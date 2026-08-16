@@ -12,6 +12,11 @@
       "path": "/v1/credits/allocations"
     },
     {
+      "operation_id": "archiveAgent",
+      "method": "DELETE",
+      "path": "/v1/agents/{agent_id}"
+    },
+    {
       "operation_id": "archiveAgentDefinition",
       "method": "DELETE",
       "path": "/v1/agent-definitions/{agent_definition_id}"
@@ -35,6 +40,11 @@
       "operation_id": "cancelNudge",
       "method": "POST",
       "path": "/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel"
+    },
+    {
+      "operation_id": "createAgent",
+      "method": "POST",
+      "path": "/v1/agents"
     },
     {
       "operation_id": "createAgentDefinition",
@@ -100,6 +110,11 @@
       "operation_id": "getAgentDefinition",
       "method": "GET",
       "path": "/v1/agent-definitions/{agent_definition_id}"
+    },
+    {
+      "operation_id": "getAgentDefinitionRevision",
+      "method": "GET",
+      "path": "/v1/agent-definitions/{agent_definition_id}/revisions/{revision}"
     },
     {
       "operation_id": "getApp",
@@ -327,6 +342,11 @@
       "path": "/v1/orgs"
     },
     {
+      "operation_id": "restoreAgent",
+      "method": "POST",
+      "path": "/v1/agents/{agent_id}/restore"
+    },
+    {
       "operation_id": "restoreAgentDefinition",
       "method": "POST",
       "path": "/v1/agent-definitions/{agent_definition_id}/restore"
@@ -390,6 +410,11 @@
       "operation_id": "summarizeAdmissions",
       "method": "GET",
       "path": "/v1/admissions/summary"
+    },
+    {
+      "operation_id": "updateAgent",
+      "method": "PATCH",
+      "path": "/v1/agents/{agent_id}"
     },
     {
       "operation_id": "updateAgentDefinition",

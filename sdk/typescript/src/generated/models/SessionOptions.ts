@@ -61,6 +61,12 @@ export interface SessionOptions {
      */
     retention?: RetentionPolicy;
     /**
+     * Immutable Session-level Agent Definition revision pin.
+     * @type {number}
+     * @memberof SessionOptions
+     */
+    pinnedRevision?: number;
+    /**
      * Opaque host correlation data. nvoken stores it, returns it verbatim,
      * and never interprets it — it exists so a support engineer holding an
      * Invocation id can get back to the board, ticket, or surface the turn
@@ -98,6 +104,7 @@ export function SessionOptionsFromJSONTyped(json: any, ignoreDiscriminator: bool
 
         'compaction': json['compaction'] == null ? undefined : CompactionPolicyFromJSON(json['compaction']),
         'retention': json['retention'] == null ? undefined : RetentionPolicyFromJSON(json['retention']),
+        'pinnedRevision': json['pinned_revision'] == null ? undefined : json['pinned_revision'],
         'metadata': json['metadata'] == null ? undefined : json['metadata'],
     };
 }
@@ -115,6 +122,7 @@ export function SessionOptionsToJSONTyped(value?: SessionOptions | null, ignoreD
 
         'compaction': CompactionPolicyToJSON(value['compaction']),
         'retention': RetentionPolicyToJSON(value['retention']),
+        'pinned_revision': value['pinnedRevision'],
         'metadata': value['metadata'],
     };
 }

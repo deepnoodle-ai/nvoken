@@ -1,9 +1,8 @@
 # nvoken Go SDK
 
-An Invocation is one durable agent turn. The host supplies `agent_key`,
-optional `tenant_key`, `session_key`, and `idempotency_key`; instructions,
-model, and tools travel with the turn as an `AgentDefinition`, either inline or
-referenced by a reusable `AgentDefinitionID`.
+An Invocation is one durable turn by a deliberately created, tenant-scoped
+Agent. An Agent binds your `agent_key` to one App-owned, versioned Agent
+Definition; a Session is one conversation with that Agent.
 
 The package has three deliberate levels:
 
@@ -24,7 +23,7 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
 The SDK is a separate Go module and does not bring the daemon's database,
 provider, or deployment dependencies into host applications.
 
-Resolve the identity-only Agent anchor without admitting work:
+List or read the full Agent instance without admitting work:
 
 ```go
 key := "support"
@@ -32,22 +31,28 @@ agents, err := client.ListAgents(ctx, nvoken.ListAgentsOptions{AgentKey: &key})
 identity, err := client.GetAgent(ctx, agents.Items[0].ID)
 ```
 
-`AgentIdentity` contains only the nvoken ID, host-owned key, and creation time.
-Instructions, models, tools, and provider keys remain per Invocation.
+The Agent records its tenant, key, display name, Definition binding, optional
+revision pin, lifecycle timestamps, and archive state.
 
 Opt into the fixed guarded public-web reader with `nvoken.FetchTool()`:
 
 ```go
-request := nvoken.InvokeRequest{
-	AgentKey: "public-summary",
-	Input:    "Summarize the supplied URL.",
-	AgentDefinition: &nvoken.AgentDefinition{
-		Model: nvoken.Model{
-			Provider: "anthropic",
-			ID:       "claude-sonnet-5",
-		},
+definition, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
+	DefinitionKey: "public-summary",
+	Name:          "Public Summary",
+	Definition: nvoken.AgentDefinition{
+		Model: nvoken.Model{Provider: "anthropic", ID: "claude-sonnet-5"},
 		Tools: []nvoken.Tool{nvoken.FetchTool()},
 	},
+})
+instance, err := client.CreateAgent(ctx, nvoken.CreateAgentInput{
+	AgentKey:          "public-summary",
+	Name:              "Public Summary",
+	AgentDefinitionID: definition.ID,
+})
+request := nvoken.InvokeRequest{
+	AgentID: instance.ID,
+	Input:   "Summarize the supplied URL.",
 }
 ```
 
@@ -58,14 +63,7 @@ HTML-to-Markdown conversion, and the ten-second and 64 KiB limits.
 Use an Agent for the common path:
 
 ```go
-agent, err := client.Agent(nvoken.AgentOptions{
-	AgentKey:     "support",
-	Instructions: "Help with billing questions.",
-	Model: nvoken.Model{
-		Provider: "anthropic",
-		ID:       "claude-sonnet-5",
-	},
-})
+agent, err := client.Agent(nvoken.AgentOptions{AgentKey: "support"})
 answer, err := agent.Text(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
 ```
 
@@ -193,8 +191,8 @@ when the facade is intentionally too narrow.
 ## Structured-output schema preflight
 
 `Client.Invoke` and Agent operations call
-`nvoken.PreflightOutputSchema(schema)` before transport when
-`InvokeRequest.AgentDefinition.OutputSchema` is present. Rejection is an `*nvoken.Error` with
+`nvoken.PreflightOutputSchema(schema)` before transport when a safe per-turn
+`InvokeRequest.Overrides.OutputSchema` is present. Rejection is an `*nvoken.Error` with
 code `schema_preflight_failed`; `Details` contain the portable issue `code`,
 RFC 6901 `path`, and optional `keyword`. A successful local check means
 eligible for admission. `Client.Raw()` remains the exact-wire escape hatch and
@@ -228,14 +226,16 @@ part of the admitted input, so it is immutable and material to idempotency: a
 replay carrying different metadata conflicts rather than updating it. That is
 why it is per-call rather than an `AgentOptions` default.
 
-## Reuse an Agent Definition
+## Define and instantiate an Agent
 
-Sending the definition inline is the ordinary path. Register it instead when
-many turns share one configuration and you would rather send a short ID:
+An App-owned Agent Definition is a reusable, versioned template. Create a
+tenant-scoped Agent instance that binds to it before admitting work:
 
 ```go
 resource, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
 	IdempotencyKey: "support-definition-v1",
+	DefinitionKey:  "support",
+	Name:           "Support",
 	Definition: nvoken.AgentDefinition{
 		Instructions: "Help with billing questions.",
 		Model: nvoken.Model{
@@ -245,25 +245,26 @@ resource, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionI
 	},
 })
 
-handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
+instance, err := client.CreateAgent(ctx, nvoken.CreateAgentInput{
 	AgentKey:          "support",
-	Input:             "Why was I charged twice?",
+	Name:              "Support",
 	AgentDefinitionID: resource.ID,
+})
+
+handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
+	AgentID: instance.ID,
+	Input:   "Why was I charged twice?",
 })
 ```
 
-Creating a definition starts no turn and creates no Agent, Session, or message.
-The resource has a stable ID and an increasing revision. Read it with
-`GetAgentDefinition`; replace its configuration with `UpdateAgentDefinition`
-and the revision you last read. An idempotency key makes create retries safe,
-while equal content under another key creates an independent resource.
-List resources with `ListAgentDefinitions`; archive one to stop new admissions
-without deleting its revision history, and restore it when it should run again.
-
-Supply exactly one of `AgentDefinition` and `AgentDefinitionID`; the facade
-rejects a request carrying both or neither before it reaches the network.
-`AgentOptions` supports the same choice. Host tool handlers remain local even
-when the server resolves the matching declarations from a reusable resource.
+Creating a Definition starts no turn. It has an immutable `DefinitionKey`, a
+stable ID, and an increasing revision; `GetAgentDefinitionRevision` reads
+historical revisions. Updating a Definition does not rewrite an Agent's
+binding. An Agent or Session may pin a revision, while an Invocation may select
+one revision for that turn. Safe per-turn overrides cover model, sampling,
+reasoning, tool choice, limits, and output schema; they cannot expand tools,
+data access, memory authority, or instructions. Host tool handlers remain
+local to the SDK facade.
 
 ## Record changing application state
 

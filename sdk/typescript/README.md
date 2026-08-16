@@ -1,9 +1,8 @@
 # nvoken TypeScript SDK
 
-An Invocation is one durable agent turn. The host supplies `agentKey`,
-optional `tenantKey`, `sessionKey`, and `idempotencyKey`; instructions, model,
-and tools travel with the turn as an `agentDefinition`, either inline or
-referenced by a reusable `agentDefinitionId`.
+An Invocation is one durable turn by a deliberately created, tenant-scoped
+Agent. An Agent binds your `agentKey` to one App-owned, versioned Agent
+Definition; a Session is one conversation with that Agent.
 
 The package has three deliberate levels:
 
@@ -22,15 +21,15 @@ npm install @deepnoodle/nvoken
 
 Node.js 20 or newer is required.
 
-Resolve the identity-only Agent anchor without admitting work:
+List or read the full Agent instance without admitting work:
 
 ```ts
-const agents = await client.listAgentIdentities({ agentKey: "support" });
-const identity = await client.getAgentIdentity(agents.items[0].id);
+const agents = await client.listAgents({ agentKey: "support" });
+const instance = await client.getAgent(agents.items[0].id);
 ```
 
-The identity contains only its nvoken ID, host-owned key, and creation time.
-Instructions, models, tools, and provider keys remain per Invocation.
+The Agent records its tenant, key, display name, Definition binding, optional
+revision pin, lifecycle timestamps, and archive state.
 
 Opt an agent into the fixed guarded public-web reader with no schema or
 transport configuration:
@@ -38,11 +37,22 @@ transport configuration:
 ```ts
 import { Client, fetchTool } from "@deepnoodle/nvoken";
 
-const agent = new Client().agent({
-  agentKey: "research",
-  instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
-  tools: [fetchTool()],
+const client = new Client();
+const definition = await client.createAgentDefinition({
+  definitionKey: "research",
+  name: "Research",
+  definition: {
+    instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+    tools: [fetchTool()],
+  },
 });
+const instance = await client.createAgent({
+  agentKey: "research",
+  name: "Research",
+  agentDefinitionId: definition.id,
+});
+const agent = client.agent({ agentId: instance.id });
 ```
 
 The Runtime accepts only `{name: "nvoken_fetch", mode: "builtin"}`. It owns
@@ -59,10 +69,21 @@ base URL, API key, provider, and model:
 ```ts
 import { Client } from "@deepnoodle/nvoken";
 
-const agent = new Client().agent({
-  agentKey: "support",
-  instructions: "Be concise and helpful.",
+const client = new Client();
+const definition = await client.createAgentDefinition({
+  definitionKey: "support",
+  name: "Support",
+  definition: {
+    instructions: "Be concise and helpful.",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+  },
 });
+const instance = await client.createAgent({
+  agentKey: "support",
+  name: "Support",
+  agentDefinitionId: definition.id,
+});
+const agent = client.agent({ agentId: instance.id });
 
 console.log(await agent.text("Why was I charged twice?"));
 ```
@@ -76,8 +97,8 @@ console.log(await agent.text("Why was I charged twice?"));
 4. `http://localhost:8080` for the base URL.
 
 It never loads an arbitrary `.env` or mutates `process.env`. `NVOKEN_API_KEY` is
-required. `NVOKEN_PROVIDER` and `NVOKEN_MODEL` must be supplied together unless
-the Agent receives an explicit model:
+required. `NVOKEN_PROVIDER` and `NVOKEN_MODEL` must be supplied together when
+they are used as a safe per-turn model override:
 
 ```ts
 const client = new Client({
@@ -106,7 +127,8 @@ Catalog membership does not guarantee that your provider account can access a
 model. `getModel()` also accepts uncataloged IDs and safely encodes IDs
 containing `/`, reserved characters, or Unicode.
 
-Set an explicit portable temperature on the request or Agent:
+Set an explicit portable temperature on the Agent Definition or safe per-turn
+overrides:
 
 ```ts
 const agentDefinition = {
@@ -219,7 +241,7 @@ and key on ambiguous retries. The key is exposed as `handle.idempotencyKey`.
 Supply `idempotencyKey` yourself only when the application needs to reproduce
 the same logical admission across a process boundary.
 
-Choose a per-turn provider key on the Agent or an individual invoke.
+Choose a per-turn provider key on the local Agent facade or an individual invoke.
 Only `caller_ephemeral` carries secret material:
 
 ```ts
@@ -277,37 +299,43 @@ one-time `secret`, `deliveryExpiresAt`, and `replayed` fields; store the secret
 before its delivery deadline. `client.raw().identity` is the generated
 low-level transport, and `credentialPages()` iterates the cursor envelope.
 
-## Reuse an Agent Definition
+## Define and instantiate an Agent
 
-Every turn runs against an Agent Definition: instructions, model, sampling,
-reasoning, tool choice, limits, tools, MCP servers, provider tools, and output
-schema. Sending it inline is the ordinary path. Register it instead when many
-turns share one configuration and you would rather send a short ID:
+Every turn runs against an App-owned, versioned Agent Definition. Create a
+tenant-scoped Agent instance that binds to the template before admitting work:
 
 ```ts
 const resource = await client.createAgentDefinition({
-  instructions: "Be concise and helpful.",
-  model: { provider: "anthropic", id: "claude-sonnet-5" },
-}, "support-definition-v1");
+  definitionKey: "support",
+  name: "Support",
+  definition: {
+    instructions: "Be concise and helpful.",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+  },
+  idempotencyKey: "support-definition-v1",
+});
+
+const instance = await client.createAgent({
+  agentKey: "support",
+  name: "Support",
+  agentDefinitionId: resource.id,
+});
 
 const handle = await client.invoke({
-  agentKey: "support",
+  agentId: instance.id,
   sessionKey: "ticket-483",
   input: "Why was I charged twice?",
-  agentDefinitionId: resource.id,
 });
 ```
 
-Creating a definition starts no turn and creates no Agent, Session, or message.
-The resource has a stable ID and an increasing revision. Use
-`getAgentDefinition()` and `updateAgentDefinition()` to read and replace it.
-An idempotency key makes create retries safe; equal content under another key
-creates an independent resource.
-
-Send exactly one of `agentDefinition` and `agentDefinitionId`. The types make
-the pair mutually exclusive, and the facade rejects a request carrying both or
-neither before it reaches the network. `Agent` supports the same choice; host
-tool handlers remain local when a reusable resource supplies the declarations.
+Creating a Definition starts no turn. It has an immutable `definitionKey`, a
+stable ID, and an increasing revision; `getAgentDefinitionRevision()` reads
+historical revisions. Updating a Definition does not rewrite an Agent's
+binding. An Agent or Session may pin a revision, while an Invocation may select
+one revision for that turn. Safe `overrides` cover model, sampling, reasoning,
+tool choice, limits, and output schema; they cannot expand tools, data access,
+memory authority, or instructions. Host tool handlers remain local to the SDK
+facade.
 
 ## Record changing application state
 
@@ -317,7 +345,6 @@ snapshot, customer facts, the current policy — belongs in `context`:
 ```ts
 const support = client.agent({
   agentKey: "support",
-  instructions: "Be concise and helpful.",
 });
 
 const answer = await support.text("Can I refund the duplicate charge?", {
@@ -351,7 +378,8 @@ it with a short current value such as `"ticket: closed"`.
 
 ## Remote MCP tools
 
-Probe the projected catalog, then attach the same declaration to an Agent:
+Probe the projected catalog, then keep the declaration in the Agent Definition
+and pass only its one-turn secret headers through the local facade:
 
 ```ts
 import { Client, mcpServer } from "@deepnoodle/nvoken";
@@ -368,8 +396,7 @@ console.log((await client.listMcpTools(server, headers)).tools);
 
 const support = client.agent({
   agentKey: "support",
-  instructions: "Use support tools when needed.",
-  mcpServers: [server],
+  tenantKey: "acme",
   mcpServerHeaders: [{ name: "support", headers }],
 });
 ```
@@ -386,7 +413,7 @@ that every named server exists, before the request leaves the process.
 Bind a Session once and use it like a chat:
 
 ```ts
-const chat = agent.session({ sessionKey: "ticket-483", tenantKey: "acme" });
+const chat = support.session({ sessionKey: "ticket-483" });
 
 await chat.text("Remember that my code is ORCHID-724.");
 console.log(await chat.text("What is my code?"));
@@ -465,9 +492,9 @@ const lookupOrder = defineHostTool({
   },
 });
 
+// The Agent Definition already declares lookup_order; the handler stays local.
 const support = new Client().agent({
   agentKey: "support",
-  instructions: "Use lookup_order for order questions.",
   tools: [lookupOrder],
 });
 
@@ -529,21 +556,25 @@ interface Classification {
   needsHuman: boolean;
 }
 
-const classifier = new Client().agent({
-  agentKey: "classifier",
-  instructions: "Classify the request.",
-  outputSchema: defineJsonSchema<Classification>({
-    type: "object",
-    properties: {
-      category: { type: "string", enum: ["billing", "other"] },
-      needsHuman: { type: "boolean" },
-    },
-    required: ["category", "needsHuman"],
-    additionalProperties: false,
-  }),
+const classificationSchema = defineJsonSchema<Classification>({
+  type: "object",
+  properties: {
+    category: { type: "string", enum: ["billing", "other"] },
+    needsHuman: { type: "boolean" },
+  },
+  required: ["category", "needsHuman"],
+  additionalProperties: false,
 });
 
-const result = await classifier.run("I was charged twice.");
+// The classifier Agent's Definition owns its instructions; this turn safely
+// replaces only its output schema.
+const classifier = new Client().agent<Classification>({
+  agentKey: "classifier",
+});
+
+const result = await classifier.run("I was charged twice.", {
+  overrides: { outputSchema: classificationSchema },
+});
 console.log(result.structuredOutput?.category);
 ```
 
@@ -559,10 +590,12 @@ const outputSchema = z.object({
   needsHuman: z.boolean(),
 });
 
-const classifier = new Client().agent({
+const classifier = new Client().agent<Classification>({
   agentKey: "classifier",
-  instructions: "Classify the request.",
-  outputSchema,
+});
+
+const result = await classifier.run("I was charged twice.", {
+  overrides: { outputSchema },
 });
 ```
 
@@ -626,7 +659,7 @@ The facade has symmetric page and drain helpers:
 ```ts
 const sessions = await client.listSessions({
   tenantKey: "acme",
-  agentId: "agnt_...",
+  agentId: "agent_...",
   sessionKey: "ticket-483",
 });
 

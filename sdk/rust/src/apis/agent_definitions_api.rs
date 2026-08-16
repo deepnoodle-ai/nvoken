@@ -52,6 +52,18 @@ pub enum GetAgentDefinitionError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`get_agent_definition_revision`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GetAgentDefinitionRevisionError {
+    Status401(models::ErrorResponse),
+    Status403(models::ErrorResponse),
+    Status404(models::ErrorResponse),
+    Status500(models::ErrorResponse),
+    Status503(models::ErrorResponse),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`list_agent_definitions`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -94,7 +106,7 @@ pub enum UpdateAgentDefinitionError {
     UnknownValue(serde_json::Value),
 }
 
-/// Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+/// Marks the resource retired. Invocation admission that resolves it — through an Agent or a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
 pub async fn archive_agent_definition(
     configuration: &configuration::Configuration,
     agent_definition_id: &str,
@@ -140,11 +152,11 @@ pub async fn archive_agent_definition(
 pub async fn create_agent_definition(
     configuration: &configuration::Configuration,
     idempotency_key: &str,
-    agent_definition_write: models::AgentDefinitionWrite,
+    agent_definition_create: models::AgentDefinitionCreate,
 ) -> Result<models::AgentDefinitionResource, Error<CreateAgentDefinitionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_header_idempotency_key = idempotency_key;
-    let p_body_agent_definition_write = agent_definition_write;
+    let p_body_agent_definition_create = agent_definition_create;
 
     let uri_str = format!("{}/v1/agent-definitions", configuration.base_path);
     let mut req_builder = configuration
@@ -158,7 +170,7 @@ pub async fn create_agent_definition(
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
     };
-    req_builder = req_builder.json(&p_body_agent_definition_write);
+    req_builder = req_builder.json(&p_body_agent_definition_create);
 
     let req = req_builder.build()?;
     let resp = configuration.client.execute(req).await?;
@@ -231,6 +243,59 @@ pub async fn get_agent_definition(
     } else {
         let content = resp.text().await?;
         let entity: Option<GetAgentDefinitionError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent {
+            status,
+            content,
+            entity,
+        }))
+    }
+}
+
+pub async fn get_agent_definition_revision(
+    configuration: &configuration::Configuration,
+    agent_definition_id: &str,
+    revision: u64,
+) -> Result<models::AgentDefinitionResource, Error<GetAgentDefinitionRevisionError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_agent_definition_id = agent_definition_id;
+    let p_path_revision = revision;
+
+    let uri_str = format!(
+        "{}/v1/agent-definitions/{agent_definition_id}/revisions/{revision}",
+        configuration.base_path,
+        agent_definition_id = crate::apis::urlencode(p_path_agent_definition_id),
+        revision = p_path_revision
+    );
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(ref token) = configuration.bearer_access_token {
+        req_builder = req_builder.bearer_auth(token.to_owned());
+    };
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::AgentDefinitionResource`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::AgentDefinitionResource`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<GetAgentDefinitionRevisionError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent {
             status,
             content,

@@ -30,13 +30,15 @@ class CreateSessionRequest(BaseModel):
     """
     CreateSessionRequest
     """ # noqa: E501
-    agent_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Your own name for the agent, handled exactly as it is when starting a turn: nvoken finds the matching Agent or creates one. Leave it out and the Session starts with no Agent — `agent_id` stays null until the first turn binds it. ")
+    agent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Your own key for a deliberately created Agent in the effective tenant. Unknown Agents are refused and never created. Mutually exclusive with `agent_id`. Leave both out for an unbound Session. ")
     tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional tenant partition. Precedence is credential constraint, this explicit value, then the default partition. ")
     user_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional host-owned end-user label recorded on the Session. Filtering only; not an isolation boundary. ")
-    session_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional caller key resolved within (effective tenant partition, Agent, session_key). Requires agent_key. Makes creation an upsert: an existing keyed Session is returned unchanged. ")
+    session_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional caller key resolved within (effective tenant partition, Agent, session_key). Requires an Agent. Makes creation an upsert: an existing keyed Session is returned unchanged. ")
     session_options: Optional[SessionOptions] = None
-    seed_messages: Optional[Annotated[List[SeedMessage], Field(min_length=1, max_length=50)]] = Field(default=None, description="Host-asserted starting history, accepted only while a new Session is created. Requires `agent_key`. A keyed request that resolves an existing Session returns it unchanged and never appends these messages. The UTF-8 text across the array may total at most 524288 bytes. ")
-    __properties: ClassVar[List[str]] = ["agent_key", "tenant_key", "user_key", "session_key", "session_options", "seed_messages"]
+    seed_messages: Optional[Annotated[List[SeedMessage], Field(min_length=1, max_length=50)]] = Field(default=None, description="Host-asserted starting history, accepted only while a new Session is created. Requires an Agent. A keyed request that resolves an existing Session returns it unchanged and never appends these messages. The UTF-8 text across the array may total at most 524288 bytes. ")
+    additional_properties: Dict[str, Any] = {}
+    __properties: ClassVar[List[str]] = ["agent_id", "agent_key", "tenant_key", "user_key", "session_key", "session_options", "seed_messages"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -68,8 +70,10 @@ class CreateSessionRequest(BaseModel):
         * `None` is only added to the output dict for nullable fields that
           were set at model initialization. Other fields with value `None`
           are ignored.
+        * Fields in `self.additional_properties` are added to the output dict.
         """
         excluded_fields: Set[str] = set([
+            "additional_properties",
         ])
 
         _dict = self.model_dump(
@@ -87,6 +91,11 @@ class CreateSessionRequest(BaseModel):
                 if _item_seed_messages:
                     _items.append(_item_seed_messages.to_dict())
             _dict['seed_messages'] = _items
+        # puts key-value pairs in additional_properties in the top level
+        if self.additional_properties is not None:
+            for _key, _value in self.additional_properties.items():
+                _dict[_key] = _value
+
         return _dict
 
     @classmethod
@@ -99,6 +108,7 @@ class CreateSessionRequest(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "agent_id": obj.get("agent_id"),
             "agent_key": obj.get("agent_key"),
             "tenant_key": obj.get("tenant_key"),
             "user_key": obj.get("user_key"),
@@ -106,4 +116,9 @@ class CreateSessionRequest(BaseModel):
             "session_options": SessionOptions.from_dict(obj["session_options"]) if obj.get("session_options") is not None else None,
             "seed_messages": [SeedMessage.from_dict(_item) for _item in obj["seed_messages"]] if obj.get("seed_messages") is not None else None
         })
+        # store additional fields in additional_properties
+        for _key in obj.keys():
+            if _key not in cls.__properties:
+                _obj.additional_properties[_key] = obj.get(_key)
+
         return _obj

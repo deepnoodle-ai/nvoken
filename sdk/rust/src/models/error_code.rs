@@ -16,6 +16,14 @@ use serde::{Deserialize, Serialize};
 pub enum ErrorCode {
     #[serde(rename = "invalid_request")]
     InvalidRequest,
+    #[serde(rename = "agent_not_found")]
+    AgentNotFound,
+    #[serde(rename = "agent_archived")]
+    AgentArchived,
+    #[serde(rename = "agent_key_conflict")]
+    AgentKeyConflict,
+    #[serde(rename = "agent_pin_invalid")]
+    AgentPinInvalid,
     #[serde(rename = "agent_definition_not_found")]
     AgentDefinitionNotFound,
     #[serde(rename = "agent_definition_revision_conflict")]
@@ -82,6 +90,10 @@ impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::InvalidRequest => write!(f, "invalid_request"),
+            Self::AgentNotFound => write!(f, "agent_not_found"),
+            Self::AgentArchived => write!(f, "agent_archived"),
+            Self::AgentKeyConflict => write!(f, "agent_key_conflict"),
+            Self::AgentPinInvalid => write!(f, "agent_pin_invalid"),
             Self::AgentDefinitionNotFound => write!(f, "agent_definition_not_found"),
             Self::AgentDefinitionRevisionConflict => {
                 write!(f, "agent_definition_revision_conflict")

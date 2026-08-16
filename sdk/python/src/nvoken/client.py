@@ -29,7 +29,13 @@ from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
 from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList
+from nvoken_generated.models.agent_definition_create import AgentDefinitionCreate
+from nvoken_generated.models.agent_definition_overrides import (
+    AgentDefinitionOverrides as GeneratedAgentDefinitionOverrides,
+)
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite
+from nvoken_generated.models.create_agent_request import CreateAgentRequest
+from nvoken_generated.models.update_agent_request import UpdateAgentRequest
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult
 from nvoken_generated.models.credit_account_list import CreditAccountList
@@ -329,6 +335,7 @@ class SessionOptions:
     compaction: ContextCompaction | None = None
     retention: SessionRetention | None = None
     metadata: dict[str, str] | None = None
+    pinned_revision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -476,10 +483,7 @@ class ProviderKeySelection:
 
 @dataclass(frozen=True)
 class AgentDefinition:
-    """The execution configuration a turn runs with.
-
-    Send it inline on an Invocation or create an App-owned reusable resource.
-    """
+    """Reusable execution configuration stored as a versioned resource."""
 
     model: Model
     instructions: str | None = None
@@ -494,17 +498,25 @@ class AgentDefinition:
 
 
 @dataclass(frozen=True)
+class AgentDefinitionOverrides:
+    """Safe per-turn replacements that cannot expand Agent authority."""
+
+    model: Model | None = None
+    sampling: Sampling | None = None
+    reasoning: Reasoning | None = None
+    tool_choice: ToolChoice | None = None
+    limits: Limits | None = None
+    output_schema: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
 class InvokeRequest:
-    agent_key: str
     input: str | tuple[InputBlock, ...]
     """Text shorthand, or ordered blocks mixing text, images, and documents."""
-    agent_definition: AgentDefinition | None = None
-    """The definition this turn runs with, sent inline.
-
-    Supply exactly one of ``agent_definition`` and ``agent_definition_id``.
-    """
-    agent_definition_id: str | None = None
-    """Reuse an App-owned Agent Definition resource."""
+    agent_id: str | None = None
+    agent_key: str | None = None
+    agent_revision: int | None = None
+    overrides: AgentDefinitionOverrides | None = None
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers, keyed to MCP server names in the definition."""
     idempotency_key: str | None = None
@@ -636,21 +648,61 @@ class Client:
 
         return Agent(self, options)
 
-    async def get_agent_identity(self, agent_id: str) -> AgentIdentity:
-        return await self._replay_safe(lambda: self.agents.get_agent(agent_id))
-
-    async def list_agent_identities(
+    async def create_agent(
         self,
         *,
+        agent_key: str,
+        name: str,
+        agent_definition_id: str,
+        tenant_key: str | None = None,
+        pinned_revision: int | None = None,
+    ) -> AgentIdentity:
+        return await self._replay_safe(lambda: self.agents.create_agent(
+            CreateAgentRequest(
+                tenant_key=tenant_key,
+                agent_key=agent_key,
+                name=name,
+                agent_definition_id=agent_definition_id,
+                pinned_revision=pinned_revision,
+            )
+        ))
+
+    async def get_agent(self, agent_id: str) -> AgentIdentity:
+        return await self._replay_safe(lambda: self.agents.get_agent(agent_id))
+
+    async def list_agents(
+        self,
+        *,
+        tenant_key: str | None = None,
         agent_key: str | None = None,
+        agent_definition_id: str | None = None,
+        include_archived: bool | None = None,
         cursor: str | None = None,
         limit: int | None = None,
     ) -> AgentList:
         return await self._replay_safe(lambda: self.agents.list_agents(
+            tenant_key=tenant_key,
             agent_key=agent_key,
+            agent_definition_id=agent_definition_id,
+            include_archived=include_archived,
             cursor=cursor,
             limit=limit,
         ))
+
+    async def update_agent(
+        self,
+        agent_id: str,
+        request: UpdateAgentRequest,
+    ) -> AgentIdentity:
+        return await self._replay_safe(
+            lambda: self.agents.update_agent(agent_id, request)
+        )
+
+    async def archive_agent(self, agent_id: str) -> None:
+        await self._replay_safe(lambda: self.agents.archive_agent(agent_id))
+
+    async def restore_agent(self, agent_id: str) -> None:
+        await self._replay_safe(lambda: self.agents.restore_agent(agent_id))
 
     async def list_models(
         self,
@@ -710,12 +762,14 @@ class Client:
     def _agent_definition_body(
         self,
         definition: AgentDefinition,
-    ) -> AgentDefinitionWrite:
+        *,
+        name: str,
+        definition_key: str | None = None,
+    ) -> AgentDefinitionWrite | AgentDefinitionCreate:
         """Render one Agent Definition.
 
-        Invocation creation and resource creation both send exactly this object, so a
-        field either reaches the wire for both or neither. Only the definition's
-        own content is checked; installation state, App signing keys, credits,
+        Creation and replacement share the configuration fields. Only the
+        definition's own content is checked; installation state, App signing keys, credits,
         provider keys, and model lifecycle are checked again at turn admission.
         """
         if definition.model is None:
@@ -760,7 +814,8 @@ class Client:
                     input_schema=tool.input_schema,
                     callback=GeneratedCallbackTarget(url=tool.callback_url),
                 )))
-        return AgentDefinitionWrite(
+        body = dict(
+            name=name,
             instructions=definition.instructions,
             model=GeneratedModelInput(GeneratedModel(
                 provider=definition.model.provider,
@@ -797,6 +852,9 @@ class Client:
                 ] or None,
             output_schema=definition.output_schema,
         )
+        if definition_key is not None:
+            return AgentDefinitionCreate(definition_key=definition_key, **body)
+        return AgentDefinitionWrite(**body)
 
     def _mcp_server_headers(
         self,
@@ -804,9 +862,8 @@ class Client:
     ) -> list[GeneratedMCPServerHeaders] | None:
         """Check the per-turn MCP secret headers.
 
-        With an inline definition every entry must name a server it declares; a
-        referenced definition is opaque here, so those names are left to the
-        service.
+        The selected Agent Definition is server-owned, so server-name
+        validation is left to the service.
         """
         seen: set[str] = set()
         entries: list[GeneratedMCPServerHeaders] = []
@@ -824,14 +881,6 @@ class Client:
                     f"mcp server headers name {entry.name} is repeated",
                 )
             seen.add(entry.name)
-            if request.agent_definition is not None and not any(
-                server.name == entry.name
-                for server in request.agent_definition.mcp_servers
-            ):
-                raise NvokenError(
-                    "validation",
-                    f"mcp server headers name {entry.name} matches no declared mcp server",
-                )
             entries.append(GeneratedMCPServerHeaders(
                 name=entry.name,
                 headers=dict(entry.headers),
@@ -900,15 +949,56 @@ class Client:
             ))
         return items or None
 
+    def _agent_definition_overrides(
+        self,
+        overrides: AgentDefinitionOverrides | None,
+    ) -> GeneratedAgentDefinitionOverrides | None:
+        if overrides is None:
+            return None
+        if not any((
+            overrides.model is not None,
+            overrides.sampling is not None,
+            overrides.reasoning is not None,
+            overrides.tool_choice is not None,
+            overrides.limits is not None,
+            overrides.output_schema is not None,
+        )):
+            raise NvokenError("validation", "overrides require at least one member")
+        if overrides.output_schema is not None:
+            preflight_output_schema(overrides.output_schema)
+        return GeneratedAgentDefinitionOverrides(
+            model=GeneratedModelInput(GeneratedModel(
+                provider=overrides.model.provider,
+                id=overrides.model.id,
+            )) if overrides.model is not None else None,
+            sampling=GeneratedSampling(temperature=overrides.sampling.temperature)
+            if overrides.sampling is not None
+            else None,
+            reasoning=GeneratedReasoning(
+                effort=ReasoningEffort(overrides.reasoning.effort)
+                if overrides.reasoning.effort is not None
+                else None,
+                budget_tokens=overrides.reasoning.budget_tokens,
+            ) if overrides.reasoning is not None else None,
+            tool_choice=GeneratedToolChoice(
+                mode=ModelToolChoiceMode(overrides.tool_choice.mode),
+                name=overrides.tool_choice.name,
+            ) if overrides.tool_choice is not None else None,
+            limits=GeneratedLimits(**vars(overrides.limits))
+            if overrides.limits is not None
+            else None,
+            output_schema=overrides.output_schema,
+        )
+
     def _invocation_body(self, request: InvokeRequest) -> CreateInvocationRequest:
-        if not request.agent_key or not request.input:
-            raise NvokenError("validation", "agent_key and input are required")
-        preflight_input(request.input)
-        if (request.agent_definition is None) == (request.agent_definition_id is None):
+        if not request.input:
+            raise NvokenError("validation", "input is required")
+        if bool(request.agent_id) == bool(request.agent_key):
             raise NvokenError(
                 "validation",
-                "supply exactly one of agent_definition and agent_definition_id",
+                "supply exactly one of agent_id and agent_key",
             )
+        preflight_input(request.input)
         if request.if_active not in (None, "reject", "supersede", "interrupt"):
             raise NvokenError(
                 "validation",
@@ -921,6 +1011,7 @@ class Client:
             )
         idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
         return CreateInvocationRequest(
+            agent_id=request.agent_id,
             agent_key=request.agent_key,
             tenant_key=request.tenant_key,
             session_id=request.session_id,
@@ -935,10 +1026,8 @@ class Client:
                 if isinstance(request.input, str)
                 else [input_block_wire(block) for block in request.input]
             ),
-            agent_definition_id=request.agent_definition_id,
-            agent_definition=self._agent_definition_body(request.agent_definition)
-            if request.agent_definition is not None
-            else None,
+            agent_revision=request.agent_revision,
+            overrides=self._agent_definition_overrides(request.overrides),
             mcp_server_headers=self._mcp_server_headers(request),
             context=self._context(request),
             provider_keys=[
@@ -950,12 +1039,20 @@ class Client:
 
     async def create_agent_definition(
         self,
+        definition_key: str,
+        name: str,
         definition: AgentDefinition,
         *,
         idempotency_key: str | None = None,
     ) -> AgentDefinitionResource:
         """Create one reusable App-owned Agent Definition resource."""
-        body = self._agent_definition_body(definition)
+        if not definition_key or not name:
+            raise NvokenError("validation", "definition_key and name are required")
+        body = self._agent_definition_body(
+            definition,
+            name=name,
+            definition_key=definition_key,
+        )
         return await self._replay_safe(
             lambda: self.agent_definitions.create_agent_definition(
                 idempotency_key or f"nvoken-{uuid.uuid4()}",
@@ -969,6 +1066,18 @@ class Client:
     ) -> AgentDefinitionResource:
         return await self._replay_safe(
             lambda: self.agent_definitions.get_agent_definition(agent_definition_id)
+        )
+
+    async def get_agent_definition_revision(
+        self,
+        agent_definition_id: str,
+        revision: int,
+    ) -> AgentDefinitionResource:
+        return await self._replay_safe(
+            lambda: self.agent_definitions.get_agent_definition_revision(
+                agent_definition_id,
+                revision,
+            )
         )
 
     async def list_agent_definitions(
@@ -990,9 +1099,10 @@ class Client:
         self,
         agent_definition_id: str,
         expected_revision: int,
+        name: str,
         definition: AgentDefinition,
     ) -> AgentDefinitionResource:
-        body = self._agent_definition_body(definition)
+        body = self._agent_definition_body(definition, name=name)
         return await self._replay_safe(
             lambda: self.agent_definitions.update_agent_definition(
                 f'"{expected_revision}"',
@@ -1689,6 +1799,7 @@ def _generated_session_options(
         options.compaction is None
         and options.retention is None
         and not options.metadata
+        and options.pinned_revision is None
     ):
         raise NvokenError("validation", "session_options requires at least one member")
     compaction = options.compaction
@@ -1704,6 +1815,7 @@ def _generated_session_options(
         if options.retention is not None
         else None,
         metadata=dict(options.metadata) if options.metadata else None,
+        pinned_revision=options.pinned_revision,
     )
 
 

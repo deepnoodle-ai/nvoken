@@ -117,7 +117,13 @@ export interface Invocation {
      * @type {string}
      * @memberof Invocation
      */
-    agentId?: string;
+    agentId: string;
+    /**
+     *
+     * @type {string}
+     * @memberof Invocation
+     */
+    agentKey: string;
     /**
      * Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
      * @type {string}
@@ -311,6 +317,8 @@ export interface Invocation {
  */
 export function instanceOfInvocation(value: object): value is Invocation {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('agentId' in value) || value['agentId'] === undefined) return false;
+    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
     if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
     if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
     if (!('agentDefinitionRevision' in value) || value['agentDefinitionRevision'] === undefined) return false;
@@ -338,7 +346,8 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
     return {
 
         'id': json['id'],
-        'agentId': json['agent_id'] == null ? undefined : json['agent_id'],
+        'agentId': json['agent_id'],
+        'agentKey': json['agent_key'],
         'sessionId': json['session_id'],
         'userKey': json['user_key'] == null ? undefined : json['user_key'],
         'agentDefinitionId': json['agent_definition_id'],
@@ -379,6 +388,7 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
 
         'id': value['id'],
         'agent_id': value['agentId'],
+        'agent_key': value['agentKey'],
         'session_id': value['sessionId'],
         'user_key': value['userKey'],
         'agent_definition_id': value['agentDefinitionId'],

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	conformanceAgentID      = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	conformanceAgentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
 	conformanceInvocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 	conformanceSessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 	conformanceToolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
@@ -219,13 +219,12 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	// dropped between the typed request and the request body.
 	sessionKey := "conformance"
 	body, err := InvokeRequest{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_conformance",
-		IdempotencyKey:    "conformance",
-		Input:             "hello",
-		SessionKey:        &sessionKey,
-		SessionOptions:    &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
-		Metadata:          fixture.InvocationMetadata,
+		AgentKey:       "support",
+		IdempotencyKey: "conformance",
+		Input:          "hello",
+		SessionKey:     &sessionKey,
+		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
+		Metadata:       fixture.InvocationMetadata,
 	}.encoded()
 	if err != nil {
 		t.Fatalf("build request: %v", err)
@@ -236,19 +235,18 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	}
 	assertEncodesTo(t, wire["metadata"], mustEncode(t, fixture.InvocationMetadata))
 	assertEncodesTo(t, wire["session_options"], fixture.SessionOptions.RetentionOnly)
-	if wire["agent_definition_id"] != "def_conformance" {
-		t.Fatalf("agent_definition_id = %#v", wire["agent_definition_id"])
+	if wire["agent_key"] != "support" {
+		t.Fatalf("agent_key = %#v", wire["agent_key"])
 	}
 
 	// Session options with no members would serialize to `{}`, which the
 	// Runtime rejects for minProperties — catching it locally names the field.
 	if _, err := (InvokeRequest{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_conformance",
-		IdempotencyKey:    "conformance",
-		Input:             "hello",
-		SessionKey:        &sessionKey,
-		SessionOptions:    &SessionOptions{},
+		AgentKey:       "support",
+		IdempotencyKey: "conformance",
+		Input:          "hello",
+		SessionKey:     &sessionKey,
+		SessionOptions: &SessionOptions{},
 	}).encoded(); err == nil {
 		t.Fatal("empty session options were admitted")
 	}
@@ -270,8 +268,7 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 		t.Fatalf("client: %v", err)
 	}
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_conformance",
+		AgentKey: "support",
 	})
 	if err != nil {
 		t.Fatalf("agent: %v", err)
@@ -514,10 +511,9 @@ func TestSharedAgentDefinitionReuseFixtureIsExpressible(t *testing.T) {
 	}
 	decodeFile(t, "../conformance/fixtures/agent-definition-reuse-v1.json", &fixture)
 	encoded, err := (InvokeRequest{
-		AgentKey:          "support",
-		IdempotencyKey:    "agent-definition-reference",
-		Input:             "hello",
-		AgentDefinitionID: fixture.AgentDefinitionID,
+		AgentKey:       "support",
+		IdempotencyKey: "agent-definition-reference",
+		Input:          "hello",
 	}).encoded()
 	if err != nil {
 		t.Fatalf("encode Agent Definition reference: %v", err)
@@ -526,9 +522,9 @@ func TestSharedAgentDefinitionReuseFixtureIsExpressible(t *testing.T) {
 	if err := json.Unmarshal(encoded, &wire); err != nil {
 		t.Fatalf("decode Agent Definition reference: %v", err)
 	}
-	if wire["agent_definition_id"] != fixture.AgentDefinitionID ||
+	if wire["agent_key"] != "support" || wire["agent_definition_id"] != nil ||
 		wire["agent_definition"] != nil {
-		t.Fatalf("Agent Definition reference wire = %#v", wire)
+		t.Fatalf("Agent identity wire = %#v", wire)
 	}
 }
 
@@ -708,11 +704,10 @@ func TestConformance(t *testing.T) {
 		t.Fatalf("list Credit allocations: %#v err=%v", allocations, err)
 	}
 	request := InvokeRequest{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_conformance",
-		IdempotencyKey:    "conformance-lost-ack",
-		IfActive:          IfActiveSupersede,
-		Input:             "hello",
+		AgentKey:       "support",
+		IdempotencyKey: "conformance-lost-ack",
+		IfActive:       IfActiveSupersede,
+		Input:          "hello",
 		MCPServerHeaders: []MCPServerHeaders{{
 			Name:    "support",
 			Headers: map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
@@ -1148,10 +1143,9 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 		events = append(events, WebhookEvent(event))
 	}
 	request := InvokeRequest{
-		AgentKey:          "support-bot",
-		AgentDefinitionID: "def_conformance",
-		IdempotencyKey:    "req-1",
-		Input:             "hello",
+		AgentKey:       "support-bot",
+		IdempotencyKey: "req-1",
+		Input:          "hello",
 		Webhook: &WebhookTarget{
 			URL:    fixture.ExampleRequest.Webhook.URL,
 			Events: events,
@@ -1468,12 +1462,11 @@ func TestSharedRecordedContextFixtureIsExpressible(t *testing.T) {
 
 	accepted := fixture.Accepted.Request
 	encoded, err := (InvokeRequest{
-		AgentKey:          accepted.AgentKey,
-		SessionKey:        &accepted.SessionKey,
-		IdempotencyKey:    accepted.IdempotencyKey,
-		Input:             accepted.Input,
-		AgentDefinitionID: accepted.AgentDefinitionID,
-		Context:           accepted.Context,
+		AgentKey:       accepted.AgentKey,
+		SessionKey:     &accepted.SessionKey,
+		IdempotencyKey: accepted.IdempotencyKey,
+		Input:          accepted.Input,
+		Context:        accepted.Context,
 	}).encoded()
 	if err != nil {
 		t.Fatalf("encode recorded context: %v", err)

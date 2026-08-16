@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "An Agent Definition resource is stable, versioned, and App-scoped. Machine Invocations may instead carry the same writable definition inline; SDKs must never let a per-turn secret enter either form.",
+  "note": "An Agent Definition is stable, versioned, and App-scoped. A tenant-scoped Agent instance selects it; Invocations never carry writable definitions inline.",
   "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
   "reference_fields": {
     "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005"
@@ -12,8 +12,8 @@
     "retained_while_referenced": true,
     "read_echoes_resolved_definition": true,
     "create_is_idempotent_by_key": true,
-    "inline_or_reference_machine_admission": true,
-    "reference_only_browser_admission": true
+    "agent_instance_required_for_admission": true,
+    "inline_machine_admission": false
   },
   "refusals": [
     {
@@ -27,9 +27,9 @@
       "code": "agent_definition_not_found"
     },
     {
-      "id": "agent-definition-plus-reference",
-      "status": 400,
-      "code": "invalid_request"
+      "id": "unknown-agent-key",
+      "status": 404,
+      "code": "agent_not_found"
     }
   ],
   "agent_definition_fields": [
@@ -45,6 +45,8 @@
     "provider_tools"
   ],
   "excluded_from_agent_definition": [
+    "definition_key",
+    "name",
     "agent_key",
     "tenant_key",
     "user_key",
@@ -60,8 +62,10 @@
     "mcp_server_headers"
   ],
   "creation": {
-    "note": "POST /v1/agent-definitions accepts the writable object an invocation may nest under agent_definition and returns a flat stable resource.",
+    "note": "POST /v1/agent-definitions creates a named, keyed, versioned template.",
     "request": {
+      "definition_key": "support",
+      "name": "Billing support",
       "instructions": "You are a concise billing support agent.",
       "model": {
         "provider": "anthropic",
@@ -70,6 +74,8 @@
     },
     "response": {
       "id": "def_019b0a12-0000-7000-8000-000000000005",
+      "definition_key": "support",
+      "name": "Billing support",
       "revision": 1,
       "instructions": "You are a concise billing support agent.",
       "model": {
@@ -80,11 +86,21 @@
       "updated_at": "2026-08-11T12:00:00Z"
     }
   },
+  "agent": {
+    "id": "agent_019b0a12-0000-7000-8000-000000000006",
+    "tenant_key": null,
+    "agent_key": "support",
+    "name": "Support",
+    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+    "pinned_revision": null,
+    "created_at": "2026-08-11T12:00:00Z",
+    "updated_at": "2026-08-11T12:00:00Z",
+    "archived_at": null
+  },
   "invocation_reference": {
-    "note": "The reusable resource reached by ID. Reference replays compare this stable ID and retain the originally admitted revision.",
+    "note": "The tenant-scoped Agent resolves the reusable Definition and admitted revision.",
     "agent_key": "support",
     "idempotency_key": "agent-definition-reference",
-    "input": "hello",
-    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005"
+    "input": "hello"
   }
 }

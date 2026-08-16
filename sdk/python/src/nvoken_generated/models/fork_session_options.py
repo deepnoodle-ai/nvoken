@@ -29,9 +29,10 @@ class ForkSessionOptions(BaseModel):
     """
     Creation-only options for a forked child. The child never inherits the source Session's compaction policy, retention, or metadata.
     """ # noqa: E501
+    pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     retention: Optional[RetentionPolicy] = None
     metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(default=None, description="Opaque host correlation data. nvoken stores it, returns it verbatim, and never interprets it — it exists so a support engineer holding an Invocation id can get back to the board, ticket, or surface the turn came from, which nvoken deliberately knows nothing about.  At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`, `:`, and `-`; values are at most 512 bytes of UTF-8.  There is no `title` field on a Session by design. A title is one of these entries (`{\"title\": \"Refund policy\"}`), which keeps nvoken from forming opinions about a string only the host renders. ")
-    __properties: ClassVar[List[str]] = ["retention", "metadata"]
+    __properties: ClassVar[List[str]] = ["pinned_revision", "retention", "metadata"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -87,6 +88,7 @@ class ForkSessionOptions(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "pinned_revision": obj.get("pinned_revision"),
             "retention": RetentionPolicy.from_dict(obj["retention"]) if obj.get("retention") is not None else None,
             "metadata": obj.get("metadata")
         })

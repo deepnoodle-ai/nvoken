@@ -93,6 +93,18 @@ import {
  */
 export interface AgentDefinitionWrite {
     /**
+     * Caller-chosen immutable key. Required on creation and omitted on replacement.
+     * @type {string}
+     * @memberof AgentDefinitionWrite
+     */
+    definitionKey?: string;
+    /**
+     *
+     * @type {string}
+     * @memberof AgentDefinitionWrite
+     */
+    name: string;
+    /**
      * Optional model instructions. Omission adds no hidden default.
      * @type {string}
      * @memberof AgentDefinitionWrite
@@ -181,6 +193,7 @@ export interface AgentDefinitionWrite {
  * Check if a given object implements the AgentDefinitionWrite interface.
  */
 export function instanceOfAgentDefinitionWrite(value: object): value is AgentDefinitionWrite {
+    if (!('name' in value) || value['name'] === undefined) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     return true;
 }
@@ -195,6 +208,8 @@ export function AgentDefinitionWriteFromJSONTyped(json: any, ignoreDiscriminator
     }
     return {
 
+        'definitionKey': json['definition_key'] == null ? undefined : json['definition_key'],
+        'name': json['name'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'model': ModelInputFromJSON(json['model']),
         'sampling': json['sampling'] == null ? undefined : SamplingFromJSON(json['sampling']),
@@ -221,6 +236,8 @@ export function AgentDefinitionWriteToJSONTyped(value?: AgentDefinitionWrite | n
 
     return {
 
+        'definition_key': value['definitionKey'],
+        'name': value['name'],
         'instructions': value['instructions'],
         'model': ModelInputToJSON(value['model']),
         'sampling': SamplingToJSON(value['sampling']),

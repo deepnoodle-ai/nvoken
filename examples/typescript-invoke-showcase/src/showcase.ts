@@ -38,6 +38,9 @@ const tenantA = `${runId}-tenant-a`;
 const tenantB = `${runId}-tenant-b`;
 const primaryAgentKey = `${runId}-support`;
 const alternateAgentKey = `${runId}-alternate`;
+const referencedAgentKey = `${runId}-referenced`;
+const toolAgentKey = `${runId}-tools`;
+const structuredAgentKey = `${runId}-structured`;
 const sharedSessionKey = `${runId}-shared-session`;
 const lookupOrder = defineHostTool<LookupOrderInput>({
   mode: "host",
@@ -79,6 +82,19 @@ async function main(): Promise<void> {
     `PASS model preflight: cataloged=${selectedModel.cataloged} `
     + `pricing=${selectedModel.pricing.status} (${selectedModel.pricing.pricingVersion})`,
   );
+
+  const resource = await client.createAgentDefinition({
+    definitionKey: `${runId}-support`,
+    name: "Support",
+    definition: baseDefinition(),
+    idempotencyKey: `${runId}:definition`,
+  });
+  await Promise.all([
+    client.createAgent({ tenantKey: tenantA, agentKey: primaryAgentKey, name: "Support", agentDefinitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantB, agentKey: primaryAgentKey, name: "Support", agentDefinitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantA, agentKey: alternateAgentKey, name: "Alternate", agentDefinitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantA, agentKey: referencedAgentKey, name: "Referenced", agentDefinitionId: resource.id }),
+  ]);
 
   const firstRequest: InvokeRequest = {
     agentKey: primaryAgentKey,
@@ -136,21 +152,12 @@ async function main(): Promise<void> {
   );
   console.log("PASS incremental transcript cursor contains only the second turn");
 
-  // Reusable Agent Definitions are stable, revisioned App resources. Inline
-  // definitions remain the ordinary path; create a resource only when turns
-  // benefit from referencing the same configuration by ID.
-  const resource = await client.createAgentDefinition(
-    chatDefinition().agentDefinition,
-    `${runId}:definition`,
-  );
-
   const referenced = await completed({
-    agentKey: primaryAgentKey,
+    agentKey: referencedAgentKey,
     tenantKey: tenantA,
     sessionKey: `${runId}-referenced-session`,
     idempotencyKey: `${runId}:referenced`,
     input: "Reply only with referenced.",
-    agentDefinitionId: resource.id,
   });
   assert.match(referenced.text, /referenced/i);
   assert.equal(referenced.invocation.agentDefinitionId, resource.id);
@@ -253,7 +260,7 @@ async function main(): Promise<void> {
     ...chatDefinition(),
   });
   const tenantBSession = await client.getSession(tenantBResult.handle.sessionId!);
-  assert.equal(tenantBSession.agentId, session.agentId);
+  assert.notEqual(tenantBSession.agentId, session.agentId);
   assert.notEqual(tenantBSession.id, session.id);
   assert.equal(tenantBSession.tenantKey, tenantB);
 
@@ -273,7 +280,7 @@ async function main(): Promise<void> {
   assert.ok(!defaultSessions.items.some((item) => (
     item.id === session.id || item.id === tenantBSession.id || item.id === alternateSession.id
   )));
-  console.log("PASS tenantKey and agentKey scope Sessions and idempotency; Agent identity spans tenants");
+  console.log("PASS tenant-scoped Agent instances isolate Sessions and idempotency");
 
   const agentMismatch = await expectNvokenError(
     () => client.invoke({
@@ -298,21 +305,29 @@ async function main(): Promise<void> {
   );
   console.log(`PASS Session scope mismatch is nondisclosing: ${agentMismatch.code}, ${tenantMismatch.code}`);
 
+  const toolDefinition = await client.createAgentDefinition({
+    definitionKey: `${runId}-tools`,
+    name: "Order tools",
+    definition: {
+      instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
+      model: { provider, id: model },
+      limits: { maxOutputTokens: 200, maxIterations: 3 },
+      tools: [lookupOrder],
+    },
+    idempotencyKey: `${runId}:tool-definition`,
+  });
+  await client.createAgent({
+    tenantKey: tenantA,
+    agentKey: toolAgentKey,
+    name: "Order tools",
+    agentDefinitionId: toolDefinition.id,
+  });
   const toolHandle = await client.invoke({
-    agentKey: primaryAgentKey,
+    agentKey: toolAgentKey,
     tenantKey: tenantA,
     sessionKey: `${runId}-tool-session`,
     idempotencyKey: `${runId}:tool`,
     input: "Check order order-42 and tell me its current state. You must use lookup_order first.",
-    agentDefinition: {
-      instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
-      model: { provider, id: model },
-      limits: {
-        maxOutputTokens: 200,
-        maxIterations: 3,
-      },
-      tools: [lookupOrder],
-    },
   });
 
   const waiting = await toolHandle.wait({ until: "actionable" });
@@ -330,7 +345,7 @@ async function main(): Promise<void> {
 
   const busySession = await expectNvokenError(
     () => client.invoke({
-      agentKey: primaryAgentKey,
+      agentKey: toolAgentKey,
       sessionId: toolHandle.sessionId!,
       idempotencyKey: `${runId}:busy-session`,
       input: "This turn should not be admitted while the tool call is waiting.",
@@ -373,7 +388,7 @@ async function main(): Promise<void> {
   console.log(`PASS host ToolCall wait/Session visibility/busy guard/result replay: ${busySession.code}, ${changedToolResult.code}`);
 
   const toolFollowup = await completed({
-    agentKey: primaryAgentKey,
+    agentKey: toolAgentKey,
     sessionId: toolHandle.sessionId!,
     idempotencyKey: `${runId}:tool-followup`,
     input: "Based on our previous order lookup, when is the estimated delivery? Reply only with the answer.",
@@ -382,21 +397,29 @@ async function main(): Promise<void> {
   assert.match(toolFollowup.text, /tomorrow/i);
   console.log("PASS a later Invocation receives the successful host-tool transcript as Session context");
 
-  const structuredHandle = await client.invoke({
-    agentKey: primaryAgentKey,
+  const structuredDefinition = await client.createAgentDefinition<SupportClassification>({
+    definitionKey: `${runId}-structured`,
+    name: "Support classification",
+    definition: {
+      instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
+      model: { provider, id: model },
+      limits: { maxOutputTokens: 200, maxIterations: 3 },
+      outputSchema: supportClassification,
+    },
+    idempotencyKey: `${runId}:structured-definition`,
+  });
+  await client.createAgent({
+    tenantKey: tenantA,
+    agentKey: structuredAgentKey,
+    name: "Support classification",
+    agentDefinitionId: structuredDefinition.id,
+  });
+  const structuredHandle = await client.invoke<SupportClassification>({
+    agentKey: structuredAgentKey,
     tenantKey: tenantA,
     sessionKey: `${runId}-structured-session`,
     idempotencyKey: `${runId}:structured`,
     input: "Classify this request: I was billed twice and need a human to review it today.",
-    agentDefinition: {
-      instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
-      model: { provider, id: model },
-      limits: {
-        maxOutputTokens: 200,
-        maxIterations: 3,
-      },
-      outputSchema: supportClassification,
-    },
   });
 
   const streamEvents = new Set<string>();
@@ -458,21 +481,20 @@ async function main(): Promise<void> {
   }, null, 2));
 }
 
-function chatDefinition() {
+function baseDefinition() {
   return {
-    agentDefinition: {
-      instructions: "You are a concise support assistant. Remember relevant facts from earlier turns in this Session.",
-      model: { provider, id: model },
-      limits: {
-        maxOutputTokens: 100,
-        maxIterations: 1,
-      },
-    },
+    instructions: "You are a concise support assistant. Remember relevant facts from earlier turns in this Session.",
+    model: { provider, id: model },
+    limits: { maxOutputTokens: 100, maxIterations: 1 },
   };
 }
 
+function chatDefinition() {
+  return {};
+}
+
 async function completed(request: InvokeRequest): Promise<{
-  handle: InvocationHandle;
+  handle: InvocationHandle<any>;
   invocation: Invocation;
   text: string;
 }> {

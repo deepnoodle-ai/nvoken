@@ -24,25 +24,162 @@ import {
     AgentListToJSON,
 } from '../models/AgentList.js';
 import {
+    type CreateAgentRequest,
+    CreateAgentRequestFromJSON,
+    CreateAgentRequestToJSON,
+} from '../models/CreateAgentRequest.js';
+import {
     type ErrorResponse,
     ErrorResponseFromJSON,
     ErrorResponseToJSON,
 } from '../models/ErrorResponse.js';
+import {
+    type UpdateAgentRequest,
+    UpdateAgentRequestFromJSON,
+    UpdateAgentRequestToJSON,
+} from '../models/UpdateAgentRequest.js';
+
+export interface ArchiveAgentRequest {
+    agentId: string;
+}
+
+export interface CreateAgentOperationRequest {
+    createAgentRequest: CreateAgentRequest;
+}
 
 export interface GetAgentRequest {
     agentId: string;
 }
 
 export interface ListAgentsRequest {
+    tenantKey?: string;
     agentKey?: string;
+    agentDefinitionId?: string;
+    includeArchived?: boolean;
     cursor?: string;
     limit?: number;
+}
+
+export interface RestoreAgentRequest {
+    agentId: string;
+}
+
+export interface UpdateAgentOperationRequest {
+    agentId: string;
+    updateAgentRequest: UpdateAgentRequest;
 }
 
 /**
  *
  */
 export class AgentsApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for archiveAgent without sending the request
+     */
+    async archiveAgentRequestOpts(requestParameters: ArchiveAgentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentId'] == null) {
+            throw new runtime.RequiredError(
+                'agentId',
+                'Required parameter "agentId" was null or undefined when calling archiveAgent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agents/{agent_id}`;
+        urlPath = urlPath.replace('{agent_id}', encodeURIComponent(String(requestParameters['agentId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Archive an Agent
+     */
+    async archiveAgentRaw(requestParameters: ArchiveAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.archiveAgentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Archive an Agent
+     */
+    async archiveAgent(requestParameters: ArchiveAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.archiveAgentRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for createAgent without sending the request
+     */
+    async createAgentRequestOpts(requestParameters: CreateAgentOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['createAgentRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createAgentRequest',
+                'Required parameter "createAgentRequest" was null or undefined when calling createAgent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agents`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateAgentRequestToJSON(requestParameters['createAgentRequest']),
+        };
+    }
+
+    /**
+     * Create or resolve a tenant-scoped Agent
+     */
+    async createAgentRaw(requestParameters: CreateAgentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Agent>> {
+        const requestOptions = await this.createAgentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentFromJSON(jsonValue));
+    }
+
+    /**
+     * Create or resolve a tenant-scoped Agent
+     */
+    async createAgent(requestParameters: CreateAgentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Agent> {
+        const response = await this.createAgentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for getAgent without sending the request
@@ -81,7 +218,7 @@ export class AgentsApi extends runtime.BaseAPI {
 
     /**
      * Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
-     * Read one Agent identity anchor
+     * Read one tenant-scoped Agent
      */
     async getAgentRaw(requestParameters: GetAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Agent>> {
         const requestOptions = await this.getAgentRequestOpts(requestParameters);
@@ -92,7 +229,7 @@ export class AgentsApi extends runtime.BaseAPI {
 
     /**
      * Reads identity without creating work. Out-of-scope and undisclosable constrained resources use `not_found`.
-     * Read one Agent identity anchor
+     * Read one tenant-scoped Agent
      */
     async getAgent(requestParameters: GetAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Agent> {
         const response = await this.getAgentRaw(requestParameters, initOverrides);
@@ -105,8 +242,20 @@ export class AgentsApi extends runtime.BaseAPI {
     async listAgentsRequestOpts(requestParameters: ListAgentsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
 
+        if (requestParameters['tenantKey'] != null) {
+            queryParameters['tenant_key'] = requestParameters['tenantKey'];
+        }
+
         if (requestParameters['agentKey'] != null) {
             queryParameters['agent_key'] = requestParameters['agentKey'];
+        }
+
+        if (requestParameters['agentDefinitionId'] != null) {
+            queryParameters['agent_definition_id'] = requestParameters['agentDefinitionId'];
+        }
+
+        if (requestParameters['includeArchived'] != null) {
+            queryParameters['include_archived'] = requestParameters['includeArchived'];
         }
 
         if (requestParameters['cursor'] != null) {
@@ -139,8 +288,8 @@ export class AgentsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns newest-first identity anchors scoped to the caller\'s app. An Agent belongs to one app and stores only its nvoken ID, the host-owned `agent_key`, and creation time; instructions, models, tools, and provider keys still travel on each Invocation. An exact `agent_key` filter returns zero or one item within that app.  Unconstrained credentials see their app\'s anchors. Tenant-constrained credentials see only anchors referenced by a Session in their effective partition. Session-constrained credentials see only that Session\'s anchor. The opaque cursor is bound to the authenticated caller, credential constraint, and exact key filter.
-     * List Agent identity anchors
+     * Returns newest-first Agents scoped to the caller\'s App. Filters combine with AND. Archived Agents are excluded unless requested.
+     * List tenant-scoped Agents
      */
     async listAgentsRaw(requestParameters: ListAgentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentList>> {
         const requestOptions = await this.listAgentsRequestOpts(requestParameters);
@@ -150,11 +299,126 @@ export class AgentsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns newest-first identity anchors scoped to the caller\'s app. An Agent belongs to one app and stores only its nvoken ID, the host-owned `agent_key`, and creation time; instructions, models, tools, and provider keys still travel on each Invocation. An exact `agent_key` filter returns zero or one item within that app.  Unconstrained credentials see their app\'s anchors. Tenant-constrained credentials see only anchors referenced by a Session in their effective partition. Session-constrained credentials see only that Session\'s anchor. The opaque cursor is bound to the authenticated caller, credential constraint, and exact key filter.
-     * List Agent identity anchors
+     * Returns newest-first Agents scoped to the caller\'s App. Filters combine with AND. Archived Agents are excluded unless requested.
+     * List tenant-scoped Agents
      */
     async listAgents(requestParameters: ListAgentsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentList> {
         const response = await this.listAgentsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for restoreAgent without sending the request
+     */
+    async restoreAgentRequestOpts(requestParameters: RestoreAgentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentId'] == null) {
+            throw new runtime.RequiredError(
+                'agentId',
+                'Required parameter "agentId" was null or undefined when calling restoreAgent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agents/{agent_id}/restore`;
+        urlPath = urlPath.replace('{agent_id}', encodeURIComponent(String(requestParameters['agentId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Restore an archived Agent
+     */
+    async restoreAgentRaw(requestParameters: RestoreAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.restoreAgentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     * Restore an archived Agent
+     */
+    async restoreAgent(requestParameters: RestoreAgentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.restoreAgentRaw(requestParameters, initOverrides);
+    }
+
+    /**
+     * Creates request options for updateAgent without sending the request
+     */
+    async updateAgentRequestOpts(requestParameters: UpdateAgentOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentId'] == null) {
+            throw new runtime.RequiredError(
+                'agentId',
+                'Required parameter "agentId" was null or undefined when calling updateAgent().'
+            );
+        }
+
+        if (requestParameters['updateAgentRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updateAgentRequest',
+                'Required parameter "updateAgentRequest" was null or undefined when calling updateAgent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agents/{agent_id}`;
+        urlPath = urlPath.replace('{agent_id}', encodeURIComponent(String(requestParameters['agentId'])));
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdateAgentRequestToJSON(requestParameters['updateAgentRequest']),
+        };
+    }
+
+    /**
+     * Rename or revision-pin an Agent
+     */
+    async updateAgentRaw(requestParameters: UpdateAgentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Agent>> {
+        const requestOptions = await this.updateAgentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentFromJSON(jsonValue));
+    }
+
+    /**
+     * Rename or revision-pin an Agent
+     */
+    async updateAgent(requestParameters: UpdateAgentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Agent> {
+        const response = await this.updateAgentRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

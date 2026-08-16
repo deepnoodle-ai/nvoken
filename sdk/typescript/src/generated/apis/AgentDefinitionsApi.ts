@@ -14,6 +14,11 @@
 
 import * as runtime from '../runtime.js';
 import {
+    type AgentDefinitionCreate,
+    AgentDefinitionCreateFromJSON,
+    AgentDefinitionCreateToJSON,
+} from '../models/AgentDefinitionCreate.js';
+import {
     type AgentDefinitionResource,
     AgentDefinitionResourceFromJSON,
     AgentDefinitionResourceToJSON,
@@ -40,11 +45,16 @@ export interface ArchiveAgentDefinitionRequest {
 
 export interface CreateAgentDefinitionRequest {
     idempotencyKey: string;
-    agentDefinitionWrite: AgentDefinitionWrite;
+    agentDefinitionCreate: AgentDefinitionCreate;
 }
 
 export interface GetAgentDefinitionRequest {
     agentDefinitionId: string;
+}
+
+export interface GetAgentDefinitionRevisionRequest {
+    agentDefinitionId: string;
+    revision: number;
 }
 
 export interface ListAgentDefinitionsRequest {
@@ -104,7 +114,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+     * Marks the resource retired. Invocation admission that resolves it — through an Agent or a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
      * Archive an Agent Definition
      */
     async archiveAgentDefinitionRaw(requestParameters: ArchiveAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
@@ -115,7 +125,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Marks the resource retired. Invocation admission that resolves it — by `agent_definition_id` or by a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
+     * Marks the resource retired. Invocation admission that resolves it — through an Agent or a pinned revision, on every admission path including browser-direct client tokens — is then refused with `409 agent_definition_archived`.  Nothing is destroyed: the resource and every revision stay readable, and each existing Invocation keeps its pinned revision evidence. Archiving requires the same authority as replacing the definition, and repeating the call is a successful no-op.
      * Archive an Agent Definition
      */
     async archiveAgentDefinition(requestParameters: ArchiveAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
@@ -133,10 +143,10 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
             );
         }
 
-        if (requestParameters['agentDefinitionWrite'] == null) {
+        if (requestParameters['agentDefinitionCreate'] == null) {
             throw new runtime.RequiredError(
-                'agentDefinitionWrite',
-                'Required parameter "agentDefinitionWrite" was null or undefined when calling createAgentDefinition().'
+                'agentDefinitionCreate',
+                'Required parameter "agentDefinitionCreate" was null or undefined when calling createAgentDefinition().'
             );
         }
 
@@ -166,7 +176,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: AgentDefinitionWriteToJSON(requestParameters['agentDefinitionWrite']),
+            body: AgentDefinitionCreateToJSON(requestParameters['agentDefinitionCreate']),
         };
     }
 
@@ -240,6 +250,67 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
      */
     async getAgentDefinition(requestParameters: GetAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
         const response = await this.getAgentDefinitionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getAgentDefinitionRevision without sending the request
+     */
+    async getAgentDefinitionRevisionRequestOpts(requestParameters: GetAgentDefinitionRevisionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['agentDefinitionId'] == null) {
+            throw new runtime.RequiredError(
+                'agentDefinitionId',
+                'Required parameter "agentDefinitionId" was null or undefined when calling getAgentDefinitionRevision().'
+            );
+        }
+
+        if (requestParameters['revision'] == null) {
+            throw new runtime.RequiredError(
+                'revision',
+                'Required parameter "revision" was null or undefined when calling getAgentDefinitionRevision().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("bearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/v1/agent-definitions/{agent_definition_id}/revisions/{revision}`;
+        urlPath = urlPath.replace('{agent_definition_id}', encodeURIComponent(String(requestParameters['agentDefinitionId'])));
+        urlPath = urlPath.replace('{revision}', encodeURIComponent(String(requestParameters['revision'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Get one immutable Agent Definition revision
+     */
+    async getAgentDefinitionRevisionRaw(requestParameters: GetAgentDefinitionRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
+        const requestOptions = await this.getAgentDefinitionRevisionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AgentDefinitionResourceFromJSON(jsonValue));
+    }
+
+    /**
+     * Get one immutable Agent Definition revision
+     */
+    async getAgentDefinitionRevision(requestParameters: GetAgentDefinitionRevisionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
+        const response = await this.getAgentDefinitionRevisionRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

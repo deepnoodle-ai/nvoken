@@ -18,8 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar, Dict
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
@@ -27,12 +27,18 @@ from pydantic_core import to_jsonable_python
 
 class Agent(BaseModel):
     """
-    App-scoped identity anchor only. Agent behavior is not registered; instructions, model, tools, and provider keys travel per Invocation.
+    One tenant's deliberately created instance of an Agent Definition. It owns that tenant's keyed Sessions and durable memory. The Definition pointer and key are immutable; name, revision pin, and archive state are mutable.
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable host-owned key, unique within the App.")
+    tenant_key: Optional[StrictStr] = Field(description="Tenant that owns this Agent, or null for the App's default tenant.")
+    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable host-owned key, unique within this tenant.")
+    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]]
     created_at: datetime
-    __properties: ClassVar[List[str]] = ["id", "agent_key", "created_at"]
+    updated_at: datetime
+    archived_at: Optional[datetime]
+    __properties: ClassVar[List[str]] = ["id", "tenant_key", "agent_key", "name", "agent_definition_id", "pinned_revision", "created_at", "updated_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -73,6 +79,21 @@ class Agent(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # set to None if tenant_key (nullable) is None
+        # and model_fields_set contains the field
+        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
+            _dict['tenant_key'] = None
+
+        # set to None if pinned_revision (nullable) is None
+        # and model_fields_set contains the field
+        if self.pinned_revision is None and "pinned_revision" in self.model_fields_set:
+            _dict['pinned_revision'] = None
+
+        # set to None if archived_at (nullable) is None
+        # and model_fields_set contains the field
+        if self.archived_at is None and "archived_at" in self.model_fields_set:
+            _dict['archived_at'] = None
+
         return _dict
 
     @classmethod
@@ -86,7 +107,13 @@ class Agent(BaseModel):
 
         _obj = cls.model_validate({
             "id": obj.get("id"),
+            "tenant_key": obj.get("tenant_key"),
             "agent_key": obj.get("agent_key"),
-            "created_at": obj.get("created_at")
+            "name": obj.get("name"),
+            "agent_definition_id": obj.get("agent_definition_id"),
+            "pinned_revision": obj.get("pinned_revision"),
+            "created_at": obj.get("created_at"),
+            "updated_at": obj.get("updated_at"),
+            "archived_at": obj.get("archived_at")
         })
         return _obj

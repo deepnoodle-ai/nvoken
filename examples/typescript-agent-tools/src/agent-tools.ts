@@ -35,12 +35,30 @@ const lookupOrder = defineHostTool({
 
 try {
   const runId = randomUUID();
-  const support = new Client().agent({
-    agentKey: `agent-tools-${runId}`,
-    instructions: [
-      "Use lookup_order for order questions.",
-      "Remember durable Session context between turns.",
-    ].join(" "),
+  const client = new Client();
+  const agentKey = `agent-tools-${runId}`;
+  const definition = await client.createAgentDefinition({
+    definitionKey: agentKey,
+    name: "Order support",
+    definition: {
+      instructions: [
+        "Use lookup_order for order questions.",
+        "Remember durable Session context between turns.",
+      ].join(" "),
+      model: {
+        provider: (process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic") as "anthropic",
+        id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
+      },
+      tools: [lookupOrder],
+    },
+  });
+  await client.createAgent({
+    agentKey,
+    name: "Order support",
+    agentDefinitionId: definition.id,
+  });
+  const support = client.agent({
+    agentKey,
     tools: [lookupOrder],
   });
   const chat = support.session({

@@ -35,10 +35,15 @@ import {
  */
 export interface CreateSessionRequest {
     /**
-     * Your own name for the agent, handled exactly as it is when starting a
-     * turn: nvoken finds the matching Agent or creates one. Leave it out and
-     * the Session starts with no Agent — `agent_id` stays null until the
-     * first turn binds it.
+     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * @type {string}
+     * @memberof CreateSessionRequest
+     */
+    agentId?: string;
+    /**
+     * Your own key for a deliberately created Agent in the effective
+     * tenant. Unknown Agents are refused and never created. Mutually
+     * exclusive with `agent_id`. Leave both out for an unbound Session.
      *
      * @type {string}
      * @memberof CreateSessionRequest
@@ -62,7 +67,7 @@ export interface CreateSessionRequest {
     userKey?: string;
     /**
      * Optional caller key resolved within (effective tenant partition,
-     * Agent, session_key). Requires agent_key. Makes creation an
+     * Agent, session_key). Requires an Agent. Makes creation an
      * upsert: an existing keyed Session is returned unchanged.
      *
      * @type {string}
@@ -77,7 +82,7 @@ export interface CreateSessionRequest {
     sessionOptions?: SessionOptions;
     /**
      * Host-asserted starting history, accepted only while a new Session
-     * is created. Requires `agent_key`. A keyed request that resolves an
+     * is created. Requires an Agent. A keyed request that resolves an
      * existing Session returns it unchanged and never appends these
      * messages. The UTF-8 text across the array may total at most 524288
      * bytes.
@@ -105,6 +110,7 @@ export function CreateSessionRequestFromJSONTyped(json: any, ignoreDiscriminator
     }
     return {
 
+        'agentId': json['agent_id'] == null ? undefined : json['agent_id'],
         'agentKey': json['agent_key'] == null ? undefined : json['agent_key'],
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'userKey': json['user_key'] == null ? undefined : json['user_key'],
@@ -125,6 +131,7 @@ export function CreateSessionRequestToJSONTyped(value?: CreateSessionRequest | n
 
     return {
 
+        'agent_id': value['agentId'],
         'agent_key': value['agentKey'],
         'tenant_key': value['tenantKey'],
         'user_key': value['userKey'],

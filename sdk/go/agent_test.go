@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	agentTestAgentID   = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	agentTestAgentID   = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
 	agentTestSessionID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 	agentTestToolID    = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 )
@@ -30,8 +30,7 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 	}
 	var handlerCalls atomic.Int64
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_test",
+		AgentKey: "support",
 		Tools: []Tool{{
 			Mode:        ToolModeHost,
 			Name:        "weather",
@@ -146,9 +145,8 @@ func TestAgentMissingHandlerPolicyAndNoOutputKinds(t *testing.T) {
 		InputSchema: map[string]any{"type": "object"},
 	}
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_test",
-		Tools:             []Tool{missingTool},
+		AgentKey: "support",
+		Tools:    []Tool{missingTool},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -209,8 +207,7 @@ func TestBoundSessionSerializesAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	agent, err := client.Agent(AgentOptions{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_test",
+		AgentKey: "support",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -275,8 +272,7 @@ func TestWaitOptionsOverallTimeoutAndCondition(t *testing.T) {
 		t.Fatal(err)
 	}
 	handle, err := client.Agent(AgentOptions{
-		AgentKey:          "support",
-		AgentDefinitionID: "def_test",
+		AgentKey: "support",
 	})
 	if err != nil {
 		t.Fatal(err)

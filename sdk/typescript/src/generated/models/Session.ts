@@ -141,6 +141,12 @@ export interface Session {
      */
     retention?: RetentionPolicy | null;
     /**
+     * Immutable Session-level Definition revision pin, or null to follow the Agent.
+     * @type {number}
+     * @memberof Session
+     */
+    pinnedRevision: number | null;
+    /**
      * When nvoken may automatically delete this Session, or null if it
      * has no retention window. The date moves forward every time a turn
      * starts and every time one finishes, so a Session in active use
@@ -237,6 +243,7 @@ export type SessionActiveInvocationStatusEnum = typeof SessionActiveInvocationSt
  */
 export function instanceOfSession(value: object): value is Session {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('pinnedRevision' in value) || value['pinnedRevision'] === undefined) return false;
     if (!('activeInvocationId' in value) || value['activeInvocationId'] === undefined) return false;
     if (!('activeInvocationStatus' in value) || value['activeInvocationStatus'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
@@ -262,6 +269,7 @@ export function SessionFromJSONTyped(json: any, ignoreDiscriminator: boolean): S
         'forkedFrom': json['forked_from'] == null ? undefined : SessionForkLineageFromJSON(json['forked_from']),
         'compaction': json['compaction'] == null ? undefined : CompactionPolicyFromJSON(json['compaction']),
         'retention': json['retention'] == null ? undefined : RetentionPolicyFromJSON(json['retention']),
+        'pinnedRevision': json['pinned_revision'],
         'expiresAt': json['expires_at'] == null ? undefined : (new Date(json['expires_at'])),
         'metadata': json['metadata'] == null ? undefined : json['metadata'],
         'activeInvocationId': json['active_invocation_id'],
@@ -294,6 +302,7 @@ export function SessionToJSONTyped(value?: Session | null, ignoreDiscriminator: 
         'forked_from': SessionForkLineageToJSON(value['forkedFrom']),
         'compaction': CompactionPolicyToJSON(value['compaction']),
         'retention': RetentionPolicyToJSON(value['retention']),
+        'pinned_revision': value['pinnedRevision'],
         'expires_at': value['expiresAt'] == null ? value['expiresAt'] : value['expiresAt'].toISOString(),
         'metadata': value['metadata'],
         'active_invocation_id': value['activeInvocationId'],

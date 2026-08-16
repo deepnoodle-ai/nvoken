@@ -27,14 +27,12 @@ from pydantic_core import to_jsonable_python
 
 class AnonymousAccess(BaseModel):
     """
-    Complete managed-anonymous mode. The Definition must be live, App-owned, client-capable, and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+    Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
     """ # noqa: E501
-    tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="App-local tenant partition funded for public traffic.")
-    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable Agent identity used for every anonymous turn.")
-    agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
     visitor_allowance: Money
     max_admissions_per_minute: Annotated[int, Field(strict=True, ge=1)] = Field(description="Admission ceiling shared across all anonymous visitor subjects in this tenant.")
-    __properties: ClassVar[List[str]] = ["tenant_key", "agent_key", "agent_definition_id", "visitor_allowance", "max_admissions_per_minute"]
+    __properties: ClassVar[List[str]] = ["agent_id", "visitor_allowance", "max_admissions_per_minute"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -90,9 +88,7 @@ class AnonymousAccess(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "tenant_key": obj.get("tenant_key"),
-            "agent_key": obj.get("agent_key"),
-            "agent_definition_id": obj.get("agent_definition_id"),
+            "agent_id": obj.get("agent_id"),
             "visitor_allowance": Money.from_dict(obj["visitor_allowance"]) if obj.get("visitor_allowance") is not None else None,
             "max_admissions_per_minute": obj.get("max_admissions_per_minute")
         })

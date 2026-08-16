@@ -40,6 +40,8 @@ class AgentDefinitionResource(BaseModel):
     AgentDefinitionResource
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    definition_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     revision: Annotated[int, Field(strict=True, ge=1)]
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None
     model: Model
@@ -56,7 +58,7 @@ class AgentDefinitionResource(BaseModel):
     client_interface: Optional[BrowserClientInterface] = None
     updated_at: datetime
     archived_at: Optional[datetime] = Field(description="When the resource was archived, or null while it is live. Invocation admission that resolves an archived Agent Definition, by id or by pinned revision, is refused with `409 agent_definition_archived`. The resource and every revision stay readable. ")
-    __properties: ClassVar[List[str]] = ["id", "revision", "instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "memory", "created_at", "client_interface", "updated_at", "archived_at"]
+    __properties: ClassVar[List[str]] = ["id", "definition_key", "name", "revision", "instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "memory", "created_at", "client_interface", "updated_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -157,6 +159,8 @@ class AgentDefinitionResource(BaseModel):
 
         _obj = cls.model_validate({
             "id": obj.get("id"),
+            "definition_key": obj.get("definition_key"),
+            "name": obj.get("name"),
             "revision": obj.get("revision"),
             "instructions": obj.get("instructions"),
             "model": Model.from_dict(obj["model"]) if obj.get("model") is not None else None,

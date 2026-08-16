@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// CurrentIdentity : Who nvoken thinks you are. `method` says how you authenticated, and it is the only thing you need to read to know which of the optional fields below are present: a machine credential carries `credential_id`, `org_id`, and `effective_profile`; a browser grant carries `agent_key`, `agent_definition_id`, and `agent_definition_revision`, and pins `app_id` and `tenant_key` to real values.
+/// CurrentIdentity : Who nvoken thinks you are. `method` says how you authenticated, and it is the only thing you need to read to know which of the optional fields below are present: a machine credential carries `credential_id`, `org_id`, and `effective_profile`; a browser grant carries `agent_id`, `agent_key`, and `agent_definition_revision`, and is pinned to one App and Agent.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CurrentIdentity {
     #[serde(rename = "authentication")]
@@ -19,7 +19,7 @@ pub struct CurrentIdentity {
 }
 
 impl CurrentIdentity {
-    /// Who nvoken thinks you are. `method` says how you authenticated, and it is the only thing you need to read to know which of the optional fields below are present: a machine credential carries `credential_id`, `org_id`, and `effective_profile`; a browser grant carries `agent_key`, `agent_definition_id`, and `agent_definition_revision`, and pins `app_id` and `tenant_key` to real values.
+    /// Who nvoken thinks you are. `method` says how you authenticated, and it is the only thing you need to read to know which of the optional fields below are present: a machine credential carries `credential_id`, `org_id`, and `effective_profile`; a browser grant carries `agent_id`, `agent_key`, and `agent_definition_revision`, and is pinned to one App and Agent.
     pub fn new(authentication: models::CurrentIdentityAuthentication) -> CurrentIdentity {
         CurrentIdentity {
             authentication: Box::new(authentication),

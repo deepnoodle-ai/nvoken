@@ -36,6 +36,7 @@ from .ask_user import (
 )
 from .client import (
     AgentDefinition,
+    AgentDefinitionOverrides,
     BuiltinTool,
     BudgetExhaustionBehavior,
     Limits,
@@ -88,6 +89,7 @@ from .invocation_status import (
 from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream_session
 __all__ = [
     "AgentDefinition",
+    "AgentDefinitionOverrides",
     "TERMINAL_INVOCATION_STATUSES",
     "answerable_tool_calls",
     "host_tool_calls",

@@ -8,6 +8,10 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Agents are tenant-scoped instances of versioned Agent Definitions.** Create
+  a Definition and Agent before invoking by Agent ID or key; all SDKs and the
+  CLI expose Agent lifecycle, revision pins, and authority-safe turn overrides.
+
 - **`nvoken auth login` now authorizes through the console by default.** The
   browser-approved 90-day Org/operator credential is saved with Org and device
   metadata; explicit `--api-key` and `NVOKEN_API_KEY` keep the non-interactive

@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use nvoken::{
-    AgentInvocationOptions, AgentOptions, Client, ErrorCategory, IfActivePolicy, Limits, Model,
-    NvokenError, SessionBinding, Tool, ToolHandlerError,
+    AgentInvocationOptions, AgentOptions, Client, ErrorCategory, IfActivePolicy, NvokenError,
+    SessionBinding, Tool, ToolHandlerError,
 };
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -24,7 +24,7 @@ use tokio::sync::watch;
 /// an ending its own status disagrees with.
 const TERMINAL_STATUS_NAMES: [&str; 4] = ["completed", "incomplete", "failed", "cancelled"];
 
-const AGENT_ID: &str = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
+const AGENT_ID: &str = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
 const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const DEFINITION_ID: &str = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330";
 const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
@@ -146,6 +146,7 @@ fn invocation_payload(id: &str, status: &str) -> Value {
     let mut value = json!({
         "id": id,
         "agent_id": AGENT_ID,
+        "agent_key": "support",
         "session_id": SESSION_ID,
         "user_key": null,
         "agent_definition_id": DEFINITION_ID,
@@ -492,7 +493,7 @@ async fn start_server() -> (String, Arc<TestRuntime>) {
 }
 
 fn base_options() -> AgentOptions {
-    AgentOptions::new("support", Model::new("openai", "gpt-test"))
+    AgentOptions::new("support")
 }
 
 #[tokio::test]
@@ -501,23 +502,21 @@ async fn agent_five_verbs_dispatch_and_structured_output() {
     let client = Client::new(&base_url, "test-key").unwrap();
     let handler_calls = Arc::new(AtomicU64::new(0));
     let counted = handler_calls.clone();
-    let options = base_options()
-        .tool(
-            Tool::host(
-                "weather",
-                "Weather lookup",
-                HashMap::from([("type".to_owned(), json!("object"))]),
-            )
-            .handler(move |input| {
-                let counted = counted.clone();
-                async move {
-                    counted.fetch_add(1, Ordering::SeqCst);
-                    assert_eq!(input["city"], json!("Paris"));
-                    Ok(json!({"temperature": 21}))
-                }
-            }),
+    let options = base_options().tool(
+        Tool::host(
+            "weather",
+            "Weather lookup",
+            HashMap::from([("type".to_owned(), json!("object"))]),
         )
-        .output_schema(HashMap::from([("type".to_owned(), json!("object"))]));
+        .handler(move |input| {
+            let counted = counted.clone();
+            async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(input["city"], json!("Paris"));
+                Ok(json!({"temperature": 21}))
+            }
+        }),
+    );
     let agent = client.agent(options).expect("agent");
 
     let handle = agent
@@ -694,30 +693,27 @@ async fn bound_session_serializes_admission() {
 }
 
 #[tokio::test]
-async fn agent_requires_a_model_without_a_client_default() {
+async fn agent_requires_exactly_one_identity() {
     let (base_url, _runtime) = start_server().await;
     let client = Client::new(&base_url, "test-key").unwrap();
     let error = expect_err(
-        client.agent(AgentOptions::new("support", Model::default())),
-        "model is required",
+        client.agent(AgentOptions {
+            agent_id: Some("agent_test".to_owned()),
+            agent_key: Some("support".to_owned()),
+            ..AgentOptions::new("support")
+        }),
+        "identity is required",
     );
     assert_eq!(error.category, ErrorCategory::Validation);
 }
 
 #[tokio::test]
-async fn agent_uses_client_default_model_when_unset() {
+async fn agent_runs_by_stable_key() {
     let (base_url, _runtime) = start_server().await;
-    let client = Client::new(&base_url, "test-key")
-        .unwrap()
-        .with_default_model(Model::new("openai", "gpt-test"));
+    let client = Client::new(&base_url, "test-key").unwrap();
     let agent = client
-        .agent(
-            AgentOptions::new("support", Model::default()).limits(Limits {
-                max_iterations: Some(4),
-                ..Limits::default()
-            }),
-        )
-        .expect("agent uses client default model");
+        .agent(AgentOptions::new("support"))
+        .expect("agent binds by key");
     let text = agent
         .text("text", AgentInvocationOptions::default())
         .await

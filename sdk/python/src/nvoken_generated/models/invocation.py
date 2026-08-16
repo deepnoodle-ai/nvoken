@@ -41,7 +41,8 @@ class Invocation(BaseModel):
     One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, and `limits`.
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
-    agent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     user_key: Optional[StrictStr] = Field(default=None, description="Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another. ")
     agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
@@ -66,7 +67,7 @@ class Invocation(BaseModel):
     updated_at: datetime
     ended_at: Optional[datetime]
     tool_calls: Optional[List[ToolCallSummary]] = Field(default=None, description="Every tool call this turn has made, with its current status. Omitted when the turn has made none. ")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "session_id", "user_key", "agent_definition_id", "agent_definition_revision", "agent_definition", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "agent_key", "session_id", "user_key", "agent_definition_id", "agent_definition_revision", "agent_definition", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "tool_calls"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -221,6 +222,7 @@ class Invocation(BaseModel):
         _obj = cls.model_validate({
             "id": obj.get("id"),
             "agent_id": obj.get("agent_id"),
+            "agent_key": obj.get("agent_key"),
             "session_id": obj.get("session_id"),
             "user_key": obj.get("user_key"),
             "agent_definition_id": obj.get("agent_definition_id"),

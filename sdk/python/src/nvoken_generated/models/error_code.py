@@ -27,6 +27,10 @@ class ErrorCode(str, Enum):
     allowed enum values
     """
     INVALID_REQUEST = 'invalid_request'
+    AGENT_NOT_FOUND = 'agent_not_found'
+    AGENT_ARCHIVED = 'agent_archived'
+    AGENT_KEY_CONFLICT = 'agent_key_conflict'
+    AGENT_PIN_INVALID = 'agent_pin_invalid'
     AGENT_DEFINITION_NOT_FOUND = 'agent_definition_not_found'
     AGENT_DEFINITION_REVISION_CONFLICT = 'agent_definition_revision_conflict'
     PRECONDITION_REQUIRED = 'precondition_required'

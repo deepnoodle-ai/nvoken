@@ -38,6 +38,8 @@ class AgentDefinitionWrite(BaseModel):
     """
     Complete writable Agent Definition fields. The model string shorthand is accepted on write. Identity, revision, and timestamps are read-only.
     """ # noqa: E501
+    definition_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Caller-chosen immutable key. Required on creation and omitted on replacement.")
+    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Optional model instructions. Omission adds no hidden default.")
     model: ModelInput
     sampling: Optional[Sampling] = None
@@ -50,7 +52,7 @@ class AgentDefinitionWrite(BaseModel):
     provider_tools: Optional[Annotated[List[ProviderTool], Field(max_length=4)]] = None
     memory: Optional[MemoryConfig] = None
     client_interface: Optional[BrowserClientInterface] = None
-    __properties: ClassVar[List[str]] = ["instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "memory", "client_interface"]
+    __properties: ClassVar[List[str]] = ["definition_key", "name", "instructions", "model", "sampling", "reasoning", "tool_choice", "limits", "output_schema", "tools", "mcp_servers", "provider_tools", "memory", "client_interface"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -145,6 +147,8 @@ class AgentDefinitionWrite(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "definition_key": obj.get("definition_key"),
+            "name": obj.get("name"),
             "instructions": obj.get("instructions"),
             "model": ModelInput.from_dict(obj["model"]) if obj.get("model") is not None else None,
             "sampling": Sampling.from_dict(obj["sampling"]) if obj.get("sampling") is not None else None,

@@ -2,7 +2,6 @@ import { Client } from "../index.js";
 
 const agent = new Client().agent({
 	agentKey: "storyteller",
-	agentDefinitionId: process.env.NVOKEN_AGENT_DEFINITION_ID ?? "",
 });
 
 // One frame previews what the model is writing; `kind` says what it is. The

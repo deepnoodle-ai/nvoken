@@ -14,8 +14,10 @@
 
 import { mapValues } from '../runtime.js';
 /**
- * App-scoped identity anchor only. Agent behavior is not registered;
- * instructions, model, tools, and provider keys travel per Invocation.
+ * One tenant's deliberately created instance of an Agent Definition. It
+ * owns that tenant's keyed Sessions and durable memory. The Definition
+ * pointer and key are immutable; name, revision pin, and archive state
+ * are mutable.
  *
  * @export
  * @interface Agent
@@ -28,17 +30,53 @@ export interface Agent {
      */
     id: string;
     /**
-     * Stable host-owned key, unique within the App.
+     * Tenant that owns this Agent, or null for the App's default tenant.
+     * @type {string}
+     * @memberof Agent
+     */
+    tenantKey: string | null;
+    /**
+     * Stable host-owned key, unique within this tenant.
      * @type {string}
      * @memberof Agent
      */
     agentKey: string;
     /**
      *
+     * @type {string}
+     * @memberof Agent
+     */
+    name: string;
+    /**
+     * Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+     * @type {string}
+     * @memberof Agent
+     */
+    agentDefinitionId: string;
+    /**
+     *
+     * @type {number}
+     * @memberof Agent
+     */
+    pinnedRevision: number | null;
+    /**
+     *
      * @type {Date}
      * @memberof Agent
      */
     createdAt: Date;
+    /**
+     *
+     * @type {Date}
+     * @memberof Agent
+     */
+    updatedAt: Date;
+    /**
+     *
+     * @type {Date}
+     * @memberof Agent
+     */
+    archivedAt: Date | null;
 }
 
 /**
@@ -46,8 +84,14 @@ export interface Agent {
  */
 export function instanceOfAgent(value: object): value is Agent {
     if (!('id' in value) || value['id'] === undefined) return false;
+    if (!('tenantKey' in value) || value['tenantKey'] === undefined) return false;
     if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
+    if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
+    if (!('pinnedRevision' in value) || value['pinnedRevision'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
+    if (!('updatedAt' in value) || value['updatedAt'] === undefined) return false;
+    if (!('archivedAt' in value) || value['archivedAt'] === undefined) return false;
     return true;
 }
 
@@ -62,8 +106,14 @@ export function AgentFromJSONTyped(json: any, ignoreDiscriminator: boolean): Age
     return {
 
         'id': json['id'],
+        'tenantKey': json['tenant_key'],
         'agentKey': json['agent_key'],
+        'name': json['name'],
+        'agentDefinitionId': json['agent_definition_id'],
+        'pinnedRevision': json['pinned_revision'],
         'createdAt': (new Date(json['created_at'])),
+        'updatedAt': (new Date(json['updated_at'])),
+        'archivedAt': (json['archived_at'] == null ? null : new Date(json['archived_at'])),
     };
 }
 
@@ -79,7 +129,13 @@ export function AgentToJSONTyped(value?: Agent | null, ignoreDiscriminator: bool
     return {
 
         'id': value['id'],
+        'tenant_key': value['tenantKey'],
         'agent_key': value['agentKey'],
+        'name': value['name'],
+        'agent_definition_id': value['agentDefinitionId'],
+        'pinned_revision': value['pinnedRevision'],
         'created_at': value['createdAt'].toISOString(),
+        'updated_at': value['updatedAt'].toISOString(),
+        'archived_at': value['archivedAt'] == null ? value['archivedAt'] : value['archivedAt'].toISOString(),
     };
 }

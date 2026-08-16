@@ -128,109 +128,114 @@ type CredentialIssuance struct {
 }
 
 const (
-	InvocationQueued                             = generated.InvocationStatusQueued
-	InvocationRunning                            = generated.InvocationStatusRunning
-	InvocationWaiting                            = generated.InvocationStatusWaiting
-	InvocationPaused                             = generated.InvocationStatusPaused
-	InvocationCompleted                          = generated.InvocationStatusCompleted
-	InvocationIncomplete                         = generated.InvocationStatusIncomplete
-	InvocationFailed                             = generated.InvocationStatusFailed
-	InvocationCancelled                          = generated.InvocationStatusCancelled
-	StopReasonEndTurn                            = generated.InvocationStopReasonEndTurn
-	StopReasonInterrupted                        = generated.InvocationStopReasonInterrupted
-	StopReasonMaxIterations                      = generated.InvocationStopReasonMaxIterations
-	StopReasonDeadline                           = generated.InvocationStopReasonDeadline
-	StopReasonMaxOutputTokens                    = generated.InvocationStopReasonMaxOutputTokens
-	StopReasonMaxEstimatedCost                   = generated.InvocationStopReasonMaxEstimatedCost
-	StopReasonInsufficientCredits                = generated.InvocationStopReasonInsufficientCredits
-	MessagePhaseCommentary                       = generated.Commentary
-	MessagePhaseFinalAnswer                      = generated.FinalAnswer
-	SeedMessageRoleUser                          = generated.SeedMessageRoleUser
-	SeedMessageRoleAssistant                     = generated.SeedMessageRoleAssistant
-	AppSigningKeyPurposeCallback                 = generated.AppSigningKeyPurposeCallback
-	AppSigningKeyPurposeWebhook                  = generated.AppSigningKeyPurposeWebhook
-	ToolCallModeBuiltin                          = generated.ToolCallModeBuiltin
-	ToolCallModeCallback                         = generated.ToolCallModeCallback
-	ToolCallModeHost                             = generated.ToolCallModeHost
-	ToolCallModeMCP                              = generated.ToolCallModeMcp
-	ModelProviderAnthropic         ModelProvider = "anthropic"
-	ModelProviderOpenAI            ModelProvider = "openai"
-	ModelProviderXAI               ModelProvider = "xai"
-	ModelProviderGoogle            ModelProvider = "google"
-	ProviderKeyScopeApp                          = generated.ProviderKeyScopeApp
-	ProviderKeyScopeTenant                       = generated.ProviderKeyScopeTenant
-	ProviderKeyStatusActive                      = generated.ProviderKeyStatusActive
-	ProviderKeyStatusRevoked                     = generated.ProviderKeyStatusRevoked
-	NudgePending                                 = generated.NudgeStatusPending
-	NudgeDrained                                 = generated.NudgeStatusDrained
-	NudgeExpired                                 = generated.NudgeStatusExpired
-	NudgeCancelled                               = generated.NudgeStatusCancelled
-	UsageIntervalDay                             = generated.Day
-	UsageIntervalWeek                            = generated.Week
-	UsageIntervalMonth                           = generated.Month
-	CredentialProfileRuntime                     = generated.CredentialProfileRuntime
-	CredentialProfileViewer                      = generated.CredentialProfileViewer
-	CredentialProfileOperator                    = generated.CredentialProfileOperator
-	CredentialStatusActive                       = generated.CredentialStatusActive
-	CredentialStatusRevoked                      = generated.CredentialStatusRevoked
-	ArchiveStatusActive                          = generated.ArchiveStatusActive
-	ArchiveStatusAll                             = generated.ArchiveStatusAll
-	ArchiveStatusArchived                        = generated.ArchiveStatusArchived
-	ListOrderAscending                           = generated.ListOrderAscending
-	ListOrderDescending                          = generated.ListOrderDescending
-	OperationCreateInvocation                    = generated.CreateInvocation
-	OperationCreateSession                       = generated.CreateSession
-	OperationGetAgent                            = generated.GetAgent
-	OperationListAgents                          = generated.ListAgents
-	OperationGetInvocation                       = generated.GetInvocation
-	OperationSubmitToolResults                   = generated.SubmitToolResults
-	OperationCancelInvocation                    = generated.CancelInvocation
-	OperationResumeInvocation                    = generated.ResumeInvocation
-	OperationListInvocations                     = generated.ListInvocations
-	OperationGetSession                          = generated.GetSession
-	OperationUpdateSession                       = generated.UpdateSession
-	OperationDeleteSession                       = generated.DeleteSession
-	OperationListSessions                        = generated.ListSessions
-	OperationListSessionMessages                 = generated.ListSessionMessages
-	OperationGetSessionTranscript                = generated.GetSessionTranscript
-	OperationGetIdentity                         = generated.GetIdentity
-	OperationListCredentials                     = generated.ListCredentials
-	OperationCreateCredential                    = generated.CreateCredential
-	OperationGetCredential                       = generated.GetCredential
-	OperationRotateCredential                    = generated.RotateCredential
-	OperationRevokeCredential                    = generated.RevokeCredential
-	OperationListProviderKeys                    = generated.ListProviderKeys
-	OperationCreateProviderKey                   = generated.CreateProviderKey
-	OperationGetProviderKey                      = generated.GetProviderKey
-	OperationRotateProviderKey                   = generated.RotateProviderKey
-	OperationRevokeProviderKey                   = generated.RevokeProviderKey
-	OperationReadUsage                           = generated.ReadUsage
-	OperationReadCredits                         = generated.ReadCredits
-	OperationAllocateCredits                     = generated.AllocateCredits
-	OperationCreateAgentDefinition               = generated.CreateAgentDefinition
-	OperationListAgentDefinitions                = generated.ListAgentDefinitions
-	OperationGetAgentDefinition                  = generated.GetAgentDefinition
-	OperationUpdateAgentDefinition               = generated.UpdateAgentDefinition
-	OperationRegisterApp                         = generated.RegisterApp
-	OperationListApps                            = generated.ListApps
-	OperationGetApp                              = generated.GetApp
-	OperationUpdateApp                           = generated.UpdateApp
-	OperationGetOrg                              = generated.GetOrg
-	OperationListOrgs                            = generated.ListOrgs
-	OperationRegisterOrg                         = generated.RegisterOrg
-	OperationUpdateOrg                           = generated.UpdateOrg
-	MemoryKindEpisode                            = generated.Episode
-	MemoryKindFact                               = generated.Fact
-	MemoryKindPreference                         = generated.Preference
-	MemoryKindSummary                            = generated.Summary
-	MemorySearchModeHybrid                       = generated.Hybrid
-	MemorySearchModeKeyword                      = generated.Keyword
-	MemorySearchModeSemantic                     = generated.Semantic
-	MemoryConfigScopeTenant                      = generated.MemoryConfigScopeTenant
-	MemoryConfigScopeUser                        = generated.MemoryConfigScopeUser
-	MemoryContextModeFull                        = generated.MemoryContextModeFull
-	MemoryContextModeIndex                       = generated.MemoryContextModeIndex
-	MemoryContextModeOff                         = generated.MemoryContextModeOff
+	InvocationQueued                                  = generated.InvocationStatusQueued
+	InvocationRunning                                 = generated.InvocationStatusRunning
+	InvocationWaiting                                 = generated.InvocationStatusWaiting
+	InvocationPaused                                  = generated.InvocationStatusPaused
+	InvocationCompleted                               = generated.InvocationStatusCompleted
+	InvocationIncomplete                              = generated.InvocationStatusIncomplete
+	InvocationFailed                                  = generated.InvocationStatusFailed
+	InvocationCancelled                               = generated.InvocationStatusCancelled
+	StopReasonEndTurn                                 = generated.InvocationStopReasonEndTurn
+	StopReasonInterrupted                             = generated.InvocationStopReasonInterrupted
+	StopReasonMaxIterations                           = generated.InvocationStopReasonMaxIterations
+	StopReasonDeadline                                = generated.InvocationStopReasonDeadline
+	StopReasonMaxOutputTokens                         = generated.InvocationStopReasonMaxOutputTokens
+	StopReasonMaxEstimatedCost                        = generated.InvocationStopReasonMaxEstimatedCost
+	StopReasonInsufficientCredits                     = generated.InvocationStopReasonInsufficientCredits
+	MessagePhaseCommentary                            = generated.Commentary
+	MessagePhaseFinalAnswer                           = generated.FinalAnswer
+	SeedMessageRoleUser                               = generated.SeedMessageRoleUser
+	SeedMessageRoleAssistant                          = generated.SeedMessageRoleAssistant
+	AppSigningKeyPurposeCallback                      = generated.AppSigningKeyPurposeCallback
+	AppSigningKeyPurposeWebhook                       = generated.AppSigningKeyPurposeWebhook
+	ToolCallModeBuiltin                               = generated.ToolCallModeBuiltin
+	ToolCallModeCallback                              = generated.ToolCallModeCallback
+	ToolCallModeHost                                  = generated.ToolCallModeHost
+	ToolCallModeMCP                                   = generated.ToolCallModeMcp
+	ModelProviderAnthropic              ModelProvider = "anthropic"
+	ModelProviderOpenAI                 ModelProvider = "openai"
+	ModelProviderXAI                    ModelProvider = "xai"
+	ModelProviderGoogle                 ModelProvider = "google"
+	ProviderKeyScopeApp                               = generated.ProviderKeyScopeApp
+	ProviderKeyScopeTenant                            = generated.ProviderKeyScopeTenant
+	ProviderKeyStatusActive                           = generated.ProviderKeyStatusActive
+	ProviderKeyStatusRevoked                          = generated.ProviderKeyStatusRevoked
+	NudgePending                                      = generated.NudgeStatusPending
+	NudgeDrained                                      = generated.NudgeStatusDrained
+	NudgeExpired                                      = generated.NudgeStatusExpired
+	NudgeCancelled                                    = generated.NudgeStatusCancelled
+	UsageIntervalDay                                  = generated.Day
+	UsageIntervalWeek                                 = generated.Week
+	UsageIntervalMonth                                = generated.Month
+	CredentialProfileRuntime                          = generated.CredentialProfileRuntime
+	CredentialProfileViewer                           = generated.CredentialProfileViewer
+	CredentialProfileOperator                         = generated.CredentialProfileOperator
+	CredentialStatusActive                            = generated.CredentialStatusActive
+	CredentialStatusRevoked                           = generated.CredentialStatusRevoked
+	ArchiveStatusActive                               = generated.ArchiveStatusActive
+	ArchiveStatusAll                                  = generated.ArchiveStatusAll
+	ArchiveStatusArchived                             = generated.ArchiveStatusArchived
+	ListOrderAscending                                = generated.ListOrderAscending
+	ListOrderDescending                               = generated.ListOrderDescending
+	OperationCreateInvocation                         = generated.CreateInvocation
+	OperationCreateSession                            = generated.CreateSession
+	OperationGetAgent                                 = generated.GetAgent
+	OperationListAgents                               = generated.ListAgents
+	OperationGetInvocation                            = generated.GetInvocation
+	OperationSubmitToolResults                        = generated.SubmitToolResults
+	OperationCancelInvocation                         = generated.CancelInvocation
+	OperationResumeInvocation                         = generated.ResumeInvocation
+	OperationListInvocations                          = generated.ListInvocations
+	OperationGetSession                               = generated.GetSession
+	OperationUpdateSession                            = generated.UpdateSession
+	OperationDeleteSession                            = generated.DeleteSession
+	OperationListSessions                             = generated.ListSessions
+	OperationListSessionMessages                      = generated.ListSessionMessages
+	OperationGetSessionTranscript                     = generated.GetSessionTranscript
+	OperationGetIdentity                              = generated.GetIdentity
+	OperationListCredentials                          = generated.ListCredentials
+	OperationCreateCredential                         = generated.CreateCredential
+	OperationGetCredential                            = generated.GetCredential
+	OperationRotateCredential                         = generated.RotateCredential
+	OperationRevokeCredential                         = generated.RevokeCredential
+	OperationListProviderKeys                         = generated.ListProviderKeys
+	OperationCreateProviderKey                        = generated.CreateProviderKey
+	OperationGetProviderKey                           = generated.GetProviderKey
+	OperationRotateProviderKey                        = generated.RotateProviderKey
+	OperationRevokeProviderKey                        = generated.RevokeProviderKey
+	OperationReadUsage                                = generated.ReadUsage
+	OperationReadCredits                              = generated.ReadCredits
+	OperationAllocateCredits                          = generated.AllocateCredits
+	OperationCreateAgentDefinition                    = generated.CreateAgentDefinition
+	OperationListAgentDefinitions                     = generated.ListAgentDefinitions
+	OperationGetAgentDefinition                       = generated.GetAgentDefinition
+	OperationGetAgentDefinitionRevision               = generated.GetAgentDefinitionRevision
+	OperationUpdateAgentDefinition                    = generated.UpdateAgentDefinition
+	OperationCreateAgent                              = generated.CreateAgent
+	OperationUpdateAgent                              = generated.UpdateAgent
+	OperationArchiveAgent                             = generated.ArchiveAgent
+	OperationRestoreAgent                             = generated.RestoreAgent
+	OperationRegisterApp                              = generated.RegisterApp
+	OperationListApps                                 = generated.ListApps
+	OperationGetApp                                   = generated.GetApp
+	OperationUpdateApp                                = generated.UpdateApp
+	OperationGetOrg                                   = generated.GetOrg
+	OperationListOrgs                                 = generated.ListOrgs
+	OperationRegisterOrg                              = generated.RegisterOrg
+	OperationUpdateOrg                                = generated.UpdateOrg
+	MemoryKindEpisode                                 = generated.Episode
+	MemoryKindFact                                    = generated.Fact
+	MemoryKindPreference                              = generated.Preference
+	MemoryKindSummary                                 = generated.Summary
+	MemorySearchModeHybrid                            = generated.Hybrid
+	MemorySearchModeKeyword                           = generated.Keyword
+	MemorySearchModeSemantic                          = generated.Semantic
+	MemoryConfigScopeTenant                           = generated.MemoryConfigScopeTenant
+	MemoryConfigScopeUser                             = generated.MemoryConfigScopeUser
+	MemoryContextModeFull                             = generated.MemoryContextModeFull
+	MemoryContextModeIndex                            = generated.MemoryContextModeIndex
+	MemoryContextModeOff                              = generated.MemoryContextModeOff
 )
 
 type ModelList struct {
@@ -454,6 +459,9 @@ type SessionOptions struct {
 	Compaction *ContextCompaction `json:"compaction,omitempty"`
 	Retention  *SessionRetention  `json:"retention,omitempty"`
 	Metadata   map[string]string  `json:"metadata,omitempty"`
+	// PinnedRevision fixes the Agent Definition revision for the lifetime of a
+	// newly created Session. Omit it to follow the Agent's resolution policy.
+	PinnedRevision *int64 `json:"pinned_revision,omitempty"`
 }
 
 // generated converts creation-only options for POST /v1/sessions. Compaction is
@@ -467,7 +475,7 @@ func (o *SessionOptions) generated() (*generated.SessionOptions, error) {
 			"compaction requires an Invocation to validate its model against: " +
 				"set it on an Invocation admission for the Session")
 	}
-	if o.Retention == nil && len(o.Metadata) == 0 {
+	if o.Retention == nil && len(o.Metadata) == 0 && o.PinnedRevision == nil {
 		return nil, fmt.Errorf("session options require at least one member")
 	}
 	options := &generated.SessionOptions{}
@@ -478,6 +486,7 @@ func (o *SessionOptions) generated() (*generated.SessionOptions, error) {
 		metadata := generated.Metadata(o.Metadata)
 		options.Metadata = &metadata
 	}
+	options.PinnedRevision = o.PinnedRevision
 	return options, nil
 }
 
@@ -485,7 +494,7 @@ func (o *SessionOptions) generatedFork() (*generated.ForkSessionOptions, error) 
 	if o.Compaction != nil {
 		return nil, fmt.Errorf("forked Sessions start uncompacted; set compaction on the child Session's first invocation")
 	}
-	if o.Retention == nil && len(o.Metadata) == 0 {
+	if o.Retention == nil && len(o.Metadata) == 0 && o.PinnedRevision == nil {
 		return nil, fmt.Errorf("session options require at least one member")
 	}
 	options := &generated.ForkSessionOptions{}
@@ -496,6 +505,7 @@ func (o *SessionOptions) generatedFork() (*generated.ForkSessionOptions, error) 
 		metadata := generated.Metadata(o.Metadata)
 		options.Metadata = &metadata
 	}
+	options.PinnedRevision = o.PinnedRevision
 	return options, nil
 }
 
@@ -644,8 +654,9 @@ func WebSearchProviderTool() ProviderTool {
 	return ProviderTool{Type: ProviderToolWebSearch, WebSearch: &WebSearchTool{}}
 }
 
-// AgentDefinition is the execution configuration a turn runs with. It may be
-// sent inline on an Invocation or used to create a reusable App-owned resource.
+// AgentDefinition is reusable execution configuration stored as an App-owned
+// versioned resource. Invocations name an Agent instance rather than carrying
+// this configuration.
 type AgentDefinition struct {
 	Instructions  string         `json:"instructions,omitempty"`
 	Model         Model          `json:"model"`
@@ -663,16 +674,34 @@ type AgentDefinition struct {
 type AgentDefinitionResource = generated.AgentDefinitionResource
 
 type CreateAgentDefinitionInput struct {
+	DefinitionKey  string
+	Name           string
 	Definition     AgentDefinition
 	IdempotencyKey string
 }
 
 type UpdateAgentDefinitionInput struct {
+	Name             string
 	Definition       AgentDefinition
 	ExpectedRevision int64
 }
 
+// AgentDefinitionOverrides replaces a safe subset of one resolved Agent
+// Definition for a single Invocation. It cannot add tools, data access, or
+// memory authority.
+type AgentDefinitionOverrides struct {
+	Model        *Model
+	Sampling     *Sampling
+	Reasoning    *Reasoning
+	ToolChoice   *ToolChoice
+	Limits       *Limits
+	OutputSchema map[string]any
+}
+
 type InvokeRequest struct {
+	// Supply exactly one identity. AgentID avoids tenant/key lookup; AgentKey
+	// resolves within TenantKey or the default tenant.
+	AgentID   string
 	AgentKey  string
 	TenantKey *string
 	// UserKey labels the host end user who admitted this turn. The Session keeps
@@ -683,19 +712,14 @@ type InvokeRequest struct {
 	SessionKey        *string
 	SessionOptions    *SessionOptions
 	IdempotencyKey    string
+	AgentRevision     *int64
+	Overrides         *AgentDefinitionOverrides
 	IfActive          IfActivePolicy
 	OnBudgetExhausted BudgetExhaustionBehavior
 	Input             string
 	// InputBlocks carries ordered multi-block input mixing text, images, and
 	// documents. Supply exactly one of Input and InputBlocks.
 	InputBlocks []InputBlock
-	// AgentDefinition sends the complete execution configuration inline for
-	// this turn. Supply exactly one of AgentDefinition and AgentDefinitionID.
-	AgentDefinition *AgentDefinition
-	// AgentDefinitionID selects an App-owned Agent Definition resource. The
-	// current revision is pinned when this Invocation is admitted. Supply
-	// exactly one of AgentDefinition and AgentDefinitionID.
-	AgentDefinitionID string
 	// MCPServerHeaders carries per-turn secret headers, keyed to MCP server
 	// names in the selected Agent Definition. They live here rather than on
 	// MCPServer because an Agent Definition may be reused.
@@ -863,6 +887,7 @@ type SeedMessage struct {
 // SeedMessages is empty. SessionKey requires AgentKey and makes creation an
 // upsert.
 type CreateSessionOptions struct {
+	AgentID    *string
 	AgentKey   *string
 	TenantKey  *string
 	UserKey    *string
@@ -889,9 +914,29 @@ type ForkSessionOptions struct {
 }
 
 type ListAgentsOptions struct {
-	AgentKey *string
-	Cursor   *string
-	Limit    *int
+	TenantKey         *string
+	AgentKey          *string
+	AgentDefinitionID *string
+	IncludeArchived   *bool
+	Cursor            *string
+	Limit             *int
+}
+
+type CreateAgentInput struct {
+	TenantKey         *string
+	AgentKey          string
+	Name              string
+	AgentDefinitionID string
+	PinnedRevision    *int64
+}
+
+// UpdateAgentInput changes the Agent's display name and/or revision pin.
+// ClearPinnedRevision emits an explicit JSON null and cannot be combined with
+// PinnedRevision.
+type UpdateAgentInput struct {
+	Name                *string
+	PinnedRevision      *int64
+	ClearPinnedRevision bool
 }
 
 type ListMemoriesOptions struct {
@@ -997,9 +1042,9 @@ func (o WaitOptions) normalized() WaitOptions {
 	return o
 }
 
-// encoded validates one Agent Definition on its own content and renders the
-// body that invocation and resource creation both send. It deliberately
-// checks only what the definition itself can settle: installation state, App
+// encoded validates one Agent Definition on its own content and renders its
+// reusable configuration fields. It deliberately checks only what the
+// definition itself can settle: installation state, App
 // signing keys, budgets, provider keys, and model lifecycle are re-checked when
 // a turn is admitted, so a definition can be created before its App is fully
 // configured to run it.
@@ -1082,6 +1127,38 @@ func (d AgentDefinition) encoded() (map[string]any, error) {
 	}
 	if d.OutputSchema != nil {
 		body["output_schema"] = d.OutputSchema
+	}
+	return body, nil
+}
+
+func (o AgentDefinitionOverrides) encoded() (map[string]any, error) {
+	body := make(map[string]any)
+	if o.Model != nil {
+		if o.Model.Provider == "" || o.Model.ID == "" {
+			return nil, fmt.Errorf("override model requires provider and id")
+		}
+		body["model"] = o.Model
+	}
+	if o.Sampling != nil {
+		body["sampling"] = o.Sampling
+	}
+	if o.Reasoning != nil {
+		body["reasoning"] = o.Reasoning
+	}
+	if o.ToolChoice != nil {
+		body["tool_choice"] = o.ToolChoice
+	}
+	if o.Limits != nil {
+		body["limits"] = o.Limits
+	}
+	if o.OutputSchema != nil {
+		if err := PreflightOutputSchema(o.OutputSchema); err != nil {
+			return nil, err
+		}
+		body["output_schema"] = o.OutputSchema
+	}
+	if len(body) == 0 {
+		return nil, fmt.Errorf("overrides require at least one member")
 	}
 	return body, nil
 }
@@ -1174,8 +1251,8 @@ func (r InvokeRequest) encodedContext() ([]ContextItem, error) {
 }
 
 func (r InvokeRequest) encoded() ([]byte, error) {
-	if r.AgentKey == "" {
-		return nil, fmt.Errorf("agent key is required")
+	if (r.AgentID == "") == (r.AgentKey == "") {
+		return nil, fmt.Errorf("supply exactly one of agent id and agent key")
 	}
 	if (r.Input == "") == (len(r.InputBlocks) == 0) {
 		return nil, fmt.Errorf("supply exactly one of input and input blocks")
@@ -1185,28 +1262,28 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 			return nil, err
 		}
 	}
-	if (r.AgentDefinition == nil) == (r.AgentDefinitionID == "") {
-		return nil, fmt.Errorf(
-			"supply exactly one of agent definition and agent definition id",
-		)
-	}
 	var input any = r.Input
 	if len(r.InputBlocks) != 0 {
 		input = inputBlocksWire(r.InputBlocks)
 	}
 	wire := map[string]any{
-		"agent_key":       r.AgentKey,
 		"idempotency_key": r.IdempotencyKey,
 		"input":           input,
 	}
-	if r.AgentDefinitionID != "" {
-		wire["agent_definition_id"] = r.AgentDefinitionID
+	if r.AgentID != "" {
+		wire["agent_id"] = r.AgentID
 	} else {
-		definition, err := r.AgentDefinition.encoded()
+		wire["agent_key"] = r.AgentKey
+	}
+	if r.AgentRevision != nil {
+		wire["agent_revision"] = *r.AgentRevision
+	}
+	if r.Overrides != nil {
+		overrides, err := r.Overrides.encoded()
 		if err != nil {
 			return nil, err
 		}
-		wire["agent_definition"] = definition
+		wire["overrides"] = overrides
 	}
 	headers, err := r.encodedMCPServerHeaders()
 	if err != nil {
@@ -1236,7 +1313,7 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	}
 	if r.SessionOptions != nil {
 		if r.SessionOptions.Compaction == nil && r.SessionOptions.Retention == nil &&
-			len(r.SessionOptions.Metadata) == 0 {
+			len(r.SessionOptions.Metadata) == 0 && r.SessionOptions.PinnedRevision == nil {
 			return nil, fmt.Errorf("session options require at least one member")
 		}
 		wire["session_options"] = r.SessionOptions

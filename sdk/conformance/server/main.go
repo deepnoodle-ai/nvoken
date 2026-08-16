@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	agentID      = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	agentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
 	sessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 	invocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 	waitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
@@ -181,11 +181,33 @@ func creditAllocation() map[string]any {
 }
 
 func serveAgents(response http.ResponseWriter, request *http.Request) bool {
-	if request.Method != http.MethodGet {
-		return false
-	}
 	switch request.URL.Path {
 	case "/v1/agents":
+		if request.Method == http.MethodPost {
+			var body struct {
+				TenantKey         *string `json:"tenant_key"`
+				AgentKey          string  `json:"agent_key"`
+				Name              string  `json:"name"`
+				AgentDefinitionID string  `json:"agent_definition_id"`
+				PinnedRevision    *int    `json:"pinned_revision"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+				body.AgentKey != "support" || body.Name == "" || body.AgentDefinitionID != definitionID {
+				writeError(response, http.StatusBadRequest, "invalid_request", "Agent did not round-trip")
+				return true
+			}
+			value := agent()
+			value["tenant_key"] = body.TenantKey
+			value["name"] = body.Name
+			if body.PinnedRevision != nil {
+				value["pinned_revision"] = *body.PinnedRevision
+			}
+			writeJSON(response, http.StatusCreated, value)
+			return true
+		}
+		if request.Method != http.MethodGet {
+			return false
+		}
 		if key := request.URL.Query().Get("agent_key"); key != "" && key != "support" {
 			writeJSON(response, http.StatusOK, map[string]any{
 				"items":       []any{},
@@ -201,7 +223,31 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 		})
 		return true
 	case "/v1/agents/" + agentID:
-		writeJSON(response, http.StatusOK, agent())
+		switch request.Method {
+		case http.MethodGet:
+			writeJSON(response, http.StatusOK, agent())
+		case http.MethodPatch:
+			var patch map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&patch); err != nil || len(patch) == 0 {
+				writeError(response, http.StatusBadRequest, "invalid_request", "Agent update did not round-trip")
+				return true
+			}
+			value := agent()
+			for key, item := range patch {
+				value[key] = item
+			}
+			writeJSON(response, http.StatusOK, value)
+		case http.MethodDelete:
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			return false
+		}
+		return true
+	case "/v1/agents/" + agentID + "/restore":
+		if request.Method != http.MethodPost {
+			return false
+		}
+		response.WriteHeader(http.StatusNoContent)
 		return true
 	default:
 		return false
@@ -412,10 +458,12 @@ func catalogModel(provider, modelID, displayName string) map[string]any {
 // conformanceDefinition is the execution configuration an Invocation nests
 // under agent_definition and resource creation sends on its own.
 type conformanceDefinition struct {
-	Instructions string                 `json:"instructions"`
-	Model        map[string]string      `json:"model"`
-	MCPServers   []conformanceMCPServer `json:"mcp_servers"`
-	Sampling     *struct {
+	DefinitionKey string                 `json:"definition_key"`
+	Name          string                 `json:"name"`
+	Instructions  string                 `json:"instructions"`
+	Model         map[string]string      `json:"model"`
+	MCPServers    []conformanceMCPServer `json:"mcp_servers"`
+	Sampling      *struct {
 		Temperature *float64 `json:"temperature"`
 	} `json:"sampling"`
 	Reasoning *struct {
@@ -433,6 +481,7 @@ func createAgentDefinition(response http.ResponseWriter, request *http.Request) 
 	}
 	var definition conformanceDefinition
 	if err := json.NewDecoder(request.Body).Decode(&definition); err != nil ||
+		definition.DefinitionKey == "" || definition.Name == "" ||
 		definition.Model["provider"] == "" || definition.Model["id"] == "" {
 		writeError(response, http.StatusBadRequest, "invalid_request", "Agent Definition did not round-trip")
 		return true
@@ -442,7 +491,11 @@ func createAgentDefinition(response http.ResponseWriter, request *http.Request) 
 		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
 		return true
 	}
-	resolved := map[string]any{"model": definition.Model}
+	resolved := map[string]any{
+		"definition_key": definition.DefinitionKey,
+		"name":           definition.Name,
+		"model":          definition.Model,
+	}
 	if definition.Instructions != "" {
 		resolved["instructions"] = definition.Instructions
 	}
@@ -456,6 +509,8 @@ func createAgentDefinition(response http.ResponseWriter, request *http.Request) 
 
 func (s *state) createInvocation(response http.ResponseWriter, request *http.Request) {
 	var body struct {
+		AgentID        string `json:"agent_id"`
+		AgentKey       string `json:"agent_key"`
 		IdempotencyKey string `json:"idempotency_key"`
 		IfActive       string `json:"if_active"`
 		ProviderKeys   []struct {
@@ -465,10 +520,8 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 				APIKey string `json:"api_key"`
 			} `json:"key"`
 		} `json:"provider_keys"`
-		AgentDefinition   *conformanceDefinition  `json:"agent_definition"`
-		AgentDefinitionID string                  `json:"agent_definition_id"`
-		MCPServerHeaders  []conformanceMCPHeaders `json:"mcp_server_headers"`
-		Context           []conformanceContext    `json:"context"`
+		MCPServerHeaders []conformanceMCPHeaders `json:"mcp_server_headers"`
+		Context          []conformanceContext    `json:"context"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
@@ -489,13 +542,8 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 			return
 		}
 	}
-	if (body.AgentDefinition == nil) == (body.AgentDefinitionID == "") {
-		writeError(response, http.StatusBadRequest, "invalid_request", "exactly one Agent Definition form is required")
-		return
-	}
-	if body.AgentDefinition != nil &&
-		(body.AgentDefinition.Model["provider"] == "" || body.AgentDefinition.Model["id"] == "") {
-		writeError(response, http.StatusBadRequest, "invalid_request", "inline Agent Definition did not round-trip")
+	if (body.AgentID == "") == (body.AgentKey == "") {
+		writeError(response, http.StatusBadRequest, "invalid_request", "exactly one Agent identity is required")
 		return
 	}
 	if len(body.MCPServerHeaders) > 0 &&
@@ -819,6 +867,7 @@ func invocationWithID(id string, status string) map[string]any {
 	value := map[string]any{
 		"id":                           id,
 		"agent_id":                     agentID,
+		"agent_key":                    "support",
 		"session_id":                   sessionID,
 		"user_key":                     nil,
 		"agent_definition_id":          definitionID,
@@ -891,6 +940,7 @@ func session() map[string]any {
 	return map[string]any{
 		"id":                       sessionID,
 		"agent_id":                 agentID,
+		"pinned_revision":          nil,
 		"tenant_key":               "acme",
 		"session_key":              "ticket-A-42",
 		"user_key":                 "agent-smith",
@@ -926,9 +976,15 @@ func session() map[string]any {
 
 func agent() map[string]any {
 	return map[string]any{
-		"id":         agentID,
-		"agent_key":  "support",
-		"created_at": "2026-07-21T12:00:00Z",
+		"id":                  agentID,
+		"tenant_key":          nil,
+		"agent_key":           "support",
+		"name":                "Support",
+		"agent_definition_id": definitionID,
+		"pinned_revision":     nil,
+		"created_at":          "2026-07-21T12:00:00Z",
+		"updated_at":          "2026-07-21T12:00:00Z",
+		"archived_at":         nil,
 	}
 }
 

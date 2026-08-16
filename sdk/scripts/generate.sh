@@ -23,13 +23,13 @@ cd "$ROOT"
 readonly SPEC="$WORK/nvoken.yaml"
 cp openapi/nvoken.yaml "$SPEC"
 
-# Agent Definition exclusivity is a constraint-only oneOf. The generators do
-# not model that shape consistently (the Rust generator aborts), so remove only
-# the constraint from the generator copy. Each handwritten facade preserves the
+# Agent identity exclusivity is a constraint-only oneOf. The generators do not
+# model that shape consistently (the Rust generator aborts), so remove only the
+# constraint from the generator copy. Each handwritten facade preserves the
 # exact-one-of contract when it constructs a request.
 perl -0pi -e '
-  my $removed = s/^      oneOf:\n        - required: \[agent_definition\]\n          not:\n            required: \[agent_definition_id\]\n        - required: \[agent_definition_id\]\n          not:\n            required: \[agent_definition\]\n//m;
-  die "CreateInvocationRequest exclusivity constraint not found; update sdk/scripts/generate.sh\n" unless $removed;
+  my $removed = s/^      oneOf:\n        - required: \[agent_id\]\n          not:\n            required: \[agent_key\]\n        - required: \[agent_key\]\n          not:\n            required: \[agent_id\]\n//m;
+  die "CreateInvocationRequest Agent identity constraint not found; update sdk/scripts/generate.sh\n" unless $removed;
 ' "$SPEC"
 
 # oapi-codegen reserves ClientInterface for its generated transport interface.

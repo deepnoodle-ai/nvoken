@@ -32,8 +32,9 @@ class SessionOptions(BaseModel):
     """ # noqa: E501
     compaction: Optional[CompactionPolicy] = None
     retention: Optional[RetentionPolicy] = None
+    pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Immutable Session-level Agent Definition revision pin.")
     metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(default=None, description="Opaque host correlation data. nvoken stores it, returns it verbatim, and never interprets it — it exists so a support engineer holding an Invocation id can get back to the board, ticket, or surface the turn came from, which nvoken deliberately knows nothing about.  At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`, `:`, and `-`; values are at most 512 bytes of UTF-8.  There is no `title` field on a Session by design. A title is one of these entries (`{\"title\": \"Refund policy\"}`), which keeps nvoken from forming opinions about a string only the host renders. ")
-    __properties: ClassVar[List[str]] = ["compaction", "retention", "metadata"]
+    __properties: ClassVar[List[str]] = ["compaction", "retention", "pinned_revision", "metadata"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -94,6 +95,7 @@ class SessionOptions(BaseModel):
         _obj = cls.model_validate({
             "compaction": CompactionPolicy.from_dict(obj["compaction"]) if obj.get("compaction") is not None else None,
             "retention": RetentionPolicy.from_dict(obj["retention"]) if obj.get("retention") is not None else None,
+            "pinned_revision": obj.get("pinned_revision"),
             "metadata": obj.get("metadata")
         })
         return _obj

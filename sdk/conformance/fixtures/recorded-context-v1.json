@@ -25,7 +25,6 @@
       "session_key": "ticket-483",
       "idempotency_key": "recorded-context",
       "input": "Can I refund the duplicate charge?",
-      "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
       "context": [
         {
           "name": "customer",

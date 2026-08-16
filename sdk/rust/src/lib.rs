@@ -28,15 +28,16 @@ pub use callback::{
     CallbackEnvelope, CallbackError, CallbackReply, CallbackResultStore, VerifiedCallback,
 };
 pub use client::{
-    fetch_tool, AgentDefinition, BudgetExhaustionBehavior, Client, CompactionListOptions,
-    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
-    HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits,
-    ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
-    ListOrder, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
-    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
-    RetryPolicy, Sampling, SessionOptions, SessionRetention, StreamOptions, Tool,
-    ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult, WaitCondition,
-    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
+    fetch_tool, AgentDefinition, AgentDefinitionOverrides, BudgetExhaustionBehavior, Client,
+    CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
+    CreateAgentInput, ErrorCategory, HostToolHandler, IfActivePolicy, InvocationHandle,
+    InvokeRequest, Limits, ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationsOptions,
+    ListModelsOptions, ListOrder, ListSessionsOptions, McpServer, McpServerHeaders,
+    MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool,
+    Reasoning, ReasoningEffort, RetryPolicy, Sampling, SessionOptions, SessionRetention,
+    StreamOptions, Tool, ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult,
+    UpdateAgentInput, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent,
+    WebhookTarget,
 };
 pub use invocation_status::{is_terminal_status, is_turn_over, TERMINAL_INVOCATION_STATUSES};
 pub use media_preflight::{

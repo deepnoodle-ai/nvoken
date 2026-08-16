@@ -432,9 +432,13 @@ func (e DocumentReferenceBlockType) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	ErrorCodeAgentArchived                   ErrorCode = "agent_archived"
 	ErrorCodeAgentDefinitionArchived         ErrorCode = "agent_definition_archived"
 	ErrorCodeAgentDefinitionNotFound         ErrorCode = "agent_definition_not_found"
 	ErrorCodeAgentDefinitionRevisionConflict ErrorCode = "agent_definition_revision_conflict"
+	ErrorCodeAgentKeyConflict                ErrorCode = "agent_key_conflict"
+	ErrorCodeAgentNotFound                   ErrorCode = "agent_not_found"
+	ErrorCodeAgentPinInvalid                 ErrorCode = "agent_pin_invalid"
 	ErrorCodeAppArchived                     ErrorCode = "app_archived"
 	ErrorCodeBudgetExceeded                  ErrorCode = "budget_exceeded"
 	ErrorCodeCostEstimateUnavailable         ErrorCode = "cost_estimate_unavailable"
@@ -468,11 +472,19 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeAgentArchived:
+		return true
 	case ErrorCodeAgentDefinitionArchived:
 		return true
 	case ErrorCodeAgentDefinitionNotFound:
 		return true
 	case ErrorCodeAgentDefinitionRevisionConflict:
+		return true
+	case ErrorCodeAgentKeyConflict:
+		return true
+	case ErrorCodeAgentNotFound:
+		return true
+	case ErrorCodeAgentPinInvalid:
 		return true
 	case ErrorCodeAppArchived:
 		return true
@@ -1236,52 +1248,57 @@ func (e ObservationStatus) Valid() bool {
 
 // Defines values for Operation.
 const (
-	AllocateCredits        Operation = "allocate_credits"
-	CancelInvocation       Operation = "cancel_invocation"
-	CreateAgentDefinition  Operation = "create_agent_definition"
-	CreateCredential       Operation = "create_credential"
-	CreateInvocation       Operation = "create_invocation"
-	CreateProviderKey      Operation = "create_provider_key"
-	CreateSession          Operation = "create_session"
-	DeleteMemory           Operation = "delete_memory"
-	DeleteSession          Operation = "delete_session"
-	DeleteTenant           Operation = "delete_tenant"
-	GetAgent               Operation = "get_agent"
-	GetAgentDefinition     Operation = "get_agent_definition"
-	GetApp                 Operation = "get_app"
-	GetCredential          Operation = "get_credential"
-	GetIdentity            Operation = "get_identity"
-	GetInvocation          Operation = "get_invocation"
-	GetOrg                 Operation = "get_org"
-	GetProviderKey         Operation = "get_provider_key"
-	GetSession             Operation = "get_session"
-	GetSessionTranscript   Operation = "get_session_transcript"
-	InterruptInvocation    Operation = "interrupt_invocation"
-	ListAgentDefinitions   Operation = "list_agent_definitions"
-	ListAgents             Operation = "list_agents"
-	ListApps               Operation = "list_apps"
-	ListCredentials        Operation = "list_credentials"
-	ListInvocations        Operation = "list_invocations"
-	ListOrgs               Operation = "list_orgs"
-	ListProviderKeys       Operation = "list_provider_keys"
-	ListSessionMessages    Operation = "list_session_messages"
-	ListSessions           Operation = "list_sessions"
-	ManageInvocationNudges Operation = "manage_invocation_nudges"
-	ReadCredits            Operation = "read_credits"
-	ReadMemories           Operation = "read_memories"
-	ReadUsage              Operation = "read_usage"
-	RegisterApp            Operation = "register_app"
-	RegisterOrg            Operation = "register_org"
-	ResumeInvocation       Operation = "resume_invocation"
-	RevokeCredential       Operation = "revoke_credential"
-	RevokeProviderKey      Operation = "revoke_provider_key"
-	RotateCredential       Operation = "rotate_credential"
-	RotateProviderKey      Operation = "rotate_provider_key"
-	SubmitToolResults      Operation = "submit_tool_results"
-	UpdateAgentDefinition  Operation = "update_agent_definition"
-	UpdateApp              Operation = "update_app"
-	UpdateOrg              Operation = "update_org"
-	UpdateSession          Operation = "update_session"
+	AllocateCredits            Operation = "allocate_credits"
+	ArchiveAgent               Operation = "archive_agent"
+	CancelInvocation           Operation = "cancel_invocation"
+	CreateAgent                Operation = "create_agent"
+	CreateAgentDefinition      Operation = "create_agent_definition"
+	CreateCredential           Operation = "create_credential"
+	CreateInvocation           Operation = "create_invocation"
+	CreateProviderKey          Operation = "create_provider_key"
+	CreateSession              Operation = "create_session"
+	DeleteMemory               Operation = "delete_memory"
+	DeleteSession              Operation = "delete_session"
+	DeleteTenant               Operation = "delete_tenant"
+	GetAgent                   Operation = "get_agent"
+	GetAgentDefinition         Operation = "get_agent_definition"
+	GetAgentDefinitionRevision Operation = "get_agent_definition_revision"
+	GetApp                     Operation = "get_app"
+	GetCredential              Operation = "get_credential"
+	GetIdentity                Operation = "get_identity"
+	GetInvocation              Operation = "get_invocation"
+	GetOrg                     Operation = "get_org"
+	GetProviderKey             Operation = "get_provider_key"
+	GetSession                 Operation = "get_session"
+	GetSessionTranscript       Operation = "get_session_transcript"
+	InterruptInvocation        Operation = "interrupt_invocation"
+	ListAgentDefinitions       Operation = "list_agent_definitions"
+	ListAgents                 Operation = "list_agents"
+	ListApps                   Operation = "list_apps"
+	ListCredentials            Operation = "list_credentials"
+	ListInvocations            Operation = "list_invocations"
+	ListOrgs                   Operation = "list_orgs"
+	ListProviderKeys           Operation = "list_provider_keys"
+	ListSessionMessages        Operation = "list_session_messages"
+	ListSessions               Operation = "list_sessions"
+	ManageInvocationNudges     Operation = "manage_invocation_nudges"
+	ReadCredits                Operation = "read_credits"
+	ReadMemories               Operation = "read_memories"
+	ReadUsage                  Operation = "read_usage"
+	RegisterApp                Operation = "register_app"
+	RegisterOrg                Operation = "register_org"
+	RestoreAgent               Operation = "restore_agent"
+	ResumeInvocation           Operation = "resume_invocation"
+	RevokeCredential           Operation = "revoke_credential"
+	RevokeProviderKey          Operation = "revoke_provider_key"
+	RotateCredential           Operation = "rotate_credential"
+	RotateProviderKey          Operation = "rotate_provider_key"
+	SubmitToolResults          Operation = "submit_tool_results"
+	UpdateAgent                Operation = "update_agent"
+	UpdateAgentDefinition      Operation = "update_agent_definition"
+	UpdateApp                  Operation = "update_app"
+	UpdateOrg                  Operation = "update_org"
+	UpdateSession              Operation = "update_session"
 )
 
 // Valid indicates whether the value is a known member of the Operation enum.
@@ -1289,7 +1306,11 @@ func (e Operation) Valid() bool {
 	switch e {
 	case AllocateCredits:
 		return true
+	case ArchiveAgent:
+		return true
 	case CancelInvocation:
+		return true
+	case CreateAgent:
 		return true
 	case CreateAgentDefinition:
 		return true
@@ -1310,6 +1331,8 @@ func (e Operation) Valid() bool {
 	case GetAgent:
 		return true
 	case GetAgentDefinition:
+		return true
+	case GetAgentDefinitionRevision:
 		return true
 	case GetApp:
 		return true
@@ -1359,6 +1382,8 @@ func (e Operation) Valid() bool {
 		return true
 	case RegisterOrg:
 		return true
+	case RestoreAgent:
+		return true
 	case ResumeInvocation:
 		return true
 	case RevokeCredential:
@@ -1370,6 +1395,8 @@ func (e Operation) Valid() bool {
 	case RotateProviderKey:
 		return true
 	case SubmitToolResults:
+		return true
+	case UpdateAgent:
 		return true
 	case UpdateAgentDefinition:
 		return true
@@ -2458,15 +2485,27 @@ type AdmissionTenantCount struct {
 	TenantKey     string    `json:"tenant_key"`
 }
 
-// Agent App-scoped identity anchor only. Agent behavior is not registered;
-// instructions, model, tools, and provider keys travel per Invocation.
+// Agent One tenant's deliberately created instance of an Agent Definition. It
+// owns that tenant's keyed Sessions and durable memory. The Definition
+// pointer and key are immutable; name, revision pin, and archive state
+// are mutable.
 type Agent struct {
-	// AgentKey Stable host-owned key, unique within the App.
-	AgentKey  string    `json:"agent_key"`
-	CreatedAt time.Time `json:"created_at"`
+	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
+
+	// AgentKey Stable host-owned key, unique within this tenant.
+	AgentKey   string     `json:"agent_key"`
+	ArchivedAt *time.Time `json:"archived_at"`
+	CreatedAt  time.Time  `json:"created_at"`
 
 	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	ID AgentID `json:"id"`
+	ID             AgentID `json:"id"`
+	Name           string  `json:"name"`
+	PinnedRevision *int64  `json:"pinned_revision"`
+
+	// TenantKey Tenant that owns this Agent, or null for the App's default tenant.
+	TenantKey *string   `json:"tenant_key"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // AgentDefinition Immutable Agent Definition fields admitted by one Invocation. Detailed
@@ -2536,8 +2575,116 @@ type AgentDefinition struct {
 	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
 }
 
+// AgentDefinitionCreate defines model for AgentDefinitionCreate.
+type AgentDefinitionCreate struct {
+	// ClientInterface One immutable definition-specific authorization object. Omission means
+	// the definition is not client-token-capable; an explicit empty object
+	// opts in with no client-authored context or tools. Each set is sorted
+	// before a revision snapshot is retained, so order alone cannot advance
+	// a resource revision.
+	//
+	// This object grants authorship and settlement only, never selective read
+	// visibility. All public transcript content in a browser-reachable
+	// Session, including operator-tier recorded context, must be treated as
+	// client-visible. No lifetime, host_only, wildcard, generic tool-policy,
+	// tier-switch, or disclosure field exists here.
+	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
+
+	// DefinitionKey Caller-chosen immutable key. Required on creation and omitted on replacement.
+	DefinitionKey string `json:"definition_key"`
+
+	// Instructions Optional model instructions. Omission adds no hidden default.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits *Limits `json:"limits,omitempty"`
+
+	// McpServers MCP server declarations for later Invocations. Secrets are never part of an Agent Definition.
+	McpServers *[]MCPServer `json:"mcp_servers,omitempty"`
+
+	// Memory Opts this Agent Definition into durable memory and automatically
+	// attaches nvoken_memory_remember, nvoken_memory_recall, and
+	// nvoken_memory_forget. Omission attaches no memory capability.
+	Memory *MemoryConfig `json:"memory,omitempty"`
+
+	// Model Which model to use. The object form — separate `provider` and `id` — is
+	// the real shape. You may also send a single `provider/id` string for
+	// convenience; nvoken splits it at the first slash and always returns the
+	// object form.
+	Model ModelInput `json:"model"`
+	Name  string     `json:"name"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema  *OutputSchema   `json:"output_schema,omitempty"`
+	ProviderTools *[]ProviderTool `json:"provider_tools,omitempty"`
+	Reasoning     *Reasoning      `json:"reasoning,omitempty"`
+	Sampling      *Sampling       `json:"sampling,omitempty"`
+
+	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
+	// none disables tools for the Invocation; required and named apply only
+	// to the first durable model iteration, then return to auto. name is
+	// required only for named mode. The final bounded iteration always
+	// disables tools.
+	ToolChoice *ToolChoice        `json:"tool_choice,omitempty"`
+	Tools      *[]ToolDeclaration `json:"tools,omitempty"`
+}
+
 // AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
 type AgentDefinitionID = string
+
+// AgentDefinitionOverrides Per-turn replacements that cannot expand tools, data access, memory, or browser authority.
+type AgentDefinitionOverrides struct {
+	// Limits Optional requested limits. Total time bounds the entire turn, active
+	// time bounds model and tool execution, and waiting time bounds the
+	// cumulative time parked for host or callback tool results. Installation
+	// defaults supply all three time limits and the iteration limit.
+	// Output-token and estimated-cost limits are unlimited when omitted.
+	// Installation maxima may be lower than the schema's numeric range.
+	Limits *Limits `json:"limits,omitempty"`
+
+	// Model Which model to use. The object form — separate `provider` and `id` — is
+	// the real shape. You may also send a single `provider/id` string for
+	// convenience; nvoken splits it at the first slash and always returns the
+	// object form.
+	Model *ModelInput `json:"model,omitempty"`
+
+	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
+	// is limited to 32 KiB and 16 schema positions. Supported keywords are
+	// type, title, description, properties, required, additionalProperties,
+	// items, enum, pattern, minLength, maxLength, minItems, maxItems,
+	// uniqueItems, minimum, and maximum. Every schema position has one string
+	// type; pattern values are limited to 1,024 UTF-8 bytes; references and
+	// other keywords are rejected. Numeric bounds are read as values, not
+	// spellings: 10, 10.0, and 1e1 are the same bound. When present, nvoken
+	// exposes a reserved durable submit tool and publishes only a
+	// server-validated terminal object. This does not enable host-defined
+	// tools.
+	OutputSchema *OutputSchema `json:"output_schema,omitempty"`
+	Reasoning    *Reasoning    `json:"reasoning,omitempty"`
+	Sampling     *Sampling     `json:"sampling,omitempty"`
+
+	// ToolChoice Portable Invocation tool selection. auto preserves normal selection;
+	// none disables tools for the Invocation; required and named apply only
+	// to the first durable model iteration, then return to auto. name is
+	// required only for named mode. The final bounded iteration always
+	// disables tools.
+	ToolChoice *ToolChoice `json:"tool_choice,omitempty"`
+}
 
 // AgentDefinitionResource defines model for AgentDefinitionResource.
 type AgentDefinitionResource struct {
@@ -2560,6 +2707,7 @@ type AgentDefinitionResource struct {
 	// tier-switch, or disclosure field exists here.
 	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
 	CreatedAt       time.Time               `json:"created_at"`
+	DefinitionKey   string                  `json:"definition_key"`
 
 	// ID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
 	ID           AgentDefinitionID `json:"id"`
@@ -2579,6 +2727,7 @@ type AgentDefinitionResource struct {
 	// nvoken_memory_forget. Omission attaches no memory capability.
 	Memory *MemoryConfig `json:"memory,omitempty"`
 	Model  Model         `json:"model"`
+	Name   string        `json:"name"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -2630,6 +2779,9 @@ type AgentDefinitionWrite struct {
 	// tier-switch, or disclosure field exists here.
 	ClientInterface *BrowserClientInterface `json:"client_interface,omitempty"`
 
+	// DefinitionKey Caller-chosen immutable key. Required on creation and omitted on replacement.
+	DefinitionKey *string `json:"definition_key,omitempty"`
+
 	// Instructions Optional model instructions. Omission adds no hidden default.
 	Instructions *string `json:"instructions,omitempty"`
 
@@ -2654,6 +2806,7 @@ type AgentDefinitionWrite struct {
 	// convenience; nvoken splits it at the first slash and always returns the
 	// object form.
 	Model ModelInput `json:"model"`
+	Name  string     `json:"name"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -2714,25 +2867,19 @@ type AllocateCreditsResult struct {
 	Allocation CreditAllocation `json:"allocation"`
 }
 
-// AnonymousAccess Complete managed-anonymous mode. The Definition must be live,
-// App-owned, client-capable, and either have no memory or explicitly use
+// AnonymousAccess Complete managed-anonymous mode. The Agent and its Definition must be
+// live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
 // user-scoped memory. The positive USD allowance is a lifetime retained-
 // cost ceiling for one opaque visitor subject. Clearing browser storage
 // can create a new subject, so the anonymous admission ceiling, tenant
 // Credits, and App admission limits remain aggregate hard caps.
 type AnonymousAccess struct {
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
-
-	// AgentKey Stable Agent identity used for every anonymous turn.
-	AgentKey string `json:"agent_key"`
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	AgentID AgentID `json:"agent_id"`
 
 	// MaxAdmissionsPerMinute Admission ceiling shared across all anonymous visitor subjects in this tenant.
 	MaxAdmissionsPerMinute int64 `json:"max_admissions_per_minute"`
-
-	// TenantKey App-local tenant partition funded for public traffic.
-	TenantKey        string `json:"tenant_key"`
-	VisitorAllowance Money  `json:"visitor_allowance"`
+	VisitorAllowance       Money `json:"visitor_allowance"`
 }
 
 // AnonymousTokenRequest defines model for AnonymousTokenRequest.
@@ -3120,6 +3267,16 @@ type CostMetrics struct {
 // CostMetricsCostCoverage defines model for CostMetrics.CostCoverage.
 type CostMetricsCostCoverage string
 
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
+	AgentKey          string            `json:"agent_key"`
+	Name              string            `json:"name"`
+	PinnedRevision    *int64            `json:"pinned_revision,omitempty"`
+	TenantKey         *string           `json:"tenant_key,omitempty"`
+}
+
 // CreateClientKeyRequest defines model for CreateClientKeyRequest.
 type CreateClientKeyRequest struct {
 	// Name Bounded operator-facing display name.
@@ -3154,27 +3311,20 @@ type CreateCredentialRequest struct {
 	TenantKey *string    `json:"tenant_key,omitempty"`
 }
 
-// CreateInvocationRequest Carries exactly one Agent Definition form. Use `agent_definition` for
-// an inline definition owned by this Invocation, or
-// `agent_definition_id` to reuse an App-owned resource. Admission always
-// pins immutable definition bytes; later resource updates affect only
-// future Invocations.
+// CreateInvocationRequest Names one deliberately created Agent and carries no reusable
+// configuration. Admission resolves and pins the Agent's Definition
+// revision atomically; an unknown Agent is `agent_not_found` and nothing
+// is created as a side effect.
 type CreateInvocationRequest struct {
-	// AgentDefinition Full definition for this turn. nvoken records an immutable snapshot
-	// and returns its generated `agent_definition_id` and revision on the
-	// Invocation. Mutually exclusive with `agent_definition_id`.
-	AgentDefinition *AgentDefinitionWrite `json:"agent_definition,omitempty"`
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	AgentID *AgentID `json:"agent_id,omitempty"`
 
-	// AgentDefinitionID Stable resource ID to resolve for this turn. IDs from another App,
-	// or IDs that do not exist, return `agent_definition_not_found`.
-	// Idempotent replay compares this stable ID and returns the original
-	// admitted revision even when the resource has advanced.
-	AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
+	// AgentKey Stable caller-controlled Agent key, unique within the effective
+	// tenant. Mutually exclusive with `agent_id`.
+	AgentKey *string `json:"agent_key,omitempty"`
 
-	// AgentKey Stable caller-controlled Agent key, unique within the
-	// authenticated App. The resulting Agent anchor stores identity
-	// only and is shared across that App's tenant partitions.
-	AgentKey string `json:"agent_key"`
+	// AgentRevision Optional one-turn revision pin, ahead of Session and Agent pins.
+	AgentRevision *int64 `json:"agent_revision,omitempty"`
 
 	// Context Ordered application-owned state snapshots to record before this
 	// turn's input. Send a name again to supersede its prior value. An
@@ -3193,9 +3343,9 @@ type CreateInvocationRequest struct {
 	// where you never saw the response, and you get the original turn
 	// back instead of starting a second one.
 	//
-	// Keys are scoped to the tenant and `agent_key`, so the same key
-	// under a different tenant is a different request. Deduplication
-	// lasts as long as the original turn still exists.
+	// Keys are scoped to the tenant and resolved Agent, so the same key
+	// under a different tenant or Agent is a different request.
+	// Deduplication lasts as long as the original turn still exists.
 	IdempotencyKey string `json:"idempotency_key"`
 
 	// IfActive What to do when the Session already has a turn running. A Session
@@ -3248,6 +3398,9 @@ type CreateInvocationRequest struct {
 	// limits, and exhausted tenant credits. Deadlines are not covered —
 	// a turn that runs out of time always ends and can never be resumed.
 	OnBudgetExhausted *CreateInvocationRequestOnBudgetExhausted `json:"on_budget_exhausted,omitempty"`
+
+	// Overrides Per-turn replacements that cannot expand tools, data access, memory, or browser authority.
+	Overrides *AgentDefinitionOverrides `json:"overrides,omitempty"`
 
 	// ProviderKeys Which key pays for the model on this turn. Names a source; never
 	// contains a secret.
@@ -3381,21 +3534,23 @@ type CreateProviderKeyRequest struct {
 
 // CreateSessionRequest defines model for CreateSessionRequest.
 type CreateSessionRequest struct {
-	// AgentKey Your own name for the agent, handled exactly as it is when starting a
-	// turn: nvoken finds the matching Agent or creates one. Leave it out and
-	// the Session starts with no Agent — `agent_id` stays null until the
-	// first turn binds it.
+	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	AgentID *AgentID `json:"agent_id,omitempty"`
+
+	// AgentKey Your own key for a deliberately created Agent in the effective
+	// tenant. Unknown Agents are refused and never created. Mutually
+	// exclusive with `agent_id`. Leave both out for an unbound Session.
 	AgentKey *string `json:"agent_key,omitempty"`
 
 	// SeedMessages Host-asserted starting history, accepted only while a new Session
-	// is created. Requires `agent_key`. A keyed request that resolves an
+	// is created. Requires an Agent. A keyed request that resolves an
 	// existing Session returns it unchanged and never appends these
 	// messages. The UTF-8 text across the array may total at most 524288
 	// bytes.
 	SeedMessages *[]SeedMessage `json:"seed_messages,omitempty"`
 
 	// SessionKey Optional caller key resolved within (effective tenant partition,
-	// Agent, session_key). Requires agent_key. Makes creation an
+	// Agent, session_key). Requires an Agent. Makes creation an
 	// upsert: an existing keyed Session is returned unchanged.
 	SessionKey *string `json:"session_key,omitempty"`
 
@@ -3552,16 +3707,16 @@ type CreditPolicy string
 // CurrentIdentity Who nvoken thinks you are. `method` says how you authenticated, and it
 // is the only thing you need to read to know which of the optional fields
 // below are present: a machine credential carries `credential_id`,
-// `org_id`, and `effective_profile`; a browser grant carries `agent_key`,
-// `agent_definition_id`, and `agent_definition_revision`, and pins
-// `app_id` and `tenant_key` to real values.
+// `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
+// `agent_key`, and `agent_definition_revision`, and is pinned to one
+// App and Agent.
 type CurrentIdentity struct {
 	Authentication struct {
-		// AgentDefinitionID Browser grants only.
-		AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
-
 		// AgentDefinitionRevision Browser grants only.
 		AgentDefinitionRevision *int `json:"agent_definition_revision,omitempty"`
+
+		// AgentID Browser grants only. The Agent this grant is pinned to.
+		AgentID *AgentID `json:"agent_id,omitempty"`
 
 		// AgentKey Browser grants only. The Agent this grant is pinned to.
 		AgentKey *string `json:"agent_key,omitempty"`
@@ -3694,7 +3849,8 @@ type ForkSessionOptions struct {
 	// There is no `title` field on a Session by design. A title is one of
 	// these entries (`{"title": "Refund policy"}`), which keeps nvoken from
 	// forming opinions about a string only the host renders.
-	Metadata *Metadata `json:"metadata,omitempty"`
+	Metadata       *Metadata `json:"metadata,omitempty"`
+	PinnedRevision *int64    `json:"pinned_revision,omitempty"`
 
 	// Retention How long a Session can sit unused before nvoken deletes it. When the
 	// window passes, the Session and everything under it are erased, exactly
@@ -3875,7 +4031,8 @@ type Invocation struct {
 	AgentDefinitionRevision int64 `json:"agent_definition_revision"`
 
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID *AgentID `json:"agent_id,omitempty"`
+	AgentID  AgentID `json:"agent_id"`
+	AgentKey string  `json:"agent_key"`
 
 	// Attempt Execution attempts this Invocation has been claimed for. It
 	// increases on every claim, so an attempt increase across a
@@ -4684,18 +4841,24 @@ type ModelCallRecord struct {
 	PricingVersion         *string                 `json:"pricing_version"`
 	ProviderAttemptOrdinal int                     `json:"provider_attempt_ordinal"`
 	ProviderKeyID          *string                 `json:"provider_key_id"`
-	ProviderKeySource      ProviderKeySource       `json:"provider_key_source"`
-	ProviderKeyVersionID   *string                 `json:"provider_key_version_id"`
-	ReasoningTokens        *int                    `json:"reasoning_tokens"`
-	RequestedModel         string                  `json:"requested_model"`
-	RequestedProvider      string                  `json:"requested_provider"`
-	ServedModel            *string                 `json:"served_model"`
-	ServedProvider         *string                 `json:"served_provider"`
-	SessionID              *string                 `json:"session_id"`
-	SettledAt              *time.Time              `json:"settled_at"`
-	StartedAt              *time.Time              `json:"started_at"`
-	Status                 ModelCallFactStatus     `json:"status"`
-	TenantKey              *string                 `json:"tenant_key"`
+
+	// ProviderKeySource Which account pays for a model call. Installations choose which
+	// sources they enable: a BYOK-disabled installation (nvoken Cloud
+	// today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok`
+	// selections and provider key storage, and every call runs on its
+	// system provider keys.
+	ProviderKeySource    ProviderKeySource   `json:"provider_key_source"`
+	ProviderKeyVersionID *string             `json:"provider_key_version_id"`
+	ReasoningTokens      *int                `json:"reasoning_tokens"`
+	RequestedModel       string              `json:"requested_model"`
+	RequestedProvider    string              `json:"requested_provider"`
+	ServedModel          *string             `json:"served_model"`
+	ServedProvider       *string             `json:"served_provider"`
+	SessionID            *string             `json:"session_id"`
+	SettledAt            *time.Time          `json:"settled_at"`
+	StartedAt            *time.Time          `json:"started_at"`
+	Status               ModelCallFactStatus `json:"status"`
+	TenantKey            *string             `json:"tenant_key"`
 
 	// UserKey Null after user erasure.
 	UserKey *string `json:"user_key"`
@@ -5195,7 +5358,11 @@ type ProviderKeySelection1 struct {
 // ProviderKeySelection1Source defines model for ProviderKeySelection.1.Source.
 type ProviderKeySelection1Source string
 
-// ProviderKeySource defines model for ProviderKeySource.
+// ProviderKeySource Which account pays for a model call. Installations choose which
+// sources they enable: a BYOK-disabled installation (nvoken Cloud
+// today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok`
+// selections and provider key storage, and every call runs on its
+// system provider keys.
 type ProviderKeySource string
 
 // ProviderKeyUsage defines model for ProviderKeyUsage.
@@ -5497,6 +5664,9 @@ type Session struct {
 	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
+	// PinnedRevision Immutable Session-level Definition revision pin, or null to follow the Agent.
+	PinnedRevision *int64 `json:"pinned_revision"`
+
 	// Retention The idle retention window this Session was created with, or null
 	// when it is retained until deleted explicitly. A window outside the
 	// supported range is refused at creation rather than clamped, so
@@ -5727,6 +5897,9 @@ type SessionOptions struct {
 	// these entries (`{"title": "Refund policy"}`), which keeps nvoken from
 	// forming opinions about a string only the host renders.
 	Metadata *Metadata `json:"metadata,omitempty"`
+
+	// PinnedRevision Immutable Session-level Agent Definition revision pin.
+	PinnedRevision *int64 `json:"pinned_revision,omitempty"`
 
 	// Retention How long a Session can sit unused before nvoken deletes it. When the
 	// window passes, the Session and everything under it are erased, exactly
@@ -6363,6 +6536,12 @@ type URLCitation struct {
 // URLCitationType defines model for URLCitation.Type.
 type URLCitationType string
 
+// UpdateAgentRequest defines model for UpdateAgentRequest.
+type UpdateAgentRequest struct {
+	Name           *string `json:"name,omitempty"`
+	PinnedRevision *int64  `json:"pinned_revision,omitempty"`
+}
+
 // UpdateAppRequest defines model for UpdateAppRequest.
 type UpdateAppRequest struct {
 	// AnonymousAccess Replace the complete anonymous-browser mode, or send null to stop
@@ -6608,7 +6787,11 @@ type UsageProviderFilter = string
 // UsageProviderKeyIDFilter Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
 type UsageProviderKeyIDFilter = ProviderKeyID
 
-// UsageProviderKeySourceFilter defines model for UsageProviderKeySourceFilter.
+// UsageProviderKeySourceFilter Which account pays for a model call. Installations choose which
+// sources they enable: a BYOK-disabled installation (nvoken Cloud
+// today) refuses `caller_ephemeral`, `app_byok`, and `tenant_byok`
+// selections and provider key storage, and every call runs on its
+// system provider keys.
 type UsageProviderKeySourceFilter = ProviderKeySource
 
 // UsageStartAt defines model for UsageStartAt.
@@ -6718,9 +6901,14 @@ type UpdateAgentDefinitionParams struct {
 
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
+	// TenantKey Exact non-default tenant partition reference.
+	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
+
 	// AgentKey Exact host-owned Agent key. On Session and Invocation lists this is
 	// mutually exclusive with agent_id.
-	AgentKey *AgentKeyFilter `form:"agent_key,omitempty" json:"agent_key,omitempty"`
+	AgentKey          *AgentKeyFilter    `form:"agent_key,omitempty" json:"agent_key,omitempty"`
+	AgentDefinitionID *AgentDefinitionID `form:"agent_definition_id,omitempty" json:"agent_definition_id,omitempty"`
+	IncludeArchived   *bool              `form:"include_archived,omitempty" json:"include_archived,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -7177,10 +7365,16 @@ type ReceiveToolCallbackParams struct {
 type ReceiveToolCallbackParamsXNvokenSignatureVersion string
 
 // CreateAgentDefinitionJSONRequestBody defines body for CreateAgentDefinition for application/json ContentType.
-type CreateAgentDefinitionJSONRequestBody = AgentDefinitionWrite
+type CreateAgentDefinitionJSONRequestBody = AgentDefinitionCreate
 
 // UpdateAgentDefinitionJSONRequestBody defines body for UpdateAgentDefinition for application/json ContentType.
 type UpdateAgentDefinitionJSONRequestBody = AgentDefinitionWrite
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = UpdateAgentRequest
 
 // RegisterAppJSONRequestBody defines body for RegisterApp for application/json ContentType.
 type RegisterAppJSONRequestBody = RegisterAppRequest
@@ -8620,7 +8814,7 @@ type ClientInterface interface {
 	// ArchiveAgentDefinition Archive an Agent Definition
 	//
 	// Marks the resource retired. Invocation admission that resolves it —
-	// by `agent_definition_id` or by a pinned revision, on every admission
+	// through an Agent or a pinned revision, on every admission
 	// path including browser-direct client tokens — is then refused with
 	// `409 agent_definition_archived`.
 	//
@@ -8663,31 +8857,64 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
 	RestoreAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListAgents List Agent identity anchors
+	// GetAgentDefinitionRevision Get one immutable Agent Definition revision
 	//
-	// Returns newest-first identity anchors scoped to the caller's app. An
-	// Agent belongs to one app and stores only its nvoken ID, the host-owned
-	// `agent_key`, and creation time; instructions, models, tools, and
-	// provider keys still travel on each Invocation. An exact `agent_key`
-	// filter returns zero or one item within that app.
+	// Corresponds with GET /v1/agent-definitions/{agent_definition_id}/revisions/{revision} (the `GetAgentDefinitionRevision` operationId).
+	GetAgentDefinitionRevision(ctx context.Context, agentDefinitionID AgentDefinitionID, revision int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgents List tenant-scoped Agents
 	//
-	// Unconstrained credentials see their app's anchors. Tenant-constrained
-	// credentials see only anchors referenced by a Session in their
-	// effective partition.
-	// Session-constrained credentials see only that Session's anchor. The
-	// opaque cursor is bound to the authenticated caller, credential
-	// constraint, and exact key filter.
+	// Returns newest-first Agents scoped to the caller's App. Filters combine
+	// with AND. Archived Agents are excluded unless requested.
 	//
 	// Corresponds with GET /v1/agents (the `ListAgents` operationId).
 	ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetAgent Read one Agent identity anchor
+	// CreateAgentWithBody Create or resolve a tenant-scoped Agent
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+	CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAgent Create or resolve a tenant-scoped Agent
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ArchiveAgent Archive an Agent
+	//
+	// Corresponds with DELETE /v1/agents/{agent_id} (the `ArchiveAgent` operationId).
+	ArchiveAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgent Read one tenant-scoped Agent
 	//
 	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
 	//
 	// Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentWithBody Rename or revision-pin an Agent
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+	UpdateAgentWithBody(ctx context.Context, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgent Rename or revision-pin an Agent
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+	UpdateAgent(ctx context.Context, agentID AgentID, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestoreAgent Restore an archived Agent
+	//
+	// Corresponds with POST /v1/agents/{agent_id}/restore (the `RestoreAgent` operationId).
+	RestoreAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListApps List registered apps
 	//
@@ -8814,7 +9041,7 @@ type ClientInterface interface {
 	// that appears in the App's browser allowlist. Omit `visitor_token` on a
 	// first visit; persist the returned visitor token in browser storage and
 	// present it on renewal to preserve the same opaque visitor partition,
-	// App-scoped Agent, and canonical Session. The response returns that
+	// tenant-scoped Agent, and canonical Session. The response returns that
 	// Session ID once the visitor has completed a first turn, allowing the
 	// page to load its transcript immediately.
 	//
@@ -8835,7 +9062,7 @@ type ClientInterface interface {
 	// that appears in the App's browser allowlist. Omit `visitor_token` on a
 	// first visit; persist the returned visitor token in browser storage and
 	// present it on renewal to preserve the same opaque visitor partition,
-	// App-scoped Agent, and canonical Session. The response returns that
+	// tenant-scoped Agent, and canonical Session. The response returns that
 	// Session ID once the visitor has completed a first turn, allowing the
 	// page to load its transcript immediately.
 	//
@@ -9113,10 +9340,10 @@ type ClientInterface interface {
 	// CreateInvocationWithBody Start one background agent turn
 	//
 	// Starts one agent turn and returns immediately. In a single database
-	// transaction nvoken finds or creates the Agent and Session, resolves
-	// either the inline `agent_definition` or the current revision of the
-	// referenced `agent_definition_id`, appends your input as one message,
-	// and queues the turn. You get a
+	// transaction nvoken resolves the deliberately created Agent, selects
+	// its Agent Definition revision, finds or creates the Session, appends
+	// your input as one message, and queues the turn. Admission never creates
+	// an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
@@ -9136,15 +9363,16 @@ type ClientInterface interface {
 	// Send `idempotency_key` and you can retry this request without risking
 	// a second turn. A repeat with the same key returns the original turn
 	// and does not add your input again, even if that turn has already
-	// finished. Keys are scoped to the tenant and `agent_key`.
+	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// stable Agent Definition ID, and the input all match. The original
-	// admitted revision is returned even if that resource has advanced. Limits are compared
-	// as you sent them, so sending a value that happens to equal the default
-	// is not the same as omitting it. Key order inside JSON objects does not
-	// matter; array order does. Change anything that matters and you get
-	// `idempotency_conflict` rather than a surprise second turn.
+	// Agent, explicit revision, per-turn overrides, and input all match. The
+	// original admitted revision is returned even if its Definition has
+	// advanced. Values are compared as sent, so omitting an override is not
+	// the same as supplying one that happens to equal the Definition. Key
+	// order inside JSON objects does not matter; array order does. Change
+	// anything material and you get `idempotency_conflict` rather than a
+	// surprise second turn.
 	//
 	// ## When the Session is already busy
 	//
@@ -9204,10 +9432,10 @@ type ClientInterface interface {
 	// CreateInvocation Start one background agent turn
 	//
 	// Starts one agent turn and returns immediately. In a single database
-	// transaction nvoken finds or creates the Agent and Session, resolves
-	// either the inline `agent_definition` or the current revision of the
-	// referenced `agent_definition_id`, appends your input as one message,
-	// and queues the turn. You get a
+	// transaction nvoken resolves the deliberately created Agent, selects
+	// its Agent Definition revision, finds or creates the Session, appends
+	// your input as one message, and queues the turn. Admission never creates
+	// an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
@@ -9227,15 +9455,16 @@ type ClientInterface interface {
 	// Send `idempotency_key` and you can retry this request without risking
 	// a second turn. A repeat with the same key returns the original turn
 	// and does not add your input again, even if that turn has already
-	// finished. Keys are scoped to the tenant and `agent_key`.
+	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// stable Agent Definition ID, and the input all match. The original
-	// admitted revision is returned even if that resource has advanced. Limits are compared
-	// as you sent them, so sending a value that happens to equal the default
-	// is not the same as omitting it. Key order inside JSON objects does not
-	// matter; array order does. Change anything that matters and you get
-	// `idempotency_conflict` rather than a surprise second turn.
+	// Agent, explicit revision, per-turn overrides, and input all match. The
+	// original admitted revision is returned even if its Definition has
+	// advanced. Values are compared as sent, so omitting an override is not
+	// the same as supplying one that happens to equal the Definition. Key
+	// order inside JSON objects does not matter; array order does. Change
+	// anything material and you get `idempotency_conflict` rather than a
+	// surprise second turn.
 	//
 	// ## When the Session is already busy
 	//
@@ -9873,9 +10102,10 @@ type ClientInterface interface {
 	// have. Use this when you want a conversation to exist before the first
 	// turn runs — to show it in a UI, or to import messages from elsewhere.
 	//
-	// Every field is optional. Leave out `agent_key` and the Session starts
-	// unbound: `agent_id` stays null until the first turn binds it
-	// permanently.
+	// Every field is optional. Leave out both `agent_id` and `agent_key` and
+	// the Session starts unbound: `agent_id` stays null until the first turn
+	// binds it permanently. A supplied Agent must already exist in the
+	// selected tenant.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9888,9 +10118,10 @@ type ClientInterface interface {
 	// have. Use this when you want a conversation to exist before the first
 	// turn runs — to show it in a UI, or to import messages from elsewhere.
 	//
-	// Every field is optional. Leave out `agent_key` and the Session starts
-	// unbound: `agent_id` stays null until the first turn binds it
-	// permanently.
+	// Every field is optional. Leave out both `agent_id` and `agent_key` and
+	// the Session starts unbound: `agent_id` stays null until the first turn
+	// binds it permanently. A supplied Agent must already exist in the
+	// selected tenant.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10352,7 +10583,7 @@ func (c *Client) CreateAgentDefinition(ctx context.Context, params *CreateAgentD
 // ArchiveAgentDefinition Archive an Agent Definition
 //
 // Marks the resource retired. Invocation admission that resolves it —
-// by `agent_definition_id` or by a pinned revision, on every admission
+// through an Agent or a pinned revision, on every admission
 // path including browser-direct client tokens — is then refused with
 // `409 agent_definition_archived`.
 //
@@ -10445,20 +10676,25 @@ func (c *Client) RestoreAgentDefinition(ctx context.Context, agentDefinitionID A
 	return c.Client.Do(req)
 }
 
-// ListAgents List Agent identity anchors
+// GetAgentDefinitionRevision Get one immutable Agent Definition revision
 //
-// Returns newest-first identity anchors scoped to the caller's app. An
-// Agent belongs to one app and stores only its nvoken ID, the host-owned
-// `agent_key`, and creation time; instructions, models, tools, and
-// provider keys still travel on each Invocation. An exact `agent_key`
-// filter returns zero or one item within that app.
+// Corresponds with GET /v1/agent-definitions/{agent_definition_id}/revisions/{revision} (the `GetAgentDefinitionRevision` operationId).
+func (c *Client) GetAgentDefinitionRevision(ctx context.Context, agentDefinitionID AgentDefinitionID, revision int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentDefinitionRevisionRequest(c.Server, agentDefinitionID, revision)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListAgents List tenant-scoped Agents
 //
-// Unconstrained credentials see their app's anchors. Tenant-constrained
-// credentials see only anchors referenced by a Session in their
-// effective partition.
-// Session-constrained credentials see only that Session's anchor. The
-// opaque cursor is bound to the authenticated caller, credential
-// constraint, and exact key filter.
+// Returns newest-first Agents scoped to the caller's App. Filters combine
+// with AND. Archived Agents are excluded unless requested.
 //
 // Corresponds with GET /v1/agents (the `ListAgents` operationId).
 func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10473,7 +10709,56 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 	return c.Client.Do(req)
 }
 
-// GetAgent Read one Agent identity anchor
+// CreateAgentWithBody Create or resolve a tenant-scoped Agent
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateAgent Create or resolve a tenant-scoped Agent
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ArchiveAgent Archive an Agent
+//
+// Corresponds with DELETE /v1/agents/{agent_id} (the `ArchiveAgent` operationId).
+func (c *Client) ArchiveAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewArchiveAgentRequest(c.Server, agentID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgent Read one tenant-scoped Agent
 //
 // Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
@@ -10481,6 +10766,55 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 // Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
 func (c *Client) GetAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentRequest(c.Server, agentID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateAgentWithBody Rename or revision-pin an Agent
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+func (c *Client) UpdateAgentWithBody(ctx context.Context, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRequestWithBody(c.Server, agentID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateAgent Rename or revision-pin an Agent
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+func (c *Client) UpdateAgent(ctx context.Context, agentID AgentID, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRequest(c.Server, agentID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RestoreAgent Restore an archived Agent
+//
+// Corresponds with POST /v1/agents/{agent_id}/restore (the `RestoreAgent` operationId).
+func (c *Client) RestoreAgent(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestoreAgentRequest(c.Server, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -10686,7 +11020,7 @@ func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONR
 // that appears in the App's browser allowlist. Omit `visitor_token` on a
 // first visit; persist the returned visitor token in browser storage and
 // present it on renewal to preserve the same opaque visitor partition,
-// App-scoped Agent, and canonical Session. The response returns that
+// tenant-scoped Agent, and canonical Session. The response returns that
 // Session ID once the visitor has completed a first turn, allowing the
 // page to load its transcript immediately.
 //
@@ -10717,7 +11051,7 @@ func (c *Client) IssueAnonymousTokenWithBody(ctx context.Context, appID AppID, p
 // that appears in the App's browser allowlist. Omit `visitor_token` on a
 // first visit; persist the returned visitor token in browser storage and
 // present it on renewal to preserve the same opaque visitor partition,
-// App-scoped Agent, and canonical Session. The response returns that
+// tenant-scoped Agent, and canonical Session. The response returns that
 // Session ID once the visitor has completed a first turn, allowing the
 // page to load its transcript immediately.
 //
@@ -11235,10 +11569,10 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // CreateInvocationWithBody Start one background agent turn
 //
 // Starts one agent turn and returns immediately. In a single database
-// transaction nvoken finds or creates the Agent and Session, resolves
-// either the inline `agent_definition` or the current revision of the
-// referenced `agent_definition_id`, appends your input as one message,
-// and queues the turn. You get a
+// transaction nvoken resolves the deliberately created Agent, selects
+// its Agent Definition revision, finds or creates the Session, appends
+// your input as one message, and queues the turn. Admission never creates
+// an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
@@ -11258,15 +11592,16 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // Send `idempotency_key` and you can retry this request without risking
 // a second turn. A repeat with the same key returns the original turn
 // and does not add your input again, even if that turn has already
-// finished. Keys are scoped to the tenant and `agent_key`.
+// finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// stable Agent Definition ID, and the input all match. The original
-// admitted revision is returned even if that resource has advanced. Limits are compared
-// as you sent them, so sending a value that happens to equal the default
-// is not the same as omitting it. Key order inside JSON objects does not
-// matter; array order does. Change anything that matters and you get
-// `idempotency_conflict` rather than a surprise second turn.
+// Agent, explicit revision, per-turn overrides, and input all match. The
+// original admitted revision is returned even if its Definition has
+// advanced. Values are compared as sent, so omitting an override is not
+// the same as supplying one that happens to equal the Definition. Key
+// order inside JSON objects does not matter; array order does. Change
+// anything material and you get `idempotency_conflict` rather than a
+// surprise second turn.
 //
 // ## When the Session is already busy
 //
@@ -11336,10 +11671,10 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // CreateInvocation Start one background agent turn
 //
 // Starts one agent turn and returns immediately. In a single database
-// transaction nvoken finds or creates the Agent and Session, resolves
-// either the inline `agent_definition` or the current revision of the
-// referenced `agent_definition_id`, appends your input as one message,
-// and queues the turn. You get a
+// transaction nvoken resolves the deliberately created Agent, selects
+// its Agent Definition revision, finds or creates the Session, appends
+// your input as one message, and queues the turn. Admission never creates
+// an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
@@ -11359,15 +11694,16 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // Send `idempotency_key` and you can retry this request without risking
 // a second turn. A repeat with the same key returns the original turn
 // and does not add your input again, even if that turn has already
-// finished. Keys are scoped to the tenant and `agent_key`.
+// finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// stable Agent Definition ID, and the input all match. The original
-// admitted revision is returned even if that resource has advanced. Limits are compared
-// as you sent them, so sending a value that happens to equal the default
-// is not the same as omitting it. Key order inside JSON objects does not
-// matter; array order does. Change anything that matters and you get
-// `idempotency_conflict` rather than a surprise second turn.
+// Agent, explicit revision, per-turn overrides, and input all match. The
+// original admitted revision is returned even if its Definition has
+// advanced. Values are compared as sent, so omitting an override is not
+// the same as supplying one that happens to equal the Definition. Key
+// order inside JSON objects does not matter; array order does. Change
+// anything material and you get `idempotency_conflict` rather than a
+// surprise second turn.
 //
 // ## When the Session is already busy
 //
@@ -12415,9 +12751,10 @@ func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams, r
 // have. Use this when you want a conversation to exist before the first
 // turn runs — to show it in a UI, or to import messages from elsewhere.
 //
-// Every field is optional. Leave out `agent_key` and the Session starts
-// unbound: `agent_id` stays null until the first turn binds it
-// permanently.
+// Every field is optional. Leave out both `agent_id` and `agent_key` and
+// the Session starts unbound: `agent_id` stays null until the first turn
+// binds it permanently. A supplied Agent must already exist in the
+// selected tenant.
 //
 // Takes any type of body and a specified content type.
 //
@@ -12440,9 +12777,10 @@ func (c *Client) CreateSessionWithBody(ctx context.Context, contentType string, 
 // have. Use this when you want a conversation to exist before the first
 // turn runs — to show it in a UI, or to import messages from elsewhere.
 //
-// Every field is optional. Leave out `agent_key` and the Session starts
-// unbound: `agent_id` stays null until the first turn binds it
-// permanently.
+// Every field is optional. Leave out both `agent_id` and `agent_key` and
+// the Session starts unbound: `agent_id` stays null until the first turn
+// binds it permanently. A supplied Agent must already exist in the
+// selected tenant.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13443,6 +13781,47 @@ func NewRestoreAgentDefinitionRequest(server string, agentDefinitionID AgentDefi
 	return req, nil
 }
 
+// NewGetAgentDefinitionRevisionRequest constructs an http.Request for the GetAgentDefinitionRevision method
+func NewGetAgentDefinitionRevisionRequest(server string, agentDefinitionID AgentDefinitionID, revision int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_definition_id", agentDefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "revision", revision, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agent-definitions/%s/revisions/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListAgentsRequest constructs an http.Request for the ListAgents method
 func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Request, error) {
 	var err error
@@ -13471,9 +13850,45 @@ func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Reques
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.TenantKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.AgentKey != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_key", *params.AgentKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AgentDefinitionID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_definition_id", *params.AgentDefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeArchived != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_archived", *params.IncludeArchived, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -13521,6 +13936,80 @@ func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Reques
 	return req, nil
 }
 
+// NewCreateAgentRequest calls the generic CreateAgent builder with application/json body
+func NewCreateAgentRequest(server string, body CreateAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAgentRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateAgentRequestWithBody constructs an http.Request for the CreateAgent method, with any body, and a specified content type
+func NewCreateAgentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewArchiveAgentRequest constructs an http.Request for the ArchiveAgent method
+func NewArchiveAgentRequest(server string, agentID AgentID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_id", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetAgentRequest constructs an http.Request for the GetAgent method
 func NewGetAgentRequest(server string, agentID AgentID) (*http.Request, error) {
 	var err error
@@ -13548,6 +14037,87 @@ func NewGetAgentRequest(server string, agentID AgentID) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentRequest calls the generic UpdateAgent builder with application/json body
+func NewUpdateAgentRequest(server string, agentID AgentID, body UpdateAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentRequestWithBody(server, agentID, "application/json", bodyReader)
+}
+
+// NewUpdateAgentRequestWithBody constructs an http.Request for the UpdateAgent method, with any body, and a specified content type
+func NewUpdateAgentRequestWithBody(server string, agentID AgentID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_id", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRestoreAgentRequest constructs an http.Request for the RestoreAgent method
+func NewRestoreAgentRequest(server string, agentID AgentID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_id", agentID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/agents/%s/restore", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -18240,7 +18810,7 @@ type ClientWithResponsesInterface interface {
 	// ArchiveAgentDefinitionWithResponse Archive an Agent Definition
 	//
 	// Marks the resource retired. Invocation admission that resolves it —
-	// by `agent_definition_id` or by a pinned revision, on every admission
+	// through an Agent or a pinned revision, on every admission
 	// path including browser-direct client tokens — is then refused with
 	// `409 agent_definition_archived`.
 	//
@@ -18289,27 +18859,45 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/agent-definitions/{agent_definition_id}/restore (the `RestoreAgentDefinition` operationId).
 	RestoreAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*RestoreAgentDefinitionHTTPResponse, error)
 
-	// ListAgentsWithResponse List Agent identity anchors
+	// GetAgentDefinitionRevisionWithResponse Get one immutable Agent Definition revision
 	//
-	// Returns newest-first identity anchors scoped to the caller's app. An
-	// Agent belongs to one app and stores only its nvoken ID, the host-owned
-	// `agent_key`, and creation time; instructions, models, tools, and
-	// provider keys still travel on each Invocation. An exact `agent_key`
-	// filter returns zero or one item within that app.
+	// Returns a wrapper object for the known response body format(s).
 	//
-	// Unconstrained credentials see their app's anchors. Tenant-constrained
-	// credentials see only anchors referenced by a Session in their
-	// effective partition.
-	// Session-constrained credentials see only that Session's anchor. The
-	// opaque cursor is bound to the authenticated caller, credential
-	// constraint, and exact key filter.
+	// Corresponds with GET /v1/agent-definitions/{agent_definition_id}/revisions/{revision} (the `GetAgentDefinitionRevision` operationId).
+	GetAgentDefinitionRevisionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, revision int64, reqEditors ...RequestEditorFn) (*GetAgentDefinitionRevisionHTTPResponse, error)
+
+	// ListAgentsWithResponse List tenant-scoped Agents
+	//
+	// Returns newest-first Agents scoped to the caller's App. Filters combine
+	// with AND. Archived Agents are excluded unless requested.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/agents (the `ListAgents` operationId).
 	ListAgentsWithResponse(ctx context.Context, params *ListAgentsParams, reqEditors ...RequestEditorFn) (*ListAgentsHTTPResponse, error)
 
-	// GetAgentWithResponse Read one Agent identity anchor
+	// CreateAgentWithBodyWithResponse Create or resolve a tenant-scoped Agent
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+	CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResponse, error)
+
+	// CreateAgentWithResponse Create or resolve a tenant-scoped Agent
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResponse, error)
+
+	// ArchiveAgentWithResponse Archive an Agent
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/agents/{agent_id} (the `ArchiveAgent` operationId).
+	ArchiveAgentWithResponse(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*ArchiveAgentHTTPResponse, error)
+
+	// GetAgentWithResponse Read one tenant-scoped Agent
 	//
 	// Reads identity without creating work. Out-of-scope and undisclosable
 	// constrained resources use `not_found`.
@@ -18318,6 +18906,27 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/agents/{agent_id} (the `GetAgent` operationId).
 	GetAgentWithResponse(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*GetAgentHTTPResponse, error)
+
+	// UpdateAgentWithBodyWithResponse Rename or revision-pin an Agent
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+	UpdateAgentWithBodyWithResponse(ctx context.Context, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentHTTPResponse, error)
+
+	// UpdateAgentWithResponse Rename or revision-pin an Agent
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+	UpdateAgentWithResponse(ctx context.Context, agentID AgentID, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentHTTPResponse, error)
+
+	// RestoreAgentWithResponse Restore an archived Agent
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/agents/{agent_id}/restore (the `RestoreAgent` operationId).
+	RestoreAgentWithResponse(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*RestoreAgentHTTPResponse, error)
 
 	// ListAppsWithResponse List registered apps
 	//
@@ -18450,7 +19059,7 @@ type ClientWithResponsesInterface interface {
 	// that appears in the App's browser allowlist. Omit `visitor_token` on a
 	// first visit; persist the returned visitor token in browser storage and
 	// present it on renewal to preserve the same opaque visitor partition,
-	// App-scoped Agent, and canonical Session. The response returns that
+	// tenant-scoped Agent, and canonical Session. The response returns that
 	// Session ID once the visitor has completed a first turn, allowing the
 	// page to load its transcript immediately.
 	//
@@ -18471,7 +19080,7 @@ type ClientWithResponsesInterface interface {
 	// that appears in the App's browser allowlist. Omit `visitor_token` on a
 	// first visit; persist the returned visitor token in browser storage and
 	// present it on renewal to preserve the same opaque visitor partition,
-	// App-scoped Agent, and canonical Session. The response returns that
+	// tenant-scoped Agent, and canonical Session. The response returns that
 	// Session ID once the visitor has completed a first turn, allowing the
 	// page to load its transcript immediately.
 	//
@@ -18775,10 +19384,10 @@ type ClientWithResponsesInterface interface {
 	// CreateInvocationWithBodyWithResponse Start one background agent turn
 	//
 	// Starts one agent turn and returns immediately. In a single database
-	// transaction nvoken finds or creates the Agent and Session, resolves
-	// either the inline `agent_definition` or the current revision of the
-	// referenced `agent_definition_id`, appends your input as one message,
-	// and queues the turn. You get a
+	// transaction nvoken resolves the deliberately created Agent, selects
+	// its Agent Definition revision, finds or creates the Session, appends
+	// your input as one message, and queues the turn. Admission never creates
+	// an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
@@ -18798,15 +19407,16 @@ type ClientWithResponsesInterface interface {
 	// Send `idempotency_key` and you can retry this request without risking
 	// a second turn. A repeat with the same key returns the original turn
 	// and does not add your input again, even if that turn has already
-	// finished. Keys are scoped to the tenant and `agent_key`.
+	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// stable Agent Definition ID, and the input all match. The original
-	// admitted revision is returned even if that resource has advanced. Limits are compared
-	// as you sent them, so sending a value that happens to equal the default
-	// is not the same as omitting it. Key order inside JSON objects does not
-	// matter; array order does. Change anything that matters and you get
-	// `idempotency_conflict` rather than a surprise second turn.
+	// Agent, explicit revision, per-turn overrides, and input all match. The
+	// original admitted revision is returned even if its Definition has
+	// advanced. Values are compared as sent, so omitting an override is not
+	// the same as supplying one that happens to equal the Definition. Key
+	// order inside JSON objects does not matter; array order does. Change
+	// anything material and you get `idempotency_conflict` rather than a
+	// surprise second turn.
 	//
 	// ## When the Session is already busy
 	//
@@ -18866,10 +19476,10 @@ type ClientWithResponsesInterface interface {
 	// CreateInvocationWithResponse Start one background agent turn
 	//
 	// Starts one agent turn and returns immediately. In a single database
-	// transaction nvoken finds or creates the Agent and Session, resolves
-	// either the inline `agent_definition` or the current revision of the
-	// referenced `agent_definition_id`, appends your input as one message,
-	// and queues the turn. You get a
+	// transaction nvoken resolves the deliberately created Agent, selects
+	// its Agent Definition revision, finds or creates the Session, appends
+	// your input as one message, and queues the turn. Admission never creates
+	// an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
@@ -18889,15 +19499,16 @@ type ClientWithResponsesInterface interface {
 	// Send `idempotency_key` and you can retry this request without risking
 	// a second turn. A repeat with the same key returns the original turn
 	// and does not add your input again, even if that turn has already
-	// finished. Keys are scoped to the tenant and `agent_key`.
+	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// stable Agent Definition ID, and the input all match. The original
-	// admitted revision is returned even if that resource has advanced. Limits are compared
-	// as you sent them, so sending a value that happens to equal the default
-	// is not the same as omitting it. Key order inside JSON objects does not
-	// matter; array order does. Change anything that matters and you get
-	// `idempotency_conflict` rather than a surprise second turn.
+	// Agent, explicit revision, per-turn overrides, and input all match. The
+	// original admitted revision is returned even if its Definition has
+	// advanced. Values are compared as sent, so omitting an override is not
+	// the same as supplying one that happens to equal the Definition. Key
+	// order inside JSON objects does not matter; array order does. Change
+	// anything material and you get `idempotency_conflict` rather than a
+	// surprise second turn.
 	//
 	// ## When the Session is already busy
 	//
@@ -19583,9 +20194,10 @@ type ClientWithResponsesInterface interface {
 	// have. Use this when you want a conversation to exist before the first
 	// turn runs — to show it in a UI, or to import messages from elsewhere.
 	//
-	// Every field is optional. Leave out `agent_key` and the Session starts
-	// unbound: `agent_id` stays null until the first turn binds it
-	// permanently.
+	// Every field is optional. Leave out both `agent_id` and `agent_key` and
+	// the Session starts unbound: `agent_id` stays null until the first turn
+	// binds it permanently. A supplied Agent must already exist in the
+	// selected tenant.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19598,9 +20210,10 @@ type ClientWithResponsesInterface interface {
 	// have. Use this when you want a conversation to exist before the first
 	// turn runs — to show it in a UI, or to import messages from elsewhere.
 	//
-	// Every field is optional. Leave out `agent_key` and the Session starts
-	// unbound: `agent_id` stays null until the first turn binds it
-	// permanently.
+	// Every field is optional. Leave out both `agent_id` and `agent_key` and
+	// the Session starts unbound: `agent_id` stays null until the first turn
+	// binds it permanently. A supplied Agent must already exist in the
+	// selected tenant.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20651,6 +21264,82 @@ func (r RestoreAgentDefinitionHTTPResponse) ContentType() string {
 	return ""
 }
 
+type GetAgentDefinitionRevisionHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentDefinitionResource
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON200() *AgentDefinitionResource {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r GetAgentDefinitionRevisionHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentDefinitionRevisionHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentDefinitionRevisionHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentDefinitionRevisionHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentDefinitionRevisionHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListAgentsHTTPResponse429Headers the declared response headers of an HTTP 429 response for ListAgents
 type ListAgentsHTTPResponse429Headers struct {
 	RetryAfter *int
@@ -20735,6 +21424,172 @@ func (r ListAgentsHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAgentsHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateAgentHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Agent
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON201() *Agent {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateAgentHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateAgentHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAgentHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAgentHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateAgentHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ArchiveAgentHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ArchiveAgentHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ArchiveAgentHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ArchiveAgentHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ArchiveAgentHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ArchiveAgentHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r ArchiveAgentHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ArchiveAgentHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ArchiveAgentHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ArchiveAgentHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20832,6 +21687,165 @@ func (r GetAgentHTTPResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAgentHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateAgentHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r UpdateAgentHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateAgentHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateAgentHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestoreAgentHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RestoreAgentHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RestoreAgentHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RestoreAgentHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r RestoreAgentHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r RestoreAgentHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r RestoreAgentHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RestoreAgentHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestoreAgentHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestoreAgentHTTPResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -27095,7 +28109,7 @@ func (c *ClientWithResponses) CreateAgentDefinitionWithResponse(ctx context.Cont
 // ArchiveAgentDefinitionWithResponse Archive an Agent Definition
 //
 // Marks the resource retired. Invocation admission that resolves it —
-// by `agent_definition_id` or by a pinned revision, on every admission
+// through an Agent or a pinned revision, on every admission
 // path including browser-direct client tokens — is then refused with
 // `409 agent_definition_archived`.
 //
@@ -27174,20 +28188,23 @@ func (c *ClientWithResponses) RestoreAgentDefinitionWithResponse(ctx context.Con
 	return ParseRestoreAgentDefinitionHTTPResponse(rsp)
 }
 
-// ListAgentsWithResponse List Agent identity anchors
+// GetAgentDefinitionRevisionWithResponse Get one immutable Agent Definition revision
 //
-// Returns newest-first identity anchors scoped to the caller's app. An
-// Agent belongs to one app and stores only its nvoken ID, the host-owned
-// `agent_key`, and creation time; instructions, models, tools, and
-// provider keys still travel on each Invocation. An exact `agent_key`
-// filter returns zero or one item within that app.
+// Returns a wrapper object for the known response body format(s).
 //
-// Unconstrained credentials see their app's anchors. Tenant-constrained
-// credentials see only anchors referenced by a Session in their
-// effective partition.
-// Session-constrained credentials see only that Session's anchor. The
-// opaque cursor is bound to the authenticated caller, credential
-// constraint, and exact key filter.
+// Corresponds with GET /v1/agent-definitions/{agent_definition_id}/revisions/{revision} (the `GetAgentDefinitionRevision` operationId).
+func (c *ClientWithResponses) GetAgentDefinitionRevisionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, revision int64, reqEditors ...RequestEditorFn) (*GetAgentDefinitionRevisionHTTPResponse, error) {
+	rsp, err := c.GetAgentDefinitionRevision(ctx, agentDefinitionID, revision, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentDefinitionRevisionHTTPResponse(rsp)
+}
+
+// ListAgentsWithResponse List tenant-scoped Agents
+//
+// Returns newest-first Agents scoped to the caller's App. Filters combine
+// with AND. Archived Agents are excluded unless requested.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27200,7 +28217,46 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 	return ParseListAgentsHTTPResponse(rsp)
 }
 
-// GetAgentWithResponse Read one Agent identity anchor
+// CreateAgentWithBodyWithResponse Create or resolve a tenant-scoped Agent
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResponse, error) {
+	rsp, err := c.CreateAgentWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentHTTPResponse(rsp)
+}
+
+// CreateAgentWithResponse Create or resolve a tenant-scoped Agent
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
+func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResponse, error) {
+	rsp, err := c.CreateAgent(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentHTTPResponse(rsp)
+}
+
+// ArchiveAgentWithResponse Archive an Agent
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/agents/{agent_id} (the `ArchiveAgent` operationId).
+func (c *ClientWithResponses) ArchiveAgentWithResponse(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*ArchiveAgentHTTPResponse, error) {
+	rsp, err := c.ArchiveAgent(ctx, agentID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseArchiveAgentHTTPResponse(rsp)
+}
+
+// GetAgentWithResponse Read one tenant-scoped Agent
 //
 // Reads identity without creating work. Out-of-scope and undisclosable
 // constrained resources use `not_found`.
@@ -27214,6 +28270,45 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, agentID 
 		return nil, err
 	}
 	return ParseGetAgentHTTPResponse(rsp)
+}
+
+// UpdateAgentWithBodyWithResponse Rename or revision-pin an Agent
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+func (c *ClientWithResponses) UpdateAgentWithBodyWithResponse(ctx context.Context, agentID AgentID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentHTTPResponse, error) {
+	rsp, err := c.UpdateAgentWithBody(ctx, agentID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentHTTPResponse(rsp)
+}
+
+// UpdateAgentWithResponse Rename or revision-pin an Agent
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/agents/{agent_id} (the `UpdateAgent` operationId).
+func (c *ClientWithResponses) UpdateAgentWithResponse(ctx context.Context, agentID AgentID, body UpdateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentHTTPResponse, error) {
+	rsp, err := c.UpdateAgent(ctx, agentID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentHTTPResponse(rsp)
+}
+
+// RestoreAgentWithResponse Restore an archived Agent
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/agents/{agent_id}/restore (the `RestoreAgent` operationId).
+func (c *ClientWithResponses) RestoreAgentWithResponse(ctx context.Context, agentID AgentID, reqEditors ...RequestEditorFn) (*RestoreAgentHTTPResponse, error) {
+	rsp, err := c.RestoreAgent(ctx, agentID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestoreAgentHTTPResponse(rsp)
 }
 
 // ListAppsWithResponse List registered apps
@@ -27389,7 +28484,7 @@ func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID A
 // that appears in the App's browser allowlist. Omit `visitor_token` on a
 // first visit; persist the returned visitor token in browser storage and
 // present it on renewal to preserve the same opaque visitor partition,
-// App-scoped Agent, and canonical Session. The response returns that
+// tenant-scoped Agent, and canonical Session. The response returns that
 // Session ID once the visitor has completed a first turn, allowing the
 // page to load its transcript immediately.
 //
@@ -27416,7 +28511,7 @@ func (c *ClientWithResponses) IssueAnonymousTokenWithBodyWithResponse(ctx contex
 // that appears in the App's browser allowlist. Omit `visitor_token` on a
 // first visit; persist the returned visitor token in browser storage and
 // present it on renewal to preserve the same opaque visitor partition,
-// App-scoped Agent, and canonical Session. The response returns that
+// tenant-scoped Agent, and canonical Session. The response returns that
 // Session ID once the visitor has completed a first turn, allowing the
 // page to load its transcript immediately.
 //
@@ -27864,10 +28959,10 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // CreateInvocationWithBodyWithResponse Start one background agent turn
 //
 // Starts one agent turn and returns immediately. In a single database
-// transaction nvoken finds or creates the Agent and Session, resolves
-// either the inline `agent_definition` or the current revision of the
-// referenced `agent_definition_id`, appends your input as one message,
-// and queues the turn. You get a
+// transaction nvoken resolves the deliberately created Agent, selects
+// its Agent Definition revision, finds or creates the Session, appends
+// your input as one message, and queues the turn. Admission never creates
+// an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
@@ -27887,15 +28982,16 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // Send `idempotency_key` and you can retry this request without risking
 // a second turn. A repeat with the same key returns the original turn
 // and does not add your input again, even if that turn has already
-// finished. Keys are scoped to the tenant and `agent_key`.
+// finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// stable Agent Definition ID, and the input all match. The original
-// admitted revision is returned even if that resource has advanced. Limits are compared
-// as you sent them, so sending a value that happens to equal the default
-// is not the same as omitting it. Key order inside JSON objects does not
-// matter; array order does. Change anything that matters and you get
-// `idempotency_conflict` rather than a surprise second turn.
+// Agent, explicit revision, per-turn overrides, and input all match. The
+// original admitted revision is returned even if its Definition has
+// advanced. Values are compared as sent, so omitting an override is not
+// the same as supplying one that happens to equal the Definition. Key
+// order inside JSON objects does not matter; array order does. Change
+// anything material and you get `idempotency_conflict` rather than a
+// surprise second turn.
 //
 // ## When the Session is already busy
 //
@@ -27961,10 +29057,10 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // CreateInvocationWithResponse Start one background agent turn
 //
 // Starts one agent turn and returns immediately. In a single database
-// transaction nvoken finds or creates the Agent and Session, resolves
-// either the inline `agent_definition` or the current revision of the
-// referenced `agent_definition_id`, appends your input as one message,
-// and queues the turn. You get a
+// transaction nvoken resolves the deliberately created Agent, selects
+// its Agent Definition revision, finds or creates the Session, appends
+// your input as one message, and queues the turn. Admission never creates
+// an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
@@ -27984,15 +29080,16 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // Send `idempotency_key` and you can retry this request without risking
 // a second turn. A repeat with the same key returns the original turn
 // and does not add your input again, even if that turn has already
-// finished. Keys are scoped to the tenant and `agent_key`.
+// finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// stable Agent Definition ID, and the input all match. The original
-// admitted revision is returned even if that resource has advanced. Limits are compared
-// as you sent them, so sending a value that happens to equal the default
-// is not the same as omitting it. Key order inside JSON objects does not
-// matter; array order does. Change anything that matters and you get
-// `idempotency_conflict` rather than a surprise second turn.
+// Agent, explicit revision, per-turn overrides, and input all match. The
+// original admitted revision is returned even if its Definition has
+// advanced. Values are compared as sent, so omitting an override is not
+// the same as supplying one that happens to equal the Definition. Key
+// order inside JSON objects does not matter; array order does. Change
+// anything material and you get `idempotency_conflict` rather than a
+// surprise second turn.
 //
 // ## When the Session is already busy
 //
@@ -28924,9 +30021,10 @@ func (c *ClientWithResponses) ListSessionsWithResponse(ctx context.Context, para
 // have. Use this when you want a conversation to exist before the first
 // turn runs — to show it in a UI, or to import messages from elsewhere.
 //
-// Every field is optional. Leave out `agent_key` and the Session starts
-// unbound: `agent_id` stays null until the first turn binds it
-// permanently.
+// Every field is optional. Leave out both `agent_id` and `agent_key` and
+// the Session starts unbound: `agent_id` stays null until the first turn
+// binds it permanently. A supplied Agent must already exist in the
+// selected tenant.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28945,9 +30043,10 @@ func (c *ClientWithResponses) CreateSessionWithBodyWithResponse(ctx context.Cont
 // have. Use this when you want a conversation to exist before the first
 // turn runs — to show it in a UI, or to import messages from elsewhere.
 //
-// Every field is optional. Leave out `agent_key` and the Session starts
-// unbound: `agent_id` stays null until the first turn binds it
-// permanently.
+// Every field is optional. Leave out both `agent_id` and `agent_key` and
+// the Session starts unbound: `agent_id` stays null until the first turn
+// binds it permanently. A supplied Agent must already exist in the
+// selected tenant.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30012,6 +31111,67 @@ func ParseRestoreAgentDefinitionHTTPResponse(rsp *http.Response) (*RestoreAgentD
 	return response, nil
 }
 
+// ParseGetAgentDefinitionRevisionHTTPResponse parses an HTTP response from a GetAgentDefinitionRevisionWithResponse call
+func ParseGetAgentDefinitionRevisionHTTPResponse(rsp *http.Response) (*GetAgentDefinitionRevisionHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentDefinitionRevisionHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAgentsHTTPResponse parses an HTTP response from a ListAgentsWithResponse call
 func ParseListAgentsHTTPResponse(rsp *http.Response) (*ListAgentsHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -30088,6 +31248,145 @@ func ParseListAgentsHTTPResponse(rsp *http.Response) (*ListAgentsHTTPResponse, e
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseCreateAgentHTTPResponse parses an HTTP response from a CreateAgentWithResponse call
+func ParseCreateAgentHTTPResponse(rsp *http.Response) (*CreateAgentHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAgentHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseArchiveAgentHTTPResponse parses an HTTP response from a ArchiveAgentWithResponse call
+func ParseArchiveAgentHTTPResponse(rsp *http.Response) (*ArchiveAgentHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ArchiveAgentHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30176,6 +31475,138 @@ func ParseGetAgentHTTPResponse(rsp *http.Response) (*GetAgentHTTPResponse, error
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentHTTPResponse parses an HTTP response from a UpdateAgentWithResponse call
+func ParseUpdateAgentHTTPResponse(rsp *http.Response) (*UpdateAgentHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestoreAgentHTTPResponse parses an HTTP response from a RestoreAgentWithResponse call
+func ParseRestoreAgentHTTPResponse(rsp *http.Response) (*RestoreAgentHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestoreAgentHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil

@@ -57,6 +57,7 @@ from nvoken.media_preflight import (
 
 from nvoken import (
     AgentDefinition,
+    AgentDefinitionOverrides,
     ASK_USER_TOOL_NAME,
     AskUserInput,
     AskUserOutput,
@@ -95,7 +96,7 @@ from nvoken import (
     fetch_tool,
 )
 
-AGENT_ID = "agnt_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+AGENT_ID = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
 INVOCATION_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
 SESSION_ID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
 TOOL_CALL_ID = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
@@ -158,17 +159,14 @@ def test_shared_session_lifecycle_fixture() -> None:
         session_key="conformance",
         session_options=SessionOptions(retention=SessionRetention(ttl_seconds=86400)),
         metadata=fixture["invocation_metadata"],
-        agent_definition=AgentDefinition(
-            model=model,
-            provider_tools=(web_search_tool(),),
-        ),
     ))
     assert retention["session_options"] == fixture["session_options"]["retention_only"]
     assert retention["metadata"] == fixture["invocation_metadata"]
-    # Execution fields belong to the Agent Definition now. Reading them back
-    # through that key is what proves the nesting actually happened.
     assert (
-        retention["agent_definition"]["provider_tools"]
+        client._agent_definition_body(
+            AgentDefinition(model=model, provider_tools=(web_search_tool(),)),
+            name="Support",
+        ).to_dict()["provider_tools"]
         == fixture["provider_tools"]["defaults"]
     )
 
@@ -181,7 +179,10 @@ def test_shared_session_lifecycle_fixture() -> None:
             retention=SessionRetention(ttl_seconds=3600),
             metadata={"surface": "web"},
         ),
-        agent_definition=AgentDefinition(
+    ))
+    assert every["session_options"] == fixture["session_options"]["every_member"]
+    configured_definition = client._agent_definition_body(
+        AgentDefinition(
             model=model,
             provider_tools=(web_search_tool(WebSearchTool(
                 max_uses=5,
@@ -194,10 +195,10 @@ def test_shared_session_lifecycle_fixture() -> None:
                 ),
             )),),
         ),
-    ))
-    assert every["session_options"] == fixture["session_options"]["every_member"]
+        name="Support",
+    ).to_dict()
     assert (
-        every["agent_definition"]["provider_tools"]
+        configured_definition["provider_tools"]
         == fixture["provider_tools"]["configured"]
     )
 
@@ -209,9 +210,6 @@ def test_shared_session_lifecycle_fixture() -> None:
             input="hello",
             session_key="conformance",
             session_options=SessionOptions(),
-            agent_definition=AgentDefinition(
-                model=model,
-            ),
         ))
 
 
@@ -228,7 +226,6 @@ def test_shared_agent_request_fixture() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
     agent = client.agent(AgentOptions(
         agent_key="support",
-        agent_definition_id="def_conformance",
     ))
     # Durable options apply on a new anonymous Session too, which is where a
     # short retention window matters most.
@@ -410,15 +407,13 @@ def test_shared_agent_definition_reuse_fixture_is_expressible() -> None:
         agent_key="support",
         input="hello",
         idempotency_key="agent-definition-reference",
-        agent_definition_id=fixture["agent_definition_id"],
     )).to_dict()
-    assert body["agent_definition_id"] == fixture["agent_definition_id"]
+    assert body["agent_key"] == "support"
     assert "agent_definition" not in body
 
 
-# Registration and invocation must render the same object, or an SDK could
-# resource creation and inline invocation must render the same writable object.
-def test_resource_creation_matches_the_agent_definition_an_invocation_nests() -> None:
+# Resource creation must render the complete named and keyed definition.
+def test_resource_creation_renders_the_named_definition() -> None:
     fixture = json.loads(
         (
             Path(__file__).parents[2]
@@ -430,52 +425,31 @@ def test_resource_creation_matches_the_agent_definition_an_invocation_nests() ->
         instructions="You are a concise billing support agent.",
         model=Model(provider="anthropic", id="claude-sonnet-5"),
     )
-    creation = client._agent_definition_body(definition).to_dict()
+    creation = client._agent_definition_body(
+        definition,
+        name="Billing support",
+        definition_key="support",
+    ).to_dict()
     assert creation == fixture["creation"]["request"]
-    body = client._invocation_body(InvokeRequest(
-        agent_key="support",
-        input="hello",
-        idempotency_key="agent-definition-inline",
-        agent_definition=definition,
-    )).to_dict()
-    assert body["agent_definition"] == creation
 
 
 # A reusable definition is durable configuration, so MCP headers must ride
 # alongside it and never within it.
 def test_mcp_secrets_stay_outside_the_agent_definition() -> None:
     client = Client(base_url="https://runtime.example.test", api_key="key")
-    server = MCPServer(
-        name="support",
-        url="https://mcp.example.test/rpc",
-        allowed_tools=("lookup",),
-    )
     request = InvokeRequest(
         agent_key="support",
         input="hello",
         idempotency_key="mcp-secret-placement",
-        agent_definition=AgentDefinition(
-            model=Model(provider="anthropic", id="claude-sonnet-5"),
-            mcp_servers=(server,),
-        ),
         mcp_server_headers=(
             MCPServerHeaders(name="support", headers={"Authorization": "Bearer secret"}),
         ),
     )
     body = client._invocation_body(request).to_dict()
-    assert "headers" not in body["agent_definition"]["mcp_servers"][0]
     assert body["mcp_server_headers"] == [
         {"name": "support", "headers": {"Authorization": "Bearer secret"}}
     ]
 
-    # A header naming no declared server is a typo the SDK can catch locally.
-    with pytest.raises(NvokenError):
-        client._invocation_body(replace(
-            request,
-            mcp_server_headers=(
-                MCPServerHeaders(name="typo", headers={"Authorization": "Bearer secret"}),
-            ),
-        ))
 
 
 def test_shared_context_compaction_fixture_is_expressible() -> None:
@@ -576,7 +550,7 @@ async def test_invoke_preflights_output_schema_before_transport() -> None:
                 await client.invoke(InvokeRequest(
                     agent_key="support",
                     input="help",
-                    agent_definition=AgentDefinition(
+                    overrides=AgentDefinitionOverrides(
                         model=Model(provider="anthropic", id="test-model"),
                         output_schema=expand_output_schema_fixture(test_case),
                     ),
@@ -605,9 +579,9 @@ async def test_shared_fault_server_semantics() -> None:
         "test-key",
         retry=RetryPolicy(max_attempts=3, min_delay=0.001, max_delay=0.005),
     ) as client:
-        agents = await client.list_agent_identities(agent_key="support")
+        agents = await client.list_agents(agent_key="support")
         assert agents.items[0].id == AGENT_ID
-        agent_identity = await client.get_agent_identity(AGENT_ID)
+        agent_identity = await client.get_agent(AGENT_ID)
         assert agent_identity.agent_key == "support"
         models = await client.list_models()
         assert models.catalog_version == "conformance-catalog-v1"
@@ -658,13 +632,6 @@ async def test_shared_fault_server_semantics() -> None:
                     source="caller_ephemeral",
                     api_key="conformance-secret",
                 ),
-            ),
-            agent_definition=AgentDefinition(
-                instructions="help",
-                model=Model(provider="openai", id="gpt-test"),
-                sampling=Sampling(temperature=0),
-                reasoning=Reasoning(effort="high"),
-                mcp_servers=(server,),
             ),
             mcp_server_headers=(
                 MCPServerHeaders(
@@ -1019,7 +986,7 @@ async def test_invoke_maps_ephemeral_and_stored_provider_keys() -> None:
             return type("Invocation", (), {
                 "id": INVOCATION_ID,
                 "session_id": SESSION_ID,
-                "agent_id": "agnt_test",
+                "agent_id": "agent_test",
                 "status": "queued",
                 "deduplicated": False,
                 "deadline_at": None,
@@ -1029,9 +996,6 @@ async def test_invoke_maps_ephemeral_and_stored_provider_keys() -> None:
         base = {
             "agent_key": "support",
             "input": "hello",
-            "agent_definition": AgentDefinition(
-                model=Model(provider="openai", id="gpt-test"),
-            ),
         }
         await client.invoke(InvokeRequest(
             **base,
@@ -1252,7 +1216,7 @@ async def test_wait_controls_support_actionable_statuses_and_local_timeout() -> 
             status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
             return SimpleNamespace(
                 session_id=SESSION_ID,
-                agent_id="agnt_test",
+                agent_id="agent_test",
                 status=status,
                 deadline_at=None,
             )
@@ -1427,7 +1391,6 @@ def test_shared_recorded_context_fixture_is_expressible() -> None:
         session_key=accepted["session_key"],
         idempotency_key=accepted["idempotency_key"],
         input=accepted["input"],
-        agent_definition_id=accepted["agent_definition_id"],
         context=tuple(ContextItem(**item) for item in accepted["context"]),
     )).to_dict()
     assert body["context"] == accepted["context"]
@@ -1447,7 +1410,6 @@ def test_shared_recorded_context_fixture_is_expressible() -> None:
             client._invocation_body(InvokeRequest(
                 agent_key="support",
                 input="hello",
-                agent_definition_id=accepted["agent_definition_id"],
                 context=items,
             ))
         except NvokenError as error:

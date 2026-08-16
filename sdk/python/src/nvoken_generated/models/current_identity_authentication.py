@@ -35,7 +35,7 @@ class CurrentIdentityAuthentication(BaseModel):
     org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Machine credentials only.")
     effective_profile: Optional[CredentialProfile] = Field(default=None, description="Machine credentials only.")
     agent_key: Optional[StrictStr] = Field(default=None, description="Browser grants only. The Agent this grant is pinned to.")
-    agent_definition_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Browser grants only.")
+    agent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Browser grants only. The Agent this grant is pinned to.")
     agent_definition_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Browser grants only.")
     tenant_key: Optional[StrictStr] = Field(default=None, description="Null only when a machine credential resolves no tenant. A browser grant is always tenant-pinned, so this is never null for one. ")
     session_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
@@ -43,7 +43,7 @@ class CurrentIdentityAuthentication(BaseModel):
     method: StrictStr = Field(description="How this caller authenticated. New values may be added; handle a value you do not recognize as an unknown caller rather than refusing the response. ")
     assurance: StrictStr
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["credential_id", "app_id", "org_id", "effective_profile", "agent_key", "agent_definition_id", "agent_definition_revision", "tenant_key", "session_id", "operations", "method", "assurance"]
+    __properties: ClassVar[List[str]] = ["credential_id", "app_id", "org_id", "effective_profile", "agent_key", "agent_id", "agent_definition_revision", "tenant_key", "session_id", "operations", "method", "assurance"]
 
     @field_validator('method')
     def method_validate_enum(cls, value):
@@ -142,7 +142,7 @@ class CurrentIdentityAuthentication(BaseModel):
             "org_id": obj.get("org_id"),
             "effective_profile": obj.get("effective_profile"),
             "agent_key": obj.get("agent_key"),
-            "agent_definition_id": obj.get("agent_definition_id"),
+            "agent_id": obj.get("agent_id"),
             "agent_definition_revision": obj.get("agent_definition_revision"),
             "tenant_key": obj.get("tenant_key"),
             "session_id": obj.get("session_id"),

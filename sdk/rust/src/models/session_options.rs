@@ -18,6 +18,9 @@ pub struct SessionOptions {
     pub compaction: Option<Box<models::CompactionPolicy>>,
     #[serde(rename = "retention", skip_serializing_if = "Option::is_none")]
     pub retention: Option<Box<models::RetentionPolicy>>,
+    /// Immutable Session-level Agent Definition revision pin.
+    #[serde(rename = "pinned_revision", skip_serializing_if = "Option::is_none")]
+    pub pinned_revision: Option<u64>,
     /// Opaque host correlation data. nvoken stores it, returns it verbatim, and never interprets it — it exists so a support engineer holding an Invocation id can get back to the board, ticket, or surface the turn came from, which nvoken deliberately knows nothing about.  At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`, `:`, and `-`; values are at most 512 bytes of UTF-8.  There is no `title` field on a Session by design. A title is one of these entries (`{\"title\": \"Refund policy\"}`), which keeps nvoken from forming opinions about a string only the host renders.
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<std::collections::HashMap<String, String>>,
@@ -29,6 +32,7 @@ impl SessionOptions {
         SessionOptions {
             compaction: None,
             retention: None,
+            pinned_revision: None,
             metadata: None,
         }
     }

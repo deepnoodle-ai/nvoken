@@ -51,6 +51,8 @@ __all__ = [
     "AdmissionTenantCount",
     "Agent",
     "AgentDefinition",
+    "AgentDefinitionCreate",
+    "AgentDefinitionOverrides",
     "AgentDefinitionResource",
     "AgentDefinitionResourceList",
     "AgentDefinitionWrite",
@@ -84,6 +86,7 @@ __all__ = [
     "CompactionPolicy",
     "CompactionPolicyTriggerTokens",
     "CostMetrics",
+    "CreateAgentRequest",
     "CreateClientKeyRequest",
     "CreateCredentialRequest",
     "CreateInvocationRequest",
@@ -257,6 +260,7 @@ __all__ = [
     "TranscriptSnapshot",
     "TranscriptUpdateEvent",
     "URLCitation",
+    "UpdateAgentRequest",
     "UpdateAppRequest",
     "UpdateOrgRequest",
     "UpdateSessionRequest",
@@ -313,6 +317,8 @@ from nvoken_generated.models.admission_summary import AdmissionSummary as Admiss
 from nvoken_generated.models.admission_tenant_count import AdmissionTenantCount as AdmissionTenantCount
 from nvoken_generated.models.agent import Agent as Agent
 from nvoken_generated.models.agent_definition import AgentDefinition as AgentDefinition
+from nvoken_generated.models.agent_definition_create import AgentDefinitionCreate as AgentDefinitionCreate
+from nvoken_generated.models.agent_definition_overrides import AgentDefinitionOverrides as AgentDefinitionOverrides
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource as AgentDefinitionResource
 from nvoken_generated.models.agent_definition_resource_list import AgentDefinitionResourceList as AgentDefinitionResourceList
 from nvoken_generated.models.agent_definition_write import AgentDefinitionWrite as AgentDefinitionWrite
@@ -346,6 +352,7 @@ from nvoken_generated.models.client_key_list import ClientKeyList as ClientKeyLi
 from nvoken_generated.models.compaction_policy import CompactionPolicy as CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import CompactionPolicyTriggerTokens as CompactionPolicyTriggerTokens
 from nvoken_generated.models.cost_metrics import CostMetrics as CostMetrics
+from nvoken_generated.models.create_agent_request import CreateAgentRequest as CreateAgentRequest
 from nvoken_generated.models.create_client_key_request import CreateClientKeyRequest as CreateClientKeyRequest
 from nvoken_generated.models.create_credential_request import CreateCredentialRequest as CreateCredentialRequest
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest as CreateInvocationRequest
@@ -519,6 +526,7 @@ from nvoken_generated.models.trace_summary import TraceSummary as TraceSummary
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot as TranscriptSnapshot
 from nvoken_generated.models.transcript_update_event import TranscriptUpdateEvent as TranscriptUpdateEvent
 from nvoken_generated.models.url_citation import URLCitation as URLCitation
+from nvoken_generated.models.update_agent_request import UpdateAgentRequest as UpdateAgentRequest
 from nvoken_generated.models.update_app_request import UpdateAppRequest as UpdateAppRequest
 from nvoken_generated.models.update_org_request import UpdateOrgRequest as UpdateOrgRequest
 from nvoken_generated.models.update_session_request import UpdateSessionRequest as UpdateSessionRequest

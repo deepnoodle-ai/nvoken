@@ -72,6 +72,9 @@ pub struct Session {
         skip_serializing_if = "Option::is_none"
     )]
     pub retention: Option<Option<Box<models::RetentionPolicy>>>,
+    /// Immutable Session-level Definition revision pin, or null to follow the Agent.
+    #[serde(rename = "pinned_revision", deserialize_with = "Option::deserialize")]
+    pub pinned_revision: Option<u64>,
     /// When nvoken may automatically delete this Session, or null if it has no retention window. The date moves forward every time a turn starts and every time one finishes, so a Session in active use never reaches it.
     #[serde(
         rename = "expires_at",
@@ -137,6 +140,7 @@ impl Session {
     /// One conversation.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`, `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`, `context`, and `usage`.
     pub fn new(
         id: String,
+        pinned_revision: Option<u64>,
         active_invocation_id: Option<String>,
         active_invocation_status: Option<ActiveInvocationStatus>,
         created_at: chrono::DateTime<chrono::FixedOffset>,
@@ -151,6 +155,7 @@ impl Session {
             forked_from: None,
             compaction: None,
             retention: None,
+            pinned_revision,
             expires_at: None,
             metadata: None,
             active_invocation_id,
