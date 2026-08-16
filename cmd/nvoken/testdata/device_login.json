@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "code": {
+    "request": {
+      "label": "curtis-mbp"
+    },
+    "success": {
+      "status": 200,
+      "body": {
+        "device_code": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "user_code": "BCDF-GHJK",
+        "verification_uri": "https://nvoken.com/app/cli/device",
+        "verification_uri_complete": "https://nvoken.com/app/cli/device?user_code=BCDF-GHJK",
+        "expires_in": 600,
+        "interval": 5
+      }
+    },
+    "invalid_request": {
+      "status": 400,
+      "body": {
+        "error": "invalid_request",
+        "error_description": "label must contain at most 64 printable ASCII characters"
+      }
+    },
+    "rate_limited": {
+      "status": 429,
+      "body": {
+        "error": "rate_limited",
+        "error_description": "Too many device login requests. Try again shortly."
+      }
+    }
+  },
+  "token": {
+    "request": {
+      "device_code": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "authorization_pending": {
+      "status": 202,
+      "body": {
+        "error": "authorization_pending",
+        "error_description": "Authorization is still pending."
+      }
+    },
+    "slow_down": {
+      "status": 429,
+      "body": {
+        "error": "slow_down",
+        "error_description": "The device code was polled too quickly."
+      }
+    },
+    "access_denied": {
+      "status": 403,
+      "body": {
+        "error": "access_denied",
+        "error_description": "The device authorization was denied."
+      }
+    },
+    "expired_token": {
+      "status": 400,
+      "body": {
+        "error": "expired_token",
+        "error_description": "The device code is invalid or has expired."
+      }
+    },
+    "server_error": {
+      "status": 502,
+      "body": {
+        "error": "server_error",
+        "error_description": "The credential could not be issued. Run nvoken auth login again."
+      }
+    },
+    "success": {
+      "status": 200,
+      "body": {
+        "secret": "nvk_example.secret",
+        "credential_id": "cred_019b0a12-0000-7000-8000-000000000001",
+        "org_id": "org_019b0a12-0000-7000-8000-000000000001",
+        "org_display_name": "Acme Corp",
+        "label": "curtis-mbp",
+        "nvoken_base_url": "https://api.nvoken.com"
+      }
+    }
+  }
+}

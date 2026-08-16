@@ -6,6 +6,13 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **`nvoken auth login` now authorizes through the console by default.** The
+  browser-approved 90-day Org/operator credential is saved with Org and device
+  metadata; explicit `--api-key` and `NVOKEN_API_KEY` keep the non-interactive
+  CI path.
+
 ## 0.18.0 - 2026-08-15
 
 - **A callback delivery names its tool inside the signed body.** `tool_name` on
