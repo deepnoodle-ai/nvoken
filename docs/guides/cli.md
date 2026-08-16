@@ -12,6 +12,23 @@ NVOKEN_BASE_URL='https://…' NVOKEN_API_KEY='…' \
   go run ./cmd/nvoken model list
 ```
 
+Authenticate interactively with the nvoken console:
+
+```bash
+nvoken auth login
+```
+
+The CLI always prints the device code and approval URL, then opens the browser
+when possible. Use `--no-browser` for a remote or headless shell,
+`--console-url` (or `NVOKEN_CONSOLE_URL`) for a self-hosted console, and
+`--label` to choose the device name shown for approval. A successful login
+saves a 90-day Org/operator credential and prints the organization it belongs
+to. Existing saved profiles do not bypass a fresh interactive login.
+
+For CI or an installation without a console, pass `--api-key` or set
+`NVOKEN_API_KEY`; `auth login` then verifies and saves that credential without
+opening a browser.
+
 The CLI stores named endpoint and API-key profiles in
 `~/.nvoken/credentials`, with directory mode `0700` and file mode `0600`.
 Environment and flag credentials override a saved profile without rewriting the

@@ -16,8 +16,11 @@ import (
 
 func registerAuthCommands(app *cli.App) {
 	group := app.Group("auth").Description("CLI authentication and local profiles")
-	group.Command("login").Description("Verify an API key and save it as a local profile").Flags(
+	group.Command("login").Description("Authorize through the nvoken console and save a local profile").Flags(
 		cli.Bool("default", "").Default(false).Help("make this profile the default"),
+		cli.String("console-url", "").Env("NVOKEN_CONSOLE_URL").Default(defaultConsoleURL).Help("nvoken console base URL"),
+		cli.String("label", "").Help("device name shown on the approval page (defaults to hostname)"),
+		cli.Bool("no-browser", "").Default(false).Help("print the approval URL without opening a browser"),
 	).Run(runAuthLogin)
 	group.Command("status").Description("Verify and show active authentication").Use(requireAuth()).Run(runAuthStatus)
 	group.Command("list").Description("List local profiles").Run(runAuthList)
@@ -26,12 +29,18 @@ func registerAuthCommands(app *cli.App) {
 	group.Command("revoke").Description("Revoke the selected credential and remove its local profile").Use(requireAuth()).Run(runAuthRevoke)
 }
 
-// runAuthLogin verifies the API key already resolved for this invocation
-// (--api-key, NVOKEN_API_KEY, or the selected profile) against GET /v1/identity
-// and records it as a named local profile. nvoken issues API keys through
-// `nvoken credentials create`; there is no interactive login.
+// runAuthLogin is interactive unless this invocation explicitly received an
+// API key by flag or environment. A saved default profile never silently turns
+// a request to log into another Org into a verification of the old profile.
 func runAuthLogin(ctx *cli.Context) error {
 	auth := authFor(ctx)
+	if auth.Source != authSourceOverride {
+		return runDeviceAuthLogin(ctx)
+	}
+	return runAPIKeyAuthLogin(ctx, auth)
+}
+
+func runAPIKeyAuthLogin(ctx *cli.Context, auth *resolvedAuth) error {
 	client, err := apiClient(auth, true)
 	if err != nil {
 		return err
@@ -106,7 +115,7 @@ func runAuthList(ctx *cli.Context) error {
 		profiles := make([]map[string]any, 0, len(names))
 		for _, name := range names {
 			profile := store.Profiles[name]
-			profiles = append(profiles, map[string]any{"name": name, "default": profile.Default, "endpoint": profile.Endpoint, "credential_id": profile.CredentialID, "created_at": profile.CreatedAt, "last_used_at": profile.LastUsedAt})
+			profiles = append(profiles, map[string]any{"name": name, "default": profile.Default, "endpoint": profile.Endpoint, "credential_id": profile.CredentialID, "org_id": profile.OrgID, "org_display_name": profile.OrgDisplayName, "label": profile.Label, "created_at": profile.CreatedAt, "last_used_at": profile.LastUsedAt})
 		}
 		return renderJSON(ctx, map[string]any{"profiles": profiles})
 	}
@@ -116,7 +125,11 @@ func runAuthList(ctx *cli.Context) error {
 		if profile.Default {
 			marker = "*"
 		}
-		ctx.Printf("%s %s\t%s\t%s\n", marker, name, profile.Endpoint, profile.CredentialID)
+		organization := profile.OrgDisplayName
+		if organization == "" {
+			organization = "-"
+		}
+		ctx.Printf("%s %s\t%s\t%s\t%s\n", marker, name, organization, profile.Endpoint, profile.CredentialID)
 	}
 	return nil
 }

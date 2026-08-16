@@ -17,13 +17,16 @@ import (
 var ErrNoDefaultProfile = errors.New("no default profile")
 
 type Profile struct {
-	Name         string `toml:"-"`
-	Default      bool   `toml:"default,omitempty"`
-	Endpoint     string `toml:"endpoint"`
-	Token        string `toml:"token"`
-	CredentialID string `toml:"credential_id"`
-	CreatedAt    string `toml:"created_at"`
-	LastUsedAt   string `toml:"last_used_at,omitempty"`
+	Name           string `toml:"-"`
+	Default        bool   `toml:"default,omitempty"`
+	Endpoint       string `toml:"endpoint"`
+	Token          string `toml:"token"`
+	CredentialID   string `toml:"credential_id"`
+	OrgID          string `toml:"org_id,omitempty"`
+	OrgDisplayName string `toml:"org_display_name,omitempty"`
+	Label          string `toml:"label,omitempty"`
+	CreatedAt      string `toml:"created_at"`
+	LastUsedAt     string `toml:"last_used_at,omitempty"`
 }
 
 type Store struct {
