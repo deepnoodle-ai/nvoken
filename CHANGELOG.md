@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.19.0 - 2026-08-16
 
 - **Agents are tenant-scoped instances of versioned Agent Definitions.** Create
   a Definition and Agent before invoking by Agent ID or key; all SDKs and the
