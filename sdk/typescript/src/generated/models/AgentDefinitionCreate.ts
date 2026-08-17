@@ -97,11 +97,11 @@ export interface AgentDefinitionCreate {
      */
     definitionKey: string;
     /**
-     *
+     * Display name. Defaults to `definition_key`.
      * @type {string}
      * @memberof AgentDefinitionCreate
      */
-    name: string;
+    name?: string;
     /**
      * Optional model instructions. Omission adds no hidden default.
      * @type {string}
@@ -192,7 +192,6 @@ export interface AgentDefinitionCreate {
  */
 export function instanceOfAgentDefinitionCreate(value: object): value is AgentDefinitionCreate {
     if (!('definitionKey' in value) || value['definitionKey'] === undefined) return false;
-    if (!('name' in value) || value['name'] === undefined) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     return true;
 }
@@ -208,7 +207,7 @@ export function AgentDefinitionCreateFromJSONTyped(json: any, ignoreDiscriminato
     return {
 
         'definitionKey': json['definition_key'],
-        'name': json['name'],
+        'name': json['name'] == null ? undefined : json['name'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'model': ModelInputFromJSON(json['model']),
         'sampling': json['sampling'] == null ? undefined : SamplingFromJSON(json['sampling']),

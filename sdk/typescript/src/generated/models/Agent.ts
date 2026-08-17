@@ -42,7 +42,7 @@ export interface Agent {
      */
     agentKey: string;
     /**
-     *
+     * Display name. Defaults to `agent_key`.
      * @type {string}
      * @memberof Agent
      */

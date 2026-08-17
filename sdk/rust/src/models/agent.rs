@@ -23,6 +23,7 @@ pub struct Agent {
     /// Stable host-owned key, unique within this tenant.
     #[serde(rename = "agent_key")]
     pub agent_key: String,
+    /// Display name. Defaults to `agent_key`.
     #[serde(rename = "name")]
     pub name: String,
     /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.

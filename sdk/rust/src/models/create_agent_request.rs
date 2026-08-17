@@ -17,8 +17,8 @@ pub struct CreateAgentRequest {
     pub tenant_key: Option<String>,
     #[serde(rename = "agent_key")]
     pub agent_key: String,
-    #[serde(rename = "name")]
-    pub name: String,
+    #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
     #[serde(rename = "agent_definition_id")]
     pub agent_definition_id: String,
@@ -27,11 +27,11 @@ pub struct CreateAgentRequest {
 }
 
 impl CreateAgentRequest {
-    pub fn new(agent_key: String, name: String, agent_definition_id: String) -> CreateAgentRequest {
+    pub fn new(agent_key: String, agent_definition_id: String) -> CreateAgentRequest {
         CreateAgentRequest {
             tenant_key: None,
             agent_key,
-            name,
+            name: None,
             agent_definition_id,
             pinned_revision: None,
         }

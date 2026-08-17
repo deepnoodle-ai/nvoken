@@ -99,11 +99,11 @@ export interface AgentDefinitionWrite {
      */
     definitionKey?: string;
     /**
-     *
+     * Display name. Defaults to `definition_key`.
      * @type {string}
      * @memberof AgentDefinitionWrite
      */
-    name: string;
+    name?: string;
     /**
      * Optional model instructions. Omission adds no hidden default.
      * @type {string}
@@ -193,7 +193,6 @@ export interface AgentDefinitionWrite {
  * Check if a given object implements the AgentDefinitionWrite interface.
  */
 export function instanceOfAgentDefinitionWrite(value: object): value is AgentDefinitionWrite {
-    if (!('name' in value) || value['name'] === undefined) return false;
     if (!('model' in value) || value['model'] === undefined) return false;
     return true;
 }
@@ -209,7 +208,7 @@ export function AgentDefinitionWriteFromJSONTyped(json: any, ignoreDiscriminator
     return {
 
         'definitionKey': json['definition_key'] == null ? undefined : json['definition_key'],
-        'name': json['name'],
+        'name': json['name'] == null ? undefined : json['name'],
         'instructions': json['instructions'] == null ? undefined : json['instructions'],
         'model': ModelInputFromJSON(json['model']),
         'sampling': json['sampling'] == null ? undefined : SamplingFromJSON(json['sampling']),

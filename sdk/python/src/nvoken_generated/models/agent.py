@@ -32,7 +32,7 @@ class Agent(BaseModel):
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
     tenant_key: Optional[StrictStr] = Field(description="Tenant that owns this Agent, or null for the App's default tenant.")
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Stable host-owned key, unique within this tenant.")
-    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Display name. Defaults to `agent_key`.")
     agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
     pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]]
     created_at: datetime

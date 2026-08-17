@@ -38,7 +38,6 @@ func (p RetryPolicy) normalized() RetryPolicy {
 type Client struct {
 	raw          *generated.ClientWithResponses
 	retry        RetryPolicy
-	DefaultModel *Model
 	sessionMu    sync.Mutex
 	sessionLocks map[string]*sync.Mutex
 }
@@ -46,9 +45,8 @@ type Client struct {
 type ClientOption func(*clientOptions)
 
 type clientOptions struct {
-	httpClient   *http.Client
-	retry        RetryPolicy
-	defaultModel *Model
+	httpClient *http.Client
+	retry      RetryPolicy
 }
 
 func WithHTTPClient(client *http.Client) ClientOption {
@@ -57,13 +55,6 @@ func WithHTTPClient(client *http.Client) ClientOption {
 
 func WithRetryPolicy(policy RetryPolicy) ClientOption {
 	return func(options *clientOptions) { options.retry = policy }
-}
-
-// WithDefaultModel sets the model an Agent uses when it does not name one
-// itself. It is resolved into model client-side before the request; the
-// server keeps requiring exact selection.
-func WithDefaultModel(model Model) ClientOption {
-	return func(options *clientOptions) { options.defaultModel = &model }
 }
 
 func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error) {
@@ -93,7 +84,6 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 	return &Client{
 		raw:          raw,
 		retry:        config.retry.normalized(),
-		DefaultModel: config.defaultModel,
 		sessionLocks: make(map[string]*sync.Mutex),
 	}, nil
 }
@@ -167,6 +157,15 @@ func retryDelay(policy RetryPolicy, attempt int, header http.Header) time.Durati
 		return delay
 	}
 	return delay/2 + time.Duration(mathrand.Int64N(int64(delay/2)+1))
+}
+
+// optionalString omits an empty value rather than sending it, so a field the
+// runtime defaults stays defaulted there instead of being filled in twice.
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func responseHeader(response *http.Response) http.Header {
@@ -259,7 +258,7 @@ func (c *Client) CreateAgentDefinition(
 		func() (callResult[generated.AgentDefinitionResource], error) {
 			response, callErr := c.raw.CreateAgentDefinitionWithBodyWithResponse(
 				ctx,
-				&generated.CreateAgentDefinitionParams{IdempotencyKey: input.IdempotencyKey},
+				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(input.IdempotencyKey)},
 				"application/json",
 				bytes.NewReader(body),
 			)
@@ -1796,14 +1795,14 @@ func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentIdentity, 
 // CreateAgent deliberately creates or resolves one tenant-scoped Agent
 // instance. Repeating the same tenant/key/Definition tuple is a safe upsert.
 func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*AgentIdentity, error) {
-	if input.AgentKey == "" || input.Name == "" || input.AgentDefinitionID == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent key, name, and Agent Definition ID are required"}
+	if input.AgentKey == "" || input.AgentDefinitionID == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent key and Agent Definition ID are required"}
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
 		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
 			TenantKey:         input.TenantKey,
 			AgentKey:          input.AgentKey,
-			Name:              input.Name,
+			Name:              optionalString(input.Name),
 			AgentDefinitionID: input.AgentDefinitionID,
 			PinnedRevision:    input.PinnedRevision,
 		})
@@ -2087,9 +2086,12 @@ func (c *Client) ForkSession(
 // transcript, checkpoints, tool calls, artifacts, and undelivered
 // webhooks. The erasure is immediate and irreversible.
 //
-// A running Invocation is stopped, and no cancellation is recorded — the
-// Invocation is removed rather than ended, so no invocation.ended webhook is
-// emitted for it. Cancel first if you need an ended record.
+// A Session holding a nonterminal Invocation is refused unless options set
+// Force. Erasure skips settlement — the Invocation is removed rather than
+// ended, so it records no terminal status and emits no invocation.ended
+// webhook — which is why a caller that bills or reconciles on settlement must
+// cancel first. Force is for erasing on an end user's behalf, where removing
+// the transcript now outranks keeping a settled record.
 //
 // An unknown or out-of-scope Session is not found, so a retry after a lost
 // response can treat that as already-done.
@@ -2097,11 +2099,24 @@ func (c *Client) ForkSession(
 // This is not account erasure by itself: nvoken keeps no account tombstone, so
 // a caller honouring a deletion request must stop admitting work for the
 // tenant before paginating and deleting.
-func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
+func (c *Client) DeleteSession(
+	ctx context.Context,
+	sessionID string,
+	options ...DeleteSessionOption,
+) error {
+	settings := deleteSessionSettings{}
+	for _, option := range options {
+		option(&settings)
+	}
+	params := &generated.DeleteSessionParams{}
+	if settings.force {
+		force := true
+		params.Force = &force
+	}
 	// Deletion is idempotent by shape — a repeat is not-found rather than a
 	// second erasure — so it is safe to replay.
 	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.DeleteSessionWithResponse(ctx, sessionID)
+		response, err := c.raw.DeleteSessionWithResponse(ctx, sessionID, params)
 		if err != nil {
 			return callResult[struct{}]{}, err
 		}
@@ -2116,6 +2131,17 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 		return result, nil
 	})
 	return err
+}
+
+type deleteSessionSettings struct{ force bool }
+
+// DeleteSessionOption configures one erasure.
+type DeleteSessionOption func(*deleteSessionSettings)
+
+// WithForceDelete erases a Session even when it holds a nonterminal
+// Invocation, discarding that turn's settlement.
+func WithForceDelete() DeleteSessionOption {
+	return func(settings *deleteSessionSettings) { settings.force = true }
 }
 
 // UpdateSession merges a metadata patch into a Session: a present key

@@ -148,15 +148,15 @@ pub async fn archive_agent_definition(
     }
 }
 
-/// Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+/// Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 pub async fn create_agent_definition(
     configuration: &configuration::Configuration,
-    idempotency_key: &str,
     agent_definition_create: models::AgentDefinitionCreate,
+    idempotency_key: Option<&str>,
 ) -> Result<models::AgentDefinitionResource, Error<CreateAgentDefinitionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
-    let p_header_idempotency_key = idempotency_key;
     let p_body_agent_definition_create = agent_definition_create;
+    let p_header_idempotency_key = idempotency_key;
 
     let uri_str = format!("{}/v1/agent-definitions", configuration.base_path);
     let mut req_builder = configuration
@@ -166,7 +166,9 @@ pub async fn create_agent_definition(
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
-    req_builder = req_builder.header("Idempotency-Key", p_header_idempotency_key.to_string());
+    if let Some(param_value) = p_header_idempotency_key {
+        req_builder = req_builder.header("Idempotency-Key", param_value.to_string());
+    }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
     };
@@ -304,14 +306,16 @@ pub async fn get_agent_definition_revision(
     }
 }
 
-/// Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+/// Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
 pub async fn list_agent_definitions(
     configuration: &configuration::Configuration,
+    definition_key: Option<&str>,
     include_archived: Option<bool>,
     cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::AgentDefinitionResourceList, Error<ListAgentDefinitionsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_definition_key = definition_key;
     let p_query_include_archived = include_archived;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
@@ -319,6 +323,9 @@ pub async fn list_agent_definitions(
     let uri_str = format!("{}/v1/agent-definitions", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_definition_key {
+        req_builder = req_builder.query(&[("definition_key", &param_value.to_string())]);
+    }
     if let Some(ref param_value) = p_query_include_archived {
         req_builder = req_builder.query(&[("include_archived", &param_value.to_string())]);
     }

@@ -30,7 +30,7 @@ class CreateAgentRequest(BaseModel):
     """ # noqa: E501
     tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
-    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
     agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
     pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     __properties: ClassVar[List[str]] = ["tenant_key", "agent_key", "name", "agent_definition_id", "pinned_revision"]

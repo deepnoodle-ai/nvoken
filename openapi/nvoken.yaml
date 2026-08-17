@@ -984,6 +984,19 @@ paths:
       tags: [Agents]
       operationId: createAgent
       summary: Create or resolve a tenant-scoped Agent
+      description: |
+        Creation is an upsert on `(tenant_key, agent_key)`, so an
+        ensure-shaped call is safe to make on every request and needs no
+        read first. The same keys backed by the same Agent Definition return
+        the existing Agent with `200`; a different Definition pointer is
+        `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+        held by an archived Agent are `409 agent_archived` — restore it or
+        choose another key — rather than silently resolving onto a record
+        that refuses every admission.
+
+        Resolution matches on the Definition pointer only. A differing `name`
+        or `pinned_revision` in the request does not modify the existing
+        Agent; use `PATCH /v1/agents/{agent_id}` to change either.
       requestBody:
         required: true
         content:
@@ -1130,7 +1143,22 @@ paths:
         Returns this App's stable resources at their current revision, newest
         first and cursor-paginated. Archived resources are excluded unless
         `include_archived` is true, and then carry a non-null `archived_at`.
+
+        `definition_key` is the lookup: the key is unique within the App, so
+        the filter returns at most one resource and never needs a cursor. Use
+        it instead of paging the collection to resolve one definition.
       parameters:
+        - name: definition_key
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          description: |
+            Return only the resource this caller-owned key names. Unique per
+            App, so the page holds zero or one item. Cannot be combined with
+            `cursor`.
         - name: include_archived
           in: query
           required: false
@@ -1158,14 +1186,26 @@ paths:
       operationId: createAgentDefinition
       summary: Create an Agent Definition resource
       description: |
-        Creates a stable App-owned resource at revision 1. Equal content in a
-        separate create gets a separate ID. Retry the same canonical request
-        with the same `Idempotency-Key` to receive the original revision-1
-        resource; changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.
+
+        `definition_key` is unique within the App, and creation is shaped
+        around that: restating an existing resource — same key, same name,
+        same definition — returns it with `200` instead of creating a second
+        one, so a deploy-time sync can call this every time. A create naming
+        a taken key with different contents is `409
+        agent_definition_key_conflict`, pointing you at
+        `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+        held by an archived resource is `409 agent_definition_archived`;
+        restore it or choose another key.
+
+        `Idempotency-Key` is optional, because the key already scopes replay.
+        Supply one to pin a replay to a specific create: the same key returns
+        that create's revision-1 resource even after later revisions moved
+        the resource on, and changing the request under that key conflicts.
       parameters:
         - name: Idempotency-Key
           in: header
-          required: true
+          required: false
           schema:
             type: string
             minLength: 1
@@ -1186,6 +1226,20 @@ paths:
                     provider: anthropic
                     id: claude-sonnet-5
       responses:
+        "200":
+          description: |
+            The existing resource, at its current revision. The request
+            restated what `definition_key` already names, so nothing was
+            created.
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: Strong ETag containing the current decimal revision in quotes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionResource"
         "201":
           description: The new or idempotently replayed revision-1 resource.
           headers:
@@ -1216,7 +1270,14 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "409":
-          $ref: "#/components/responses/AppArchived"
+          description: |
+            The App is archived, or `definition_key` already names a
+            different or archived resource
+            (`agent_definition_key_conflict`, `agent_definition_archived`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -3582,11 +3643,15 @@ paths:
         bindings, and undelivered webhooks. The erasure is immediate and
         irreversible; a subsequent read is `not_found`.
 
-        A turn still running is stopped, but no cancellation is recorded —
-        there is nothing left to record it against, and no
-        `invocation.ended` webhook fires for it. If you need a record that
-        the turn ended, cancel it and wait for its final state before
-        deleting.
+        A Session holding a nonterminal Invocation is refused with
+        `session_invocation_active` unless you pass `force=true`. Erasure
+        skips settlement: a turn still running is stopped, but no
+        cancellation is recorded — there is nothing left to record it
+        against — and no `invocation.ended` webhook fires for it. So if you
+        bill or reconcile on settlement, cancel the turn and wait for its
+        final state first, then delete. `force=true` is for erasing on an end
+        user's behalf, where removing the transcript now outranks keeping a
+        settled record of the turn.
 
         An unknown `session_id`, or one outside your scope, returns
         `not_found`. So if you lose the response and retry, you can safely
@@ -3605,6 +3670,17 @@ paths:
         marked erased; prompts, responses, and tool payloads do not. The
         deleted turns' idempotency keys become reusable, since deduplication
         only holds while the original turn still exists.
+      parameters:
+        - name: force
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: |
+            Erase even when the Session holds a nonterminal Invocation,
+            discarding that turn's settlement. Without it, live work is
+            refused with `session_invocation_active`.
       responses:
         "204":
           description: The Session and its subtree no longer exist.
@@ -3616,6 +3692,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            The Session holds a nonterminal Invocation and `force` was not
+            set (`session_invocation_active`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -4521,6 +4605,7 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+          description: Display name. Defaults to `agent_key`.
         agent_definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
         pinned_revision:
@@ -4544,7 +4629,7 @@ components:
     CreateAgentRequest:
       type: object
       additionalProperties: false
-      required: [agent_key, name, agent_definition_id]
+      required: [agent_key, agent_definition_id]
       properties:
         tenant_key:
           type: string
@@ -6773,7 +6858,7 @@ components:
     AgentDefinitionWrite:
       type: object
       additionalProperties: false
-      required: [name, model]
+      required: [model]
       properties:
         definition_key:
           type: string
@@ -6784,6 +6869,7 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+          description: Display name. Defaults to `definition_key`.
         instructions:
           type: string
           minLength: 1
@@ -9701,6 +9787,7 @@ components:
         - agent_key_conflict
         - agent_pin_invalid
         - agent_definition_not_found
+        - agent_definition_key_conflict
         - agent_definition_revision_conflict
         - precondition_required
         - media_fetch_failed

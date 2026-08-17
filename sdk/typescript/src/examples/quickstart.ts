@@ -4,20 +4,19 @@ import { Client, formatNvokenError } from "@deepnoodle/nvoken";
 
 const client = new Client();
 
+// Both creates are keyed and idempotent, so this file is safe to run twice.
+// definitionKey and (tenantKey, agentKey) are unique, and restating one
+// returns what it already names rather than making a second.
 try {
   const definition = await client.createAgentDefinition({
     definitionKey: "quickstart",
-    name: "Quickstart",
     definition: {
       instructions: "Answer in one short sentence.",
-      model: { provider: "anthropic", id: "claude-sonnet-5" },
+      model: "anthropic/claude-sonnet-5",
     },
-    idempotencyKey: "quickstart-definition",
   });
-  const agents = await client.listAgents({ agentKey: "quickstart" });
-  const instance = agents.items[0] ?? await client.createAgent({
+  const instance = await client.createAgent({
     agentKey: "quickstart",
-    name: "Quickstart",
     agentDefinitionId: definition.id,
   });
   const agent = client.agent({ agentId: instance.id });

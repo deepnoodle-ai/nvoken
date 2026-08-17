@@ -6,6 +6,57 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Fixed: the default `fetch` is bound, so streaming works on workerd.** It
+  was stored unbound and invoked as a method, which throws `Illegal
+  invocation` on Cloudflare Workers — on the stream path only, so every REST
+  call kept working while a turn parked on a host tool was never answered. The
+  reconnect loop that hid it is now bounded: a stream that cannot connect for
+  `streamReconnectTimeoutMs` (five minutes by default) throws instead of
+  retrying forever, and the clock resets on any successful connection.
+
+- **Breaking: `run()` and `waitForResult()` return an `incomplete` turn
+  instead of throwing.** An `incomplete` turn stopped at a budget with its work
+  retained — including a validated structured output, since an unsatisfied
+  schema settles `failed` — so it is paid-for work and now arrives as a result
+  to branch on. `InvocationError` is reserved for `failed` and `cancelled`.
+  `EndedInvocationHandle.status` widens to `"completed" | "incomplete"`;
+  branch on it rather than assuming `completed`.
+
+- **Breaking: the client-level default model is removed** from every SDK. It
+  was accepted and documented but never read in TypeScript, Go, and Python,
+  and in Rust it filled an Agent Definition's model — which makes durable,
+  versioned, App-owned configuration depend on whichever process published it.
+  Name the model in the definition, or override it per turn.
+
+- **A model is nameable as `"provider/id"` everywhere it appears.** The wire
+  and the contract always allowed the string form; the handwritten types
+  required the object. `normalizeModel` is exported for callers that need the
+  object form themselves.
+
+- **Agent Definitions are readable and creatable by key.**
+  `getAgentDefinitionByKey` (`get_agent_definition_by_key`) replaces
+  paginate-and-filter, and creation is ensure-shaped: restating an existing
+  definition returns it, so `Idempotency-Key` is optional and the
+  caller-invented key disappears. `name` defaults to the key on both creates.
+
+- **`deleteSession` takes `force`.** Erasing a Session with a live turn skips
+  its settlement, so it is now refused unless asked for explicitly.
+
+- **`handle.streamReduced()` yields folded snapshots.** The four
+  preview-discard rules and the messages-before-changes ordering live in the
+  SDK's `Reducer` rather than in each consumer.
+
+- **Dependency-free subpath exports.** `@deepnoodle/nvoken/status` and
+  `@deepnoodle/nvoken/callback` reach the protocol predicates and the callback
+  verifier without pulling in the runtime client, so a browser bundle or a
+  separate callback process no longer forks them.
+
+- **A transport hook.** `onResponse` reports method, URL, status, and duration
+  for every round trip, including requests that failed before a response
+  existed.
+
 ## 0.20.0 - 2026-08-16
 
 - **The CLI covers the complete public outbound API.** Every operation now has

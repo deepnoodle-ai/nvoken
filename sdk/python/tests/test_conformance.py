@@ -1132,6 +1132,7 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
         await client.restore_agent_definition("def_test")
         assert definition_calls == [
             ("list", {
+                "definition_key": None,
                 "include_archived": True,
                 "cursor": "definitions-2",
                 "limit": 10,

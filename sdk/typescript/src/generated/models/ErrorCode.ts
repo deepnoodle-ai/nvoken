@@ -24,6 +24,7 @@ export const ErrorCode = {
     AgentKeyConflict: 'agent_key_conflict',
     AgentPinInvalid: 'agent_pin_invalid',
     AgentDefinitionNotFound: 'agent_definition_not_found',
+    AgentDefinitionKeyConflict: 'agent_definition_key_conflict',
     AgentDefinitionRevisionConflict: 'agent_definition_revision_conflict',
     PreconditionRequired: 'precondition_required',
     MediaFetchFailed: 'media_fetch_failed',

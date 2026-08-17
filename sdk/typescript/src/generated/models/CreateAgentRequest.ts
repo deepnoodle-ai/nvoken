@@ -36,7 +36,7 @@ export interface CreateAgentRequest {
      * @type {string}
      * @memberof CreateAgentRequest
      */
-    name: string;
+    name?: string;
     /**
      * Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
      * @type {string}
@@ -56,7 +56,6 @@ export interface CreateAgentRequest {
  */
 export function instanceOfCreateAgentRequest(value: object): value is CreateAgentRequest {
     if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
-    if (!('name' in value) || value['name'] === undefined) return false;
     if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
     return true;
 }
@@ -73,7 +72,7 @@ export function CreateAgentRequestFromJSONTyped(json: any, ignoreDiscriminator: 
 
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'agentKey': json['agent_key'],
-        'name': json['name'],
+        'name': json['name'] == null ? undefined : json['name'],
         'agentDefinitionId': json['agent_definition_id'],
         'pinnedRevision': json['pinned_revision'] == null ? undefined : json['pinned_revision'],
     };

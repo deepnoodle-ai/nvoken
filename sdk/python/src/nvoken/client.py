@@ -583,14 +583,12 @@ class Client:
         *,
         retry: RetryPolicy = RetryPolicy(),
         transport: httpx.AsyncBaseTransport | None = None,
-        default_model: Model | None = None,
     ) -> None:
         if not base_url or not api_key:
             raise NvokenError("validation", "base_url and api_key are required")
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.retry = retry
-        self.default_model = default_model
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._background_tasks: set[asyncio.Task[Any]] = set()
         configuration = Configuration(host=self.base_url, access_token=api_key)
@@ -763,7 +761,7 @@ class Client:
         self,
         definition: AgentDefinition,
         *,
-        name: str,
+        name: str | None,
         definition_key: str | None = None,
     ) -> AgentDefinitionWrite | AgentDefinitionCreate:
         """Render one Agent Definition.
@@ -1040,14 +1038,22 @@ class Client:
     async def create_agent_definition(
         self,
         definition_key: str,
-        name: str,
         definition: AgentDefinition,
         *,
+        name: str | None = None,
         idempotency_key: str | None = None,
     ) -> AgentDefinitionResource:
-        """Create one reusable App-owned Agent Definition resource."""
-        if not definition_key or not name:
-            raise NvokenError("validation", "definition_key and name are required")
+        """Create one App-owned Agent Definition, or return the one the key names.
+
+        ``definition_key`` is unique within the App, so this is ensure-shaped:
+        restating an existing definition returns it, and a key already held by
+        a different definition is a conflict naming the resource to update
+        instead. ``name`` defaults to the key. ``idempotency_key`` is optional
+        and pins replay to a specific create; the key already scopes replay
+        without it.
+        """
+        if not definition_key:
+            raise NvokenError("validation", "definition_key is required")
         body = self._agent_definition_body(
             definition,
             name=name,
@@ -1055,10 +1061,29 @@ class Client:
         )
         return await self._replay_safe(
             lambda: self.agent_definitions.create_agent_definition(
-                idempotency_key or f"nvoken-{uuid.uuid4()}",
                 body,
+                idempotency_key=idempotency_key,
             )
         )
+
+    async def get_agent_definition_by_key(
+        self,
+        definition_key: str,
+        *,
+        include_archived: bool | None = None,
+    ) -> AgentDefinitionResource | None:
+        """Read the Agent Definition a key names, or ``None`` when it names none.
+
+        The key is unique within the App, so this is a lookup rather than a
+        search: nothing to paginate, nothing to filter, no duplicate to detect.
+        """
+        if not definition_key:
+            raise NvokenError("validation", "definition_key is required")
+        page = await self.list_agent_definitions(
+            definition_key=definition_key,
+            include_archived=include_archived,
+        )
+        return page.items[0] if page.items else None
 
     async def get_agent_definition(
         self,
@@ -1083,12 +1108,14 @@ class Client:
     async def list_agent_definitions(
         self,
         *,
+        definition_key: str | None = None,
         include_archived: bool | None = None,
         cursor: str | None = None,
         limit: int | None = None,
     ) -> AgentDefinitionResourceList:
         return await self._replay_safe(
             lambda: self.agent_definitions.list_agent_definitions(
+                definition_key=definition_key,
                 include_archived=include_archived,
                 cursor=cursor,
                 limit=limit,
@@ -1362,17 +1389,19 @@ class Client:
             await self._replay_safe(lambda: self.sessions.get_session(session_id))
         )
 
-    async def delete_session(self, session_id: str) -> None:
+    async def delete_session(self, session_id: str, *, force: bool = False) -> None:
         """Erase a Session and everything under it.
 
         Removes its Invocations, transcript, checkpoints, tool calls,
         artifacts, and undelivered webhooks. The erasure is immediate and
         irreversible.
 
-        A running Invocation is stopped, and no cancellation is recorded — the
-        Invocation is removed rather than ended, so no ``invocation.ended``
-        webhook is emitted for it. Cancel first if you need an ended
-        record.
+        A Session holding a nonterminal Invocation is refused unless ``force``.
+        Erasure skips settlement — the Invocation is removed rather than ended,
+        so it records no terminal status and emits no ``invocation.ended``
+        webhook — which is why a caller that bills or reconciles on settlement
+        must cancel first. ``force`` is for erasing on an end user's behalf,
+        where removing the transcript now outranks keeping a settled record.
 
         An unknown or out-of-scope Session is not found, so a retry after a
         lost response can treat that as already-done.
@@ -1383,7 +1412,9 @@ class Client:
         """
         # Deletion is idempotent by shape — a repeat is not-found rather than a
         # second erasure — so it is safe to replay.
-        await self._replay_safe(lambda: self.sessions.delete_session(session_id))
+        await self._replay_safe(
+            lambda: self.sessions.delete_session(session_id, force=force or None)
+        )
 
     async def update_session(
         self,

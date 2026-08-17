@@ -26,6 +26,8 @@ pub enum ErrorCode {
     AgentPinInvalid,
     #[serde(rename = "agent_definition_not_found")]
     AgentDefinitionNotFound,
+    #[serde(rename = "agent_definition_key_conflict")]
+    AgentDefinitionKeyConflict,
     #[serde(rename = "agent_definition_revision_conflict")]
     AgentDefinitionRevisionConflict,
     #[serde(rename = "precondition_required")]
@@ -95,6 +97,7 @@ impl std::fmt::Display for ErrorCode {
             Self::AgentKeyConflict => write!(f, "agent_key_conflict"),
             Self::AgentPinInvalid => write!(f, "agent_pin_invalid"),
             Self::AgentDefinitionNotFound => write!(f, "agent_definition_not_found"),
+            Self::AgentDefinitionKeyConflict => write!(f, "agent_definition_key_conflict"),
             Self::AgentDefinitionRevisionConflict => {
                 write!(f, "agent_definition_revision_conflict")
             }

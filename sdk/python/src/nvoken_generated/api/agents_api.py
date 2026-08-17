@@ -333,6 +333,7 @@ class AgentsApi:
     ) -> Agent:
         """Create or resolve a tenant-scoped Agent
 
+        Creation is an upsert on `(tenant_key, agent_key)`, so an ensure-shaped call is safe to make on every request and needs no read first. The same keys backed by the same Agent Definition return the existing Agent with `200`; a different Definition pointer is `409 agent_key_conflict`, naming the Agent that holds the key. Keys held by an archived Agent are `409 agent_archived` — restore it or choose another key — rather than silently resolving onto a record that refuses every admission.  Resolution matches on the Definition pointer only. A differing `name` or `pinned_revision` in the request does not modify the existing Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 
         :param create_agent_request: (required)
         :type create_agent_request: CreateAgentRequest
@@ -407,6 +408,7 @@ class AgentsApi:
     ) -> ApiResponse[Agent]:
         """Create or resolve a tenant-scoped Agent
 
+        Creation is an upsert on `(tenant_key, agent_key)`, so an ensure-shaped call is safe to make on every request and needs no read first. The same keys backed by the same Agent Definition return the existing Agent with `200`; a different Definition pointer is `409 agent_key_conflict`, naming the Agent that holds the key. Keys held by an archived Agent are `409 agent_archived` — restore it or choose another key — rather than silently resolving onto a record that refuses every admission.  Resolution matches on the Definition pointer only. A differing `name` or `pinned_revision` in the request does not modify the existing Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 
         :param create_agent_request: (required)
         :type create_agent_request: CreateAgentRequest
@@ -481,6 +483,7 @@ class AgentsApi:
     ) -> RESTResponseType:
         """Create or resolve a tenant-scoped Agent
 
+        Creation is an upsert on `(tenant_key, agent_key)`, so an ensure-shaped call is safe to make on every request and needs no read first. The same keys backed by the same Agent Definition return the existing Agent with `200`; a different Definition pointer is `409 agent_key_conflict`, naming the Agent that holds the key. Keys held by an archived Agent are `409 agent_archived` — restore it or choose another key — rather than silently resolving onto a record that refuses every admission.  Resolution matches on the Definition pointer only. A differing `name` or `pinned_revision` in the request does not modify the existing Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 
         :param create_agent_request: (required)
         :type create_agent_request: CreateAgentRequest
