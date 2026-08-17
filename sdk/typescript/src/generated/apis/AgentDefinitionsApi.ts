@@ -175,7 +175,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
+     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  Both conflicts carry `details.definition_id` and `details.definition_key` naming the resource already holding the key, so the `PUT` they point at needs no lookup first. A full sync is therefore at most two calls per definition and never a read: `POST`, and on `agent_definition_key_conflict`, `PUT` that `definition_id` with `If-Match: *`.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
      * Create an Agent Definition resource
      */
     async createAgentDefinitionRaw(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
@@ -186,7 +186,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
+     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  Both conflicts carry `details.definition_id` and `details.definition_key` naming the resource already holding the key, so the `PUT` they point at needs no lookup first. A full sync is therefore at most two calls per definition and never a read: `POST`, and on `agent_definition_key_conflict`, `PUT` that `definition_id` with `If-Match: *`.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
      * Create an Agent Definition resource
      */
     async createAgentDefinition(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
@@ -482,8 +482,8 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
-     * Replace an Agent Definition and create its next revision
+     * Replacement is ensure-shaped, as creation is: a request whose definition and `name` already match the current revision publishes nothing and answers `200` with that revision, `updated_at` included. A request that changes either publishes the next revision and answers `201`. Read which happened from the status; you do not need to compare representations to find out.  This is what makes deploy-time sync a write-only loop. Send every definition you own on every deploy with `If-Match: *` and let nvoken decide which ones moved — rather than reading each one back and reimplementing nvoken\'s canonicalization to decide for yourself, which is the same comparison in a second place, free to disagree.  If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+     * Replace an Agent Definition, publishing a revision if anything changed
      */
     async updateAgentDefinitionRaw(requestParameters: UpdateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
         const requestOptions = await this.updateAgentDefinitionRequestOpts(requestParameters);
@@ -493,8 +493,8 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
-     * Replace an Agent Definition and create its next revision
+     * Replacement is ensure-shaped, as creation is: a request whose definition and `name` already match the current revision publishes nothing and answers `200` with that revision, `updated_at` included. A request that changes either publishes the next revision and answers `201`. Read which happened from the status; you do not need to compare representations to find out.  This is what makes deploy-time sync a write-only loop. Send every definition you own on every deploy with `If-Match: *` and let nvoken decide which ones moved — rather than reading each one back and reimplementing nvoken\'s canonicalization to decide for yourself, which is the same comparison in a second place, free to disagree.  If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+     * Replace an Agent Definition, publishing a revision if anything changed
      */
     async updateAgentDefinition(requestParameters: UpdateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
         const response = await this.updateAgentDefinitionRaw(requestParameters, initOverrides);

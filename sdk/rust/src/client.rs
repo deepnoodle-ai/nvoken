@@ -1369,15 +1369,55 @@ impl CreateAgentDefinitionOptions {
 /// How one replacement is sent, as opposed to what it says.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct UpdateAgentDefinitionOptions {
-    /// The revision the caller read, sent as `If-Match`. Required, because a
-    /// replacement with no expectation is a lost update waiting to happen.
+    /// The revision the caller read, sent as `If-Match`.
+    /// [`ANY_DEFINITION_REVISION`] sends `*` instead.
     pub expected_revision: u32,
 }
+
+/// The `expected_revision` that sends `If-Match: *`, meaning "I read no
+/// revision; replace whichever is current".
+///
+/// It is the honest precondition for a caller syncing from its own source of
+/// truth, which has nothing to be stale against. It is never refused as stale,
+/// and it still cannot create: the Definition must already exist.
+///
+/// A real revision keeps its own meaning — "I am replacing the revision I
+/// read" — so one that has since moved is refused even if the replacement
+/// happens to match it, because the caller is acting on a state it has not
+/// seen. Reach for this constant when that is genuinely not what you meant.
+pub const ANY_DEFINITION_REVISION: u32 = 0;
 
 impl UpdateAgentDefinitionOptions {
     pub fn new(expected_revision: u32) -> Self {
         Self { expected_revision }
     }
+
+    /// Replaces whichever revision is current. See [`ANY_DEFINITION_REVISION`].
+    pub fn any() -> Self {
+        Self {
+            expected_revision: ANY_DEFINITION_REVISION,
+        }
+    }
+}
+
+/// What one definition's [`Client::sync_definitions`] call did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionSyncOutcome {
+    /// The key named nothing and now names this.
+    Created,
+    /// A revision was published over different contents.
+    Updated,
+    /// nvoken already held exactly this, so nothing was published and the
+    /// revision did not move.
+    Unchanged,
+}
+
+/// One definition's result from [`Client::sync_definitions`].
+#[derive(Debug, Clone)]
+pub struct DefinitionSync {
+    pub definition_key: String,
+    pub outcome: DefinitionSyncOutcome,
+    pub definition: models::AgentDefinitionResource,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2337,6 +2377,19 @@ impl Client {
         definition: AgentDefinition,
         options: CreateAgentDefinitionOptions,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
+        let (resource, _) = self.ensure_agent_definition(definition, options).await?;
+        Ok(resource)
+    }
+
+    /// The created-or-resolved resource, and whether this call minted it.
+    ///
+    /// The status carries that and the body does not: 201 for a create, 200 for
+    /// a restatement that resolved to what already existed.
+    async fn ensure_agent_definition(
+        &self,
+        definition: AgentDefinition,
+        options: CreateAgentDefinitionOptions,
+    ) -> Result<(models::AgentDefinitionResource, bool), NvokenError> {
         let write = self.agent_definition_body(definition)?;
         let definition_key = write
             .definition_key
@@ -2358,16 +2411,22 @@ impl Client {
             memory: write.memory,
             client_interface: write.client_interface,
         };
-        apis::agent_definitions_api::create_agent_definition(
-            &self.configuration,
-            body,
-            options
-                .idempotency_key
-                .as_deref()
-                .filter(|key| !key.is_empty()),
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        let mut request = self
+            .configuration
+            .client
+            .post(format!(
+                "{}/v1/agent-definitions",
+                self.configuration.base_path
+            ))
+            .json(&body);
+        if let Some(key) = options
+            .idempotency_key
+            .as_deref()
+            .filter(|key| !key.is_empty())
+        {
+            request = request.header("Idempotency-Key", key);
+        }
+        self.send_agent_definition_write(request, 201).await
     }
 
     pub async fn get_agent_definition(
@@ -2414,28 +2473,187 @@ impl Client {
     /// kept. `AgentDefinition::from_resource` reads one back into a definition
     /// that carries every writable field across. The expected revision travels
     /// as `If-Match`, so a concurrent write fails rather than overwriting.
+    ///
+    /// Replacement is ensure-shaped: a definition already matching the current
+    /// revision publishes nothing and returns that revision unchanged. So this
+    /// is safe to call with contents you are not sure differ — see
+    /// [`Client::sync_definitions`], which is that call in a loop.
+    /// [`ANY_DEFINITION_REVISION`] is the precondition for a caller that read
+    /// nothing to compare against.
     pub async fn update_agent_definition(
         &self,
         definition_id: &str,
         definition: AgentDefinition,
         options: UpdateAgentDefinitionOptions,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        if options.expected_revision < 1 {
-            return Err(NvokenError::validation("expected_revision is required"));
-        }
+        let (resource, _) = self
+            .replace_agent_definition(definition_id, definition, options.expected_revision)
+            .await?;
+        Ok(resource)
+    }
+
+    /// The replacement, and whether a revision was published.
+    ///
+    /// The status carries that and the body does not: 201 for a published
+    /// revision, 200 for a request the current revision already satisfied.
+    async fn replace_agent_definition(
+        &self,
+        definition_id: &str,
+        definition: AgentDefinition,
+        expected_revision: u32,
+    ) -> Result<(models::AgentDefinitionResource, bool), NvokenError> {
         let mut body = self.agent_definition_body(definition)?;
         // A replacement cannot move a resource to another key, so a definition
         // read back from the server carries one that is dropped here.
         body.definition_key = None;
-        let expected_revision = options.expected_revision;
-        apis::agent_definitions_api::update_agent_definition(
-            &self.configuration,
-            &format!("\"{expected_revision}\""),
-            definition_id,
-            body,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+        let if_match = if expected_revision == ANY_DEFINITION_REVISION {
+            "*".to_string()
+        } else {
+            format!("\"{expected_revision}\"")
+        };
+        let request = self
+            .configuration
+            .client
+            .put(format!(
+                "{}/v1/agent-definitions/{}",
+                self.configuration.base_path,
+                apis::urlencode(definition_id),
+            ))
+            .header("If-Match", if_match)
+            .json(&body);
+        self.send_agent_definition_write(request, 201).await
+    }
+
+    /// Sends one Agent Definition write and reports whether it published.
+    ///
+    /// The request is sent directly rather than through the generated client
+    /// because both write paths are ensure-shaped and answer the same body at
+    /// two statuses, and the generated function returns only the body. It still
+    /// goes through the configured middleware, so retry and response-metadata
+    /// behaviour are unchanged.
+    async fn send_agent_definition_write(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+        published_status: u16,
+    ) -> Result<(models::AgentDefinitionResource, bool), NvokenError> {
+        let mut request = request;
+        if let Some(token) = &self.configuration.bearer_access_token {
+            request = request.bearer_auth(token);
+        }
+        let response = request
+            .send()
+            .await
+            .map_err(|error| NvokenError::transport(error.to_string()))?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        if !status.is_success() {
+            let body = response.json::<Value>().await.unwrap_or(Value::Null);
+            return Err(NvokenError::response_with_headers(status, body, &headers));
+        }
+        let resource = response
+            .json::<models::AgentDefinitionResource>()
+            .await
+            .map_err(|error| NvokenError::transport(error.to_string()))?;
+        Ok((resource, status.as_u16() == published_status))
+    }
+
+    /// Makes nvoken hold exactly the definitions given, publishing a revision
+    /// only where one differs.
+    ///
+    /// This is a write-only loop: nothing is read back and nothing is compared
+    /// here. Both write paths are ensure-shaped, so nvoken decides what moved —
+    /// which matters because it canonicalizes a definition before comparing it,
+    /// and a caller reproducing that comparison would be maintaining a second
+    /// copy of the rule, in another language, free to disagree the first time
+    /// either side gains a field.
+    ///
+    /// ```no_run
+    /// # use nvoken::{AgentDefinition, Client, DefinitionSyncOutcome};
+    /// # async fn run(client: &Client, definitions: Vec<AgentDefinition>) -> Result<(), Box<dyn std::error::Error>> {
+    /// for synced in client.sync_definitions(definitions).await? {
+    ///     if synced.outcome != DefinitionSyncOutcome::Unchanged {
+    ///         println!("{}: {:?}", synced.definition_key, synced.outcome);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Each definition costs one call, or two when its contents changed: the
+    /// create conflict names the resource to replace, so nothing has to be
+    /// looked up.
+    ///
+    /// It is sequential and stops at the first error, which is the useful
+    /// behavior for a deploy step. A key held by an archived Definition is one
+    /// of those errors rather than an outcome: restoring it is a decision, not
+    /// a sync.
+    pub async fn sync_definitions(
+        &self,
+        definitions: Vec<AgentDefinition>,
+    ) -> Result<Vec<DefinitionSync>, NvokenError> {
+        let mut results = Vec::with_capacity(definitions.len());
+        for definition in definitions {
+            let definition_key = definition
+                .definition_key
+                .clone()
+                .filter(|key| !key.is_empty())
+                .ok_or_else(|| NvokenError::validation("definition_key is required"))?;
+            let conflict = match self
+                .ensure_agent_definition(
+                    definition.clone(),
+                    CreateAgentDefinitionOptions::default(),
+                )
+                .await
+            {
+                // The create either minted the resource or resolved to one
+                // already holding these exact contents. Either way nvoken now
+                // holds them.
+                Ok((resource, created)) => {
+                    results.push(DefinitionSync {
+                        definition_key,
+                        outcome: if created {
+                            DefinitionSyncOutcome::Created
+                        } else {
+                            DefinitionSyncOutcome::Unchanged
+                        },
+                        definition: resource,
+                    });
+                    continue;
+                }
+                Err(error) => error,
+            };
+            // The conflict names the resource holding the key, so the
+            // replacement it points at needs no lookup first.
+            let definition_id = conflict
+                .details
+                .as_ref()
+                .filter(|_| conflict.code.as_deref() == Some("agent_definition_key_conflict"))
+                .and_then(|details| details.get("definition_id"))
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned);
+            let Some(definition_id) = definition_id else {
+                return Err(conflict);
+            };
+            // ANY_DEFINITION_REVISION, because nothing was read: the conflict
+            // proves the resource exists and differs, not which revision it is
+            // at.
+            let (resource, published) = self
+                .replace_agent_definition(&definition_id, definition, ANY_DEFINITION_REVISION)
+                .await?;
+            results.push(DefinitionSync {
+                definition_key,
+                // Not published means someone else published these contents
+                // between the two calls.
+                outcome: if published {
+                    DefinitionSyncOutcome::Updated
+                } else {
+                    DefinitionSyncOutcome::Unchanged
+                },
+                definition: resource,
+            });
+        }
+        Ok(results)
     }
 
     pub async fn get_model(&self, model: &Model) -> Result<models::ModelDescriptor, NvokenError> {

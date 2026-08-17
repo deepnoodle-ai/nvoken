@@ -302,6 +302,24 @@ An update replaces the whole resource, so send back everything you want kept;
 `from_resource` is what keeps it whole. `expected_revision` travels as
 `If-Match`, so a concurrent write fails rather than overwriting.
 
+Both writes are ensure-shaped: restating what nvoken already holds publishes
+nothing and returns the current revision. So a deploy step that owns its
+definitions in source does not read anything first — `sync_definitions()`
+writes them all and reports what moved:
+
+```python
+for synced in await client.sync_definitions(definitions):
+    if synced.outcome != "unchanged":
+        print(f"{synced.definition_key}: {synced.outcome}")
+```
+
+Each definition costs one call, or two when its contents differ: the create
+conflict names the resource to replace, so nothing has to be looked up. Do not
+compare a definition against what you read back to decide whether to write —
+nvoken canonicalizes one before comparing it, and a second copy of that rule in
+your code is free to disagree the first time either side gains a field. Write
+unconditionally and read the outcome.
+
 Creating a Definition starts no turn. It has an immutable `definition_key`, a
 stable ID, and an increasing revision; `get_agent_definition_revision()` reads
 historical revisions. Updating a Definition does not rewrite an Agent's

@@ -26,6 +26,7 @@ from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
 from nvoken_generated.models.tool_call_summary import ToolCallSummary
+from nvoken_generated.exceptions import ApiException
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
 
 from nvoken_generated.models.reminder_block import ReminderBlock
@@ -1784,9 +1785,9 @@ async def test_create_agent_definition_sends_the_flat_definition() -> None:
         async def create(body: Any, idempotency_key: str | None = None) -> Any:
             seen["body"] = body.to_dict()
             seen["idempotency_key"] = idempotency_key
-            return complete_agent_definition_resource()
+            return SimpleNamespace(status_code=201, data=complete_agent_definition_resource())
 
-        client.agent_definitions.create_agent_definition = create
+        client.agent_definitions.create_agent_definition_with_http_info = create
         await client.create_agent_definition(AgentDefinition(
             definition_key="support",
             name="Billing support",
@@ -1806,6 +1807,126 @@ async def test_create_agent_definition_sends_the_flat_definition() -> None:
             await client.create_agent_definition(AgentDefinition(
                 model=Model(provider="anthropic", id="claude-sonnet-5"),
             ))
+
+
+def _synced_definition(definition_key: str, revision: int) -> AgentDefinitionResource:
+    return AgentDefinitionResource.from_dict({
+        "id": f"def_{definition_key}",
+        "definition_key": definition_key,
+        "name": definition_key,
+        "revision": revision,
+        "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+        "created_at": "2026-08-17T12:00:00Z",
+        "updated_at": "2026-08-17T12:00:00Z",
+        "archived_at": None,
+    })
+
+
+def _definition_conflict(code: str, definition_id: str) -> ApiException:
+    return ApiException(status=409, body=json.dumps({
+        "code": code,
+        "message": "definition_key is held by another definition",
+        "details": {"definition_id": definition_id},
+    }))
+
+
+# A sync writes and never reads: nvoken decides what moved, because it
+# canonicalizes a definition before comparing it and a second copy of that rule
+# in the SDK would be free to disagree.
+@pytest.mark.asyncio
+async def test_sync_definitions_writes_without_reading() -> None:
+    async with Client("https://runtime.example.test", "key") as client:
+        calls: list[tuple[str, Any]] = []
+
+        async def create(body: Any, idempotency_key: str | None = None) -> Any:
+            calls.append(("POST", body.to_dict()))
+            # A key the App has never used, then a restatement of one it holds,
+            # then one whose contents differ.
+            if body.definition_key == "new":
+                return SimpleNamespace(status_code=201, data=_synced_definition("new", 1))
+            if body.definition_key == "same":
+                return SimpleNamespace(status_code=200, data=_synced_definition("same", 3))
+            raise _definition_conflict("agent_definition_key_conflict", "def_changed")
+
+        async def update(if_match: str, definition_id: str, body: Any) -> Any:
+            calls.append((f"PUT {definition_id} If-Match={if_match}", body.to_dict()))
+            return SimpleNamespace(status_code=201, data=_synced_definition("changed", 7))
+
+        client.agent_definitions.create_agent_definition_with_http_info = create
+        client.agent_definitions.update_agent_definition_with_http_info = update
+
+        model = Model(provider="anthropic", id="claude-sonnet-5")
+        synced = await client.sync_definitions([
+            AgentDefinition(definition_key="new", model=model),
+            AgentDefinition(definition_key="same", model=model),
+            AgentDefinition(definition_key="changed", model=model, instructions="Be warm."),
+        ])
+
+        assert [(one.definition_key, one.outcome) for one in synced] == [
+            ("new", "created"),
+            ("same", "unchanged"),
+            ("changed", "updated"),
+        ]
+        assert synced[2].definition.revision == 7
+        # Nothing was read: three creates, and one replacement the conflict
+        # addressed with "*", because it proves the resource exists and differs,
+        # not which revision it is at.
+        assert [call for call, _ in calls] == [
+            "POST",
+            "POST",
+            "POST",
+            "PUT def_changed If-Match=*",
+        ]
+        # A replacement cannot move a resource to another key.
+        assert "definition_key" not in calls[3][1]
+        assert calls[3][1]["instructions"] == "Be warm."
+
+
+# Someone else publishing the same contents between the two calls leaves the
+# replacement with nothing to publish, which is not an update.
+@pytest.mark.asyncio
+async def test_sync_definitions_reports_a_raced_replacement_as_unchanged() -> None:
+    async with Client("https://runtime.example.test", "key") as client:
+        async def create(body: Any, idempotency_key: str | None = None) -> Any:
+            raise _definition_conflict("agent_definition_key_conflict", "def_raced")
+
+        async def update(if_match: str, definition_id: str, body: Any) -> Any:
+            return SimpleNamespace(status_code=200, data=_synced_definition("support", 2))
+
+        client.agent_definitions.create_agent_definition_with_http_info = create
+        client.agent_definitions.update_agent_definition_with_http_info = update
+
+        synced = await client.sync_definitions([
+            AgentDefinition(
+                definition_key="support",
+                model=Model(provider="anthropic", id="claude-sonnet-5"),
+            ),
+        ])
+        assert [one.outcome for one in synced] == ["unchanged"]
+
+
+# Restoring an archived key is a decision, not a sync step, so it stops the loop
+# rather than being skipped past.
+@pytest.mark.asyncio
+async def test_sync_definitions_stops_at_the_first_error() -> None:
+    async with Client("https://runtime.example.test", "key") as client:
+        posts = 0
+
+        async def create(body: Any, idempotency_key: str | None = None) -> Any:
+            nonlocal posts
+            posts += 1
+            raise _definition_conflict("agent_definition_archived", "def_archived")
+
+        client.agent_definitions.create_agent_definition_with_http_info = create
+
+        model = Model(provider="anthropic", id="claude-sonnet-5")
+        with pytest.raises(NvokenError) as raised:
+            await client.sync_definitions([
+                AgentDefinition(definition_key="gone", model=model),
+                AgentDefinition(definition_key="next", model=model),
+            ])
+        assert raised.value.code == "agent_definition_archived"
+        assert posts == 1
 
 
 # The mode and the name have to agree, which is the check the flat shape gives up

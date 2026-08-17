@@ -1412,8 +1412,36 @@ export interface CreateAgentDefinitionRequestOptions {
 }
 
 export interface UpdateAgentDefinitionRequestOptions {
-  /** The `revision` the definition was read at. Sent as `If-Match`. */
-  expectedRevision: number;
+  /**
+   * The `revision` the definition was read at, sent as `If-Match`, or `"*"`.
+   *
+   * `"*"` means "I read no revision; replace whichever is current" — the
+   * honest precondition for a caller syncing from its own source of truth,
+   * which has nothing to be stale against. It is never refused as stale, and
+   * it still cannot create: the Definition must already exist.
+   *
+   * A number keeps its own meaning — "I am replacing the revision I read" —
+   * so one that has since moved is refused even if the replacement happens to
+   * match it, because you are acting on a state you have not seen. Reach for
+   * `"*"` when that is genuinely not what you meant.
+   */
+  expectedRevision: number | "*";
+}
+
+/** What one definition's {@link NvokenClient.syncDefinitions} call did. */
+export type DefinitionSyncOutcome = "created" | "updated" | "unchanged";
+
+/** One definition's result from {@link NvokenClient.syncDefinitions}. */
+export interface DefinitionSyncResult {
+  definitionKey: string;
+  /**
+   * `created` — the key named nothing and now names this.
+   * `updated` — a revision was published over different contents.
+   * `unchanged` — nvoken already held exactly this, so nothing was published
+   * and the revision did not move.
+   */
+  outcome: DefinitionSyncOutcome;
+  definition: AgentDefinitionResource;
 }
 
 export interface TranscriptPageOptions {
@@ -2077,24 +2105,48 @@ export class Client {
     options: CreateAgentDefinitionRequestOptions = {},
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
+    const { definition: resource } = await this.ensureAgentDefinition(
+      definition,
+      signal,
+      options.idempotencyKey,
+    );
+    return resource;
+  }
+
+  /**
+   * The created-or-resolved resource, plus whether this call minted it — which
+   * the status carries and the body does not: 201 for a create, 200 for a
+   * restatement that resolved to what already existed.
+   */
+  private async ensureAgentDefinition<TOutput extends object = JsonObject>(
+    definition: CreateAgentDefinitionOptions<TOutput>,
+    signal?: AbortSignal,
+    idempotencyKey?: string,
+  ): Promise<{ definition: AgentDefinitionResource; created: boolean }> {
     validateAgentDefinition(definition);
     if (!definition.definitionKey) {
       throw new NvokenError("validation", "definitionKey is required");
     }
     return await this.replaySafe(
-      () => this.agentDefinitions.createAgentDefinition(
-        {
-          idempotencyKey: options.idempotencyKey,
-          // An omitted name is left omitted rather than filled in with the key
-          // here: the runtime applies that default, and duplicating it would
-          // make two places to change it.
-          agentDefinitionCreate: agentDefinitionToWire(
-            definition,
-            { definitionKey: definition.definitionKey },
-          ) as AgentDefinitionCreate,
-        },
-        { signal },
-      ),
+      async () => {
+        const response = await this.agentDefinitions.createAgentDefinitionRaw(
+          {
+            idempotencyKey,
+            // An omitted name is left omitted rather than filled in with the key
+            // here: the runtime applies that default, and duplicating it would
+            // make two places to change it.
+            agentDefinitionCreate: agentDefinitionToWire(
+              definition,
+              { definitionKey: definition.definitionKey },
+            ) as AgentDefinitionCreate,
+          },
+          { signal },
+        );
+        return {
+          definition: await response.value(),
+          created: response.raw.status === 201,
+        };
+      },
       signal,
     );
   }
@@ -2172,28 +2224,128 @@ export class Client {
    *
    * A field you leave out is cleared, not kept, which is why spreading the
    * current resource rather than restating it by hand is the safe habit.
+   *
+   * Replacement is ensure-shaped: a definition already matching the current
+   * revision publishes nothing and returns that revision unchanged. So this is
+   * safe to call with contents you are not sure differ — see
+   * {@link NvokenClient.syncDefinitions}, which is that call in a loop.
    */
-  updateAgentDefinition<TOutput extends object = JsonObject>(
+  async updateAgentDefinition<TOutput extends object = JsonObject>(
     definitionId: string,
     definition: UpdateAgentDefinitionOptions<TOutput>,
     options: UpdateAgentDefinitionRequestOptions,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
-    validateAgentDefinition(definition);
-    if (!(options.expectedRevision >= 1)) {
-      throw new NvokenError("validation", "expectedRevision must be positive");
-    }
-    return this.replaySafe(
-      () => this.agentDefinitions.updateAgentDefinition({
-        agentDefinitionId: definitionId,
-        ifMatch: `"${options.expectedRevision}"`,
-        // The key is immutable, so it is dropped rather than sent back: a
-        // spread resource always carries one and the replacement schema does
-        // not want it.
-        agentDefinitionWrite: agentDefinitionToWire(definition, {}),
-      }, { signal }),
+    const { definition: resource } = await this.replaceAgentDefinition(
+      definitionId,
+      definition,
+      options.expectedRevision,
       signal,
     );
+    return resource;
+  }
+
+  /**
+   * The replacement, plus whether a revision was published — which the status
+   * carries and the body does not: 201 for a published revision, 200 for a
+   * request the current revision already satisfied.
+   */
+  private async replaceAgentDefinition<TOutput extends object = JsonObject>(
+    definitionId: string,
+    definition: UpdateAgentDefinitionOptions<TOutput>,
+    expectedRevision: number | "*",
+    signal?: AbortSignal,
+  ): Promise<{ definition: AgentDefinitionResource; published: boolean }> {
+    validateAgentDefinition(definition);
+    if (expectedRevision !== "*" && !(expectedRevision >= 1)) {
+      throw new NvokenError("validation", 'expectedRevision must be positive, or "*"');
+    }
+    return await this.replaySafe(
+      async () => {
+        const response = await this.agentDefinitions.updateAgentDefinitionRaw({
+          agentDefinitionId: definitionId,
+          ifMatch: expectedRevision === "*" ? "*" : `"${expectedRevision}"`,
+          // The key is immutable, so it is dropped rather than sent back: a
+          // spread resource always carries one and the replacement schema does
+          // not want it.
+          agentDefinitionWrite: agentDefinitionToWire(definition, {}),
+        }, { signal });
+        return {
+          definition: await response.value(),
+          published: response.raw.status === 201,
+        };
+      },
+      signal,
+    );
+  }
+
+  /**
+   * Makes nvoken hold exactly the definitions given, publishing a revision
+   * only where one differs.
+   *
+   * This is a write-only loop: nothing is read back and nothing is compared
+   * here. Both write paths are ensure-shaped, so nvoken decides what moved —
+   * which matters because it canonicalizes a definition before comparing it,
+   * and a caller reproducing that comparison would be maintaining a second
+   * copy of the rule, in another language, free to disagree the first time
+   * either side gains a field.
+   *
+   * ```ts
+   * const synced = await client.syncDefinitions(definitions);
+   * for (const { definitionKey, outcome } of synced) {
+   *   if (outcome !== "unchanged") console.log(`${definitionKey}: ${outcome}`);
+   * }
+   * ```
+   *
+   * Each definition costs one call, or two when its contents changed: the
+   * create conflict names the resource to replace, so nothing has to be looked
+   * up.
+   *
+   * It is sequential and stops at the first error, which is the useful
+   * behavior for a deploy step. A key held by an archived Definition is one of
+   * those errors rather than an outcome: restoring it is a decision, not a
+   * sync.
+   */
+  async syncDefinitions<TOutput extends object = JsonObject>(
+    definitions: readonly CreateAgentDefinitionOptions<TOutput>[],
+    signal?: AbortSignal,
+  ): Promise<DefinitionSyncResult[]> {
+    const results: DefinitionSyncResult[] = [];
+    for (const definition of definitions) {
+      const { definitionKey } = definition;
+      try {
+        const { definition: resource, created } =
+          await this.ensureAgentDefinition(definition, signal);
+        // The create either minted the resource or resolved to one already
+        // holding these exact contents. Either way nvoken now holds them.
+        results.push({
+          definitionKey,
+          outcome: created ? "created" : "unchanged",
+          definition: resource,
+        });
+        continue;
+      } catch (error) {
+        const conflict = await normalizeError(error);
+        // The conflict names the resource holding the key, so the replacement
+        // it points at needs no lookup first.
+        const id = conflict.code === "agent_definition_key_conflict"
+          ? conflict.details?.definition_id
+          : undefined;
+        if (typeof id !== "string" || !id) throw conflict;
+        // "*", because nothing was read: the conflict proves the resource
+        // exists and differs, not which revision it is at.
+        const { definition: resource, published } =
+          await this.replaceAgentDefinition(id, definition, "*", signal);
+        results.push({
+          definitionKey,
+          // Not published means someone else published these contents between
+          // the two calls.
+          outcome: published ? "updated" : "unchanged",
+          definition: resource,
+        });
+      }
+    }
+    return results;
   }
 
   archiveAgentDefinition(

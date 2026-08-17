@@ -7250,7 +7250,19 @@ type CreateAgentDefinitionParams struct {
 
 // UpdateAgentDefinitionParams defines parameters for UpdateAgentDefinition.
 type UpdateAgentDefinitionParams struct {
-	// IfMatch One strong decimal revision ETag returned by GET or PUT.
+	// IfMatch One strong decimal revision ETag returned by GET or PUT, or `*`.
+	//
+	// The two say different things about a revision that has moved. An
+	// ETag means "I am replacing the revision I read", so a revision
+	// that has since moved is `412` — even if the replacement happens
+	// to match it, the caller is acting on a state it has not seen. `*`
+	// means "I read no revision; replace whichever is current", which
+	// is the honest form for a caller syncing from its own source of
+	// truth. It is never stale, and it still cannot create: the
+	// Definition must already exist.
+	//
+	// The header stays required in both forms, so an omitted
+	// precondition is `428` rather than a silent overwrite.
 	IfMatch string `json:"If-Match"`
 }
 
@@ -9221,6 +9233,13 @@ type ClientInterface interface {
 	// held by an archived resource is `409 agent_definition_archived`;
 	// restore it or choose another key.
 	//
+	// Both conflicts carry `details.definition_id` and
+	// `details.definition_key` naming the resource already holding the key,
+	// so the `PUT` they point at needs no lookup first. A full sync is
+	// therefore at most two calls per definition and never a read: `POST`,
+	// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+	// with `If-Match: *`.
+	//
 	// `Idempotency-Key` is optional, because the key already scopes replay.
 	// Supply one to pin a replay to a specific create: the same key returns
 	// that create's revision-1 resource even after later revisions moved
@@ -9244,6 +9263,13 @@ type ClientInterface interface {
 	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
 	// held by an archived resource is `409 agent_definition_archived`;
 	// restore it or choose another key.
+	//
+	// Both conflicts carry `details.definition_id` and
+	// `details.definition_key` naming the resource already holding the key,
+	// so the `PUT` they point at needs no lookup first. A full sync is
+	// therefore at most two calls per definition and never a read: `POST`,
+	// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+	// with `If-Match: *`.
 	//
 	// `Idempotency-Key` is optional, because the key already scopes replay.
 	// Supply one to pin a replay to a specific create: the same key returns
@@ -9275,18 +9301,48 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/agent-definitions/{agent_definition_id} (the `GetAgentDefinition` operationId).
 	GetAgentDefinition(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateAgentDefinitionWithBody Replace an Agent Definition and create its next revision
+	// UpdateAgentDefinitionWithBody Replace an Agent Definition, publishing a revision if anything changed
 	//
-	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	// Replacement is ensure-shaped, as creation is: a request whose
+	// definition and `name` already match the current revision publishes
+	// nothing and answers `200` with that revision, `updated_at` included.
+	// A request that changes either publishes the next revision and answers
+	// `201`. Read which happened from the status; you do not need to
+	// compare representations to find out.
+	//
+	// This is what makes deploy-time sync a write-only loop. Send every
+	// definition you own on every deploy with `If-Match: *` and let nvoken
+	// decide which ones moved — rather than reading each one back and
+	// reimplementing nvoken's canonicalization to decide for yourself,
+	// which is the same comparison in a second place, free to disagree.
+	//
+	// If the App currently selects this Definition for anonymous access, the
+	// replacement must retain client_interface and either omit memory or set
+	// memory.scope to user.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinitionWithBody(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateAgentDefinition Replace an Agent Definition and create its next revision
+	// UpdateAgentDefinition Replace an Agent Definition, publishing a revision if anything changed
 	//
-	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	// Replacement is ensure-shaped, as creation is: a request whose
+	// definition and `name` already match the current revision publishes
+	// nothing and answers `200` with that revision, `updated_at` included.
+	// A request that changes either publishes the next revision and answers
+	// `201`. Read which happened from the status; you do not need to
+	// compare representations to find out.
+	//
+	// This is what makes deploy-time sync a write-only loop. Send every
+	// definition you own on every deploy with `If-Match: *` and let nvoken
+	// decide which ones moved — rather than reading each one back and
+	// reimplementing nvoken's canonicalization to decide for yourself,
+	// which is the same comparison in a second place, free to disagree.
+	//
+	// If the App currently selects this Definition for anonymous access, the
+	// replacement must retain client_interface and either omit memory or set
+	// memory.scope to user.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -11133,6 +11189,13 @@ func (c *Client) ListAgentDefinitions(ctx context.Context, params *ListAgentDefi
 // held by an archived resource is `409 agent_definition_archived`;
 // restore it or choose another key.
 //
+// Both conflicts carry `details.definition_id` and
+// `details.definition_key` naming the resource already holding the key,
+// so the `PUT` they point at needs no lookup first. A full sync is
+// therefore at most two calls per definition and never a read: `POST`,
+// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+// with `If-Match: *`.
+//
 // `Idempotency-Key` is optional, because the key already scopes replay.
 // Supply one to pin a replay to a specific create: the same key returns
 // that create's revision-1 resource even after later revisions moved
@@ -11166,6 +11229,13 @@ func (c *Client) CreateAgentDefinitionWithBody(ctx context.Context, params *Crea
 // `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
 // held by an archived resource is `409 agent_definition_archived`;
 // restore it or choose another key.
+//
+// Both conflicts carry `details.definition_id` and
+// `details.definition_key` naming the resource already holding the key,
+// so the `PUT` they point at needs no lookup first. A full sync is
+// therefore at most two calls per definition and never a read: `POST`,
+// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+// with `If-Match: *`.
 //
 // `Idempotency-Key` is optional, because the key already scopes replay.
 // Supply one to pin a replay to a specific create: the same key returns
@@ -11227,9 +11297,24 @@ func (c *Client) GetAgentDefinition(ctx context.Context, agentDefinitionID Agent
 	return c.Client.Do(req)
 }
 
-// UpdateAgentDefinitionWithBody Replace an Agent Definition and create its next revision
+// UpdateAgentDefinitionWithBody Replace an Agent Definition, publishing a revision if anything changed
 //
-// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+// Replacement is ensure-shaped, as creation is: a request whose
+// definition and `name` already match the current revision publishes
+// nothing and answers `200` with that revision, `updated_at` included.
+// A request that changes either publishes the next revision and answers
+// `201`. Read which happened from the status; you do not need to
+// compare representations to find out.
+//
+// This is what makes deploy-time sync a write-only loop. Send every
+// definition you own on every deploy with `If-Match: *` and let nvoken
+// decide which ones moved — rather than reading each one back and
+// reimplementing nvoken's canonicalization to decide for yourself,
+// which is the same comparison in a second place, free to disagree.
+//
+// If the App currently selects this Definition for anonymous access, the
+// replacement must retain client_interface and either omit memory or set
+// memory.scope to user.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11246,9 +11331,24 @@ func (c *Client) UpdateAgentDefinitionWithBody(ctx context.Context, agentDefinit
 	return c.Client.Do(req)
 }
 
-// UpdateAgentDefinition Replace an Agent Definition and create its next revision
+// UpdateAgentDefinition Replace an Agent Definition, publishing a revision if anything changed
 //
-// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+// Replacement is ensure-shaped, as creation is: a request whose
+// definition and `name` already match the current revision publishes
+// nothing and answers `200` with that revision, `updated_at` included.
+// A request that changes either publishes the next revision and answers
+// `201`. Read which happened from the status; you do not need to
+// compare representations to find out.
+//
+// This is what makes deploy-time sync a write-only loop. Send every
+// definition you own on every deploy with `If-Match: *` and let nvoken
+// decide which ones moved — rather than reading each one back and
+// reimplementing nvoken's canonicalization to decide for yourself,
+// which is the same comparison in a second place, free to disagree.
+//
+// If the App currently selects this Definition for anonymous access, the
+// replacement must retain client_interface and either omit memory or set
+// memory.scope to user.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -19646,6 +19746,13 @@ type ClientWithResponsesInterface interface {
 	// held by an archived resource is `409 agent_definition_archived`;
 	// restore it or choose another key.
 	//
+	// Both conflicts carry `details.definition_id` and
+	// `details.definition_key` naming the resource already holding the key,
+	// so the `PUT` they point at needs no lookup first. A full sync is
+	// therefore at most two calls per definition and never a read: `POST`,
+	// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+	// with `If-Match: *`.
+	//
 	// `Idempotency-Key` is optional, because the key already scopes replay.
 	// Supply one to pin a replay to a specific create: the same key returns
 	// that create's revision-1 resource even after later revisions moved
@@ -19669,6 +19776,13 @@ type ClientWithResponsesInterface interface {
 	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
 	// held by an archived resource is `409 agent_definition_archived`;
 	// restore it or choose another key.
+	//
+	// Both conflicts carry `details.definition_id` and
+	// `details.definition_key` naming the resource already holding the key,
+	// so the `PUT` they point at needs no lookup first. A full sync is
+	// therefore at most two calls per definition and never a read: `POST`,
+	// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+	// with `If-Match: *`.
 	//
 	// `Idempotency-Key` is optional, because the key already scopes replay.
 	// Supply one to pin a replay to a specific create: the same key returns
@@ -19704,18 +19818,48 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/agent-definitions/{agent_definition_id} (the `GetAgentDefinition` operationId).
 	GetAgentDefinitionWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, reqEditors ...RequestEditorFn) (*GetAgentDefinitionHTTPResponse, error)
 
-	// UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition and create its next revision
+	// UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition, publishing a revision if anything changed
 	//
-	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	// Replacement is ensure-shaped, as creation is: a request whose
+	// definition and `name` already match the current revision publishes
+	// nothing and answers `200` with that revision, `updated_at` included.
+	// A request that changes either publishes the next revision and answers
+	// `201`. Read which happened from the status; you do not need to
+	// compare representations to find out.
+	//
+	// This is what makes deploy-time sync a write-only loop. Send every
+	// definition you own on every deploy with `If-Match: *` and let nvoken
+	// decide which ones moved — rather than reading each one back and
+	// reimplementing nvoken's canonicalization to decide for yourself,
+	// which is the same comparison in a second place, free to disagree.
+	//
+	// If the App currently selects this Definition for anonymous access, the
+	// replacement must retain client_interface and either omit memory or set
+	// memory.scope to user.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /v1/agent-definitions/{agent_definition_id} (the `UpdateAgentDefinition` operationId).
 	UpdateAgentDefinitionWithBodyWithResponse(ctx context.Context, agentDefinitionID AgentDefinitionID, params *UpdateAgentDefinitionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionHTTPResponse, error)
 
-	// UpdateAgentDefinitionWithResponse Replace an Agent Definition and create its next revision
+	// UpdateAgentDefinitionWithResponse Replace an Agent Definition, publishing a revision if anything changed
 	//
-	// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+	// Replacement is ensure-shaped, as creation is: a request whose
+	// definition and `name` already match the current revision publishes
+	// nothing and answers `200` with that revision, `updated_at` included.
+	// A request that changes either publishes the next revision and answers
+	// `201`. Read which happened from the status; you do not need to
+	// compare representations to find out.
+	//
+	// This is what makes deploy-time sync a write-only loop. Send every
+	// definition you own on every deploy with `If-Match: *` and let nvoken
+	// decide which ones moved — rather than reading each one back and
+	// reimplementing nvoken's canonicalization to decide for yourself,
+	// which is the same comparison in a second place, free to disagree.
+	//
+	// If the App currently selects this Definition for anonymous access, the
+	// replacement must retain client_interface and either omit memory or set
+	// memory.scope to user.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -22161,11 +22305,18 @@ type UpdateAgentDefinitionHTTPResponse200Headers struct {
 	ETag *string
 }
 
+// UpdateAgentDefinitionHTTPResponse201Headers the declared response headers of an HTTP 201 response for UpdateAgentDefinition
+type UpdateAgentDefinitionHTTPResponse201Headers struct {
+	ETag *string
+}
+
 type UpdateAgentDefinitionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *AgentDefinitionResource
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AgentDefinitionResource
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
@@ -22186,11 +22337,18 @@ type UpdateAgentDefinitionHTTPResponse struct {
 	JSON503 *Unavailable
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *UpdateAgentDefinitionHTTPResponse200Headers
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *UpdateAgentDefinitionHTTPResponse201Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r UpdateAgentDefinitionHTTPResponse) GetJSON200() *AgentDefinitionResource {
 	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r UpdateAgentDefinitionHTTPResponse) GetJSON201() *AgentDefinitionResource {
+	return r.JSON201
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -29209,6 +29367,13 @@ func (c *ClientWithResponses) ListAgentDefinitionsWithResponse(ctx context.Conte
 // held by an archived resource is `409 agent_definition_archived`;
 // restore it or choose another key.
 //
+// Both conflicts carry `details.definition_id` and
+// `details.definition_key` naming the resource already holding the key,
+// so the `PUT` they point at needs no lookup first. A full sync is
+// therefore at most two calls per definition and never a read: `POST`,
+// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+// with `If-Match: *`.
+//
 // `Idempotency-Key` is optional, because the key already scopes replay.
 // Supply one to pin a replay to a specific create: the same key returns
 // that create's revision-1 resource even after later revisions moved
@@ -29238,6 +29403,13 @@ func (c *ClientWithResponses) CreateAgentDefinitionWithBodyWithResponse(ctx cont
 // `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
 // held by an archived resource is `409 agent_definition_archived`;
 // restore it or choose another key.
+//
+// Both conflicts carry `details.definition_id` and
+// `details.definition_key` naming the resource already holding the key,
+// so the `PUT` they point at needs no lookup first. A full sync is
+// therefore at most two calls per definition and never a read: `POST`,
+// and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+// with `If-Match: *`.
 //
 // `Idempotency-Key` is optional, because the key already scopes replay.
 // Supply one to pin a replay to a specific create: the same key returns
@@ -29291,9 +29463,24 @@ func (c *ClientWithResponses) GetAgentDefinitionWithResponse(ctx context.Context
 	return ParseGetAgentDefinitionHTTPResponse(rsp)
 }
 
-// UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition and create its next revision
+// UpdateAgentDefinitionWithBodyWithResponse Replace an Agent Definition, publishing a revision if anything changed
 //
-// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+// Replacement is ensure-shaped, as creation is: a request whose
+// definition and `name` already match the current revision publishes
+// nothing and answers `200` with that revision, `updated_at` included.
+// A request that changes either publishes the next revision and answers
+// `201`. Read which happened from the status; you do not need to
+// compare representations to find out.
+//
+// This is what makes deploy-time sync a write-only loop. Send every
+// definition you own on every deploy with `If-Match: *` and let nvoken
+// decide which ones moved — rather than reading each one back and
+// reimplementing nvoken's canonicalization to decide for yourself,
+// which is the same comparison in a second place, free to disagree.
+//
+// If the App currently selects this Definition for anonymous access, the
+// replacement must retain client_interface and either omit memory or set
+// memory.scope to user.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29306,9 +29493,24 @@ func (c *ClientWithResponses) UpdateAgentDefinitionWithBodyWithResponse(ctx cont
 	return ParseUpdateAgentDefinitionHTTPResponse(rsp)
 }
 
-// UpdateAgentDefinitionWithResponse Replace an Agent Definition and create its next revision
+// UpdateAgentDefinitionWithResponse Replace an Agent Definition, publishing a revision if anything changed
 //
-// If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+// Replacement is ensure-shaped, as creation is: a request whose
+// definition and `name` already match the current revision publishes
+// nothing and answers `200` with that revision, `updated_at` included.
+// A request that changes either publishes the next revision and answers
+// `201`. Read which happened from the status; you do not need to
+// compare representations to find out.
+//
+// This is what makes deploy-time sync a write-only loop. Send every
+// definition you own on every deploy with `If-Match: *` and let nvoken
+// decide which ones moved — rather than reading each one back and
+// reimplementing nvoken's canonicalization to decide for yourself,
+// which is the same comparison in a second place, free to disagree.
+//
+// If the App currently selects this Definition for anonymous access, the
+// replacement must retain client_interface and either omit memory or set
+// memory.scope to user.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -32306,6 +32508,13 @@ func ParseUpdateAgentDefinitionHTTPResponse(rsp *http.Response) (*UpdateAgentDef
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AgentDefinitionResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest InvalidRequest
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -32382,6 +32591,16 @@ func ParseUpdateAgentDefinitionHTTPResponse(rsp *http.Response) (*UpdateAgentDef
 			headers.ETag = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 201:
+		var headers UpdateAgentDefinitionHTTPResponse201Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil

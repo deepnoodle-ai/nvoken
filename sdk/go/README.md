@@ -291,6 +291,27 @@ An update replaces the whole resource, so send back everything you want kept;
 `AgentDefinitionFromResource` is what keeps it whole. `ExpectedRevision`
 travels as `If-Match`, so a concurrent write fails rather than overwriting.
 
+Both writes are ensure-shaped: restating what nvoken already holds publishes
+nothing and returns the current revision. So a deploy step that owns its
+definitions in source does not read anything first — `SyncDefinitions` writes
+them all and reports what moved:
+
+```go
+synced, err := client.SyncDefinitions(ctx, definitions)
+for _, one := range synced {
+	if one.Outcome != nvoken.DefinitionUnchanged {
+		log.Printf("%s: %s", one.DefinitionKey, one.Outcome)
+	}
+}
+```
+
+Each definition costs one call, or two when its contents differ: the create
+conflict names the resource to replace, so nothing has to be looked up. Do not
+compare a definition against what you read back to decide whether to write —
+nvoken canonicalizes one before comparing it, and a second copy of that rule in
+your code is free to disagree the first time either side gains a field. Write
+unconditionally and read the outcome.
+
 Creating a Definition starts no turn. It has an immutable `DefinitionKey`, a
 stable ID, and an increasing revision; `GetAgentDefinitionRevision` reads
 historical revisions. Updating a Definition does not rewrite an Agent's

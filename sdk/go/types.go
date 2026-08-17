@@ -820,8 +820,42 @@ type CreateAgentDefinitionOptions struct {
 // body.
 type UpdateAgentDefinitionOptions struct {
 	// ExpectedRevision is the revision the definition was read at, sent as
-	// If-Match.
+	// If-Match. AnyDefinitionRevision sends `*` instead.
 	ExpectedRevision int64
+}
+
+// AnyDefinitionRevision is the ExpectedRevision that sends `If-Match: *`,
+// meaning "I read no revision; replace whichever is current".
+//
+// It is the honest precondition for a caller syncing from its own source of
+// truth, which has nothing to be stale against. It is never refused as stale,
+// and it still cannot create: the Definition must already exist.
+//
+// A real revision keeps its own meaning — "I am replacing the revision I
+// read" — so one that has since moved is refused even if the replacement
+// happens to match it, because the caller is acting on a state it has not
+// seen. Reach for this constant when that is genuinely not what you meant.
+const AnyDefinitionRevision int64 = 0
+
+// DefinitionSyncOutcome reports what one definition's sync did.
+type DefinitionSyncOutcome string
+
+const (
+	// DefinitionCreated means the key named nothing and now names this.
+	DefinitionCreated DefinitionSyncOutcome = "created"
+	// DefinitionUpdated means a revision was published over different
+	// contents.
+	DefinitionUpdated DefinitionSyncOutcome = "updated"
+	// DefinitionUnchanged means nvoken already held exactly this, so nothing
+	// was published and the revision did not move.
+	DefinitionUnchanged DefinitionSyncOutcome = "unchanged"
+)
+
+// DefinitionSync is one definition's result from SyncDefinitions.
+type DefinitionSync struct {
+	DefinitionKey string
+	Outcome       DefinitionSyncOutcome
+	Definition    *AgentDefinitionResource
 }
 
 // AgentDefinitionOverrides replaces a safe subset of one resolved Agent

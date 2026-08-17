@@ -340,7 +340,7 @@ class AgentDefinitionsApi:
     ) -> AgentDefinitionResource:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  Both conflicts carry `details.definition_id` and `details.definition_key` naming the resource already holding the key, so the `PUT` they point at needs no lookup first. A full sync is therefore at most two calls per definition and never a read: `POST`, and on `agent_definition_key_conflict`, `PUT` that `definition_id` with `If-Match: *`.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
@@ -419,7 +419,7 @@ class AgentDefinitionsApi:
     ) -> ApiResponse[AgentDefinitionResource]:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  Both conflicts carry `details.definition_id` and `details.definition_key` naming the resource already holding the key, so the `PUT` they point at needs no lookup first. A full sync is therefore at most two calls per definition and never a read: `POST`, and on `agent_definition_key_conflict`, `PUT` that `definition_id` with `If-Match: *`.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
@@ -498,7 +498,7 @@ class AgentDefinitionsApi:
     ) -> RESTResponseType:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  Both conflicts carry `details.definition_id` and `details.definition_key` naming the resource already holding the key, so the `PUT` they point at needs no lookup first. A full sync is therefore at most two calls per definition and never a read: `POST`, and on `agent_definition_key_conflict`, `PUT` that `definition_id` with `If-Match: *`.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
@@ -1808,7 +1808,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def update_agent_definition(
         self,
-        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite. ")],
         agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
         agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
@@ -1824,11 +1824,11 @@ class AgentDefinitionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> AgentDefinitionResource:
-        """Replace an Agent Definition and create its next revision
+        """Replace an Agent Definition, publishing a revision if anything changed
 
-        If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+        Replacement is ensure-shaped, as creation is: a request whose definition and `name` already match the current revision publishes nothing and answers `200` with that revision, `updated_at` included. A request that changes either publishes the next revision and answers `201`. Read which happened from the status; you do not need to compare representations to find out.  This is what makes deploy-time sync a write-only loop. Send every definition you own on every deploy with `If-Match: *` and let nvoken decide which ones moved — rather than reading each one back and reimplementing nvoken's canonicalization to decide for yourself, which is the same comparison in a second place, free to disagree.  If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 
-        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :param if_match: One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite.  (required)
         :type if_match: str
         :param agent_definition_id: (required)
         :type agent_definition_id: str
@@ -1868,6 +1868,7 @@ class AgentDefinitionsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentDefinitionResource",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1892,7 +1893,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def update_agent_definition_with_http_info(
         self,
-        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite. ")],
         agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
         agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
@@ -1908,11 +1909,11 @@ class AgentDefinitionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[AgentDefinitionResource]:
-        """Replace an Agent Definition and create its next revision
+        """Replace an Agent Definition, publishing a revision if anything changed
 
-        If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+        Replacement is ensure-shaped, as creation is: a request whose definition and `name` already match the current revision publishes nothing and answers `200` with that revision, `updated_at` included. A request that changes either publishes the next revision and answers `201`. Read which happened from the status; you do not need to compare representations to find out.  This is what makes deploy-time sync a write-only loop. Send every definition you own on every deploy with `If-Match: *` and let nvoken decide which ones moved — rather than reading each one back and reimplementing nvoken's canonicalization to decide for yourself, which is the same comparison in a second place, free to disagree.  If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 
-        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :param if_match: One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite.  (required)
         :type if_match: str
         :param agent_definition_id: (required)
         :type agent_definition_id: str
@@ -1952,6 +1953,7 @@ class AgentDefinitionsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentDefinitionResource",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
@@ -1976,7 +1978,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def update_agent_definition_without_preload_content(
         self,
-        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT.")],
+        if_match: Annotated[StrictStr, Field(description="One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite. ")],
         agent_definition_id: Annotated[str, Field(min_length=1, strict=True)],
         agent_definition_write: AgentDefinitionWrite,
         _request_timeout: Union[
@@ -1992,11 +1994,11 @@ class AgentDefinitionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Replace an Agent Definition and create its next revision
+        """Replace an Agent Definition, publishing a revision if anything changed
 
-        If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
+        Replacement is ensure-shaped, as creation is: a request whose definition and `name` already match the current revision publishes nothing and answers `200` with that revision, `updated_at` included. A request that changes either publishes the next revision and answers `201`. Read which happened from the status; you do not need to compare representations to find out.  This is what makes deploy-time sync a write-only loop. Send every definition you own on every deploy with `If-Match: *` and let nvoken decide which ones moved — rather than reading each one back and reimplementing nvoken's canonicalization to decide for yourself, which is the same comparison in a second place, free to disagree.  If the App currently selects this Definition for anonymous access, the replacement must retain client_interface and either omit memory or set memory.scope to user.
 
-        :param if_match: One strong decimal revision ETag returned by GET or PUT. (required)
+        :param if_match: One strong decimal revision ETag returned by GET or PUT, or `*`.  The two say different things about a revision that has moved. An ETag means \"I am replacing the revision I read\", so a revision that has since moved is `412` — even if the replacement happens to match it, the caller is acting on a state it has not seen. `*` means \"I read no revision; replace whichever is current\", which is the honest form for a caller syncing from its own source of truth. It is never stale, and it still cannot create: the Definition must already exist.  The header stays required in both forms, so an omitted precondition is `428` rather than a silent overwrite.  (required)
         :type if_match: str
         :param agent_definition_id: (required)
         :type agent_definition_id: str
@@ -2036,6 +2038,7 @@ class AgentDefinitionsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "AgentDefinitionResource",
+            '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
