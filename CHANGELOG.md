@@ -19,9 +19,18 @@ without republishing every artifact.
   Python (`definition_key`, `ensure`, `with_tools`), and Rust
   (`AgentOptions::declared`, `ensure`, `resource`).
 
+- **Breaking: one name for the Agent Definition a resource points at.** Every
+  field referencing it is `definitionId`, `definitionKey`, `definitionRevision`,
+  or `definition` (`definition_id`, … on the wire; `DefinitionID` in Go). That
+  covers `Agent.definitionId`, `Invocation.definitionId` / `definitionRevision`
+  / `definition`, the `listAgents({definitionId})` filter, and the one-turn pin
+  on invoke — previously `agentRevision`, a name for a revision Agents do not
+  have. `nvoken` CLI flags follow: `--definition-id`, `--definition-key`,
+  `--definition-revision`. Resource names, error codes, and the
+  `/v1/agent-definitions/{id}` routes keep the qualified spelling.
+
 - **An Agent names its Definition by key.** `POST /v1/agents` accepts
-  `definition_key` in place of `agent_definition_id` — the same spelling the
-  Agent Definition uses for its own key — so declaring an Agent needs no
+  `definition_key` in place of `definition_id`, so declaring an Agent needs no
   lookup first. `nvoken agent create` takes `--definition-key`, and `--name`
   is optional now that it defaults to the Agent key.
 

@@ -839,7 +839,7 @@ export interface WebhookTarget {
 interface InvokeRequestBase {
   tenantKey?: string;
   /** Optional one-turn revision pin, ahead of Session and Agent pins. */
-  agentRevision?: number;
+  definitionRevision?: number;
   /** Safe per-turn replacements that cannot expand Agent authority. */
   overrides?: AgentDefinitionOverrides;
   idempotencyKey?: string;
@@ -963,7 +963,7 @@ export type AgentOptions<TOutput extends object = JsonObject> =
      */
     definitionKey?: string;
     /** The Definition by opaque ID, for a host that stores nvoken IDs. */
-    agentDefinitionId?: string;
+    definitionId?: string;
     /**
      * Revision of the Definition this instance follows. Omit to track the
      * latest, which is what makes revising the Definition the rollout.
@@ -989,7 +989,7 @@ export interface InvocationOptions {
   sessionKey?: string;
   sessionOptions?: SessionOptions;
   idempotencyKey?: string;
-  agentRevision?: number;
+  definitionRevision?: number;
   overrides?: AgentDefinitionOverrides;
   ifActive?: IfActivePolicy;
   onBudgetExhausted?: BudgetExhaustionBehavior;
@@ -1207,7 +1207,7 @@ export type SessionKeyScope = (
 export interface ListAgentOptions {
   tenantKey?: string;
   agentKey?: string;
-  agentDefinitionId?: string;
+  definitionId?: string;
   includeArchived?: boolean;
   cursor?: string;
   limit?: number;
@@ -1869,23 +1869,23 @@ export class Client {
   }
 
   getAgentDefinition(
-    agentDefinitionId: string,
+    definitionId: string,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
     return this.replaySafe(
-      () => this.agentDefinitions.getAgentDefinition({ agentDefinitionId }, { signal }),
+      () => this.agentDefinitions.getAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
       signal,
     );
   }
 
   getAgentDefinitionRevision(
-    agentDefinitionId: string,
+    definitionId: string,
     revision: number,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
     return this.replaySafe(
       () => this.agentDefinitions.getAgentDefinitionRevision(
-        { agentDefinitionId, revision },
+        { agentDefinitionId: definitionId, revision },
         { signal },
       ),
       signal,
@@ -1927,7 +1927,7 @@ export class Client {
   }
 
   updateAgentDefinition<TOutput extends object = JsonObject>(
-    agentDefinitionId: string,
+    definitionId: string,
     options: UpdateAgentDefinitionOptions<TOutput>,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
@@ -1937,7 +1937,7 @@ export class Client {
     }
     return this.replaySafe(
       () => this.agentDefinitions.updateAgentDefinition({
-        agentDefinitionId,
+        agentDefinitionId: definitionId,
         ifMatch: `"${options.expectedRevision}"`,
         agentDefinitionWrite: agentDefinitionToWire(options.definition, options.name),
       }, { signal }),
@@ -1946,21 +1946,21 @@ export class Client {
   }
 
   archiveAgentDefinition(
-    agentDefinitionId: string,
+    definitionId: string,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.replaySafe(
-      () => this.agentDefinitions.archiveAgentDefinition({ agentDefinitionId }, { signal }),
+      () => this.agentDefinitions.archiveAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
       signal,
     );
   }
 
   restoreAgentDefinition(
-    agentDefinitionId: string,
+    definitionId: string,
     signal?: AbortSignal,
   ): Promise<void> {
     return this.replaySafe(
-      () => this.agentDefinitions.restoreAgentDefinition({ agentDefinitionId }, { signal }),
+      () => this.agentDefinitions.restoreAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
       signal,
     );
   }
@@ -2497,13 +2497,13 @@ export class Agent<TOutput extends object = JsonObject> {
         "supply exactly one of agentId and agentKey",
       );
     }
-    if (options.definitionKey && options.agentDefinitionId) {
+    if (options.definitionKey && options.definitionId) {
       throw new NvokenError(
         "validation",
-        "supply at most one of definitionKey and agentDefinitionId",
+        "supply at most one of definitionKey and definitionId",
       );
     }
-    if (hasAgentId && (options.definitionKey || options.agentDefinitionId)) {
+    if (hasAgentId && (options.definitionKey || options.definitionId)) {
       throw new NvokenError(
         "validation",
         "an Agent declared by agentId already names its record; the Definition"
@@ -2554,8 +2554,8 @@ export class Agent<TOutput extends object = JsonObject> {
     return this.record?.name ?? this.options.name;
   }
 
-  get agentDefinitionId(): string | undefined {
-    return this.record?.agentDefinitionId ?? this.options.agentDefinitionId;
+  get definitionId(): string | undefined {
+    return this.record?.definitionId ?? this.options.definitionId;
   }
 
   get pinnedRevision(): number | undefined {
@@ -2581,7 +2581,7 @@ export class Agent<TOutput extends object = JsonObject> {
       agentKey: this.options.agentKey,
       tenantKey: this.options.tenantKey,
       definitionKey: this.options.definitionKey,
-      agentDefinitionId: this.options.agentDefinitionId,
+      definitionId: this.options.definitionId,
     };
   }
 
@@ -2657,7 +2657,7 @@ export class Agent<TOutput extends object = JsonObject> {
   }
 
   private async resolveRecord(signal?: AbortSignal): Promise<AgentResource> {
-    if (this.options.definitionKey || this.options.agentDefinitionId) {
+    if (this.options.definitionKey || this.options.definitionId) {
       // The Definition travels by whichever spelling was declared: the server
       // resolves a key in the same transaction that resolves the Agent, so
       // this stays one round trip either way.
@@ -2665,7 +2665,7 @@ export class Agent<TOutput extends object = JsonObject> {
         tenantKey: this.options.tenantKey,
         agentKey: this.options.agentKey!,
         name: this.options.name,
-        agentDefinitionId: this.options.agentDefinitionId,
+        definitionId: this.options.definitionId,
         definitionKey: this.options.definitionKey,
         pinnedRevision: this.options.pinnedRevision,
       }, signal);
@@ -2746,7 +2746,7 @@ export class Agent<TOutput extends object = JsonObject> {
    */
   private async ready(signal?: AbortSignal): Promise<void> {
     if (this.record) return;
-    if (!this.options.definitionKey && !this.options.agentDefinitionId) return;
+    if (!this.options.definitionKey && !this.options.definitionId) return;
     await this.ensure(signal);
   }
 
@@ -2764,7 +2764,7 @@ export class Agent<TOutput extends object = JsonObject> {
       ...identity,
       tenantKey: this.options.tenantKey,
       idempotencyKey,
-      agentRevision: options.agentRevision,
+      definitionRevision: options.definitionRevision,
       overrides: options.overrides,
       ifActive: options.ifActive,
       onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
@@ -3521,7 +3521,7 @@ function invocationRequestToWire<TOutput extends object>(
     agentId: "agentId" in request ? request.agentId : undefined,
     agentKey: "agentKey" in request ? request.agentKey : undefined,
     tenantKey: request.tenantKey,
-    agentRevision: request.agentRevision,
+    definitionRevision: request.definitionRevision,
     overrides: request.overrides === undefined
       ? undefined
       : agentDefinitionOverridesToWire(request.overrides),

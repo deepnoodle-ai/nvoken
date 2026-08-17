@@ -314,7 +314,7 @@ snapshot every turn and get the same transcript as a host that tracks changes.
 Use `ContextTierContextual` for conversation-adjacent facts and
 `ContextTierOperator` for policy or other application-authoritative state.
 Context is Session history, not an Agent Definition field: it never changes
-`AgentDefinitionID`, and later turns keep sending it to the model even when you
+`DefinitionID`, and later turns keep sending it to the model even when you
 omit it. That is what keeps the prompt prefix stable enough for provider
 caching, which rewriting the same state into `Instructions` would break on every
 turn.

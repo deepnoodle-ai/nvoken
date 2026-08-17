@@ -751,7 +751,7 @@ async fn shared_fault_server_semantics() {
             metadata: None,
             input: "hello".to_owned(),
             input_blocks: Vec::new(),
-            agent_revision: None,
+            definition_revision: None,
             overrides: None,
             mcp_server_headers: vec![McpServerHeaders::new("support", mcp_secret)],
             context: Vec::new(),

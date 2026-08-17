@@ -149,9 +149,9 @@ func run(ctx context.Context) error {
 			return fmt.Errorf("create MCP Agent Definition: %w", createErr)
 		}
 		agent, createErr := client.CreateAgent(ctx, nvoken.CreateAgentInput{
-			AgentKey:          "mcp-recovery-example",
-			Name:              "MCP recovery example",
-			AgentDefinitionID: definition.ID,
+			AgentKey:     "mcp-recovery-example",
+			Name:         "MCP recovery example",
+			DefinitionID: definition.ID,
 		})
 		if createErr != nil {
 			return fmt.Errorf("create MCP Agent: %w", createErr)

@@ -674,15 +674,15 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 			case request.URL.Path == "/v1/agents" && request.Method == http.MethodPost:
 				creates = append(creates, body)
 				writeAgentTestJSON(response, http.StatusCreated, map[string]any{
-					"id":                  agentTestAgentID,
-					"tenant_key":          "customer-482",
-					"agent_key":           "support",
-					"name":                "support",
-					"agent_definition_id": "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
-					"pinned_revision":     nil,
-					"created_at":          "2026-07-21T12:00:00Z",
-					"updated_at":          "2026-07-21T12:00:00Z",
-					"archived_at":         nil,
+					"id":              agentTestAgentID,
+					"tenant_key":      "customer-482",
+					"agent_key":       "support",
+					"name":            "support",
+					"definition_id":   "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+					"pinned_revision": nil,
+					"created_at":      "2026-07-21T12:00:00Z",
+					"updated_at":      "2026-07-21T12:00:00Z",
+					"archived_at":     nil,
 				})
 			case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 				admissions = append(admissions, body)
@@ -727,7 +727,7 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 	}
 	if creates[0]["definition_key"] != "support" ||
 		creates[0]["tenant_key"] != "customer-482" ||
-		creates[0]["agent_definition_id"] != nil {
+		creates[0]["definition_id"] != nil {
 		t.Fatalf("create body = %#v", creates[0])
 	}
 	if agent.ID() != agentTestAgentID {
@@ -746,15 +746,15 @@ func TestDeclaredAgentRefusesAContradictedPin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(
 		func(response http.ResponseWriter, _ *http.Request) {
 			writeAgentTestJSON(response, http.StatusOK, map[string]any{
-				"id":                  agentTestAgentID,
-				"tenant_key":          nil,
-				"agent_key":           "support",
-				"name":                "support",
-				"agent_definition_id": "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
-				"pinned_revision":     3,
-				"created_at":          "2026-07-21T12:00:00Z",
-				"updated_at":          "2026-07-21T12:00:00Z",
-				"archived_at":         nil,
+				"id":              agentTestAgentID,
+				"tenant_key":      nil,
+				"agent_key":       "support",
+				"name":            "support",
+				"definition_id":   "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+				"pinned_revision": 3,
+				"created_at":      "2026-07-21T12:00:00Z",
+				"updated_at":      "2026-07-21T12:00:00Z",
+				"archived_at":     nil,
 			})
 		}))
 	defer server.Close()

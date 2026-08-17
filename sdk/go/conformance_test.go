@@ -507,7 +507,7 @@ func TestSharedMediaInputFixtureMatchesPreflight(t *testing.T) {
 
 func TestSharedAgentDefinitionReuseFixtureIsExpressible(t *testing.T) {
 	var fixture struct {
-		AgentDefinitionID string `json:"agent_definition_id"`
+		DefinitionID string `json:"definition_id"`
 	}
 	decodeFile(t, "../conformance/fixtures/agent-definition-reuse-v1.json", &fixture)
 	encoded, err := (InvokeRequest{
@@ -522,8 +522,8 @@ func TestSharedAgentDefinitionReuseFixtureIsExpressible(t *testing.T) {
 	if err := json.Unmarshal(encoded, &wire); err != nil {
 		t.Fatalf("decode Agent Definition reference: %v", err)
 	}
-	if wire["agent_key"] != "support" || wire["agent_definition_id"] != nil ||
-		wire["agent_definition"] != nil {
+	if wire["agent_key"] != "support" || wire["definition_id"] != nil ||
+		wire["definition"] != nil {
 		t.Fatalf("Agent identity wire = %#v", wire)
 	}
 }
@@ -1426,12 +1426,12 @@ type recordedContextFixture struct {
 	Accepted struct {
 		ID      string `json:"id"`
 		Request struct {
-			AgentKey          string        `json:"agent_key"`
-			SessionKey        string        `json:"session_key"`
-			IdempotencyKey    string        `json:"idempotency_key"`
-			Input             string        `json:"input"`
-			AgentDefinitionID string        `json:"agent_definition_id"`
-			Context           []ContextItem `json:"context"`
+			AgentKey       string        `json:"agent_key"`
+			SessionKey     string        `json:"session_key"`
+			IdempotencyKey string        `json:"idempotency_key"`
+			Input          string        `json:"input"`
+			DefinitionID   string        `json:"definition_id"`
+			Context        []ContextItem `json:"context"`
 		} `json:"request"`
 		Messages []json.RawMessage `json:"messages"`
 	} `json:"accepted"`
@@ -1482,7 +1482,7 @@ func TestSharedRecordedContextFixtureIsExpressible(t *testing.T) {
 	if !equalJSON(t, wire["context"], expected) {
 		t.Fatalf("context wire = %s", wire["context"])
 	}
-	if _, nested := wire["agent_definition"]; nested {
+	if _, nested := wire["definition"]; nested {
 		t.Fatal("recorded context must not carry an Agent Definition")
 	}
 

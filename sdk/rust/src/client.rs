@@ -766,7 +766,7 @@ pub enum ContextTier {
 /// resend its whole snapshot every turn. Omit the reserved `app-` prefix the
 /// model sees; nvoken adds it. Context is durable Session history rather than
 /// an Agent Definition field, so it never changes the selected
-/// `agent_definition_id`.
+/// `definition_id`.
 #[derive(Debug, Clone)]
 pub struct ContextItem {
     pub name: String,
@@ -799,7 +799,7 @@ pub struct InvokeRequest {
     /// Ordered blocks mixing text, images, and documents. Supply exactly one of
     /// `input` and `input_blocks`.
     pub input_blocks: Vec<models::InputBlock>,
-    pub agent_revision: Option<u32>,
+    pub definition_revision: Option<u32>,
     pub overrides: Option<AgentDefinitionOverrides>,
     /// Per-turn secret headers, keyed to MCP server names in the selected
     /// Agent Definition. They live here rather than on `McpServer` because an
@@ -837,7 +837,7 @@ impl InvokeRequest {
             on_budget_exhausted: None,
             input: input.into(),
             input_blocks: Vec::new(),
-            agent_revision: None,
+            definition_revision: None,
             overrides: None,
             mcp_server_headers: Vec::new(),
             context: Vec::new(),
@@ -944,8 +944,8 @@ impl InvokeRequest {
         self
     }
 
-    pub fn agent_revision(mut self, revision: u32) -> Self {
-        self.agent_revision = Some(revision);
+    pub fn definition_revision(mut self, revision: u32) -> Self {
+        self.definition_revision = Some(revision);
         self
     }
 
@@ -1030,7 +1030,7 @@ pub struct ToolResult {
 pub struct ListAgentsOptions {
     pub tenant_key: Option<String>,
     pub agent_key: Option<String>,
-    pub agent_definition_id: Option<String>,
+    pub definition_id: Option<String>,
     pub include_archived: Option<bool>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
@@ -1044,7 +1044,7 @@ pub struct CreateAgentInput {
     pub name: String,
     /// The Agent Definition this Agent follows, by opaque ID or by
     /// `definition_key`. Supply exactly one.
-    pub agent_definition_id: Option<String>,
+    pub definition_id: Option<String>,
     pub definition_key: Option<String>,
     pub pinned_revision: Option<u32>,
 }
@@ -1631,7 +1631,7 @@ impl Client {
         );
         body.agent_id = request.agent_id;
         body.agent_key = request.agent_key;
-        body.agent_revision = request.agent_revision.map(u64::from);
+        body.definition_revision = request.definition_revision.map(u64::from);
         body.overrides = overrides;
         body.mcp_server_headers = mcp_server_headers;
         body.context = context;
@@ -1834,9 +1834,9 @@ impl Client {
 
     pub async fn get_agent_definition(
         &self,
-        agent_definition_id: &str,
+        definition_id: &str,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        apis::agent_definitions_api::get_agent_definition(&self.configuration, agent_definition_id)
+        apis::agent_definitions_api::get_agent_definition(&self.configuration, definition_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
@@ -1858,12 +1858,12 @@ impl Client {
 
     pub async fn get_agent_definition_revision(
         &self,
-        agent_definition_id: &str,
+        definition_id: &str,
         revision: u32,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
         apis::agent_definitions_api::get_agent_definition_revision(
             &self.configuration,
-            agent_definition_id,
+            definition_id,
             u64::from(revision),
         )
         .await
@@ -1872,7 +1872,7 @@ impl Client {
 
     pub async fn update_agent_definition(
         &self,
-        agent_definition_id: &str,
+        definition_id: &str,
         expected_revision: u32,
         name: &str,
         definition: AgentDefinition,
@@ -1881,7 +1881,7 @@ impl Client {
         apis::agent_definitions_api::update_agent_definition(
             &self.configuration,
             &format!("\"{expected_revision}\""),
-            agent_definition_id,
+            definition_id,
             body,
         )
         .await
@@ -1898,28 +1898,16 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn archive_agent_definition(
-        &self,
-        agent_definition_id: &str,
-    ) -> Result<(), NvokenError> {
-        apis::agent_definitions_api::archive_agent_definition(
-            &self.configuration,
-            agent_definition_id,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+    pub async fn archive_agent_definition(&self, definition_id: &str) -> Result<(), NvokenError> {
+        apis::agent_definitions_api::archive_agent_definition(&self.configuration, definition_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
-    pub async fn restore_agent_definition(
-        &self,
-        agent_definition_id: &str,
-    ) -> Result<(), NvokenError> {
-        apis::agent_definitions_api::restore_agent_definition(
-            &self.configuration,
-            agent_definition_id,
-        )
-        .await
-        .map_err(|error| self.normalize_generated_error(error))
+    pub async fn restore_agent_definition(&self, definition_id: &str) -> Result<(), NvokenError> {
+        apis::agent_definitions_api::restore_agent_definition(&self.configuration, definition_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn get_invocation(
@@ -1935,15 +1923,15 @@ impl Client {
         &self,
         input: CreateAgentInput,
     ) -> Result<models::Agent, NvokenError> {
-        if input.agent_definition_id.is_some() == input.definition_key.is_some() {
+        if input.definition_id.is_some() == input.definition_key.is_some() {
             return Err(NvokenError::validation(
-                "supply exactly one of agent_definition_id and definition_key",
+                "supply exactly one of definition_id and definition_key",
             ));
         }
         let mut body = models::CreateAgentRequest::new(input.agent_key);
         body.name = optional_name(&input.name);
         body.tenant_key = input.tenant_key;
-        body.agent_definition_id = input.agent_definition_id;
+        body.definition_id = input.definition_id;
         body.definition_key = input.definition_key;
         body.pinned_revision = input.pinned_revision.map(u64::from);
         apis::agents_api::create_agent(&self.configuration, body)
@@ -1965,7 +1953,7 @@ impl Client {
             &self.configuration,
             options.tenant_key.as_deref(),
             options.agent_key.as_deref(),
-            options.agent_definition_id.as_deref(),
+            options.definition_id.as_deref(),
             options.include_archived,
             options.cursor.as_deref(),
             options.limit,

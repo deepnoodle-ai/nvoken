@@ -36,10 +36,10 @@ pub struct AgentOptions {
     pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
     /// The `definition_key` of the Agent Definition this Agent follows.
-    /// `agent_definition_id` is the same pointer by opaque ID; supply at most
+    /// `definition_id` is the same pointer by opaque ID; supply at most
     /// one, and only alongside `agent_key`.
     pub definition_key: Option<String>,
-    pub agent_definition_id: Option<String>,
+    pub definition_id: Option<String>,
     /// Holds this instance to one Definition revision. Leave it `None` to
     /// follow the latest, which is what makes revising the Definition the
     /// rollout.
@@ -65,7 +65,7 @@ impl AgentOptions {
             agent_key: Some(agent_key.into()),
             tenant_key: None,
             definition_key: None,
-            agent_definition_id: None,
+            definition_id: None,
             pinned_revision: None,
             name: None,
             tools: Vec::new(),
@@ -90,7 +90,7 @@ impl AgentOptions {
             agent_key: None,
             tenant_key: None,
             definition_key: None,
-            agent_definition_id: None,
+            definition_id: None,
             pinned_revision: None,
             name: None,
             tools: Vec::new(),
@@ -142,7 +142,7 @@ pub struct AgentInvocationOptions {
     pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub webhook: Option<WebhookTarget>,
-    pub agent_revision: Option<u32>,
+    pub definition_revision: Option<u32>,
     pub overrides: Option<AgentDefinitionOverrides>,
     pub wait: WaitOptions,
     /// Application state snapshots to record ahead of this turn's input.
@@ -299,13 +299,13 @@ impl Client {
                 "supply exactly one of agent_id and agent_key",
             ));
         }
-        if options.definition_key.is_some() && options.agent_definition_id.is_some() {
+        if options.definition_key.is_some() && options.definition_id.is_some() {
             return Err(NvokenError::validation(
-                "supply at most one of definition_key and agent_definition_id",
+                "supply at most one of definition_key and definition_id",
             ));
         }
         if options.agent_id.is_some()
-            && (options.definition_key.is_some() || options.agent_definition_id.is_some())
+            && (options.definition_key.is_some() || options.definition_id.is_some())
         {
             return Err(NvokenError::validation(
                 "an Agent named by agent_id already names its record; the Definition \
@@ -344,15 +344,14 @@ impl Agent {
             return Ok(existing.clone());
         }
         let options = &self.inner.options;
-        let resolved = if options.definition_key.is_some() || options.agent_definition_id.is_some()
-        {
+        let resolved = if options.definition_key.is_some() || options.definition_id.is_some() {
             let created = self
                 .client
                 .create_agent(CreateAgentInput {
                     tenant_key: options.tenant_key.clone(),
                     agent_key: options.agent_key.clone().unwrap_or_default(),
                     name: options.name.clone().unwrap_or_default(),
-                    agent_definition_id: options.agent_definition_id.clone(),
+                    definition_id: options.definition_id.clone(),
                     definition_key: options.definition_key.clone(),
                     pinned_revision: options.pinned_revision,
                 })
@@ -397,8 +396,7 @@ impl Agent {
     /// declaration says how. An Agent named by `agent_id`, or by `agent_key`
     /// alone, is one the caller has said already exists.
     async fn ready(&self) -> Result<(), NvokenError> {
-        if self.inner.options.definition_key.is_none()
-            && self.inner.options.agent_definition_id.is_none()
+        if self.inner.options.definition_key.is_none() && self.inner.options.definition_id.is_none()
         {
             return Ok(());
         }
@@ -440,7 +438,7 @@ impl Agent {
                 .or(agent_options.on_budget_exhausted),
             input,
             input_blocks: Vec::new(),
-            agent_revision: options.agent_revision,
+            definition_revision: options.definition_revision,
             overrides: options.overrides.clone(),
             mcp_server_headers: agent_options.mcp_server_headers.clone(),
             context: options.context.clone(),

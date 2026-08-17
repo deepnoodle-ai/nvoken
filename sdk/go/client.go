@@ -1798,7 +1798,7 @@ func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*Agen
 	if input.AgentKey == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
 	}
-	if (input.AgentDefinitionID == "") == (input.DefinitionKey == "") {
+	if (input.DefinitionID == "") == (input.DefinitionKey == "") {
 		return nil, &Error{
 			Category: ErrorValidation,
 			Message:  "Supply exactly one of Agent Definition ID and Definition key",
@@ -1806,12 +1806,12 @@ func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*Agen
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
 		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
-			TenantKey:         input.TenantKey,
-			AgentKey:          input.AgentKey,
-			Name:              optionalString(input.Name),
-			AgentDefinitionID: optionalString(input.AgentDefinitionID),
-			DefinitionKey:     optionalString(input.DefinitionKey),
-			PinnedRevision:    input.PinnedRevision,
+			TenantKey:      input.TenantKey,
+			AgentKey:       input.AgentKey,
+			Name:           optionalString(input.Name),
+			DefinitionID:   optionalString(input.DefinitionID),
+			DefinitionKey:  optionalString(input.DefinitionKey),
+			PinnedRevision: input.PinnedRevision,
 		})
 		if err != nil {
 			return callResult[generated.Agent]{}, err
@@ -1908,12 +1908,12 @@ func (c *Client) RestoreAgent(ctx context.Context, agentID string) error {
 
 func (c *Client) ListAgents(ctx context.Context, options ListAgentsOptions) (*AgentList, error) {
 	params := &generated.ListAgentsParams{
-		TenantKey:         options.TenantKey,
-		AgentKey:          options.AgentKey,
-		AgentDefinitionID: options.AgentDefinitionID,
-		IncludeArchived:   options.IncludeArchived,
-		Cursor:            options.Cursor,
-		Limit:             options.Limit,
+		TenantKey:       options.TenantKey,
+		AgentKey:        options.AgentKey,
+		DefinitionID:    options.DefinitionID,
+		IncludeArchived: options.IncludeArchived,
+		Cursor:          options.Cursor,
+		Limit:           options.Limit,
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentList], error) {
 		response, err := c.raw.ListAgentsWithResponse(ctx, params)

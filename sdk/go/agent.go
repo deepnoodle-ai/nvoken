@@ -24,10 +24,10 @@ type AgentOptions struct {
 	AgentKey  string
 	TenantKey *string
 	// DefinitionKey is the definition_key of the Agent Definition this Agent
-	// follows. AgentDefinitionID is the same pointer by opaque ID; supply at
+	// follows. DefinitionID is the same pointer by opaque ID; supply at
 	// most one, and only alongside AgentKey.
-	DefinitionKey     string
-	AgentDefinitionID string
+	DefinitionKey string
+	DefinitionID  string
 	// PinnedRevision holds this instance to one Definition revision. Leave it
 	// nil to follow the latest, which is what makes revising the Definition
 	// the rollout.
@@ -45,15 +45,15 @@ type AgentOptions struct {
 }
 
 type AgentInvocationOptions struct {
-	IdempotencyKey    string
-	AgentRevision     *int64
-	Overrides         *AgentDefinitionOverrides
-	SessionID         *string
-	SessionKey        *string
-	SessionOptions    *SessionOptions
-	IfActive          IfActivePolicy
-	OnBudgetExhausted BudgetExhaustionBehavior
-	Webhook           *WebhookTarget
+	IdempotencyKey     string
+	DefinitionRevision *int64
+	Overrides          *AgentDefinitionOverrides
+	SessionID          *string
+	SessionKey         *string
+	SessionOptions     *SessionOptions
+	IfActive           IfActivePolicy
+	OnBudgetExhausted  BudgetExhaustionBehavior
+	Webhook            *WebhookTarget
 	// Context carries the application state snapshots to record ahead of this
 	// turn's input. Per-call rather than per-Agent, because a snapshot is what
 	// changes between turns while the Agent Definition stays fixed.
@@ -171,13 +171,13 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Supply exactly one of Agent ID and Agent key",
 		}
 	}
-	if options.DefinitionKey != "" && options.AgentDefinitionID != "" {
+	if options.DefinitionKey != "" && options.DefinitionID != "" {
 		return nil, &Error{
 			Category: ErrorValidation,
 			Message:  "Supply at most one of Definition key and Agent Definition ID",
 		}
 	}
-	if options.AgentID != "" && (options.DefinitionKey != "" || options.AgentDefinitionID != "") {
+	if options.AgentID != "" && (options.DefinitionKey != "" || options.DefinitionID != "") {
 		return nil, &Error{
 			Category: ErrorValidation,
 			Message: "An Agent named by ID already names its record; the Definition" +
@@ -216,14 +216,14 @@ func (a *Agent) Ensure(ctx context.Context) (*AgentResource, error) {
 	if a.record != nil {
 		return a.record, nil
 	}
-	if a.options.DefinitionKey != "" || a.options.AgentDefinitionID != "" {
+	if a.options.DefinitionKey != "" || a.options.DefinitionID != "" {
 		record, err := a.client.CreateAgent(ctx, CreateAgentInput{
-			TenantKey:         a.options.TenantKey,
-			AgentKey:          a.options.AgentKey,
-			Name:              a.options.Name,
-			AgentDefinitionID: a.options.AgentDefinitionID,
-			DefinitionKey:     a.options.DefinitionKey,
-			PinnedRevision:    a.options.PinnedRevision,
+			TenantKey:      a.options.TenantKey,
+			AgentKey:       a.options.AgentKey,
+			Name:           a.options.Name,
+			DefinitionID:   a.options.DefinitionID,
+			DefinitionKey:  a.options.DefinitionKey,
+			PinnedRevision: a.options.PinnedRevision,
 		})
 		if err != nil {
 			return nil, err
@@ -315,7 +315,7 @@ func (a *Agent) verifyDeclaration(record *AgentResource) error {
 // the caller has said already exists: admitting it directly keeps the turn at
 // one round trip and lets the server answer for a key that names nothing.
 func (a *Agent) ready(ctx context.Context) error {
-	if a.options.DefinitionKey == "" && a.options.AgentDefinitionID == "" {
+	if a.options.DefinitionKey == "" && a.options.DefinitionID == "" {
 		return nil
 	}
 	_, err := a.Ensure(ctx)
@@ -348,20 +348,20 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		agentID, agentKey = record.ID, ""
 	}
 	request := InvokeRequest{
-		AgentID:           agentID,
-		AgentKey:          agentKey,
-		TenantKey:         a.options.TenantKey,
-		SessionID:         options.SessionID,
-		SessionKey:        options.SessionKey,
-		SessionOptions:    options.SessionOptions,
-		IdempotencyKey:    options.IdempotencyKey,
-		AgentRevision:     options.AgentRevision,
-		Overrides:         options.Overrides,
-		IfActive:          options.IfActive,
-		OnBudgetExhausted: onBudgetExhausted,
-		Input:             input,
-		MCPServerHeaders:  a.options.MCPServerHeaders,
-		ProviderKeys:      a.options.ProviderKeys,
+		AgentID:            agentID,
+		AgentKey:           agentKey,
+		TenantKey:          a.options.TenantKey,
+		SessionID:          options.SessionID,
+		SessionKey:         options.SessionKey,
+		SessionOptions:     options.SessionOptions,
+		IdempotencyKey:     options.IdempotencyKey,
+		DefinitionRevision: options.DefinitionRevision,
+		Overrides:          options.Overrides,
+		IfActive:           options.IfActive,
+		OnBudgetExhausted:  onBudgetExhausted,
+		Input:              input,
+		MCPServerHeaders:   a.options.MCPServerHeaders,
+		ProviderKeys:       a.options.ProviderKeys,
 		// A per-call target overrides the agent default so one Agent can
 		// webhook different endpoints without a second Agent.
 		Webhook:  webhookTarget(options.Webhook, a.options.Webhook),

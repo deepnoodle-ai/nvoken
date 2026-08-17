@@ -322,7 +322,7 @@ class DeclaringClient(FakeClient):
             tenant_key=kwargs.get("tenant_key"),
             agent_key=kwargs["agent_key"],
             name=kwargs.get("name") or kwargs["agent_key"],
-            agent_definition_id="def_declared",
+            definition_id="def_declared",
             pinned_revision=self.pinned_revision,
             archived_at=None,
         )
@@ -346,7 +346,7 @@ async def test_declared_agent_creates_its_record_on_first_use() -> None:
 
     assert len(client.creates) == 1
     assert client.creates[0]["definition_key"] == "support"
-    assert client.creates[0]["agent_definition_id"] is None
+    assert client.creates[0]["definition_id"] is None
     assert agent.id == "agent_declared"
     # Admission uses the record's ID once it is known.
     assert [request.agent_id for request in client.invocations] == [

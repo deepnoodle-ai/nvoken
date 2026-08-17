@@ -90,10 +90,10 @@ async function main(): Promise<void> {
     idempotencyKey: `${runId}:definition`,
   });
   await Promise.all([
-    client.createAgent({ tenantKey: tenantA, agentKey: primaryAgentKey, name: "Support", agentDefinitionId: resource.id }),
-    client.createAgent({ tenantKey: tenantB, agentKey: primaryAgentKey, name: "Support", agentDefinitionId: resource.id }),
-    client.createAgent({ tenantKey: tenantA, agentKey: alternateAgentKey, name: "Alternate", agentDefinitionId: resource.id }),
-    client.createAgent({ tenantKey: tenantA, agentKey: referencedAgentKey, name: "Referenced", agentDefinitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantA, agentKey: primaryAgentKey, name: "Support", definitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantB, agentKey: primaryAgentKey, name: "Support", definitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantA, agentKey: alternateAgentKey, name: "Alternate", definitionId: resource.id }),
+    client.createAgent({ tenantKey: tenantA, agentKey: referencedAgentKey, name: "Referenced", definitionId: resource.id }),
   ]);
 
   const firstRequest: InvokeRequest = {
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
     input: "Reply only with referenced.",
   });
   assert.match(referenced.text, /referenced/i);
-  assert.equal(referenced.invocation.agentDefinitionId, resource.id);
+  assert.equal(referenced.invocation.definitionId, resource.id);
   console.log(`PASS revisioned Agent Definition resource is reusable by ID: ${resource.id}`);
 
   // Recorded context is Session history rather than an Agent Definition field,
@@ -320,7 +320,7 @@ async function main(): Promise<void> {
     tenantKey: tenantA,
     agentKey: toolAgentKey,
     name: "Order tools",
-    agentDefinitionId: toolDefinition.id,
+    definitionId: toolDefinition.id,
   });
   const toolHandle = await client.invoke({
     agentKey: toolAgentKey,
@@ -412,7 +412,7 @@ async function main(): Promise<void> {
     tenantKey: tenantA,
     agentKey: structuredAgentKey,
     name: "Support classification",
-    agentDefinitionId: structuredDefinition.id,
+    definitionId: structuredDefinition.id,
   });
   const structuredHandle = await client.invoke<SupportClassification>({
     agentKey: structuredAgentKey,

@@ -85,10 +85,10 @@ class AgentOptions(Generic[StructuredT]):
     agent_id: str | None = None
     agent_key: str | None = None
     #: The definition_key of the Agent Definition this Agent follows.
-    #: agent_definition_id is the same pointer by opaque ID; supply at most
+    #: definition_id is the same pointer by opaque ID; supply at most
     #: one, and only alongside agent_key.
     definition_key: str | None = None
-    agent_definition_id: str | None = None
+    definition_id: str | None = None
     #: Holds this instance to one Definition revision. Leave it None to follow
     #: the latest, which is what makes revising the Definition the rollout.
     pinned_revision: int | None = None
@@ -111,7 +111,7 @@ class AgentOptions(Generic[StructuredT]):
 @dataclass(frozen=True)
 class InvocationOptions:
     idempotency_key: str | None = None
-    agent_revision: int | None = None
+    definition_revision: int | None = None
     overrides: AgentDefinitionOverrides | None = None
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
@@ -183,12 +183,12 @@ class Agent(Generic[StructuredT]):
                 "validation",
                 "supply exactly one of agent_id and agent_key",
             )
-        if options.definition_key and options.agent_definition_id:
+        if options.definition_key and options.definition_id:
             raise NvokenError(
                 "validation",
-                "supply at most one of definition_key and agent_definition_id",
+                "supply at most one of definition_key and definition_id",
             )
-        if options.agent_id and (options.definition_key or options.agent_definition_id):
+        if options.agent_id and (options.definition_key or options.definition_id):
             raise NvokenError(
                 "validation",
                 "an Agent named by agent_id already names its record; the"
@@ -230,10 +230,10 @@ class Agent(Generic[StructuredT]):
         async with self._ensuring:
             if self._resource is not None:
                 return self._resource
-            if self.options.definition_key or self.options.agent_definition_id:
+            if self.options.definition_key or self.options.definition_id:
                 record = await self.client.create_agent(
                     agent_key=self.options.agent_key or "",
-                    agent_definition_id=self.options.agent_definition_id,
+                    definition_id=self.options.definition_id,
                     definition_key=self.options.definition_key,
                     name=self.options.name,
                     tenant_key=self.options.tenant_key,
@@ -294,7 +294,7 @@ class Agent(Generic[StructuredT]):
         """
         if self._resource is not None:
             return
-        if not self.options.definition_key and not self.options.agent_definition_id:
+        if not self.options.definition_key and not self.options.definition_id:
             return
         await self.ensure()
 
@@ -506,7 +506,7 @@ class Agent(Generic[StructuredT]):
             agent_id=agent_id,
             agent_key=agent_key,
             input=input,
-            agent_revision=options.agent_revision,
+            definition_revision=options.definition_revision,
             overrides=options.overrides,
             mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,

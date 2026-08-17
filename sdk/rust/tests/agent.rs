@@ -151,9 +151,9 @@ fn invocation_payload(id: &str, status: &str) -> Value {
         "agent_key": "support",
         "session_id": SESSION_ID,
         "user_key": null,
-        "agent_definition_id": DEFINITION_ID,
-        "agent_definition_revision": 1,
-        "agent_definition": null,
+        "definition_id": DEFINITION_ID,
+        "definition_revision": 1,
+        "definition": null,
         "context": null,
         "status": status,
         "stop_reason": if status == "completed" { json!("end_turn") } else { Value::Null },
@@ -280,7 +280,7 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
             "tenant_key": body["tenant_key"].clone(),
             "agent_key": body["agent_key"].clone(),
             "name": body["agent_key"].clone(),
-            "agent_definition_id": DEFINITION_ID,
+            "definition_id": DEFINITION_ID,
             "pinned_revision": if pinned_revision.is_null() { json!(null) } else { pinned_revision },
             "created_at": "2026-07-21T12:00:00Z",
             "updated_at": "2026-07-21T12:00:00Z",
@@ -803,7 +803,7 @@ async fn declared_agent_creates_its_record_on_first_use() {
     assert_eq!(state.agent_creates.len(), 1, "one create for two turns");
     assert_eq!(state.agent_creates[0]["definition_key"], json!("support"));
     assert_eq!(state.agent_creates[0]["tenant_key"], json!("customer-482"));
-    assert!(state.agent_creates[0].get("agent_definition_id").is_none());
+    assert!(state.agent_creates[0].get("definition_id").is_none());
     for (agent_id, agent_key) in &state.admitted_identities {
         assert_eq!(agent_id.as_deref(), Some(AGENT_ID));
         assert_eq!(agent_key.as_deref(), None);

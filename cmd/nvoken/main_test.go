@@ -420,8 +420,8 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 			_, _ = io.WriteString(response, `{
 				"id":"`+testInvocationID+`",
 				"session_id":"`+testSessionID+`",
-				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-				"agent_definition_revision":1,
+				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"definition_revision":1,
 				"status":"completed",
 				"attempt":1,
 				"active_execution_ms":0,
@@ -442,9 +442,9 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 				"agent_id":"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
 				"agent_key":"support",
 				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-				"agent_definition_revision":1,
-				"agent_definition":null,
+				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"definition_revision":1,
+				"definition":null,
 				"status":"queued",
 				"stop_reason":null,
 				"attempt":0,
@@ -499,7 +499,7 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("flat admission output=%q err=%v", output, err)
 	}
-	for _, leaked := range []string{"instructions", "model", "limits", "tools", "agent_definition", "agent_definition_id"} {
+	for _, leaked := range []string{"instructions", "model", "limits", "tools", "definition", "definition_id"} {
 		if admission[leaked] != nil {
 			t.Fatalf("execution field %q leaked to the top level: %#v", leaked, admission)
 		}
@@ -582,8 +582,8 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 				"agent_key":"support",
 				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
 				"id":"`+testInvocationID+`",
-				"agent_definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-				"agent_definition_revision":1,
+				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
+				"definition_revision":1,
 				"status":"queued",
 				"deduplicated":false,
 				"deadline_at":"2026-07-21T12:05:00Z"
@@ -784,8 +784,8 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 			response.WriteHeader(http.StatusAccepted)
 			_, _ = io.WriteString(response, `{
 				"id":"inv_test","agent_id":"agent_test","agent_key":"support",
-				"session_id":"sesn_test","agent_definition_id":"def_test",
-				"agent_definition_revision":1,"status":"queued","active_execution_ms":0,
+				"session_id":"sesn_test","definition_id":"def_test",
+				"definition_revision":1,"status":"queued","active_execution_ms":0,
 				"attempt":0,"created_at":"2026-08-16T12:00:00Z","updated_at":"2026-08-16T12:00:00Z"
 			}`)
 		case "POST /v1/apps":
