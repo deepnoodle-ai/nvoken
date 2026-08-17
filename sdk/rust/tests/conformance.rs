@@ -6,19 +6,20 @@ use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
-    accept_webhook, answerable_tool_calls, ask_user_input_schema, ask_user_tool,
-    ask_user_tool_with, deduplicate_callback_result, fetch_tool, host_tool_calls,
-    preflight_input_blocks, preflight_output_schema, retry_webhook, verify_callback,
-    verify_webhook, webhook_status_is_retried, AgentDefinition, AgentInvocationOptions,
-    AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
-    CallbackResultStore, Client, ClientInterface, CompactionListOptions, ContextCompaction,
-    ContextCompactionTrigger, ContextItem, ContextTier, DeliveryError, ErrorCategory,
-    IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
-    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
-    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
-    Reducer, RetryPolicy, SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview,
-    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions,
-    WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
+    accept_webhook, all_browser_operations, answerable_tool_calls, ask_user_input_schema,
+    ask_user_tool, ask_user_tool_with, deduplicate_callback_result, fetch_tool, host_tool_calls,
+    mint_client_token, preflight_input_blocks, preflight_output_schema, retry_webhook,
+    verify_callback, verify_webhook, webhook_status_is_retried, AgentDefinition,
+    AgentInvocationOptions, AgentOptions, AskUserInput, AskUserKind, AskUserOutput,
+    BudgetExhaustionBehavior, CallbackResultStore, Client, ClientInterface, ClientTokenClaims,
+    CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
+    DeliveryError, ErrorCategory, IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions,
+    ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders,
+    MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool,
+    Reasoning, ReasoningEffort, Reducer, RetryPolicy, SessionOptions, SessionOptionsConflict,
+    StreamEvent, StreamPreview, ToolCallListOptions, ToolChoice, ToolMode, ToolResult,
+    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
+    ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -1857,4 +1858,169 @@ fn an_empty_client_interface_reaches_the_wire() {
         serde_json::to_value(&body).unwrap()["client_interface"],
         json!({})
     );
+}
+
+/// The cross-SDK agreement on what a host signs. nvoken publishes it, its own
+/// verifier accepts the token in it, and every SDK mints against it.
+#[derive(serde::Deserialize)]
+struct ClientTokenVector {
+    signing_key: ClientTokenSigningKey,
+    claims: ClientTokenVectorClaims,
+    token: String,
+    maximum_lifetime_seconds: u64,
+    browser_operation_ceiling: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ClientTokenSigningKey {
+    key_id: String,
+    private_key_seed: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ClientTokenVectorClaims {
+    iss: String,
+    sub: String,
+    iat: u64,
+    exp: u64,
+    tenant_key: String,
+    agent_key: String,
+    definition_revision: i64,
+    session_id: String,
+    ops: Vec<models::Operation>,
+}
+
+fn client_token_vector() -> ClientTokenVector {
+    serde_json::from_str(
+        &std::fs::read_to_string("../../docs/design/client-token-v1.json").unwrap(),
+    )
+    .unwrap()
+}
+
+fn client_token_seed(vector: &ClientTokenVector) -> Vec<u8> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(&vector.signing_key.private_key_seed)
+        .unwrap()
+}
+
+fn client_token_claims(vector: &ClientTokenVector) -> ClientTokenClaims {
+    ClientTokenClaims {
+        app_id: vector.claims.iss.clone(),
+        key_id: vector.signing_key.key_id.clone(),
+        subject: vector.claims.sub.clone(),
+        tenant_key: Some(vector.claims.tenant_key.clone()),
+        agent_id: None,
+        agent_key: Some(vector.claims.agent_key.clone()),
+        definition_revision: Some(vector.claims.definition_revision),
+        session_id: Some(vector.claims.session_id.clone()),
+        operations: vector.claims.ops.clone(),
+        issued_at: Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(vector.claims.iat)),
+        lifetime: std::time::Duration::from_secs(vector.claims.exp - vector.claims.iat),
+    }
+}
+
+/// Ed25519 signatures are deterministic, so identical claims produce an
+/// identical token in every language. That is what turns the published token
+/// from an illustration into a check: nvoken's own verifier accepts this exact
+/// string in its test suite, so a token equal to it is a token that works.
+#[test]
+fn shared_client_token_vector() {
+    let vector = client_token_vector();
+    let minted = mint_client_token(&client_token_seed(&vector), &client_token_claims(&vector))
+        .expect("mint the published claims");
+    assert_eq!(minted, vector.token);
+}
+
+/// The vector's list is derived on the server from its route table, so this is
+/// the one place this SDK's idea of what a browser may do meets the routes the
+/// runtime actually opens to one.
+#[test]
+fn client_token_ceiling_matches_the_published_one() {
+    let vector = client_token_vector();
+    let mut local: Vec<String> = all_browser_operations()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    local.sort();
+    let mut published = vector.browser_operation_ceiling.clone();
+    published.sort();
+    assert_eq!(local, published);
+    assert_eq!(
+        CLIENT_TOKEN_LIFETIME_LIMIT.as_secs(),
+        vector.maximum_lifetime_seconds
+    );
+}
+
+/// nvoken cannot second-guess a signed claim, so every one of these would mint
+/// cleanly and then fail in a browser, where the failure reads as "invalid
+/// client token" and says nothing about which claim was wrong.
+#[test]
+fn minting_refuses_what_the_runtime_would_refuse() {
+    let vector = client_token_vector();
+    let seed = client_token_seed(&vector);
+    let mutations: Vec<(&str, fn(&mut ClientTokenClaims))> = vec![
+        ("blank subject", |claims| claims.subject = String::new()),
+        ("padded subject", |claims| {
+            claims.subject = " user ".to_string()
+        }),
+        ("oversized subject", |claims| {
+            claims.subject = "u".repeat(256)
+        }),
+        ("no agent", |claims| claims.agent_key = None),
+        ("both agents", |claims| {
+            claims.agent_id = Some("agent_x".to_string())
+        }),
+        ("malformed app", |claims| claims.app_id = "acme".to_string()),
+        ("malformed key", |claims| {
+            claims.key_id = "key-1".to_string()
+        }),
+        ("malformed session", |claims| {
+            claims.session_id = Some("session-1".to_string())
+        }),
+        ("negative revision", |claims| {
+            claims.definition_revision = Some(-1)
+        }),
+        ("zero lifetime", |claims| {
+            claims.lifetime = std::time::Duration::ZERO
+        }),
+        ("excessive lifetime", |claims| {
+            claims.lifetime = CLIENT_TOKEN_LIFETIME_LIMIT + std::time::Duration::from_secs(1)
+        }),
+        ("unreachable op", |claims| {
+            claims.operations = vec![models::Operation::DeleteSession]
+        }),
+        ("duplicate op", |claims| {
+            claims.operations = vec![models::Operation::GetSession, models::Operation::GetSession]
+        }),
+        ("unscoped operations", |claims| {
+            claims.operations = Vec::new()
+        }),
+    ];
+    for (name, mutate) in mutations {
+        let mut claims = client_token_claims(&vector);
+        mutate(&mut claims);
+        assert!(
+            mint_client_token(&seed, &claims).is_err(),
+            "minted a grant the runtime refuses: {name}"
+        );
+    }
+    assert!(mint_client_token(b"short", &client_token_claims(&vector)).is_err());
+}
+
+/// nvoken reads an absent `ops` as the whole ceiling, which means the most
+/// permissive token is also the one you get by not thinking about it. Here the
+/// two are spelled differently, so breadth is something a host chose.
+#[test]
+fn minting_makes_breadth_deliberate() {
+    let vector = client_token_vector();
+    let seed = client_token_seed(&vector);
+
+    let mut claims = client_token_claims(&vector);
+    claims.operations = Vec::new();
+    let error = mint_client_token(&seed, &claims).expect_err("omitted operations");
+    assert!(error.to_string().contains("all_browser_operations"));
+
+    claims.operations = all_browser_operations();
+    assert!(mint_client_token(&seed, &claims).is_ok());
 }

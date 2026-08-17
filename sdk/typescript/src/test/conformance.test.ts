@@ -8,6 +8,13 @@ import {
   MAX_MEDIA_INPUT_BYTES,
   MAX_MEDIA_TITLE_CHARACTERS,
 } from "../client.js";
+import { createBrowserClient } from "../browser.js";
+import {
+  CLIENT_TOKEN_LIFETIME_LIMIT_MS,
+  allBrowserOperations,
+  mintClientToken,
+  type ClientTokenClaims,
+} from "../client-token.js";
 import { isTerminalStatus } from "../invocation-status.js";
 import { mediaInputIssue } from "../media-preflight.js";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -3212,4 +3219,133 @@ test("a scoped client stamps every request and leaves its parent alone", async (
   // the one failure mode a scope cannot have.
   assert.throws(() => client.scoped({}), NvokenError);
   assert.throws(() => client.scoped({ tenantKey: "   " }), NvokenError);
+});
+
+// The cross-SDK agreement on what a host signs. nvoken publishes it, its own
+// verifier accepts the token in it, and every SDK mints against it.
+interface ClientTokenVector {
+  signing_key: { key_id: string; private_key_seed: string; public_key: string };
+  claims: {
+    iss: string;
+    sub: string;
+    aud: string;
+    iat: number;
+    exp: number;
+    tenant_key: string;
+    agent_key: string;
+    definition_revision: number;
+    session_id: string;
+    ops: string[];
+  };
+  token: string;
+  maximum_lifetime_seconds: number;
+  browser_operation_ceiling: string[];
+}
+
+async function clientTokenVector(): Promise<ClientTokenVector> {
+  return JSON.parse(await readFile(
+    new URL("../../../../docs/design/client-token-v1.json", import.meta.url),
+    "utf8",
+  )) as ClientTokenVector;
+}
+
+function vectorClaims(vector: ClientTokenVector): ClientTokenClaims {
+  return {
+    appId: vector.claims.iss,
+    keyId: vector.signing_key.key_id,
+    subject: vector.claims.sub,
+    tenantKey: vector.claims.tenant_key,
+    agentKey: vector.claims.agent_key,
+    definitionRevision: vector.claims.definition_revision,
+    sessionId: vector.claims.session_id,
+    operations: vector.claims.ops as ClientTokenClaims["operations"],
+    issuedAt: new Date(vector.claims.iat * 1_000),
+    lifetimeMs: (vector.claims.exp - vector.claims.iat) * 1_000,
+  };
+}
+
+// Ed25519 signatures are deterministic, so identical claims produce an
+// identical token in every language. That is what turns the published token
+// from an illustration into a check: nvoken's own verifier accepts this exact
+// string in its test suite, so a token equal to it is a token that works.
+test("shared client token vector", async () => {
+  const vector = await clientTokenVector();
+  const seed = Uint8Array.from(Buffer.from(vector.signing_key.private_key_seed, "base64"));
+  assert.equal(await mintClientToken(seed, vectorClaims(vector)), vector.token);
+});
+
+// The vector's list is derived on the server from its route table, so this is
+// the one place this SDK's idea of what a browser may do meets the routes the
+// runtime actually opens to one.
+test("client token ceiling matches the published one", async () => {
+  const vector = await clientTokenVector();
+  assert.deepEqual(
+    [...allBrowserOperations()].map(String).sort(),
+    [...vector.browser_operation_ceiling].sort(),
+  );
+  assert.equal(CLIENT_TOKEN_LIFETIME_LIMIT_MS / 1_000, vector.maximum_lifetime_seconds);
+});
+
+// nvoken cannot second-guess a signed claim, so every one of these would mint
+// cleanly and then fail in a browser, where the failure reads as "invalid
+// client token" and says nothing about which claim was wrong.
+test("minting refuses what the runtime would refuse", async () => {
+  const vector = await clientTokenVector();
+  const seed = Uint8Array.from(Buffer.from(vector.signing_key.private_key_seed, "base64"));
+  const mutations: Array<[string, (claims: ClientTokenClaims) => void]> = [
+    ["blank subject", (claims) => { claims.subject = ""; }],
+    ["padded subject", (claims) => { claims.subject = " user "; }],
+    ["oversized subject", (claims) => { claims.subject = "u".repeat(256); }],
+    ["no agent", (claims) => { delete claims.agentKey; }],
+    ["both agents", (claims) => { claims.agentId = "agent_x"; }],
+    ["malformed app", (claims) => { claims.appId = "acme"; }],
+    ["malformed key", (claims) => { claims.keyId = "key-1"; }],
+    ["malformed session", (claims) => { claims.sessionId = "session-1"; }],
+    ["negative revision", (claims) => { claims.definitionRevision = -1; }],
+    ["zero lifetime", (claims) => { claims.lifetimeMs = 0; }],
+    ["excessive lifetime", (claims) => { claims.lifetimeMs = CLIENT_TOKEN_LIFETIME_LIMIT_MS + 1_000; }],
+    ["unreachable op", (claims) => { claims.operations = ["delete_session"] as ClientTokenClaims["operations"]; }],
+    ["duplicate op", (claims) => {
+      claims.operations = ["get_session", "get_session"] as ClientTokenClaims["operations"];
+    }],
+    ["unscoped operations", (claims) => { claims.operations = []; }],
+  ];
+  for (const [name, mutate] of mutations) {
+    const claims = vectorClaims(vector);
+    mutate(claims);
+    await assert.rejects(() => mintClientToken(seed, claims), new RegExp("nvoken"), name);
+  }
+  await assert.rejects(() => mintClientToken(new Uint8Array(16), vectorClaims(vector)));
+});
+
+// nvoken reads an absent `ops` as the whole ceiling, which means the most
+// permissive token is also the one you get by not thinking about it. Here the
+// two are spelled differently, so breadth is something a host chose.
+test("minting makes breadth deliberate", async () => {
+  const vector = await clientTokenVector();
+  const seed = Uint8Array.from(Buffer.from(vector.signing_key.private_key_seed, "base64"));
+  const claims = vectorClaims(vector);
+  claims.operations = [];
+  await assert.rejects(() => mintClientToken(seed, claims), /allBrowserOperations/);
+  claims.operations = allBrowserOperations();
+  assert.ok(await mintClientToken(seed, claims));
+});
+
+// A machine API key in a page is readable by everyone who loads it, reaches
+// every tenant in the App, and cannot be narrowed after the fact.
+test("the browser entry refuses a machine credential", async () => {
+  assert.throws(
+    () => createBrowserClient({
+      baseUrl: "https://api.example.com",
+      clientToken: "nvk_live_not_for_a_browser",
+    }),
+    /never hold one/,
+  );
+  // A token that arrives from a refresh function is checked when it arrives,
+  // since there is nothing to check at construction.
+  const client = createBrowserClient({
+    baseUrl: "https://api.example.com",
+    clientToken: () => "nvk_live_from_a_refresh",
+  });
+  await assert.rejects(() => client.listSessions());
 });

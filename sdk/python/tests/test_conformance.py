@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 from dataclasses import asdict, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -54,6 +55,13 @@ from nvoken.media_preflight import (
     TextBlock,
     input_block_wire,
     media_input_issue,
+)
+
+from nvoken.client_token import (
+    CLIENT_TOKEN_LIFETIME_LIMIT,
+    ClientTokenClaims,
+    all_browser_operations,
+    mint_client_token,
 )
 
 from nvoken import (
@@ -1683,3 +1691,95 @@ def test_a_scoped_client_stamps_every_request_and_leaves_its_parent_alone() -> N
         client.scoped(Scope())
     with pytest.raises(NvokenError):
         client.scoped(Scope(tenant_key="   "))
+
+
+def client_token_vector() -> dict[str, Any]:
+    """The cross-SDK agreement on what a host signs.
+
+    nvoken publishes it, its own verifier accepts the token in it, and every
+    SDK mints against it.
+    """
+    path = Path(__file__).parents[3] / "docs/design/client-token-v1.json"
+    return json.loads(path.read_text())
+
+
+def vector_claims(vector: dict[str, Any]) -> ClientTokenClaims:
+    claims = vector["claims"]
+    return ClientTokenClaims(
+        app_id=claims["iss"],
+        key_id=vector["signing_key"]["key_id"],
+        subject=claims["sub"],
+        tenant_key=claims["tenant_key"],
+        agent_key=claims["agent_key"],
+        definition_revision=claims["definition_revision"],
+        session_id=claims["session_id"],
+        operations=list(claims["ops"]),
+        issued_at=datetime.fromtimestamp(claims["iat"], timezone.utc),
+        lifetime=timedelta(seconds=claims["exp"] - claims["iat"]),
+    )
+
+
+def test_shared_client_token_vector() -> None:
+    """Ed25519 signatures are deterministic, so identical claims produce an
+    identical token in every language. That is what turns the published token
+    from an illustration into a check: nvoken's own verifier accepts this exact
+    string in its test suite, so a token equal to it is a token that works.
+    """
+    vector = client_token_vector()
+    seed = base64.b64decode(vector["signing_key"]["private_key_seed"])
+    assert mint_client_token(seed, vector_claims(vector)) == vector["token"]
+
+
+def test_client_token_ceiling_matches_the_published_one() -> None:
+    """The vector's list is derived on the server from its route table, so this
+    is the one place this SDK's idea of what a browser may do meets the routes
+    the runtime actually opens to one.
+    """
+    vector = client_token_vector()
+    assert sorted(all_browser_operations()) == sorted(vector["browser_operation_ceiling"])
+    assert CLIENT_TOKEN_LIFETIME_LIMIT.total_seconds() == vector["maximum_lifetime_seconds"]
+
+
+def test_minting_refuses_what_the_runtime_would_refuse() -> None:
+    """nvoken cannot second-guess a signed claim, so every one of these would
+    mint cleanly and then fail in a browser, where the failure reads as
+    "invalid client token" and says nothing about which claim was wrong.
+    """
+    vector = client_token_vector()
+    seed = base64.b64decode(vector["signing_key"]["private_key_seed"])
+    mutations: dict[str, dict[str, Any]] = {
+        "blank subject": {"subject": ""},
+        "padded subject": {"subject": " user "},
+        "oversized subject": {"subject": "u" * 256},
+        "no agent": {"agent_key": None},
+        "both agents": {"agent_id": "agent_x"},
+        "malformed app": {"app_id": "acme"},
+        "malformed key": {"key_id": "key-1"},
+        "malformed session": {"session_id": "session-1"},
+        "negative revision": {"definition_revision": -1},
+        "zero lifetime": {"lifetime": timedelta(0)},
+        "excessive lifetime": {"lifetime": CLIENT_TOKEN_LIFETIME_LIMIT + timedelta(seconds=1)},
+        "unreachable op": {"operations": ["delete_session"]},
+        "duplicate op": {"operations": ["get_session", "get_session"]},
+        "unscoped operations": {"operations": []},
+    }
+    for name, changes in mutations.items():
+        claims = replace(vector_claims(vector), **changes)
+        with pytest.raises(ValueError):
+            mint_client_token(seed, claims)
+    with pytest.raises(ValueError):
+        mint_client_token(b"short", vector_claims(vector))
+
+
+def test_minting_makes_breadth_deliberate() -> None:
+    """nvoken reads an absent ``ops`` as the whole ceiling, which means the most
+    permissive token is also the one you get by not thinking about it. Here the
+    two are spelled differently, so breadth is something a host chose.
+    """
+    vector = client_token_vector()
+    seed = base64.b64decode(vector["signing_key"]["private_key_seed"])
+    with pytest.raises(ValueError, match="all_browser_operations"):
+        mint_client_token(seed, replace(vector_claims(vector), operations=[]))
+    assert mint_client_token(
+        seed, replace(vector_claims(vector), operations=all_browser_operations())
+    )

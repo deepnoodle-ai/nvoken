@@ -1014,7 +1014,13 @@ export interface RetryPolicy {
 
 export interface ClientOptions {
   baseUrl?: string;
-  apiKey?: string;
+  /**
+   * The credential every request carries. A function is resolved per request,
+   * which is what a short-lived credential needs: a client token expires in
+   * minutes, so a browser holding one static string stops working mid-session
+   * rather than fetching the next one.
+   */
+  apiKey?: string | (() => string | Promise<string>);
   /**
    * Reads only a marked nvokend quickstart file. Set false to disable the
    * default .env lookup. Probing is skipped outside Node-like runtimes, so a

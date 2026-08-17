@@ -3,6 +3,7 @@ pub mod apis;
 pub mod ask_user;
 pub mod callback;
 pub mod client;
+pub mod client_token;
 pub mod invocation_status;
 pub mod media_preflight;
 #[allow(unused_imports)]
@@ -42,6 +43,10 @@ pub use client::{
     ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult,
     UpdateAgentDefinitionOptions, UpdateAgentInput, UpdateSessionOptions, WaitCondition,
     WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
+};
+pub use client_token::{
+    all_browser_operations, mint_client_token, ClientTokenClaims, ClientTokenError,
+    CLIENT_TOKEN_LIFETIME_LIMIT, CLIENT_TOKEN_TYPE,
 };
 pub use invocation_status::{is_terminal_status, is_turn_over, TERMINAL_INVOCATION_STATUSES};
 pub use media_preflight::{

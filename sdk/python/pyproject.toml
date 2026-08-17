@@ -26,7 +26,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest==9.1.1", "pytest-asyncio==1.4.0"]
+# Minting a browser client token needs Ed25519 signing, which the standard
+# library does not provide. It is an extra rather than a dependency because
+# only hosts that put a browser in front of nvoken ever sign one, and a
+# compiled crypto package is a real cost to impose on everyone else.
+client-tokens = ["cryptography>=42,<47"]
+test = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "cryptography>=42,<47"]
 
 [project.urls]
 Homepage = "https://github.com/deepnoodle-ai/nvoken/tree/main/sdk/python"
