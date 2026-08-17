@@ -6,6 +6,22 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## 0.20.0 - 2026-08-16
+
+- **The CLI covers the complete public outbound API.** Every operation now has
+  a documented command, every command path has useful help, and pageable and
+  mutating commands consistently expose cursors and stable text/JSON receipts.
+
+- **Complex requests keep their full shape.** Invocation, App, and Session
+  commands accept JSON request files for nested payloads and explicit nulls;
+  tool results can be submitted in batches, usage records can be emitted as
+  CSV, provider identifiers stay extensible, and the remaining API filters are
+  available as flags.
+
+- **Streams can resume and narrow to one turn.** The Go SDK and CLI accept an
+  initial cursor and Invocation filter for Session streams, while filtered
+  streams stop after that Invocation settles.
+
 ## 0.19.0 - 2026-08-16
 
 - **Agents are tenant-scoped instances of versioned Agent Definitions.** Create
