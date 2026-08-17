@@ -81,7 +81,6 @@ cursor on stderr so stdout remains pipe-safe CSV.
 
 ### Validation
 
-- `make openapi-sync-check NVOKEN_CLOUD_REPO=../nvoken-cloud`
 - focused Go CLI and Go SDK tests
 - recursive built-binary help inspection
 - conformance-server CLI exercise for text and JSON output

@@ -3,9 +3,8 @@
 **Status:** Standing direction. Set by Curtis Myzie on 2026-08-13. It governs
 every later change to the streaming protocol and the contract, and it outranks
 any individual design document in this directory.
-**Applies to:** `openapi/nvoken.yaml` and the runtime behind it, in
-`nvoken-cloud`; the SDKs, conformance fixtures, and reference documentation in
-this repository.
+**Applies to:** `openapi/nvoken.yaml` and the runtime behind it; the SDKs,
+conformance fixtures, and reference documentation in this repository.
 
 ## The direction
 

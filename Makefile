@@ -1,8 +1,7 @@
 REDOCLY_VERSION := 1.34.11
 
-.PHONY: build check fmt fmt-check generate openapi-check openapi-sync \
-	openapi-sync-check release scripts-check sdk-check sdk-generate \
-	sdk-generate-check test vet
+.PHONY: build check fmt fmt-check generate openapi-check release \
+	scripts-check sdk-check sdk-generate sdk-generate-check test vet
 
 build:
 	mkdir -p bin
@@ -21,12 +20,6 @@ generate: sdk-generate
 
 openapi-check:
 	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/nvoken.yaml
-
-openapi-sync:
-	python3 scripts/sync_openapi.py --repo "$(NVOKEN_CLOUD_REPO)"
-
-openapi-sync-check:
-	python3 scripts/sync_openapi.py --check --repo "$(NVOKEN_CLOUD_REPO)"
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z"; exit 1; fi

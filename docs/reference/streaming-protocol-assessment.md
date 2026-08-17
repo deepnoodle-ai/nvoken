@@ -12,11 +12,9 @@ The companion [reference](streaming-protocol.md) describes the protocol as it
 is; this document says what we would change, in what order, and why. When a
 recommendation here is accepted, it graduates into `docs/design/` and then into
 implementation.
-**Inputs:** the [reference](streaming-protocol.md), verified against
-`nvoken-cloud@50d8a5e`; the protocol research in
-[`docs/research/`](../research/README.md); and market research in
-`nvoken-website` under `docs/research/` (documents 003 and 004, private to
-that repository).
+**Inputs:** the [reference](streaming-protocol.md), verified against the
+runtime; the protocol research in [`docs/research/`](../research/README.md);
+and market research that is not public.
 **Date:** 2026-08-13
 
 ## The verdict
@@ -80,7 +78,7 @@ Four decisions worth defending against any future proposal to revisit them:
 Fix S2 (open the event schemas and state an ignore-unknown-fields norm), S3
 (forward-compatibility notes on both reason enums), and S1 (declare the
 discriminators the unions already satisfy). This is one contract change in
-`nvoken-cloud`, and it is the gate for everything else: after it, adding a
+the service, and it is the gate for everything else: after it, adding a
 field, a frame type, a union member, or an enum value is non-breaking. Before
 it, every improvement below is a breaking change. C5 largely falls out of S1
 through regeneration.
@@ -121,7 +119,7 @@ Invocation once (N1); document the cursor's several names (N2) and the counter
 bases (N6); document cursor interchangeability between streams as supported
 (P6).
 
-### 4. Fix P3 in `nvoken-cloud`
+### 4. Fix P3 in the service
 
 The sharpest correctness item on the list. `phase` is derived at read time and
 delivered once on a strictly forward stream, so whether a Session-stream
@@ -207,7 +205,7 @@ a decision rather than an omission.
 The fixtures land in the same change as the fixes, so the gap that let C1
 survive closes with it.
 
-### Wave 2: start in `nvoken-cloud` now (longest lead time)
+### Wave 2: start in the service now (longest lead time)
 
 | ID | Action |
 | --- | --- |
@@ -286,6 +284,5 @@ P1, P2, P4, S5, S6, S7, I2, N1, N2, N6, P6. Described under recommendation 3.
 - [Session options conflict scope](../design/002-session-options-conflict-scope.md),
   the house style for arguing a change, for when a recommendation here
   graduates into a decision.
-- In `nvoken-website`, private: `docs/research/003-pain-point-inventory.md`
-  and `docs/research/004-competitive-landscape.md`, the market context this
-  assessment factors in.
+- A pain-point inventory and a competitive landscape, neither public, are the
+  market context this assessment factors in.

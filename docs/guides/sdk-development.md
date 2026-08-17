@@ -2,30 +2,28 @@
 
 ## Source boundaries
 
-The service contract is authored in the private `nvoken-cloud` repository. The
-`openapi/nvoken.yaml` file in this repository is a synchronized snapshot, not a
-second source of truth. `openapi/SOURCE.json` records the upstream commit that
-last changed the contract, so unrelated cloud commits leave provenance alone.
+The service contract is authored by the nvoken service, which owns it and
+publishes `openapi/nvoken.yaml` here. That file is a published copy, not a
+second source of truth: do not edit it in this repository.
 
 The generated transports are intentionally committed. A contributor can build,
-test, and package every public client without access to `nvoken-cloud` or an
-OpenAPI generator. Regeneration requires the pinned OpenAPI Generator jar,
-Java, and Go.
+test, and package every public client with nothing but this checkout — no
+service access and no OpenAPI generator. Regeneration requires the pinned
+OpenAPI Generator jar, Java, and Go.
 
-## Synchronize a contract change
+## Adopt a published contract change
 
-Start from a clean, committed `nvoken-cloud` checkout:
+A contract change arrives as a new `openapi/nvoken.yaml`. Regenerate and verify
+it in one reviewed change:
 
 ```bash
-make openapi-sync NVOKEN_CLOUD_REPO=../nvoken-cloud
 make sdk-generate
 make check
 ```
 
-`make openapi-sync-check` compares the snapshot and its provenance
-with the neighboring cloud checkout. The default sync refuses uncommitted
-contract changes. `scripts/sync_openapi.py --allow-dirty` exists for local
-cross-repository iteration, but dirty provenance should not be merged.
+`make sdk-generate-check` proves the committed transports match the contract in
+this repository, so a contract that landed without regeneration fails CI rather
+than shipping.
 
 ## Generated and handwritten layers
 

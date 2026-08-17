@@ -4,13 +4,12 @@
 of [design 004](../design/004-protocol-end-state.md), today and the end state
 are the same thing for the stream: one route, one saved frame, one terminal
 signal, one preview frame, one cursor.
-**Verified against:** `nvoken-cloud@59238739`
-(`internal/adapters/httpapi/stream.go`), the contract snapshot pinned in
-[`openapi/SOURCE.json`](../../openapi/SOURCE.json), and the four SDK
+**Verified against:** the runtime's stream handler, the contract in
+[`openapi/nvoken.yaml`](../../openapi/nvoken.yaml), and the four SDK
 implementations in this repository.
 **Date:** 2026-08-14
-**Authority:** The runtime is the authority. Where this document and
-`nvoken-cloud` disagree, the runtime is right and this document is stale.
+**Authority:** The runtime is the authority. Where this document and the
+runtime disagree, the runtime is right and this document is stale.
 
 ## Who this is for
 
@@ -335,9 +334,9 @@ A stream is a sequence of appends. A transcript is not. Getting from one to the
 other is where most of this protocol's remaining friction lives, and the
 reducer only covers the first third of it.
 
-The nvoken console is a worked example. It lives in `nvoken-website` under
-`app/components/console/chat/`, runs the TypeScript SDK in the browser against
-the Session stream, and every claim in this section is visible there.
+The nvoken console is a worked example. It is not public, but it runs the
+TypeScript SDK in the browser against the Session stream, and every claim in
+this section came from it.
 
 ### Five kinds of state, five update rules
 
@@ -528,8 +527,8 @@ through, so the numbering has gaps; the design documents are the record of what
 changed and why.
 
 Items marked **(wire)** change what the server sends or what the contract
-promises, so they land in `nvoken-cloud` and reach this repository through a
-contract sync. Everything else is local to this repository.
+promises, so they land in the service and reach this repository when the
+contract is published. Everything else is local to this repository.
 
 ### Protocol semantics
 
@@ -572,8 +571,7 @@ structured output or a provenance that is itself structured.
 ### Incremental rendering
 
 Everything a client hits building a live transcript out of an append-only
-stream. Each item names where the nvoken console
-(`nvoken-website/app/components/console/chat/`) absorbs the cost today.
+stream. Each item names where the nvoken console absorbs the cost today.
 
 **I3. `invocation_changes` advertises state and delivers history.** The reducer
 keys by `(invocation_id, revision)` and returns every revision it has seen, so
@@ -656,21 +654,18 @@ In this repository:
   The frame schema is `SessionStreamEvent`.
 - [`docs/design/004-protocol-end-state.md`](../design/004-protocol-end-state.md).
   The end state this document now describes, and the path that got here.
-- [`docs/guides/sdk-development.md`](../guides/sdk-development.md). How to sync
-  the contract, and where the cross-language reliability rules live.
+- [`docs/guides/sdk-development.md`](../guides/sdk-development.md). How a
+  published contract is adopted, and where the cross-language reliability rules
+  live.
 - [`sdk/conformance/fixtures/reducer.json`](../../sdk/conformance/fixtures/reducer.json).
   The pinned reducer behavior.
 - [`sdk/conformance/server/main.go`](../../sdk/conformance/server/main.go). The
   fake runtime the cross-language gate streams against.
 
-In `nvoken-website`, the only production client that builds a live transcript:
-
-- `app/components/console/chat/transcript-model.ts`. Block folding, tool call
-  indexing, preview grouping.
-- `app/components/console/chat/activity.ts`. Reconciling stream state with a
-  local claim.
-- `app/components/console/chat/useSessionChat.ts`. Stream lifecycle and the
-  compaction fetches of I9.
+The nvoken console, not public, is the only production client that builds a
+live transcript. Its transcript model does block folding, tool call indexing,
+and preview grouping; its activity layer reconciles stream state with a local
+claim; its session hook owns stream lifecycle and the compaction fetches of I9.
 
 Product documentation:
 
@@ -678,11 +673,7 @@ Product documentation:
 - [Tools](https://nvoken.com/docs/guides/tools)
 - [HTTP API reference](https://nvoken.com/docs/reference/http-api)
 
-In `nvoken-cloud`, which owns all of this:
-
-- [`internal/adapters/httpapi/stream.go`](https://github.com/deepnoodle-ai/nvoken-cloud/blob/main/internal/adapters/httpapi/stream.go).
-  The one stream handler. The authority for everything above.
-- [`internal/domain/streaming.go`](https://github.com/deepnoodle-ai/nvoken-cloud/blob/main/internal/domain/streaming.go).
-  Frame payload types and reason constants.
-- [`internal/ports/streaming.go`](https://github.com/deepnoodle-ai/nvoken-cloud/blob/main/internal/ports/streaming.go).
-  The live event bus, and why previews are lossy by design.
+The service owns all of this, and is not public. Behind the contract are one
+stream handler — the authority for everything above — the frame payload types
+and reason constants it serializes, and a live event bus whose previews are
+lossy by design.

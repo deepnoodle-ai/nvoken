@@ -1,25 +1,24 @@
 # Session options are a creation payload and a precondition at once
 
-**Status:** Accepted. Proposals 1 through 3 landed in
-[nvoken-cloud#193](https://github.com/deepnoodle-ai/nvoken-cloud/pull/193);
-proposal 4 is deferred, for the reason recorded under it.
+**Status:** Accepted. Proposals 1 through 3 landed in the service; proposal 4
+is deferred, for the reason recorded under it.
 **Author:** Claude Opus 5 with Curtis Myzie
 **Date:** 2026-08-13
-**Workflow:** Written from a production defect in Nabaname
-**Applies to:** `nvoken-cloud` for the contract and runtime behavior; this
+**Workflow:** Written from a production defect in a host application
+**Applies to:** the service for the contract and runtime behavior; this
 repository for the SDK error types
 
 ## Context
 
-Nabaname is a brand-naming workspace where every user message is one turn on
-nvoken. Boards are keyed conversations: `chat:<boardKey>` and
-`research:<boardKey>`, admitted with `POST /v1/invocations` carrying
-`session_key`, so the host never has to know whether the Session already exists.
+A host application runs one nvoken turn per user message. Its boards are keyed
+conversations: `chat:<boardKey>` and `research:<boardKey>`, admitted with
+`POST /v1/invocations` carrying `session_key`, so the host never has to know
+whether the Session already exists.
 
 Each admission also carried `session_options.metadata`, holding three entries:
-`nabaname:board`, `nabaname:surface`, and `title`. The title followed the
-contract's own guidance, which states that a title is a metadata entry rather
-than a Session field.
+`app:board`, `app:surface`, and `title`. The title followed the contract's own
+guidance, which states that a title is a metadata entry rather than a Session
+field.
 
 Every board broke on its second message. The turn was rejected before an
 Invocation existed, the SSE stream carried
@@ -33,7 +32,7 @@ the first exchange for eleven days.
 
 ## The mechanism
 
-A Nabaname board is created by its page loader with the placeholder title
+A board is created by the host's page loader with the placeholder title
 `"Untitled board"`, before any message exists to name it. The first message
 admits a turn, so the Session is created storing
 `metadata.title = "Untitled board"`. That same request then renames the board to
@@ -151,7 +150,7 @@ Put the paths in the message, and the stored and supplied values with them:
 > Session options conflict at `/session_options/compaction`: stored
 > `trigger_tokens: 40000`, supplied `trigger_tokens: 80000`.
 
-This single change would have reduced the Nabaname investigation to reading one
+This single change would have reduced that investigation to reading one
 error.
 
 ### 4. Give the SDKs a typed conflict error
@@ -164,8 +163,9 @@ fields, so callers branch on a class rather than on a string code. Add
 `SessionOptionsConflictError` alongside it in all four SDKs, exposing
 `conflictingPaths`.
 
-Nabaname now retries admission once without `session_options` when it sees this
-code, because correlation metadata is never worth failing a paid turn over. That
+The host now retries admission once without `session_options` when it sees
+this code, because correlation metadata is never worth failing a paid turn
+over. That
 recovery is reasonable and general, and today it requires matching
 `error.code === "session_options_conflict"` against a string literal.
 
@@ -229,8 +229,8 @@ a conversation, after the first one worked.
 ## Tradeoffs and consequences
 
 - Merging metadata on admission is a behavior change for any host currently
-  relying on the rejection to detect drift. No known host does; Nabaname was
-  broken by the rejection rather than protected by it.
+  relying on the rejection to detect drift. No known host does; the host in
+  this incident was broken by the rejection rather than protected by it.
 - It gives metadata two write paths, admission and `PATCH`, with the same merge
   semantics. Consistent, and one more thing to keep consistent.
 - Richer error messages carry stored values into error responses. For
@@ -244,15 +244,13 @@ a conversation, after the first one worked.
 
 ## Rollout
 
-1. Land the metadata change in `nvoken-cloud`: merge on admission against an
+1. Land the metadata change in the service: merge on admission against an
    existing Session, restrict `conflicting_paths` to `compaction` and
    `retention`, and update the `SessionOptions` description to state which
    members are asserted and which merge.
 2. Enrich the conflict message with paths and values.
-3. Sync the contract snapshot here and regenerate. This waits on step 1
-   merging: `openapi/SOURCE.json` records the upstream commit that last changed
-   the contract, so syncing from an unmerged branch would pin a hash that
-   disappears on squash. No SDK error class ships; see proposal 4.
+3. Adopt the published contract here and regenerate, once step 1 has merged. No
+   SDK error class ships; see proposal 4.
 4. Note the change in `CHANGELOG.md`. Existing callers need no migration; hosts
    working around the old behavior can drop their workarounds at their leisure.
 
