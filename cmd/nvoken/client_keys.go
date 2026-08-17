@@ -67,14 +67,10 @@ func runClientKeyList(command *cli.Context) error {
 // is the App's browser authority — whoever holds it can mint a grant for any
 // end user — so it belongs in backend configuration and never in a bundle.
 func runClientKeyGenerate(command *cli.Context) error {
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	publicKey, seed, err := generateClientKeypair()
 	if err != nil {
-		return fmt.Errorf("generate client keypair: %w", err)
+		return err
 	}
-	// The seed, not the 64-byte expanded private key: it is what every
-	// language's Ed25519 implementation accepts, and what the SDK mint helpers
-	// document taking.
-	seed := base64.StdEncoding.EncodeToString(privateKey.Seed())
 	encodedPublic := base64.StdEncoding.EncodeToString(publicKey)
 
 	generated := map[string]string{
@@ -110,6 +106,17 @@ func runClientKeyGenerate(command *cli.Context) error {
 			key.ID, key.Name, key.ID, seed)
 		return err
 	})
+}
+
+func generateClientKeypair() (ed25519.PublicKey, string, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, "", fmt.Errorf("generate client keypair: %w", err)
+	}
+	// The seed, not the 64-byte expanded private key: it is what every
+	// language's Ed25519 implementation accepts, and what the SDK mint helpers
+	// document taking.
+	return publicKey, base64.StdEncoding.EncodeToString(privateKey.Seed()), nil
 }
 
 func runClientKeyCreate(command *cli.Context) error {

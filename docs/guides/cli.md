@@ -95,6 +95,37 @@ Both stream commands accept `--cursor` to resume after the last durable frame.
 `session stream --invocation-id inv_...` narrows a Session subscription to one
 turn and exits when that turn settles.
 
+## Initialize an App
+
+`app init` registers an App, issues its App-bound Runtime credential, and
+prints the App id, API key, and one-time callback and webhook signing keys as a
+ready `.env` block:
+
+```bash
+nvoken app init support > nvoken.env
+```
+
+The output contains secrets that cannot be read again. Store it in your secret
+manager, keep it out of version control, and preserve any partial block the
+command prints if a later provisioning step fails.
+
+Add `--browser` to configure browser-direct access and generate and register an
+Ed25519 client keypair. Supply every exact browser origin and the HTTPS webhook
+that receives browser-started Invocation events:
+
+```bash
+nvoken app init support \
+  --browser \
+  --origin https://app.example.com \
+  --webhook-url https://api.example.com/nvoken/events \
+  > nvoken.env
+```
+
+Browser mode starts with finite App, tenant, user, concurrency, and admission
+limits. The command help lists their defaults and the flags for sizing them to
+the deployment. The private client-key seed is emitted only in the environment
+block; nvoken receives and retains only its public half.
+
 ## Complete nested requests
 
 Common operations have focused flags. The few API requests with substantial
