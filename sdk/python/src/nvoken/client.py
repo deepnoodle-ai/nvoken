@@ -24,7 +24,7 @@ from nvoken_generated.api.sessions_api import SessionsApi
 from nvoken_generated.api_client import ApiClient
 from nvoken_generated.configuration import Configuration
 from nvoken_generated.exceptions import ApiException
-from nvoken_generated.models.agent import Agent as AgentIdentity
+from nvoken_generated.models.agent import Agent as AgentResource
 from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
@@ -650,22 +650,35 @@ class Client:
         self,
         *,
         agent_key: str,
-        name: str,
-        agent_definition_id: str,
+        agent_definition_id: str | None = None,
+        agent_definition_key: str | None = None,
+        name: str | None = None,
         tenant_key: str | None = None,
         pinned_revision: int | None = None,
-    ) -> AgentIdentity:
+    ) -> AgentResource:
+        """Create or resolve one tenant's Agent record.
+
+        Name the Definition with ``agent_definition_id`` or
+        ``agent_definition_key`` — exactly one. ``name`` defaults to the Agent
+        key.
+        """
+        if bool(agent_definition_id) == bool(agent_definition_key):
+            raise NvokenError(
+                "validation",
+                "supply exactly one of agent_definition_id and agent_definition_key",
+            )
         return await self._replay_safe(lambda: self.agents.create_agent(
             CreateAgentRequest(
                 tenant_key=tenant_key,
                 agent_key=agent_key,
                 name=name,
                 agent_definition_id=agent_definition_id,
+                agent_definition_key=agent_definition_key,
                 pinned_revision=pinned_revision,
             )
         ))
 
-    async def get_agent(self, agent_id: str) -> AgentIdentity:
+    async def get_agent(self, agent_id: str) -> AgentResource:
         return await self._replay_safe(lambda: self.agents.get_agent(agent_id))
 
     async def list_agents(
@@ -691,7 +704,7 @@ class Client:
         self,
         agent_id: str,
         request: UpdateAgentRequest,
-    ) -> AgentIdentity:
+    ) -> AgentResource:
         return await self._replay_safe(
             lambda: self.agents.update_agent(agent_id, request)
         )

@@ -27,7 +27,7 @@ NVOKEN_BASE_URL=http://localhost:8080 NVOKEN_API_KEY=... \
   cargo run --example quickstart
 ```
 
-List or read the full Agent instance without admitting work:
+List or read the Agent record without admitting work:
 
 ```rust
 let agents = client
@@ -36,11 +36,25 @@ let agents = client
         ..Default::default()
     })
     .await?;
-let instance = client.get_agent(&agents.items[0].id).await?;
+let record = client.get_agent(&agents.items[0].id).await?;
 ```
 
-The Agent records its tenant, key, display name, Definition binding, optional
-revision pin, lifecycle timestamps, and archive state.
+`models::Agent` is that record: tenant, key, display name, Definition binding,
+optional revision pin, lifecycle timestamps, and archive state. `Agent` is the
+object that runs its turns, and it corresponds to the same row — declare one
+from the keys you already own and it creates its record on first use:
+
+```rust
+let agent = client.agent(AgentOptions::declared("support", "support"))?;
+```
+
+An Agent's identity and configuration live on the server; its tool handlers are
+supplied by whichever process runs the turn. `agent.ensure().await?` creates the
+record at a moment you choose instead of on first use, and never mutates: the
+same keys and Definition resolve onto what exists, a different Definition is
+`agent_key_conflict`, an archived record is `agent_archived`, and a declared
+`pinned_revision` the record does not follow is refused. `agent.resource()` and
+`agent.id()` report the record once it is known.
 
 Opt into the fixed guarded public-web reader with `fetch_tool()`:
 
@@ -259,16 +273,10 @@ let resource = client
     )
     .await?;
 
-let instance = client
-    .create_agent(CreateAgentInput {
-        tenant_key: None,
-        agent_key: "support".to_owned(),
-        name: "Support".to_owned(),
-        agent_definition_id: resource.id,
-        pinned_revision: None,
-    })
+let agent = client.agent(AgentOptions::declared("support", resource.definition_key))?;
+let handle = agent
+    .invoke("Why was I charged twice?", AgentInvocationOptions::default())
     .await?;
-let request = InvokeRequest::from_agent_id(instance.id, "Why was I charged twice?");
 ```
 
 Creating a Definition starts no turn. It has an immutable `definition_key`, a

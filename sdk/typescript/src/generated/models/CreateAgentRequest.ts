@@ -42,7 +42,19 @@ export interface CreateAgentRequest {
      * @type {string}
      * @memberof CreateAgentRequest
      */
-    agentDefinitionId: string;
+    agentDefinitionId?: string;
+    /**
+     * The `definition_key` of the Agent Definition this Agent follows,
+     * as an alternative spelling of `agent_definition_id`. Supply
+     * exactly one; supplying both or neither is `400`. The key is
+     * resolved in the same transaction that resolves the Agent, so a
+     * create and a restatement compare the same Definition however it
+     * was named.
+     *
+     * @type {string}
+     * @memberof CreateAgentRequest
+     */
+    agentDefinitionKey?: string;
     /**
      *
      * @type {number}
@@ -56,7 +68,6 @@ export interface CreateAgentRequest {
  */
 export function instanceOfCreateAgentRequest(value: object): value is CreateAgentRequest {
     if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
-    if (!('agentDefinitionId' in value) || value['agentDefinitionId'] === undefined) return false;
     return true;
 }
 
@@ -73,7 +84,8 @@ export function CreateAgentRequestFromJSONTyped(json: any, ignoreDiscriminator: 
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'agentKey': json['agent_key'],
         'name': json['name'] == null ? undefined : json['name'],
-        'agentDefinitionId': json['agent_definition_id'],
+        'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
+        'agentDefinitionKey': json['agent_definition_key'] == null ? undefined : json['agent_definition_key'],
         'pinnedRevision': json['pinned_revision'] == null ? undefined : json['pinned_revision'],
     };
 }
@@ -93,6 +105,7 @@ export function CreateAgentRequestToJSONTyped(value?: CreateAgentRequest | null,
         'agent_key': value['agentKey'],
         'name': value['name'],
         'agent_definition_id': value['agentDefinitionId'],
+        'agent_definition_key': value['agentDefinitionKey'],
         'pinned_revision': value['pinnedRevision'],
     };
 }

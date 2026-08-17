@@ -8,6 +8,23 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: one `Agent` type, declared from its keys.** `Agent` is now the
+  server record and the object that runs its turns; the wire shape is
+  `AgentResource` (the `AgentIdentity` alias is gone). `client.agent({
+  tenantKey, agentKey, definitionKey, tools })` declares one locally and it
+  creates its record on first use, or on an explicit `ensure()`, which never
+  mutates and refuses a declared `pinnedRevision` the record does not follow.
+  `getAgent()` returns the same type, hydrated, for `withTools()` to complete.
+  Same shape in Go (`AgentOptions.DefinitionKey`, `Ensure`, `Resource`),
+  Python (`definition_key`, `ensure`, `with_tools`), and Rust
+  (`AgentOptions::declared`, `ensure`, `resource`).
+
+- **An Agent names its Definition by key.** `POST /v1/agents` accepts
+  `agent_definition_key` in place of `agent_definition_id`, so declaring an
+  Agent needs no lookup first. `nvoken agent create` takes
+  `--agent-definition-key`, and `--name` is optional now that it defaults to
+  the Agent key.
+
 - **Fixed: the default `fetch` is bound, so streaming works on workerd.** It
   was stored unbound and invoked as a method, which throws `Illegal
   invocation` on Cloudflare Workers — on the stream path only, so every REST

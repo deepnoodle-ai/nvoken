@@ -997,6 +997,11 @@ paths:
         Resolution matches on the Definition pointer only. A differing `name`
         or `pinned_revision` in the request does not modify the existing
         Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+
+        Name the Definition with either `agent_definition_id` or
+        `agent_definition_key` — exactly one. The key spelling lets a caller
+        declare an Agent entirely from keys it already owns, with no lookup
+        first.
       requestBody:
         required: true
         content:
@@ -4629,7 +4634,7 @@ components:
     CreateAgentRequest:
       type: object
       additionalProperties: false
-      required: [agent_key, agent_definition_id]
+      required: [agent_key]
       properties:
         tenant_key:
           type: string
@@ -4645,6 +4650,17 @@ components:
           maxLength: 255
         agent_definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
+        agent_definition_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            The `definition_key` of the Agent Definition this Agent follows,
+            as an alternative spelling of `agent_definition_id`. Supply
+            exactly one; supplying both or neither is `400`. The key is
+            resolved in the same transaction that resolves the Agent, so a
+            create and a restatement compare the same Definition however it
+            was named.
         pinned_revision:
           type: integer
           format: int64

@@ -1040,8 +1040,12 @@ pub struct ListAgentsOptions {
 pub struct CreateAgentInput {
     pub tenant_key: Option<String>,
     pub agent_key: String,
+    /// Display name recorded at creation. Empty defaults to the Agent key.
     pub name: String,
-    pub agent_definition_id: String,
+    /// The Agent Definition this Agent follows, by opaque ID or by
+    /// `definition_key`. Supply exactly one.
+    pub agent_definition_id: Option<String>,
+    pub agent_definition_key: Option<String>,
     pub pinned_revision: Option<u32>,
 }
 
@@ -1931,9 +1935,16 @@ impl Client {
         &self,
         input: CreateAgentInput,
     ) -> Result<models::Agent, NvokenError> {
-        let mut body = models::CreateAgentRequest::new(input.agent_key, input.agent_definition_id);
+        if input.agent_definition_id.is_some() == input.agent_definition_key.is_some() {
+            return Err(NvokenError::validation(
+                "supply exactly one of agent_definition_id and agent_definition_key",
+            ));
+        }
+        let mut body = models::CreateAgentRequest::new(input.agent_key);
         body.name = optional_name(&input.name);
         body.tenant_key = input.tenant_key;
+        body.agent_definition_id = input.agent_definition_id;
+        body.agent_definition_key = input.agent_definition_key;
         body.pinned_revision = input.pinned_revision.map(u64::from);
         apis::agents_api::create_agent(&self.configuration, body)
             .await
@@ -2639,6 +2650,13 @@ where
 impl NvokenError {
     pub(crate) fn validation(message: impl Into<String>) -> Self {
         Self::new(ErrorCategory::Validation, message)
+    }
+
+    pub(crate) fn conflict(code: &str, message: impl Into<String>) -> Self {
+        let mut error = Self::new(ErrorCategory::Conflict, message);
+        error.status = Some(409);
+        error.code = Some(code.to_string());
+        error
     }
 
     pub(crate) fn transport(message: impl Into<String>) -> Self {

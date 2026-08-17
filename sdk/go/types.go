@@ -28,7 +28,10 @@ type ClientKey = generated.ClientKey
 // ListOrder is the sequence order for a message page.
 type ListOrder = generated.ListSessionMessagesParamsOrder
 type ClientKeyList = generated.ClientKeyList
-type AgentIdentity = generated.Agent
+
+// AgentResource is one tenant's Agent exactly as the server stores it: the
+// serialization behind Agent, reachable through (*Agent).Resource.
+type AgentResource = generated.Agent
 type AgentDefinitionResourceList = generated.AgentDefinitionResourceList
 type Session = generated.Session
 type SessionContext = generated.SessionContext
@@ -251,7 +254,7 @@ type InvocationList struct {
 
 type AgentList struct {
 	HasMore    bool            `json:"has_more"`
-	Items      []AgentIdentity `json:"items"`
+	Items      []AgentResource `json:"items"`
 	NextCursor *string         `json:"next_cursor"`
 }
 
@@ -933,11 +936,15 @@ type ListAgentsOptions struct {
 // the existing Agent, a different Definition pointer conflicts, and Name
 // defaults to AgentKey.
 type CreateAgentInput struct {
-	TenantKey         *string
-	AgentKey          string
-	Name              string
-	AgentDefinitionID string
-	PinnedRevision    *int64
+	TenantKey *string
+	AgentKey  string
+	Name      string
+	// AgentDefinitionID and AgentDefinitionKey are two spellings of one
+	// pointer: supply exactly one. The key spelling lets a caller declare an
+	// Agent from the keys it already owns, with no lookup first.
+	AgentDefinitionID  string
+	AgentDefinitionKey string
+	PinnedRevision     *int64
 }
 
 // UpdateAgentInput changes the Agent's display name and/or revision pin.

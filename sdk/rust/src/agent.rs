@@ -14,21 +14,38 @@ use futures_util::{pin_mut, StreamExt};
 use serde_json::{json, Value};
 
 use crate::client::{
-    AgentDefinitionOverrides, BudgetExhaustionBehavior, Client, ContextItem, ErrorCategory,
-    IfActivePolicy, InvocationHandle, InvokeRequest, McpServerHeaders, NvokenError,
+    AgentDefinitionOverrides, BudgetExhaustionBehavior, Client, ContextItem, CreateAgentInput,
+    ErrorCategory, IfActivePolicy, InvocationHandle, InvokeRequest, McpServerHeaders, NvokenError,
     ProviderKeySelection, SessionOptions, Tool, ToolMode, ToolResult, WaitCondition, WaitOptions,
     WebhookTarget,
 };
 use crate::models;
 use crate::stream::StreamEvent;
 
-/// Fixed tenant-scoped Agent identity and local execution defaults. Built with
-/// `Client::agent`.
+/// A declaration of one tenant's Agent, plus this process's execution
+/// defaults. Built with `Client::agent`.
+///
+/// Nothing here reaches the server when the Agent is built: `(tenant_key,
+/// agent_key)` names the record and `definition_key` names the Agent
+/// Definition it follows, so the first use — or an explicit `Agent::ensure` —
+/// creates the record if it is missing. Give `agent_id` instead to name a
+/// record that already exists.
 #[derive(Clone)]
 pub struct AgentOptions {
     pub agent_id: Option<String>,
     pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
+    /// The `definition_key` of the Agent Definition this Agent follows.
+    /// `agent_definition_id` is the same pointer by opaque ID; supply at most
+    /// one, and only alongside `agent_key`.
+    pub definition_key: Option<String>,
+    pub agent_definition_id: Option<String>,
+    /// Holds this instance to one Definition revision. Leave it `None` to
+    /// follow the latest, which is what makes revising the Definition the
+    /// rollout.
+    pub pinned_revision: Option<u32>,
+    /// Display name recorded at creation. Defaults to the Agent key.
+    pub name: Option<String>,
     /// Local handlers for host-mode tools declared by the selected Agent
     /// Definition. Only the handler runs here; the service owns declarations.
     pub tools: Vec<Tool>,
@@ -47,6 +64,10 @@ impl AgentOptions {
             agent_id: None,
             agent_key: Some(agent_key.into()),
             tenant_key: None,
+            definition_key: None,
+            agent_definition_id: None,
+            pinned_revision: None,
+            name: None,
             tools: Vec::new(),
             mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
@@ -55,11 +76,23 @@ impl AgentOptions {
         }
     }
 
+    /// Declares the Agent by its keys and the Definition it follows, which is
+    /// everything creation needs.
+    pub fn declared(agent_key: impl Into<String>, definition_key: impl Into<String>) -> Self {
+        let mut options = Self::new(agent_key);
+        options.definition_key = Some(definition_key.into());
+        options
+    }
+
     pub fn from_agent_id(agent_id: impl Into<String>) -> Self {
         Self {
             agent_id: Some(agent_id.into()),
             agent_key: None,
             tenant_key: None,
+            definition_key: None,
+            agent_definition_id: None,
+            pinned_revision: None,
+            name: None,
             tools: Vec::new(),
             mcp_server_headers: Vec::new(),
             provider_keys: Vec::new(),
@@ -202,6 +235,11 @@ impl Stream for AgentEventStream {
 struct AgentInner {
     options: AgentOptions,
     host_tools: HashMap<String, Tool>,
+    /// The server record once it is known. The lock also serializes the
+    /// creation itself, so concurrent first uses of one declared Agent make
+    /// one create between them. Clones share it, because clones are the same
+    /// Agent.
+    record: tokio::sync::Mutex<Option<models::Agent>>,
 }
 
 /// Whether a pending call is this caller's to execute.
@@ -216,6 +254,31 @@ struct AgentInner {
 /// there is no case where it is missing to accommodate.
 fn runs_locally(call: &models::ToolCallSummary) -> bool {
     call.mode == models::ToolCallMode::Host
+}
+
+/// Refuses a record that contradicts the declaration. Creation resolves on the
+/// Definition pointer, which the server already guards; the pin is the
+/// remaining substantive field, and a declaration naming a revision the record
+/// does not follow would otherwise run configuration the caller never asked
+/// for. A differing name is cosmetic and is left alone.
+fn verify_declaration(options: &AgentOptions, record: &models::Agent) -> Result<(), NvokenError> {
+    let Some(declared) = options.pinned_revision else {
+        return Ok(());
+    };
+    if record.pinned_revision == Some(u64::from(declared)) {
+        return Ok(());
+    }
+    let following = match record.pinned_revision {
+        Some(revision) => format!("revision {revision}"),
+        None => "latest".to_string(),
+    };
+    Err(NvokenError::conflict(
+        "agent_pin_conflict",
+        format!(
+            "Agent {} follows {following}, not the declared revision {declared}",
+            record.agent_key
+        ),
+    ))
 }
 
 /// A high-level binding for one Agent identity: `text`/`run`/`invoke`/
@@ -236,6 +299,19 @@ impl Client {
                 "supply exactly one of agent_id and agent_key",
             ));
         }
+        if options.definition_key.is_some() && options.agent_definition_id.is_some() {
+            return Err(NvokenError::validation(
+                "supply at most one of definition_key and agent_definition_id",
+            ));
+        }
+        if options.agent_id.is_some()
+            && (options.definition_key.is_some() || options.agent_definition_id.is_some())
+        {
+            return Err(NvokenError::validation(
+                "an Agent named by agent_id already names its record; the Definition \
+                 belongs to a declaration by agent_key",
+            ));
+        }
         let host_tools = options
             .tools
             .iter()
@@ -247,21 +323,112 @@ impl Client {
             inner: Arc::new(AgentInner {
                 options,
                 host_tools,
+                record: tokio::sync::Mutex::new(None),
             }),
         })
     }
 }
 
 impl Agent {
+    /// Creates this Agent's server record if it is missing and returns it.
+    ///
+    /// Creation never mutates: the same keys backed by the same Definition
+    /// resolve onto the existing record, a different Definition is
+    /// `agent_key_conflict`, an archived record is `agent_archived`, and a
+    /// declared `pinned_revision` the record does not follow is refused. A
+    /// first use calls this for you; call it directly to create the record at
+    /// a moment you choose, or to read back what the server holds.
+    pub async fn ensure(&self) -> Result<models::Agent, NvokenError> {
+        let mut record = self.inner.record.lock().await;
+        if let Some(existing) = record.as_ref() {
+            return Ok(existing.clone());
+        }
+        let options = &self.inner.options;
+        let resolved = if options.definition_key.is_some() || options.agent_definition_id.is_some()
+        {
+            let created = self
+                .client
+                .create_agent(CreateAgentInput {
+                    tenant_key: options.tenant_key.clone(),
+                    agent_key: options.agent_key.clone().unwrap_or_default(),
+                    name: options.name.clone().unwrap_or_default(),
+                    agent_definition_id: options.agent_definition_id.clone(),
+                    agent_definition_key: options.definition_key.clone(),
+                    pinned_revision: options.pinned_revision,
+                })
+                .await?;
+            verify_declaration(options, &created)?;
+            created
+        } else if let Some(agent_id) = options.agent_id.as_deref() {
+            self.client.get_agent(agent_id).await?
+        } else {
+            return Err(NvokenError::validation(
+                "this Agent cannot be created without knowing which Agent Definition it \
+                 follows: declare definition_key, or declare agent_id for a record that \
+                 already exists",
+            ));
+        };
+        *record = Some(resolved.clone());
+        Ok(resolved)
+    }
+
+    /// Re-reads the record from the server.
+    pub async fn refresh(&self) -> Result<models::Agent, NvokenError> {
+        let ensured = self.ensure().await?;
+        let latest = self.client.get_agent(&ensured.id).await?;
+        *self.inner.record.lock().await = Some(latest.clone());
+        Ok(latest)
+    }
+
+    /// The server record once `ensure` or a first use has run.
+    pub async fn resource(&self) -> Option<models::Agent> {
+        self.inner.record.lock().await.clone()
+    }
+
+    /// The record's ID once it is known, and otherwise the declared one.
+    pub async fn id(&self) -> Option<String> {
+        if let Some(record) = self.inner.record.lock().await.as_ref() {
+            return Some(record.id.clone());
+        }
+        self.inner.options.agent_id.clone()
+    }
+
+    /// Creates the record before the turn that needs it, and only when the
+    /// declaration says how. An Agent named by `agent_id`, or by `agent_key`
+    /// alone, is one the caller has said already exists.
+    async fn ready(&self) -> Result<(), NvokenError> {
+        if self.inner.options.definition_key.is_none()
+            && self.inner.options.agent_definition_id.is_none()
+        {
+            return Ok(());
+        }
+        self.ensure().await.map(|_| ())
+    }
+
     /// Composes this Agent's identity and execution controls with one call's overrides into
     /// the request `invoke` admits. It is the single place a per-call option
     /// reaches the wire, so the conformance suite can pin the whole admitted
     /// body without a server.
     pub fn request(&self, input: String, options: &AgentInvocationOptions) -> InvokeRequest {
         let agent_options = &self.inner.options;
+        // The record's ID wins once it is known, so a declared Agent stops
+        // being re-resolved by key on every turn.
+        let known = self
+            .inner
+            .record
+            .try_lock()
+            .ok()
+            .and_then(|record| record.as_ref().map(|value| value.id.clone()));
+        let (agent_id, agent_key) = match known {
+            Some(id) => (Some(id), None),
+            None => (
+                agent_options.agent_id.clone(),
+                agent_options.agent_key.clone(),
+            ),
+        };
         InvokeRequest {
-            agent_id: agent_options.agent_id.clone(),
-            agent_key: agent_options.agent_key.clone(),
+            agent_id,
+            agent_key,
             tenant_key: agent_options.tenant_key.clone(),
             session_id: options.session_id.clone(),
             session_key: options.session_key.clone(),
@@ -293,6 +460,7 @@ impl Agent {
         input: impl Into<String>,
         options: AgentInvocationOptions,
     ) -> Result<InvocationHandle, NvokenError> {
+        self.ready().await?;
         let request = self.request(input.into(), &options);
         self.client.invoke(request).await
     }

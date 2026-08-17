@@ -266,8 +266,9 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Create one tenant-scoped Agent instance").
 		Flags(
 			cli.String("agent-key").Required().Help("Stable key unique within the tenant"),
-			cli.String("name").Required().Help("Human-facing Agent name"),
-			cli.String("agent-definition-id").Required().Help("Immutable Agent Definition binding"),
+			cli.String("name").Help("Human-facing Agent name; defaults to the Agent key"),
+			cli.String("agent-definition-id").Help("Immutable Agent Definition binding by ID"),
+			cli.String("agent-definition-key").Help("The same binding by Definition key"),
 			cli.String("tenant-key").Help("Tenant partition; omit for the default tenant"),
 			cli.Int("pinned-revision").Help("Optional default Agent Definition revision pin"),
 		).
@@ -1794,10 +1795,11 @@ func runAgentCreate(command *cli.Context) error {
 		return err
 	}
 	input := nvoken.CreateAgentInput{
-		TenantKey:         optionalString(command.String("tenant-key")),
-		AgentKey:          command.String("agent-key"),
-		Name:              command.String("name"),
-		AgentDefinitionID: command.String("agent-definition-id"),
+		TenantKey:          optionalString(command.String("tenant-key")),
+		AgentKey:           command.String("agent-key"),
+		Name:               command.String("name"),
+		AgentDefinitionID:  command.String("agent-definition-id"),
+		AgentDefinitionKey: command.String("agent-definition-key"),
 	}
 	if revision := command.Int("pinned-revision"); revision > 0 {
 		value := int64(revision)

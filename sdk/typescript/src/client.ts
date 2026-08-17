@@ -14,7 +14,7 @@ import {
   SessionsApi,
 } from "./generated/apis/index.js";
 import type {
-  Agent as AgentIdentity,
+  Agent as AgentResource,
   CreateAgentRequest,
   UpdateAgentRequest,
   AgentDefinitionResource,
@@ -65,6 +65,13 @@ import type {
   UpdateSessionRequest,
 } from "./generated/models/index.js";
 export type {
+  /**
+   * One tenant's Agent exactly as the server stores it: the serialization
+   * behind {@link Agent}, reachable at {@link Agent.resource}. Reach for it
+   * when you are storing or displaying a record; reach for {@link Agent} when
+   * you are running turns.
+   */
+  Agent as AgentResource,
   CallbackDeliveryOutcome,
   SessionCompaction,
   SessionCompactionList,
@@ -932,10 +939,38 @@ export interface ResponseObservation {
   error?: unknown;
 }
 
+/**
+ * A declaration of one tenant's Agent.
+ *
+ * Nothing here reaches the server when the {@link Agent} is constructed. The
+ * keys are the identity — `(tenantKey, agentKey)` names the record, and
+ * `definitionKey` names the Agent Definition it follows — so the first use of
+ * the Agent, or an explicit {@link Agent.ensure}, creates the record if it is
+ * missing. Declaring `agentId` instead names a record that already exists.
+ *
+ * Tool *handlers* are the one part that is local by nature: the Definition
+ * holds the schemas, and the code is supplied by whichever process runs the
+ * turn.
+ */
 export type AgentOptions<TOutput extends object = JsonObject> =
   & AgentIdentityRequest
   & {
     tenantKey?: string;
+    /**
+     * The `definitionKey` of the Agent Definition this Agent follows. Give it
+     * with `agentKey` and the Agent can create itself on first use; leave it
+     * out and the Agent must already exist.
+     */
+    definitionKey?: string;
+    /** The Definition by opaque ID, for a host that stores nvoken IDs. */
+    agentDefinitionId?: string;
+    /**
+     * Revision of the Definition this instance follows. Omit to track the
+     * latest, which is what makes revising the Definition the rollout.
+     */
+    pinnedRevision?: number;
+    /** Display name recorded at creation. Defaults to `agentKey`. */
+    name?: string;
     /** Local handlers for host tools declared by the Agent Definition. */
     tools?: Array<Tool<object>>;
     /**
@@ -1334,16 +1369,37 @@ export class Client {
     };
   }
 
+  /**
+   * Declares one tenant's Agent. Local: no request is made here.
+   *
+   * Declare it by its keys — `{tenantKey, agentKey, definitionKey}` — and the
+   * record is created on first use if it is missing, or by
+   * {@link Agent.ensure} at a moment you choose. Declare it by `agentId` to
+   * name a record that already exists.
+   */
   agent<TOutput extends object = JsonObject>(
     options: AgentOptions<TOutput>,
   ): Agent<TOutput> {
     return new Agent(this, options);
   }
 
-  createAgent(
+  /**
+   * Creates or resolves the record and returns the {@link Agent} that runs
+   * turns through it. Repeating the same keys and Definition is safe; a
+   * different Definition for the same key is `agent_key_conflict`.
+   */
+  async createAgent<TOutput extends object = JsonObject>(
     request: CreateAgentRequest,
     signal?: AbortSignal,
-  ): Promise<AgentIdentity> {
+  ): Promise<EnsuredAgent<TOutput>> {
+    const resource = await this.createAgentResource(request, signal);
+    return Agent.hydrate<TOutput>(this, resource);
+  }
+
+  createAgentResource(
+    request: CreateAgentRequest,
+    signal?: AbortSignal,
+  ): Promise<AgentResource> {
     return this.replaySafe(
       () => this.agents.createAgent({ createAgentRequest: request }, { signal }),
       signal,
@@ -1357,7 +1413,21 @@ export class Client {
     return this.replaySafe(() => this.agents.listAgents(options, { signal }), signal);
   }
 
-  getAgent(agentId: string, signal?: AbortSignal): Promise<AgentIdentity> {
+  /**
+   * Reads one Agent and returns it as the same {@link Agent} that
+   * {@link Client.agent} declares — hydrated, and ready for
+   * {@link Agent.withTools} to supply this process's handlers.
+   *
+   * {@link Client.getAgentResource} returns the plain record instead.
+   */
+  async getAgent<TOutput extends object = JsonObject>(
+    agentId: string,
+    signal?: AbortSignal,
+  ): Promise<EnsuredAgent<TOutput>> {
+    return Agent.hydrate<TOutput>(this, await this.getAgentResource(agentId, signal));
+  }
+
+  getAgentResource(agentId: string, signal?: AbortSignal): Promise<AgentResource> {
     return this.replaySafe(() => this.agents.getAgent({ agentId }, { signal }), signal);
   }
 
@@ -1365,7 +1435,7 @@ export class Client {
     agentId: string,
     request: UpdateAgentRequest,
     signal?: AbortSignal,
-  ): Promise<AgentIdentity> {
+  ): Promise<AgentResource> {
     return this.replaySafe(
       () => this.agents.updateAgent({ agentId, updateAgentRequest: request }, { signal }),
       signal,
@@ -2371,6 +2441,36 @@ export interface AnswerToolCallsOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * An {@link Agent} whose server record is known, so `id` and `resource` are
+ * no longer optional. {@link Agent.ensure}, {@link Client.getAgent}, and
+ * {@link Client.createAgent} all return one.
+ */
+export type EnsuredAgent<TOutput extends object = JsonObject> =
+  & Agent<TOutput>
+  & { readonly id: string; readonly resource: AgentResource };
+
+/**
+ * One tenant's Agent: the server record and the object that runs its turns,
+ * which are the same thing.
+ *
+ * An Agent's identity and configuration live on the server; its tool
+ * *handlers* are supplied by whichever process runs the turn, the way a
+ * queue worker supplies the code for the jobs it claims. That asymmetry is
+ * the only one — everything else about the Agent is the record.
+ *
+ * Declared from its keys, an Agent creates its record on first use:
+ *
+ * ```ts
+ * const support = client.agent({
+ *   tenantKey: userId,
+ *   agentKey: "support",
+ *   definitionKey: "support",
+ *   tools: [lookupOrderTool],
+ * });
+ * await support.run("Where is order 4821?", { sessionKey: "ticket-483" });
+ * ```
+ */
 export class Agent<TOutput extends object = JsonObject> {
   private readonly hostTools: Map<string, HostTool<object>>;
   /**
@@ -2381,10 +2481,13 @@ export class Agent<TOutput extends object = JsonObject> {
    * `mode` on a summary; see {@link Agent.runsLocally}.
    */
   private readonly callbackTools: Set<string>;
+  private record?: AgentResource;
+  private ensuring?: Promise<AgentResource>;
 
   constructor(
     readonly client: Client,
     readonly options: AgentOptions<TOutput>,
+    resource?: AgentResource,
   ) {
     const hasAgentId = "agentId" in options && Boolean(options.agentId);
     const hasAgentKey = "agentKey" in options && Boolean(options.agentKey);
@@ -2394,6 +2497,20 @@ export class Agent<TOutput extends object = JsonObject> {
         "supply exactly one of agentId and agentKey",
       );
     }
+    if (options.definitionKey && options.agentDefinitionId) {
+      throw new NvokenError(
+        "validation",
+        "supply at most one of definitionKey and agentDefinitionId",
+      );
+    }
+    if (hasAgentId && (options.definitionKey || options.agentDefinitionId)) {
+      throw new NvokenError(
+        "validation",
+        "an Agent declared by agentId already names its record; the Definition"
+          + " belongs to a declaration by agentKey",
+      );
+    }
+    this.record = resource;
     this.hostTools = new Map(
       (options.tools ?? [])
         .filter((tool): tool is HostTool<object> => tool.mode === "host")
@@ -2403,6 +2520,191 @@ export class Agent<TOutput extends object = JsonObject> {
       (options.tools ?? [])
         .filter((tool) => tool.mode === "callback")
         .map((tool) => tool.name),
+    );
+  }
+
+  /** Wraps a record read from the server as the Agent that runs its turns. */
+  static hydrate<TOutput extends object = JsonObject>(
+    client: Client,
+    resource: AgentResource,
+    tools?: Array<Tool<object>>,
+  ): EnsuredAgent<TOutput> {
+    const agent = new Agent<TOutput>(
+      client,
+      { agentId: resource.id, tools } as AgentOptions<TOutput>,
+      resource,
+    );
+    return agent as EnsuredAgent<TOutput>;
+  }
+
+  /** The record's ID, once the record is known. */
+  get id(): string | undefined {
+    return this.record?.id ?? this.options.agentId;
+  }
+
+  get agentKey(): string | undefined {
+    return this.record?.agentKey ?? this.options.agentKey;
+  }
+
+  get tenantKey(): string | undefined {
+    return this.record ? this.record.tenantKey ?? undefined : this.options.tenantKey;
+  }
+
+  get name(): string | undefined {
+    return this.record?.name ?? this.options.name;
+  }
+
+  get agentDefinitionId(): string | undefined {
+    return this.record?.agentDefinitionId ?? this.options.agentDefinitionId;
+  }
+
+  get pinnedRevision(): number | undefined {
+    return (this.record ? this.record.pinnedRevision ?? undefined : this.options.pinnedRevision);
+  }
+
+  get archivedAt(): Date | undefined {
+    return this.record?.archivedAt ?? undefined;
+  }
+
+  /** The server record, once {@link Agent.ensure} or a first use has run. */
+  get resource(): AgentResource | undefined {
+    return this.record;
+  }
+
+  /**
+   * Serializes as the record, so logging or storing an Agent gives what the
+   * server holds rather than this process's handlers.
+   */
+  toJSON(): AgentResource | Record<string, unknown> {
+    return this.record ?? {
+      agentId: this.options.agentId,
+      agentKey: this.options.agentKey,
+      tenantKey: this.options.tenantKey,
+      definitionKey: this.options.definitionKey,
+      agentDefinitionId: this.options.agentDefinitionId,
+    };
+  }
+
+  /**
+   * Creates the server record if it is missing, and returns this Agent with
+   * its record known.
+   *
+   * Creation never mutates: the same keys backed by the same Definition
+   * resolve onto the existing record, a different Definition is
+   * `agent_key_conflict`, and an archived record is `agent_archived` rather
+   * than a silent resolve onto something that refuses every admission. A
+   * declared `pinnedRevision` that disagrees with the record is refused here
+   * too — the pin decides which configuration runs, so a declaration that no
+   * longer describes the record is a mistake worth hearing about.
+   *
+   * A first use calls this for you. Call it directly to create the record at
+   * a moment you choose, or to read back what the server holds.
+   */
+  ensure(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
+    if (this.record) return Promise.resolve(this.ensured());
+    this.ensuring ??= this.resolveRecord(signal).finally(() => {
+      this.ensuring = undefined;
+    });
+    return this.ensuring.then(() => this.ensured());
+  }
+
+  /** Re-reads the record from the server. */
+  async refresh(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
+    const ensured = await this.ensure(signal);
+    this.record = await this.client.getAgentResource(ensured.id, signal);
+    return this.ensured();
+  }
+
+  /** Renames the Agent or moves its revision pin. */
+  async update(
+    request: UpdateAgentRequest,
+    signal?: AbortSignal,
+  ): Promise<EnsuredAgent<TOutput>> {
+    const ensured = await this.ensure(signal);
+    this.record = await this.client.updateAgent(ensured.id, request, signal);
+    return this.ensured();
+  }
+
+  /** Archives the Agent, so admissions through it are refused. */
+  async archive(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
+    const ensured = await this.ensure(signal);
+    await this.client.archiveAgent(ensured.id, signal);
+    return this.refresh(signal);
+  }
+
+  async restore(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
+    const ensured = await this.ensure(signal);
+    await this.client.restoreAgent(ensured.id, signal);
+    return this.refresh(signal);
+  }
+
+  /**
+   * Returns the same Agent with this process's tool handlers attached. Use it
+   * on an Agent that came back from {@link Client.getAgent}, which knows the
+   * record but not who runs its tools.
+   */
+  withTools(tools: Array<Tool<object>>): this {
+    const next = new Agent<TOutput>(
+      this.client,
+      { ...this.options, tools } as AgentOptions<TOutput>,
+      this.record,
+    );
+    return next as this;
+  }
+
+  private ensured(): EnsuredAgent<TOutput> {
+    return this as EnsuredAgent<TOutput>;
+  }
+
+  private async resolveRecord(signal?: AbortSignal): Promise<AgentResource> {
+    if (this.options.definitionKey || this.options.agentDefinitionId) {
+      // The Definition travels by whichever spelling was declared: the server
+      // resolves a key in the same transaction that resolves the Agent, so
+      // this stays one round trip either way.
+      const record = await this.client.createAgentResource({
+        tenantKey: this.options.tenantKey,
+        agentKey: this.options.agentKey!,
+        name: this.options.name,
+        agentDefinitionId: this.options.agentDefinitionId,
+        agentDefinitionKey: this.options.definitionKey,
+        pinnedRevision: this.options.pinnedRevision,
+      }, signal);
+      this.verifyDeclaration(record);
+      this.record = record;
+      return record;
+    }
+    if (this.options.agentId) {
+      this.record = await this.client.getAgentResource(this.options.agentId, signal);
+      return this.record;
+    }
+    throw new NvokenError(
+      "validation",
+      `Agent ${this.options.agentKey} cannot be created without knowing which`
+        + " Agent Definition it follows: declare definitionKey, or declare"
+        + " agentId for a record that already exists",
+    );
+  }
+
+  /**
+   * Refuses a record that contradicts the declaration. Creation resolves on
+   * the Definition pointer, which the server already guards; the pin is the
+   * remaining substantive field, and a declaration naming a revision the
+   * record does not follow would otherwise run configuration the caller
+   * never asked for. A differing `name` is cosmetic and is left alone.
+   */
+  private verifyDeclaration(record: AgentResource): void {
+    const declared = this.options.pinnedRevision;
+    if (declared === undefined || record.pinnedRevision === declared) return;
+    throw new NvokenError(
+      "conflict",
+      `Agent ${record.agentKey} follows revision `
+        + `${record.pinnedRevision ?? "latest"}, not the declared ${declared};`
+        + " move the pin with update() or drop pinnedRevision from the declaration",
+      409,
+      "agent_pin_conflict",
+      undefined,
+      undefined,
+      { agent_id: record.id, pinned_revision: record.pinnedRevision },
     );
   }
 
@@ -2427,11 +2729,25 @@ export class Agent<TOutput extends object = JsonObject> {
     return new AgentSession(this, binding);
   }
 
-  invoke(
+  async invoke(
     input: InvokeInput,
     options: InvocationOptions = {},
   ): Promise<InvocationHandle<TOutput>> {
+    await this.ready(options.signal);
     return this.client.invoke<TOutput>(this.request(input, options), options.signal);
+  }
+
+  /**
+   * Creates the record before the turn that needs it, and only when the
+   * declaration says how. An Agent declared by `agentId`, or by `agentKey`
+   * alone, is one the caller has said already exists: admitting it directly
+   * keeps the turn at one round trip and lets the server answer for a key
+   * that names nothing.
+   */
+  private async ready(signal?: AbortSignal): Promise<void> {
+    if (this.record) return;
+    if (!this.options.definitionKey && !this.options.agentDefinitionId) return;
+    await this.ensure(signal);
   }
 
   private request(
@@ -2439,8 +2755,10 @@ export class Agent<TOutput extends object = JsonObject> {
     options: InvocationOptions,
     idempotencyKey = options.idempotencyKey,
   ): InvokeRequest<TOutput> {
-    const identity: AgentIdentityRequest = "agentId" in this.options
-      ? { agentId: this.options.agentId! }
+    // The record's ID wins once it is known, so a declared Agent stops being
+    // re-resolved by key on every turn.
+    const identity: AgentIdentityRequest = this.record || "agentId" in this.options
+      ? { agentId: this.id! }
       : { agentKey: this.options.agentKey };
     const request: InvokeRequestBase & AgentIdentityRequest = {
       ...identity,

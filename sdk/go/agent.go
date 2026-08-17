@@ -11,14 +11,30 @@ import (
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
-// AgentOptions binds the workflow facade to one deliberately created Agent.
-// Supply exactly one of AgentID and AgentKey. Tools register local handlers;
-// their declarations live on the Agent's versioned Agent Definition.
+// AgentOptions declares one tenant's Agent. Nothing here reaches the server
+// when the Agent is constructed: (TenantKey, AgentKey) names the record and
+// DefinitionKey names the Agent Definition it follows, so the first use — or
+// an explicit Ensure — creates the record if it is missing. Supply AgentID
+// instead to name a record that already exists.
+//
+// Tools register this process's handlers; their declarations live on the
+// Agent's versioned Agent Definition.
 type AgentOptions struct {
 	AgentID   string
 	AgentKey  string
 	TenantKey *string
-	Tools     []Tool
+	// DefinitionKey is the definition_key of the Agent Definition this Agent
+	// follows. AgentDefinitionID is the same pointer by opaque ID; supply at
+	// most one, and only alongside AgentKey.
+	DefinitionKey     string
+	AgentDefinitionID string
+	// PinnedRevision holds this instance to one Definition revision. Leave it
+	// nil to follow the latest, which is what makes revising the Definition
+	// the rollout.
+	PinnedRevision *int64
+	// Name is the display name recorded at creation. It defaults to AgentKey.
+	Name  string
+	Tools []Tool
 	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
 	// Agent declares. They stay outside the Agent Definition so no reusable
 	// revision depends on a secret.
@@ -113,6 +129,11 @@ type Agent struct {
 	// too old to stamp `mode` on a summary; see runsLocally.
 	hostTools     map[string]Tool
 	callbackTools map[string]struct{}
+
+	// mu guards record, and serializes the creation itself so concurrent
+	// first uses of one declared Agent make one create between them.
+	mu     sync.Mutex
+	record *AgentResource
 }
 
 // runsLocally reports whether a pending call is this caller's to execute.
@@ -150,6 +171,19 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 			Message:  "Supply exactly one of Agent ID and Agent key",
 		}
 	}
+	if options.DefinitionKey != "" && options.AgentDefinitionID != "" {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "Supply at most one of Definition key and Agent Definition ID",
+		}
+	}
+	if options.AgentID != "" && (options.DefinitionKey != "" || options.AgentDefinitionID != "") {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message: "An Agent named by ID already names its record; the Definition" +
+				" belongs to a declaration by Agent key",
+		}
+	}
 	hostTools := make(map[string]Tool)
 	callbackTools := make(map[string]struct{})
 	for _, tool := range options.Tools {
@@ -168,11 +202,134 @@ func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
 	}, nil
 }
 
+// Ensure creates this Agent's server record if it is missing and returns it.
+//
+// Creation never mutates: the same keys backed by the same Definition resolve
+// onto the existing record, a different Definition is agent_key_conflict, an
+// archived record is agent_archived, and a declared PinnedRevision that the
+// record does not follow is refused rather than quietly ignored. A first use
+// calls this for you; call it directly to create the record at a moment you
+// choose, or to read back what the server holds.
+func (a *Agent) Ensure(ctx context.Context) (*AgentResource, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.record != nil {
+		return a.record, nil
+	}
+	if a.options.DefinitionKey != "" || a.options.AgentDefinitionID != "" {
+		record, err := a.client.CreateAgent(ctx, CreateAgentInput{
+			TenantKey:          a.options.TenantKey,
+			AgentKey:           a.options.AgentKey,
+			Name:               a.options.Name,
+			AgentDefinitionID:  a.options.AgentDefinitionID,
+			AgentDefinitionKey: a.options.DefinitionKey,
+			PinnedRevision:     a.options.PinnedRevision,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := a.verifyDeclaration(record); err != nil {
+			return nil, err
+		}
+		a.record = record
+		return record, nil
+	}
+	if a.options.AgentID != "" {
+		record, err := a.client.GetAgent(ctx, a.options.AgentID)
+		if err != nil {
+			return nil, err
+		}
+		a.record = record
+		return record, nil
+	}
+	return nil, &Error{
+		Category: ErrorValidation,
+		Message: "Agent " + a.options.AgentKey + " cannot be created without knowing" +
+			" which Agent Definition it follows: declare a Definition key, or" +
+			" declare an Agent ID for a record that already exists",
+	}
+}
+
+// Refresh re-reads the record from the server.
+func (a *Agent) Refresh(ctx context.Context) (*AgentResource, error) {
+	ensured, err := a.Ensure(ctx)
+	if err != nil {
+		return nil, err
+	}
+	record, err := a.client.GetAgent(ctx, ensured.ID)
+	if err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.record = record
+	return record, nil
+}
+
+// Resource returns the server record once Ensure or a first use has run.
+func (a *Agent) Resource() *AgentResource {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.record
+}
+
+// ID returns the record's ID once it is known, and otherwise the declared one.
+func (a *Agent) ID() string {
+	if record := a.Resource(); record != nil {
+		return record.ID
+	}
+	return a.options.AgentID
+}
+
+// verifyDeclaration refuses a record that contradicts the declaration.
+// Creation resolves on the Definition pointer, which the server already
+// guards; the pin is the remaining substantive field, and a declaration naming
+// a revision the record does not follow would otherwise run configuration the
+// caller never asked for. A differing Name is cosmetic and is left alone.
+func (a *Agent) verifyDeclaration(record *AgentResource) error {
+	declared := a.options.PinnedRevision
+	if declared == nil {
+		return nil
+	}
+	if record.PinnedRevision != nil && *record.PinnedRevision == *declared {
+		return nil
+	}
+	following := "latest"
+	if record.PinnedRevision != nil {
+		following = fmt.Sprintf("revision %d", *record.PinnedRevision)
+	}
+	return &Error{
+		Category: ErrorConflict,
+		Status:   409,
+		Code:     "agent_pin_conflict",
+		Message: fmt.Sprintf(
+			"Agent %s follows %s, not the declared revision %d",
+			record.AgentKey, following, *declared,
+		),
+		Details: map[string]any{"agent_id": record.ID},
+	}
+}
+
+// ready creates the record before the turn that needs it, and only when the
+// declaration says how. An Agent named by ID, or by Agent key alone, is one
+// the caller has said already exists: admitting it directly keeps the turn at
+// one round trip and lets the server answer for a key that names nothing.
+func (a *Agent) ready(ctx context.Context) error {
+	if a.options.DefinitionKey == "" && a.options.AgentDefinitionID == "" {
+		return nil
+	}
+	_, err := a.Ensure(ctx)
+	return err
+}
+
 func (a *Agent) Invoke(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
 ) (*InvocationHandle, error) {
+	if err := a.ready(ctx); err != nil {
+		return nil, err
+	}
 	return a.client.Invoke(ctx, a.request(input, options))
 }
 
@@ -184,9 +341,15 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 	if onBudgetExhausted == "" {
 		onBudgetExhausted = a.options.OnBudgetExhausted
 	}
+	// The record's ID wins once it is known, so a declared Agent stops being
+	// re-resolved by key on every turn.
+	agentID, agentKey := a.options.AgentID, a.options.AgentKey
+	if record := a.Resource(); record != nil {
+		agentID, agentKey = record.ID, ""
+	}
 	request := InvokeRequest{
-		AgentID:           a.options.AgentID,
-		AgentKey:          a.options.AgentKey,
+		AgentID:           agentID,
+		AgentKey:          agentKey,
 		TenantKey:         a.options.TenantKey,
 		SessionID:         options.SessionID,
 		SessionKey:        options.SessionKey,

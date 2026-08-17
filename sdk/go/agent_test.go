@@ -656,3 +656,162 @@ func writeAgentTestJSON(
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(value)
 }
+
+// TestDeclaredAgentCreatesItsRecordOnFirstUse pins the declaration path: the
+// keys a host already owns are enough to run a turn, the record is created
+// once, and later turns admit by the ID the create returned.
+func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
+	var mu sync.Mutex
+	var creates []map[string]any
+	var admissions []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(
+		func(response http.ResponseWriter, request *http.Request) {
+			var body map[string]any
+			_ = json.NewDecoder(request.Body).Decode(&body)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case request.URL.Path == "/v1/agents" && request.Method == http.MethodPost:
+				creates = append(creates, body)
+				writeAgentTestJSON(response, http.StatusCreated, map[string]any{
+					"id":                  agentTestAgentID,
+					"tenant_key":          "customer-482",
+					"agent_key":           "support",
+					"name":                "support",
+					"agent_definition_id": "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+					"pinned_revision":     nil,
+					"created_at":          "2026-07-21T12:00:00Z",
+					"updated_at":          "2026-07-21T12:00:00Z",
+					"archived_at":         nil,
+				})
+			case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
+				admissions = append(admissions, body)
+				writeAgentTestJSON(response, http.StatusAccepted, agentTestInvocationPayload("invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322", "queued"))
+			default:
+				t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+				response.WriteHeader(http.StatusNotFound)
+			}
+		}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenantKey := "customer-482"
+	agent, err := client.Agent(AgentOptions{
+		TenantKey:     &tenantKey,
+		AgentKey:      "support",
+		DefinitionKey: "support",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agent.ID() != "" || agent.Resource() != nil {
+		t.Fatalf("declaration reached the server: id=%q resource=%#v", agent.ID(), agent.Resource())
+	}
+
+	for _, input := range []string{"first", "second"} {
+		if _, err := agent.Invoke(
+			context.Background(),
+			input,
+			AgentInvocationOptions{IdempotencyKey: input},
+		); err != nil {
+			t.Fatalf("invoke %s: %v", input, err)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(creates) != 1 {
+		t.Fatalf("creates = %d, want one for two turns", len(creates))
+	}
+	if creates[0]["agent_definition_key"] != "support" ||
+		creates[0]["tenant_key"] != "customer-482" ||
+		creates[0]["agent_definition_id"] != nil {
+		t.Fatalf("create body = %#v", creates[0])
+	}
+	if agent.ID() != agentTestAgentID {
+		t.Fatalf("ensured Agent ID = %q", agent.ID())
+	}
+	for index, admission := range admissions {
+		if admission["agent_id"] != agentTestAgentID || admission["agent_key"] != nil {
+			t.Fatalf("admission %d identified the Agent as %#v", index, admission)
+		}
+	}
+}
+
+// TestDeclaredAgentRefusesAContradictedPin covers the one substantive field a
+// restatement can disagree about.
+func TestDeclaredAgentRefusesAContradictedPin(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(response http.ResponseWriter, _ *http.Request) {
+			writeAgentTestJSON(response, http.StatusOK, map[string]any{
+				"id":                  agentTestAgentID,
+				"tenant_key":          nil,
+				"agent_key":           "support",
+				"name":                "support",
+				"agent_definition_id": "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+				"pinned_revision":     3,
+				"created_at":          "2026-07-21T12:00:00Z",
+				"updated_at":          "2026-07-21T12:00:00Z",
+				"archived_at":         nil,
+			})
+		}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := int64(2)
+	agent, err := client.Agent(AgentOptions{
+		AgentKey:       "support",
+		DefinitionKey:  "support",
+		PinnedRevision: &pin,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = agent.Ensure(context.Background())
+	var conflict *Error
+	if !errors.As(err, &conflict) || conflict.Code != "agent_pin_conflict" {
+		t.Fatalf("contradicted pin = %#v", err)
+	}
+
+	// Declaring no pin declares nothing about the pin.
+	silent, err := client.Agent(AgentOptions{AgentKey: "support", DefinitionKey: "support"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := silent.Ensure(context.Background())
+	if err != nil || record.PinnedRevision == nil || *record.PinnedRevision != 3 {
+		t.Fatalf("unpinned declaration = %#v, %v", record, err)
+	}
+}
+
+// TestDeclaredAgentWithoutADefinitionCannotCreateItself keeps the failure a
+// local, explanatory one rather than a server round trip.
+func TestDeclaredAgentWithoutADefinitionCannotCreateItself(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(_ http.ResponseWriter, request *http.Request) {
+			t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
+		}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := client.Agent(AgentOptions{AgentKey: "support"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agent.Ensure(context.Background()); err == nil ||
+		!strings.Contains(err.Error(), "Definition key") {
+		t.Fatalf("ensure without a Definition = %v", err)
+	}
+	if _, err := client.Agent(AgentOptions{
+		AgentID:       agentTestAgentID,
+		DefinitionKey: "support",
+	}); err == nil {
+		t.Fatal("an Agent named by ID accepted a Definition declaration")
+	}
+}

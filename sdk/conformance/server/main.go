@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	agentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	sessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	invocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	waitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
-	toolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
-	definitionID = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
-	exactModelID = "experimental/model?variant=雪%#1"
-	allocationID = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	agentID       = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	sessionID     = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	invocationID  = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	waitID        = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	toolCallID    = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	definitionID  = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
+	definitionKey = "support"
+	exactModelID  = "experimental/model?variant=雪%#1"
+	allocationID  = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
 )
 
 type state struct {
@@ -185,19 +186,28 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 	case "/v1/agents":
 		if request.Method == http.MethodPost {
 			var body struct {
-				TenantKey         *string `json:"tenant_key"`
-				AgentKey          string  `json:"agent_key"`
-				Name              string  `json:"name"`
-				AgentDefinitionID string  `json:"agent_definition_id"`
-				PinnedRevision    *int    `json:"pinned_revision"`
+				TenantKey          *string `json:"tenant_key"`
+				AgentKey           string  `json:"agent_key"`
+				Name               string  `json:"name"`
+				AgentDefinitionID  string  `json:"agent_definition_id"`
+				AgentDefinitionKey string  `json:"agent_definition_key"`
+				PinnedRevision     *int    `json:"pinned_revision"`
 			}
-			if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
-				body.AgentKey != "support" || body.Name == "" || body.AgentDefinitionID != definitionID {
+			// The Definition arrives under exactly one of its two spellings,
+			// and both name the single Definition this server knows.
+			err := json.NewDecoder(request.Body).Decode(&body)
+			namedByID := body.AgentDefinitionID == definitionID
+			namedByKey := body.AgentDefinitionKey == definitionKey
+			if err != nil || body.AgentKey != "support" || namedByID == namedByKey {
 				writeError(response, http.StatusBadRequest, "invalid_request", "Agent did not round-trip")
 				return true
 			}
 			value := agent()
 			value["tenant_key"] = body.TenantKey
+			// name defaults to the Agent key, as the runtime does.
+			if body.Name == "" {
+				body.Name = body.AgentKey
+			}
 			value["name"] = body.Name
 			if body.PinnedRevision != nil {
 				value["pinned_revision"] = *body.PinnedRevision

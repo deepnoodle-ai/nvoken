@@ -31,9 +31,10 @@ class CreateAgentRequest(BaseModel):
     tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
-    agent_definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    agent_definition_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
+    agent_definition_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="The `definition_key` of the Agent Definition this Agent follows, as an alternative spelling of `agent_definition_id`. Supply exactly one; supplying both or neither is `400`. The key is resolved in the same transaction that resolves the Agent, so a create and a restatement compare the same Definition however it was named. ")
     pinned_revision: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
-    __properties: ClassVar[List[str]] = ["tenant_key", "agent_key", "name", "agent_definition_id", "pinned_revision"]
+    __properties: ClassVar[List[str]] = ["tenant_key", "agent_key", "name", "agent_definition_id", "agent_definition_key", "pinned_revision"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -90,6 +91,7 @@ class CreateAgentRequest(BaseModel):
             "agent_key": obj.get("agent_key"),
             "name": obj.get("name"),
             "agent_definition_id": obj.get("agent_definition_id"),
+            "agent_definition_key": obj.get("agent_definition_key"),
             "pinned_revision": obj.get("pinned_revision")
         })
         return _obj

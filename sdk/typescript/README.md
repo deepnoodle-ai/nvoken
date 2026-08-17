@@ -21,15 +21,42 @@ npm install @deepnoodle/nvoken
 
 Node.js 20 or newer is required.
 
-List or read the full Agent instance without admitting work:
+An `Agent` is one tenant's instance of an Agent Definition — the server record
+and the object that runs its turns, which are the same thing. Declare one from
+the keys you already own and it creates its record the first time you use it:
+
+```ts
+const support = client.agent({
+  tenantKey: userId,
+  agentKey: "support",
+  definitionKey: "support",   // the Definition this instance follows
+  tools: [lookupOrder],       // this process's handlers; never on the server
+});
+```
+
+An Agent's identity and configuration live on the server; its tool *handlers*
+are supplied by whichever process runs the turn. That is the only asymmetry —
+everything else about the Agent is the record, readable at `agent.resource` and
+through `agent.id`, `agent.agentKey`, `agent.name`, and `agent.pinnedRevision`.
+
+`agent.ensure()` creates the record at a moment you choose instead of on first
+use. It never mutates: the same keys and Definition resolve onto what exists, a
+different Definition is `agent_key_conflict`, an archived record is
+`agent_archived`, and a declared `pinnedRevision` that disagrees with the record
+is refused rather than silently ignored. Instances follow their Definition's
+latest revision unless `pinnedRevision` opts one tenant out, so revising the
+Definition is the rollout and a per-tenant fleet never needs walking.
+
+Reading one back gives the same type, ready for this process's handlers:
 
 ```ts
 const agents = await client.listAgents({ agentKey: "support" });
-const instance = await client.getAgent(agents.items[0].id);
+const support = (await client.getAgent(agents.items[0].id)).withTools([lookupOrder]);
 ```
 
-The Agent records its tenant, key, display name, Definition binding, optional
-revision pin, lifecycle timestamps, and archive state.
+`AgentResource` is that record as the wire carries it — what `agent.resource`
+holds, what `client.getAgentResource()` returns, and what `JSON.stringify(agent)`
+produces.
 
 Opt an agent into the fixed guarded public-web reader with no schema or
 transport configuration:
@@ -47,12 +74,7 @@ const definition = await client.createAgentDefinition({
     tools: [fetchTool()],
   },
 });
-const instance = await client.createAgent({
-  agentKey: "research",
-  name: "Research",
-  agentDefinitionId: definition.id,
-});
-const agent = client.agent({ agentId: instance.id });
+const agent = client.agent({ agentKey: "research", definitionKey: definition.definitionKey });
 ```
 
 The Runtime accepts only `{name: "nvoken_fetch", mode: "builtin"}`. It owns
@@ -71,21 +93,19 @@ import { Client } from "@deepnoodle/nvoken";
 
 const client = new Client();
 
-// Both creates are keyed and idempotent: definitionKey and
-// (tenantKey, agentKey) are unique, so restating one returns what it already
-// names. Safe to run on every deploy.
-const definition = await client.createAgentDefinition({
+// Registering the Definition is keyed and idempotent: definitionKey is
+// unique, so restating it returns what it already names. Safe to run on
+// every deploy.
+await client.createAgentDefinition({
   definitionKey: "support",
   definition: {
     instructions: "Be concise and helpful.",
     model: "anthropic/claude-sonnet-5",
   },
 });
-const instance = await client.createAgent({
-  agentKey: "support",
-  agentDefinitionId: definition.id,
-});
-const agent = client.agent({ agentId: instance.id });
+
+// The Agent is declared from its keys and creates its record on first use.
+const agent = client.agent({ agentKey: "support", definitionKey: "support" });
 
 console.log(await agent.text("Why was I charged twice?"));
 ```
@@ -336,16 +356,13 @@ const resource = await client.createAgentDefinition({
   idempotencyKey: "support-definition-v1",
 });
 
-const instance = await client.createAgent({
+const support = client.agent({
   agentKey: "support",
-  name: "Support",
-  agentDefinitionId: resource.id,
+  definitionKey: resource.definitionKey,
 });
 
-const handle = await client.invoke({
-  agentId: instance.id,
+const handle = await support.invoke("Why was I charged twice?", {
   sessionKey: "ticket-483",
-  input: "Why was I charged twice?",
 });
 ```
 

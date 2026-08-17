@@ -44,6 +44,8 @@ struct RuntimeState {
     invocations: HashMap<String, InvocationState>,
     submissions: u64,
     cancel_count: u64,
+    agent_creates: Vec<Value>,
+    admitted_identities: Vec<(Option<String>, Option<String>)>,
 }
 
 struct TestRuntime {
@@ -258,8 +260,41 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
     let Some(request) = read_request(&mut stream).await else {
         return;
     };
+    if request.path == "/v1/agents" && request.method == "POST" {
+        let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+        // One key stands for a record somebody else already pinned, so a
+        // declaration can be tested against a record that disagrees with it.
+        let pinned_revision = if body["agent_key"] == json!("pinned-elsewhere") {
+            json!(3)
+        } else {
+            body["pinned_revision"].clone()
+        };
+        runtime
+            .state
+            .lock()
+            .unwrap()
+            .agent_creates
+            .push(body.clone());
+        let record = json!({
+            "id": AGENT_ID,
+            "tenant_key": body["tenant_key"].clone(),
+            "agent_key": body["agent_key"].clone(),
+            "name": body["agent_key"].clone(),
+            "agent_definition_id": DEFINITION_ID,
+            "pinned_revision": if pinned_revision.is_null() { json!(null) } else { pinned_revision },
+            "created_at": "2026-07-21T12:00:00Z",
+            "updated_at": "2026-07-21T12:00:00Z",
+            "archived_at": null,
+        });
+        write_json(&mut stream, 201, &record).await;
+        return;
+    }
     if request.path == "/v1/invocations" && request.method == "POST" {
         let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+        runtime.state.lock().unwrap().admitted_identities.push((
+            body["agent_id"].as_str().map(str::to_owned),
+            body["agent_key"].as_str().map(str::to_owned),
+        ));
         let input = body["input"].as_str().unwrap_or_default().to_owned();
         let session_key = body["session_key"].as_str().unwrap_or_default().to_owned();
         let if_active = body["if_active"].as_str().unwrap_or_default().to_owned();
@@ -742,3 +777,82 @@ async fn tool_handler_failure_reports_as_error_content() {
 }
 
 fn _unused(_: NvokenError) {}
+
+/// The declaration path: the keys a host already owns are enough to run a
+/// turn, the record is created once, and later turns admit by the ID the
+/// create returned.
+#[tokio::test]
+async fn declared_agent_creates_its_record_on_first_use() {
+    let (base_url, runtime) = start_server().await;
+    let client = Client::new(&base_url, "test-key").unwrap();
+    let mut options = AgentOptions::declared("support", "support");
+    options.tenant_key = Some("customer-482".to_owned());
+    let agent = client.agent(options).unwrap();
+    assert!(agent.id().await.is_none());
+    assert!(agent.resource().await.is_none());
+
+    for input in ["first", "second"] {
+        agent
+            .invoke(input, AgentInvocationOptions::default())
+            .await
+            .unwrap();
+    }
+
+    assert_eq!(agent.id().await.as_deref(), Some(AGENT_ID));
+    let state = runtime.state.lock().unwrap();
+    assert_eq!(state.agent_creates.len(), 1, "one create for two turns");
+    assert_eq!(
+        state.agent_creates[0]["agent_definition_key"],
+        json!("support")
+    );
+    assert_eq!(state.agent_creates[0]["tenant_key"], json!("customer-482"));
+    assert!(state.agent_creates[0].get("agent_definition_id").is_none());
+    for (agent_id, agent_key) in &state.admitted_identities {
+        assert_eq!(agent_id.as_deref(), Some(AGENT_ID));
+        assert_eq!(agent_key.as_deref(), None);
+    }
+}
+
+/// The one substantive field a restatement can disagree about.
+#[tokio::test]
+async fn declared_agent_refuses_a_contradicted_pin() {
+    let (base_url, _runtime) = start_server().await;
+    let client = Client::new(&base_url, "test-key").unwrap();
+    let mut options = AgentOptions::declared("support", "support");
+    options.pinned_revision = Some(2);
+    let agent = client.agent(options).unwrap();
+    // The mock echoes the pin it was sent, so agreement is the ordinary case.
+    assert_eq!(agent.ensure().await.unwrap().pinned_revision, Some(2));
+
+    let mut disagreeing = AgentOptions::declared("pinned-elsewhere", "support");
+    disagreeing.pinned_revision = Some(2);
+    let other = client.agent(disagreeing).unwrap();
+    let error = other.ensure().await.unwrap_err();
+    assert_eq!(error.code.as_deref(), Some("agent_pin_conflict"));
+
+    // Declaring no pin declares nothing about the pin.
+    let silent = client
+        .agent(AgentOptions::declared("pinned-elsewhere", "support"))
+        .unwrap();
+    assert_eq!(silent.ensure().await.unwrap().pinned_revision, Some(3));
+}
+
+/// An Agent that cannot create itself fails locally and explains which part of
+/// the declaration is missing.
+#[tokio::test]
+async fn declared_agent_without_a_definition_cannot_create_itself() {
+    let (base_url, _runtime) = start_server().await;
+    let client = Client::new(&base_url, "test-key").unwrap();
+    let agent = client.agent(AgentOptions::new("support")).unwrap();
+    let error = agent.ensure().await.unwrap_err();
+    assert_eq!(error.category, ErrorCategory::Validation);
+    assert!(
+        error.message.contains("definition_key"),
+        "{}",
+        error.message
+    );
+
+    let mut contradiction = AgentOptions::from_agent_id(AGENT_ID);
+    contradiction.definition_key = Some("support".to_owned());
+    assert!(client.agent(contradiction).is_err());
+}

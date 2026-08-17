@@ -1777,7 +1777,7 @@ func (c *Client) UpdateOrg(ctx context.Context, orgID, displayName string) (*Org
 	})
 }
 
-func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentIdentity, error) {
+func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentResource, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
 		response, err := c.raw.GetAgentWithResponse(ctx, agentID)
 		if err != nil {
@@ -1794,17 +1794,24 @@ func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentIdentity, 
 
 // CreateAgent deliberately creates or resolves one tenant-scoped Agent
 // instance. Repeating the same tenant/key/Definition tuple is a safe upsert.
-func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*AgentIdentity, error) {
-	if input.AgentKey == "" || input.AgentDefinitionID == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent key and Agent Definition ID are required"}
+func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*AgentResource, error) {
+	if input.AgentKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
+	}
+	if (input.AgentDefinitionID == "") == (input.AgentDefinitionKey == "") {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "Supply exactly one of Agent Definition ID and Agent Definition key",
+		}
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
 		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
-			TenantKey:         input.TenantKey,
-			AgentKey:          input.AgentKey,
-			Name:              optionalString(input.Name),
-			AgentDefinitionID: input.AgentDefinitionID,
-			PinnedRevision:    input.PinnedRevision,
+			TenantKey:          input.TenantKey,
+			AgentKey:           input.AgentKey,
+			Name:               optionalString(input.Name),
+			AgentDefinitionID:  optionalString(input.AgentDefinitionID),
+			AgentDefinitionKey: optionalString(input.AgentDefinitionKey),
+			PinnedRevision:     input.PinnedRevision,
 		})
 		if err != nil {
 			return callResult[generated.Agent]{}, err
@@ -1822,7 +1829,7 @@ func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*Agen
 	})
 }
 
-func (c *Client) UpdateAgent(ctx context.Context, agentID string, input UpdateAgentInput) (*AgentIdentity, error) {
+func (c *Client) UpdateAgent(ctx context.Context, agentID string, input UpdateAgentInput) (*AgentResource, error) {
 	if input.Name == nil && input.PinnedRevision == nil && !input.ClearPinnedRevision {
 		return nil, &Error{Category: ErrorValidation, Message: "Agent update requires a name or revision pin"}
 	}

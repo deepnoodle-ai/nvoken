@@ -3279,11 +3279,19 @@ type CostMetricsCostCoverage string
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
 	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
-	AgentKey          string            `json:"agent_key"`
-	Name              *string           `json:"name,omitempty"`
-	PinnedRevision    *int64            `json:"pinned_revision,omitempty"`
-	TenantKey         *string           `json:"tenant_key,omitempty"`
+	AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
+
+	// AgentDefinitionKey The `definition_key` of the Agent Definition this Agent follows,
+	// as an alternative spelling of `agent_definition_id`. Supply
+	// exactly one; supplying both or neither is `400`. The key is
+	// resolved in the same transaction that resolves the Agent, so a
+	// create and a restatement compare the same Definition however it
+	// was named.
+	AgentDefinitionKey *string `json:"agent_definition_key,omitempty"`
+	AgentKey           string  `json:"agent_key"`
+	Name               *string `json:"name,omitempty"`
+	PinnedRevision     *int64  `json:"pinned_revision,omitempty"`
+	TenantKey          *string `json:"tenant_key,omitempty"`
 }
 
 // CreateClientKeyRequest defines model for CreateClientKeyRequest.
@@ -8935,6 +8943,11 @@ type ClientInterface interface {
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
+	// Name the Definition with either `agent_definition_id` or
+	// `agent_definition_key` — exactly one. The key spelling lets a caller
+	// declare an Agent entirely from keys it already owns, with no lookup
+	// first.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -8954,6 +8967,11 @@ type ClientInterface interface {
 	// Resolution matches on the Definition pointer only. A differing `name`
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
+	// Name the Definition with either `agent_definition_id` or
+	// `agent_definition_key` — exactly one. The key spelling lets a caller
+	// declare an Agent entirely from keys it already owns, with no lookup
+	// first.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10832,6 +10850,11 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
+// Name the Definition with either `agent_definition_id` or
+// `agent_definition_key` — exactly one. The key spelling lets a caller
+// declare an Agent entirely from keys it already owns, with no lookup
+// first.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -10861,6 +10884,11 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 // Resolution matches on the Definition pointer only. A differing `name`
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
+// Name the Definition with either `agent_definition_id` or
+// `agent_definition_key` — exactly one. The key spelling lets a caller
+// declare an Agent entirely from keys it already owns, with no lookup
+// first.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -19098,6 +19126,11 @@ type ClientWithResponsesInterface interface {
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
+	// Name the Definition with either `agent_definition_id` or
+	// `agent_definition_key` — exactly one. The key spelling lets a caller
+	// declare an Agent entirely from keys it already owns, with no lookup
+	// first.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -19117,6 +19150,11 @@ type ClientWithResponsesInterface interface {
 	// Resolution matches on the Definition pointer only. A differing `name`
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
+	// Name the Definition with either `agent_definition_id` or
+	// `agent_definition_key` — exactly one. The key spelling lets a caller
+	// declare an Agent entirely from keys it already owns, with no lookup
+	// first.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28518,6 +28556,11 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
+// Name the Definition with either `agent_definition_id` or
+// `agent_definition_key` — exactly one. The key spelling lets a caller
+// declare an Agent entirely from keys it already owns, with no lookup
+// first.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -28543,6 +28586,11 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 // Resolution matches on the Definition pointer only. A differing `name`
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
+// Name the Definition with either `agent_definition_id` or
+// `agent_definition_key` — exactly one. The key spelling lets a caller
+// declare an Agent entirely from keys it already owns, with no lookup
+// first.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
