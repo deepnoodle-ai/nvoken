@@ -401,3 +401,76 @@ waiting Invocation's pending calls the same way a host call does, so
 `answerable_tool_calls` includes it. `host_tool_calls` is the narrower set you
 must run yourself — answerable and `mode` `Host` — and an `Agent` dispatches
 exactly that, whatever its own definition declares.
+
+## Invocation webhooks
+
+A turn that ends tells you so, without you holding a connection open to hear
+it. Set `InvokeRequest::webhook` to a `WebhookTarget` when you start the turn.
+Omitting `events` selects all three: `invocation.ended` fires once when the turn
+reaches a terminal status, `invocation.waiting` when it needs a host tool run,
+`invocation.paused` when a spending limit stopped it.
+
+Receiving one is the same verification you already wrote for callbacks — the
+signature scheme is identical, and `verify_webhook` is the same code path with a
+different body check:
+
+```rust
+let delivery = nvoken::verify_webhook(&webhook_signing_key, &headers, &raw_body, SystemTime::now())?;
+if delivery.supersedes(last_applied_sequence(&delivery.invocation_id).await?) {
+    settle(&delivery.invocation_id, &delivery.envelope.invocation, delivery.sequence).await?;
+}
+Ok(nvoken::accept_webhook())
+```
+
+The key is the App's `webhook`-purpose signing key, not its `callback` key. A
+receiver serving both endpoints holds two, and must not try either against the
+other's deliveries.
+
+Three rules make a receiver correct:
+
+**Fold by sequence, not by arrival.** Delivery is at least once, so the same
+transition can arrive twice and a redelivery can land after a later one. Keep
+the highest `sequence` you have applied per Invocation and apply only what
+`VerifiedWebhook::supersedes` accepts. That is the deduplication too — a repeat
+carries a sequence you already applied — so nothing else is needed to make
+handling idempotent.
+
+**The payload is a pointer, not a copy.** `WebhookSubject` carries `status`,
+`stop_reason`, `failure_code`, `waiting_tool_call_ids`, and `credit_block`, and
+deliberately nothing else: no transcript, no output text, no usage. Read
+`Client::get_invocation` or `Client::get_invocation_result` when you need more,
+so you are reconciling against the authoritative record rather than a staler
+copy of it.
+
+**Answer `retry_webhook()` when you could not record it.** Any 5xx is
+redelivered, as are 408, 425, and 429. Every other non-2xx answer is permanent
+and that transition is never delivered again, so a 400 from a receiver that was
+merely busy is a settlement you silently lost.
+
+Retries are bounded, so webhooks alone are not a settlement guarantee.
+`Client::list_ended_invocations` is the backstop: it walks turns in the order
+they ended, so a delivery that never landed is one you still find.
+
+## Acting for one tenant or one end user
+
+An app-wide credential can reach every tenant in its App, so an id that arrives
+from the wrong place — a stale link, a mixed-up webhook, a tampered form field
+— is an id it can act on. Say the scope once instead of re-reading the resource
+before every call:
+
+```rust
+let tenant = client.scoped(Scope::tenant("acme").user("user-7c1f"))?;
+let session = tenant.get_session(&session_id_from_the_request).await?;
+```
+
+Anything outside the scope is reported as `not_found`, so a Session or
+Invocation belonging to somebody else cannot be read, cancelled, interrupted,
+forked, answered, or erased — and you learn nothing about whether the id
+exists. Writes take the same scope: an omitted tenant or user key in the body
+inherits it, and one naming somebody else is refused.
+
+A scope may only narrow. A credential already bound to one tenant refuses a
+scope naming another with `forbidden` rather than silently returning nothing.
+The client it was derived from is unchanged, so the unscoped one keeps doing
+administrative reads. Browser tokens already carry their tenant and end user
+and neither need this nor may send it.

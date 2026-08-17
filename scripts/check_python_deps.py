@@ -33,8 +33,19 @@ REQUIREMENTS = ROOT / "requirements-dev.txt"
 # Every Python file `make check` runs or imports.
 TREES = ("scripts", "sdk/scripts")
 
-# Modules that live in this repository rather than on the path.
-LOCAL = {"scripts", "check_facade_parity"}
+
+def local_modules() -> set[str]:
+    """Modules that live in this repository rather than on the path.
+
+    Derived from the trees themselves rather than listed. A hand-kept list of
+    sibling imports fails on the next script that imports its own neighbour,
+    and reports it as an undeclared third-party dependency — which points at
+    `requirements-dev.txt`, the one file that cannot fix it.
+    """
+    names = {tree.rsplit("/", 1)[-1] for tree in TREES}
+    for tree in TREES:
+        names.update(path.stem for path in (ROOT / tree).rglob("*.py"))
+    return names
 
 
 def canonical(name: str) -> str:
@@ -69,6 +80,7 @@ def imported(tree: ast.Module) -> set[str]:
 
 def main() -> int:
     requirements = declared()
+    local = local_modules()
     # Import name to the distributions providing it: `yaml` comes from PyYAML,
     # and the import is what a script writes while the file declares the other.
     provided_by = metadata.packages_distributions()
@@ -93,7 +105,7 @@ def main() -> int:
                 problems.append(f"{relative}: {error}")
                 continue
             for module in sorted(imported(parsed)):
-                if module in LOCAL or module in sys.stdlib_module_names:
+                if module in local or module in sys.stdlib_module_names:
                     continue
                 distributions = provided_by.get(module)
                 if distributions is None:

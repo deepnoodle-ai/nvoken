@@ -8,6 +8,60 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Invocation webhooks can be received.** `verifyWebhook` returns a typed
+  envelope in all four SDKs, alongside sequence folding (`supersedes`), the
+  reply discipline (`acceptWebhook`, `retryWebhook`, `webhookStatusIsRetried`),
+  and `verifySignedDelivery`, which callbacks and webhooks now genuinely share.
+  Settlement no longer requires holding a stream.
+
+- **Breaking: `CallbackError` is `DeliveryError` in Rust, and Go's
+  `CallbackTimestampWindow` is `SignatureTimestampWindow`.** One signing scheme
+  covers both delivery kinds, so the names that governed both stopped naming
+  only one of them.
+
+- **Breaking: `docs/design/callback-signing-v1.json` is
+  `docs/design/delivery-signing-v1.json`,** and holds a vector per delivery
+  kind under `vectors`. `make check` recomputes both signatures from their own
+  bodies, so a vector can no longer be signed for a body it no longer has.
+
+- **The deployment probes are reachable.** `nvoken health` and `nvoken ready`,
+  and `nvoken.NewProbe` in Go, read `/health` and `/ready` without a
+  credential. A refused readiness check prints its report and exits non-zero.
+
+- **`user_key` is writable from every SDK.** It was reachable on the Go
+  invocation request and nowhere else, so user-scope Agent memory — where
+  `user_key` decides whose durable memories the model can recall — could only
+  be used through `raw()`. It is now on the invocation request and the
+  per-call Agent options in all four SDKs.
+
+- **The Go facade reaches the whole App configuration.** `RegisterApp` and
+  `UpdateApp` dropped `browser_access`, `anonymous_access`,
+  `default_rate_limits`, and `credit_policy`, which is the entire browser-direct
+  go-live path. `UpdateAppOptions` also distinguishes replacing a member from
+  clearing one, with `ClearBrowserAccess`, `ClearAnonymousAccess`, and
+  `ClearDefaultRateLimits`, because omitting a member preserves it.
+
+- **A client can act for one tenant or one end user.** `client.scoped({...})`
+  in all four SDKs, and `--scope-tenant-key` / `--scope-user-key` on the CLI,
+  stamp `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` on every request. An id
+  outside the scope is reported as `not_found`, so an app-wide credential no
+  longer needs an ownership check written at every call site. A scope may only
+  narrow; the client it was derived from is unchanged.
+
+- **Breaking: `session_options.metadata` is now
+  `session_options.authorization_context`, and forks no longer take
+  `user_key`.** The
+  authorization context is written at Session creation, never model-visible,
+  and carried in the signed callback envelope as a sibling of `nvoken`, so a
+  receiver authorizes a delivery without reading the Invocation back. Mutable
+  Session metadata is unaffected and still lives on `updateSession`. A fork
+  inherits the source Session's `user_key` rather than accepting one.
+
+- **`session_options.on_conflict: "join"` reaches an existing Session without
+  asserting how it is configured**, so compaction and retention stop
+  conflicting. It never relaxes `authorization_context`, `pinned_revision`, or
+  `user_key`.
+
 - **Breaking: the `stream.end` frame is now `connection.closing`.** It never
   said anything about a turn, but its name said the stream was over, and enough
   readers believed the name that the contract carried a correction in four

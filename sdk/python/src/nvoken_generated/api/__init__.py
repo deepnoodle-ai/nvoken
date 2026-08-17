@@ -11,6 +11,7 @@ from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.memories_api import MemoriesApi
 from nvoken_generated.api.models_api import ModelsApi
+from nvoken_generated.api.operations_api import OperationsApi
 from nvoken_generated.api.orgs_api import OrgsApi
 from nvoken_generated.api.provider_keys_api import ProviderKeysApi
 from nvoken_generated.api.sessions_api import SessionsApi

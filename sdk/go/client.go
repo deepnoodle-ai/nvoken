@@ -36,10 +36,43 @@ func (p RetryPolicy) normalized() RetryPolicy {
 }
 
 type Client struct {
-	raw          *generated.ClientWithResponses
-	retry        RetryPolicy
-	sessionMu    sync.Mutex
-	sessionLocks map[string]*sync.Mutex
+	raw     *generated.ClientWithResponses
+	retry   RetryPolicy
+	locks   *sessionLockTable
+	baseURL string
+	apiKey  string
+	http    *http.Client
+	scope   Scope
+}
+
+// Scope narrows every request a Client makes to one tenant, one end user, or
+// both. Anything outside it is reported as not found, so an id that arrives
+// from the wrong place cannot be acted on — which is what lets one app-wide
+// credential serve a whole application without an ownership check written at
+// every call site. A scope may only narrow: naming a tenant the credential is
+// not bound to is refused rather than silently returning nothing.
+type Scope struct {
+	TenantKey string
+	UserKey   string
+}
+
+// Scoped returns a Client that stamps this scope on every request it makes.
+// The receiver is unchanged, so a scoped client can be handed to the part of
+// an application that handles one tenant's or one end user's work while the
+// unscoped one keeps doing administrative reads.
+func (c *Client) Scoped(scope Scope) (*Client, error) {
+	if strings.TrimSpace(scope.TenantKey) == "" && strings.TrimSpace(scope.UserKey) == "" {
+		return nil, fmt.Errorf("a scope requires a tenant key, a user key, or both")
+	}
+	return newClient(c.baseURL, c.apiKey, c.http, c.retry, scope, c.locks)
+}
+
+// Scope reports the scope this Client stamps, zero-valued when it stamps none.
+func (c *Client) Scope() Scope { return c.scope }
+
+type sessionLockTable struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
 }
 
 type ClientOption func(*clientOptions)
@@ -47,6 +80,7 @@ type ClientOption func(*clientOptions)
 type clientOptions struct {
 	httpClient *http.Client
 	retry      RetryPolicy
+	scope      Scope
 }
 
 func WithHTTPClient(client *http.Client) ClientOption {
@@ -55,6 +89,12 @@ func WithHTTPClient(client *http.Client) ClientOption {
 
 func WithRetryPolicy(policy RetryPolicy) ClientOption {
 	return func(options *clientOptions) { options.retry = policy }
+}
+
+// WithScope narrows the client at construction, for the common case where an
+// application makes one client per tenant rather than deriving them.
+func WithScope(scope Scope) ClientOption {
+	return func(options *clientOptions) { options.scope = scope }
 }
 
 func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error) {
@@ -68,23 +108,47 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 	for _, option := range options {
 		option(&config)
 	}
+	return newClient(baseURL, apiKey, config.httpClient, config.retry, config.scope, nil)
+}
+
+func newClient(
+	baseURL string,
+	apiKey string,
+	httpClient *http.Client,
+	retry RetryPolicy,
+	scope Scope,
+	locks *sessionLockTable,
+) (*Client, error) {
 	requestEditor := func(_ context.Context, request *http.Request) error {
 		request.Header.Set("Authorization", "Bearer "+apiKey)
 		request.Header.Set("User-Agent", "nvoken-go/"+Version)
+		if scope.TenantKey != "" {
+			request.Header.Set("X-Nvoken-Tenant-Key", scope.TenantKey)
+		}
+		if scope.UserKey != "" {
+			request.Header.Set("X-Nvoken-User-Key", scope.UserKey)
+		}
 		return nil
 	}
 	raw, err := generated.NewClientWithResponses(
 		baseURL,
-		generated.WithHTTPClient(config.httpClient),
+		generated.WithHTTPClient(httpClient),
 		generated.WithRequestEditorFn(requestEditor),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create generated client: %w", err)
 	}
+	if locks == nil {
+		locks = &sessionLockTable{locks: make(map[string]*sync.Mutex)}
+	}
 	return &Client{
-		raw:          raw,
-		retry:        config.retry.normalized(),
-		sessionLocks: make(map[string]*sync.Mutex),
+		raw:     raw,
+		retry:   retry.normalized(),
+		locks:   locks,
+		baseURL: baseURL,
+		apiKey:  apiKey,
+		http:    httpClient,
+		scope:   scope,
 	}, nil
 }
 
@@ -1343,14 +1407,25 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 // RegisterApp registers one host application and returns its generated app_id.
 // It requires an Org-scoped or installation Operator credential.
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
+	body := generated.RegisterAppJSONRequestBody{
+		Name:                   name,
+		ExternalRef:            options.ExternalRef,
+		DisplayName:            options.DisplayName,
+		OrgID:                  options.OrgID,
+		CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
+		DefaultRateLimits:      options.DefaultRateLimits.generated(),
+	}
+	browser, err := options.BrowserAccess.generated()
+	if err != nil {
+		return nil, err
+	}
+	body.BrowserAccess = browser
+	if options.CreditPolicy != nil {
+		policy := generated.CreditPolicy(*options.CreditPolicy)
+		body.CreditPolicy = &policy
+	}
 	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppRegistration], error) {
-		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
-			Name:                   name,
-			ExternalRef:            options.ExternalRef,
-			DisplayName:            options.DisplayName,
-			OrgID:                  options.OrgID,
-			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
-		})
+		response, err := c.raw.RegisterAppWithResponse(ctx, body)
 		if err != nil {
 			return callResult[generated.AppRegistration]{}, err
 		}
@@ -1670,22 +1745,24 @@ func (c *Client) RetireAppSigningKey(
 	return err
 }
 
-// UpdateApp changes an app's mutable presentation fields; name and
-// external_ref cannot be changed.
+// UpdateApp changes an App's mutable configuration: its presentation, its
+// admission ceilings, its credit policy, and whether browser-direct and
+// anonymous callers are allowed. Name and external_ref cannot be changed.
 func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppOptions) (*App, error) {
-	if options.DisplayName == nil && options.OrgID == nil &&
-		options.CallbackTimeoutSeconds == nil {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "app update requires display name, Org ID, or callback timeout",
-		}
+	// Encoded by hand because three members distinguish "leave it alone" from
+	// "turn it off", and a null is the only way to say the second. The
+	// generated body omits a nil pointer, so it can express one of the two.
+	body, err := options.encoded()
+	if err != nil {
+		return nil, err
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.App], error) {
-		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{
-			DisplayName:            options.DisplayName,
-			OrgID:                  options.OrgID,
-			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
-		})
+		response, err := c.raw.UpdateAppWithBodyWithResponse(
+			ctx,
+			appID,
+			"application/json",
+			bytes.NewReader(body),
+		)
 		if err != nil {
 			return callResult[generated.App]{}, err
 		}
@@ -2151,7 +2228,6 @@ func (c *Client) ForkSession(
 	body := generated.ForkSessionJSONRequestBody{
 		FromMessage: fromMessage,
 		SessionKey:  options.SessionKey,
-		UserKey:     options.UserKey,
 	}
 	if options.SessionOptions != nil {
 		sessionOptions, err := options.SessionOptions.generatedFork()

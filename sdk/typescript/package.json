@@ -52,10 +52,14 @@
     "dist/media-preflight.js",
     "dist/schema-preflight.d.ts",
     "dist/schema-preflight.js",
+    "dist/signed-delivery.d.ts",
+    "dist/signed-delivery.js",
     "dist/stream.d.ts",
     "dist/stream.js",
     "dist/version.d.ts",
-    "dist/version.js"
+    "dist/version.js",
+    "dist/webhook.d.ts",
+    "dist/webhook.js"
   ],
   "repository": {
     "type": "git",

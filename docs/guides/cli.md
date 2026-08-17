@@ -34,6 +34,29 @@ The CLI stores named endpoint and API-key profiles in
 Environment and flag credentials override a saved profile without rewriting the
 credentials file.
 
+`--scope-tenant-key` and `--scope-user-key` (or `NVOKEN_SCOPE_TENANT_KEY` and
+`NVOKEN_SCOPE_USER_KEY`) narrow every request of that invocation. An id outside
+the scope is reported as not found, which is what an operator wants when the id
+came from a ticket, a log line, or somebody else's paste. They may only narrow:
+a credential already bound to one tenant refuses a scope naming another.
+
+## Checking a deployment
+
+`nvoken health` and `nvoken ready` read the two probe endpoints and need no
+credential — a probe that required a key could not tell "the deployment is
+down" apart from "this key is wrong", and those call for opposite responses.
+
+```bash
+nvoken health --base-url https://nvoken.example   # is the process running?
+nvoken ready  --base-url https://nvoken.example   # can it serve requests?
+```
+
+Route traffic on `ready`, which answers only once Postgres has; restart on
+`health`, which touches nothing, so a database outage never reads as a reason
+to kill the process. A deployment that answers "not ready" is a successful
+probe of an unhealthy deployment: the report prints normally and the command
+exits non-zero, so a wait loop can branch on the exit code alone.
+
 ## Discovering and scripting commands
 
 `nvoken --help` prints the complete command tree. Every command has its own
@@ -90,7 +113,7 @@ nvoken app update app_... --request-file app-update.json
 
 # Set nested Session options at creation or fork time.
 nvoken session create --request-file session.json
-nvoken session fork sesn_... --request-file fork.json
+nvoken session fork sess_... --request-file fork.json
 
 # Settle up to 32 host ToolCalls together.
 nvoken tool-result submit inv_... --file results.json

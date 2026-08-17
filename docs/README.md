@@ -11,6 +11,11 @@ Read it before proposing a change to either.
 - [The end-state protocol](design/004-protocol-end-state.md), the actual
   target: the protocol designed with no compatibility budget, and the path
   to it. All three steps have landed.
+- [CLI contract conformance](design/005-cli-contract-conformance.md)
+- [SDK write shape parity](design/006-sdk-write-shape-parity.md)
+- [One home for each host-supplied fact](design/007-host-supplied-context.md),
+  which retires the second write path to Session metadata, pins `user_key` to
+  the Session, and gives callback authorization a field of its own
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [The streaming protocol](reference/streaming-protocol.md)

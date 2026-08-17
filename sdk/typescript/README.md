@@ -254,7 +254,7 @@ Use a lazy handle to recover work in another process. Creating it performs no
 request:
 
 ```ts
-const handle = client.invocation("invk_...");
+const handle = client.invocation("inv_...");
 const result = await handle.waitForResult();
 ```
 
@@ -469,7 +469,7 @@ console.log(await chat.text("What is my code?"));
 You can also bind a durable Session ID:
 
 ```ts
-const chat = agent.session({ sessionId: "sesn_..." });
+const chat = agent.session({ sessionId: "sess_..." });
 ```
 
 Every turn admitted through the same binding is serialized locally, including
@@ -593,6 +593,66 @@ way a host call does, so `answerableToolCalls` includes it. `hostToolCalls` is
 the narrower set you must run yourself — answerable and `mode: "host"` — and
 `Agent` dispatches exactly that, whatever its own definition declares.
 
+## Invocation webhooks
+
+A turn that ends tells you so, without you holding a connection open to hear
+it. Ask for it when you start the turn:
+
+```ts
+const invocation = await client.createInvocation({
+  agentKey: "support",
+  input: "Where is my order?",
+  webhook: { url: "https://example.com/nvoken/webhooks" },
+});
+```
+
+Omitting `events` selects all three. `invocation.ended` fires once when the
+turn reaches a terminal status; `invocation.waiting` fires when it needs a host
+tool run; `invocation.paused` fires when a spending limit stopped it.
+
+Receiving one is the same verification you already wrote for callbacks — the
+signature scheme is identical, and `verifyWebhook` is the same code path with a
+different body check:
+
+```ts
+import { acceptWebhook, retryWebhook, verifyWebhook, webhookSupersedes } from "@deepnoodle/nvoken";
+
+const delivery = await verifyWebhook(webhookSigningKey, request.headers, rawBody);
+const applied = await lastAppliedSequence(delivery.invocationId);
+if (webhookSupersedes(delivery, applied)) {
+  await settle(delivery.invocationId, delivery.envelope.invocation, delivery.sequence);
+}
+return new Response(null, acceptWebhook());
+```
+
+The key is the App's `webhook`-purpose signing key, not its `callback` key. A
+receiver serving both endpoints holds two, and must not try either against the
+other's deliveries.
+
+Three rules make a receiver correct:
+
+**Fold by sequence, not by arrival.** Delivery is at least once, so the same
+transition can arrive twice and a redelivery can land after a later one. Keep
+the highest `sequence` you have applied per Invocation and apply only what
+`webhookSupersedes` accepts. That is the deduplication too — a repeat carries a
+sequence you already applied — so nothing else is needed to make handling
+idempotent.
+
+**The payload is a pointer, not a copy.** It carries `status`, `stop_reason`,
+`failure_code`, `waiting_tool_call_ids`, and `credit_block`, and deliberately
+nothing else: no transcript, no output text, no usage. Read `getInvocation` or
+`getInvocationResult` when you need more, so you are reconciling against the
+authoritative record rather than a staler copy of it.
+
+**Answer `retryWebhook()` when you could not record it.** Any 5xx is
+redelivered, as are 408, 425, and 429. Every other non-2xx answer is permanent
+and that transition is never delivered again, so a 400 from a receiver that was
+merely busy is a settlement you silently lost.
+
+Retries are bounded, so webhooks alone are not a settlement guarantee.
+`client.listEndedInvocations` is the backstop: it walks turns in the order they
+ended, so a delivery that never landed is one you still find.
+
 ## Structured output and schema libraries
 
 Raw JSON Schema keeps an application type:
@@ -714,11 +774,11 @@ for await (const session of client.sessionPages({ tenantKey: "acme" })) {
   console.log(session.id);
 }
 
-for await (const message of client.messagePages("sesn_...", { limit: 100 })) {
+for await (const message of client.messagePages("sess_...", { limit: 100 })) {
   console.log(message.sequence, message.role);
 }
 
-const transcript = await client.drainTranscript("sesn_...", {
+const transcript = await client.drainTranscript("sess_...", {
   cursor: previousCursor,
   pageSize: 100,
 });
@@ -726,6 +786,30 @@ const transcript = await client.drainTranscript("sesn_...", {
 
 `drainTranscript()` holds one fixed snapshot cut across pages and returns the
 next durable `resumeCursor`.
+
+## Acting for one tenant or one end user
+
+An app-wide credential can reach every tenant in its App, so an id that arrives
+from the wrong place — a stale link, a mixed-up webhook, a tampered form field
+— is an id it can act on. Say the scope once instead of re-reading the resource
+before every call:
+
+```ts
+const tenant = client.scoped({ tenantKey: "acme", userKey: "user-7c1f" });
+await tenant.getSession(sessionIdFromTheRequest);
+```
+
+Anything outside the scope is reported as `not_found`, so a Session or
+Invocation belonging to somebody else cannot be read, cancelled, interrupted,
+forked, answered, or erased — and you learn nothing about whether the id
+exists. Writes take the same scope: an omitted `tenantKey` or `userKey`
+inherits it, and one naming somebody else is refused.
+
+A scope may only narrow. A credential already bound to one tenant refuses a
+scope naming another with `forbidden` rather than silently returning nothing.
+`client` itself is unchanged, so the unscoped one keeps doing administrative
+reads. Browser tokens already carry their tenant and end user and neither need
+this nor may send it.
 
 ## Errors and raw access
 

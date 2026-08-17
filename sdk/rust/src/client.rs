@@ -482,10 +482,38 @@ pub struct SessionOptions {
     pub compaction: Option<ContextCompaction>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retention: Option<SessionRetention>,
+    /// Fixes the Agent Definition revision for the lifetime of a newly created
+    /// Session. Omit it to follow the Agent's resolution policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinned_revision: Option<u32>,
+    /// Binds the Session to the host's own authorization facts. It is written
+    /// only by the request that creates the Session, never interpreted by
+    /// nvoken, never visible to the model, and carried inside the signed
+    /// callback envelope so a receiver authorizes a delivery without reading
+    /// the Invocation back. What nvoken guarantees is integrity, not
+    /// authentication: what creation recorded is what a signed delivery
+    /// carries.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, String>>,
+    pub authorization_context: Option<HashMap<String, String>>,
+    /// What this request asserts about a Session that already exists.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub on_conflict: Option<SessionOptionsConflict>,
+}
+
+/// What a request asserts about a Session that already exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum SessionOptionsConflict {
+    /// The default: compares every option sent.
+    #[serde(rename = "refuse")]
+    Refuse,
+    /// Reaches whatever Session is there without asserting how it is
+    /// configured, so compaction and retention stop conflicting. It never
+    /// relaxes the authorization context, the revision pin, or the Session's
+    /// end user: those catch a caller acting on the wrong conversation, and a
+    /// flag that suppressed them would be a way around the check rather than a
+    /// way to express intent.
+    #[serde(rename = "join")]
+    Join,
 }
 
 impl SessionOptions {
@@ -504,8 +532,13 @@ impl SessionOptions {
         self
     }
 
-    pub fn metadata(mut self, metadata: HashMap<String, String>) -> Self {
-        self.metadata = Some(metadata);
+    pub fn authorization_context(mut self, context: HashMap<String, String>) -> Self {
+        self.authorization_context = Some(context);
+        self
+    }
+
+    pub fn on_conflict(mut self, policy: SessionOptionsConflict) -> Self {
+        self.on_conflict = Some(policy);
         self
     }
 }
@@ -1035,6 +1068,16 @@ pub struct InvokeRequest {
     pub agent_id: Option<String>,
     pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
+    /// Who this turn is for. The first request that opens a Session fixes its
+    /// user key, including fixing it to absent; every later turn either sends
+    /// the same one or leaves it out and inherits it. A turn naming a different
+    /// end user is refused with `session_user_key_conflict`.
+    ///
+    /// It is a filter, and on an Agent whose Definition sets
+    /// `memory.scope: user` it is also the memory partition — it decides whose
+    /// durable memories the model can recall — so it is required on the turn
+    /// that opens a Session for such an Agent.
+    pub user_key: Option<String>,
     pub session_id: Option<String>,
     pub session_key: Option<String>,
     pub session_options: Option<SessionOptions>,
@@ -1064,8 +1107,7 @@ pub struct InvokeRequest {
     /// Opaque host correlation data recorded on this Invocation. It is part of
     /// the admitted input, so it is immutable and material to idempotency: a
     /// replay carrying different metadata conflicts rather than updating it.
-    /// Session metadata is separate and mutable — see `SessionOptions::metadata`
-    /// and `Client::update_session`.
+    /// Session metadata is separate and mutable — see `Client::update_session`.
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -1075,6 +1117,7 @@ impl InvokeRequest {
             agent_id: None,
             agent_key: Some(agent_key.into()),
             tenant_key: None,
+            user_key: None,
             session_id: None,
             session_key: None,
             session_options: None,
@@ -1114,6 +1157,11 @@ impl InvokeRequest {
 
     pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
         self.tenant_key = Some(tenant_key.into());
+        self
+    }
+
+    pub fn user_key(mut self, user_key: impl Into<String>) -> Self {
+        self.user_key = Some(user_key.into());
         self
     }
 
@@ -1493,11 +1541,87 @@ impl Default for WaitOptions {
     }
 }
 
+/// Narrows every request a `Client` makes to one tenant, one end user, or
+/// both. Anything outside it is reported as not found, so an id that arrives
+/// from the wrong place cannot be acted on — which is what lets one app-wide
+/// credential serve a whole application without an ownership check written at
+/// every call site. A scope may only narrow: naming a tenant the credential is
+/// not bound to is refused rather than silently returning nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Scope {
+    pub tenant_key: Option<String>,
+    pub user_key: Option<String>,
+}
+
+impl Scope {
+    pub fn tenant(tenant_key: impl Into<String>) -> Self {
+        Self {
+            tenant_key: Some(tenant_key.into()),
+            user_key: None,
+        }
+    }
+
+    pub fn user(mut self, user_key: impl Into<String>) -> Self {
+        self.user_key = Some(user_key.into());
+        self
+    }
+
+    /// Drops a scope that names nobody, so an empty one is not a silent no-op.
+    fn narrowing(self) -> Option<Self> {
+        let tenant_key = self.tenant_key.and_then(|key| non_blank(key));
+        let user_key = self.user_key.and_then(|key| non_blank(key));
+        if tenant_key.is_none() && user_key.is_none() {
+            return None;
+        }
+        Some(Self {
+            tenant_key,
+            user_key,
+        })
+    }
+}
+
+fn narrowing_scope(scope: Scope) -> Result<Scope, NvokenError> {
+    scope.narrowing().ok_or_else(|| {
+        NvokenError::validation("a scope requires a tenant key, a user key, or both")
+    })
+}
+
+fn scope_headers(scope: Option<&Scope>) -> Result<reqwest::header::HeaderMap, NvokenError> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    let Some(scope) = scope else {
+        return Ok(headers);
+    };
+    for (name, value) in [
+        ("x-nvoken-tenant-key", scope.tenant_key.as_deref()),
+        ("x-nvoken-user-key", scope.user_key.as_deref()),
+    ] {
+        let Some(value) = value else {
+            continue;
+        };
+        let value = reqwest::header::HeaderValue::from_str(value).map_err(|_| {
+            NvokenError::validation(format!("{name} must be a valid HTTP header value"))
+        })?;
+        headers.insert(name, value);
+    }
+    Ok(headers)
+}
+
+fn non_blank(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    }
+}
+
 #[derive(Clone)]
 pub struct Client {
     pub(crate) configuration: Arc<apis::configuration::Configuration>,
     pub(crate) stream_client: reqwest::Client,
     response_metadata: ResponseMetadataStore,
+    retry_policy: RetryPolicy,
+    scope: Option<Scope>,
     /// One lock per bound Agent Session key, shared across every clone of
     /// this `Client` so two `AgentSession` handles for the same Session
     /// (even built from different `Agent` values) serialize correctly.
@@ -1517,6 +1641,50 @@ impl Client {
         api_key: impl Into<String>,
         retry_policy: RetryPolicy,
     ) -> Result<Self, NvokenError> {
+        Self::build(base_url, api_key, retry_policy, None, None)
+    }
+
+    /// Narrows the client at construction, for the common case where an
+    /// application makes one client per tenant rather than deriving them.
+    pub fn with_scope(
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        scope: Scope,
+    ) -> Result<Self, NvokenError> {
+        let scope = narrowing_scope(scope)?;
+        Self::build(base_url, api_key, RetryPolicy::default(), Some(scope), None)
+    }
+
+    /// Returns a client that stamps this scope on every request it makes. The
+    /// receiver is unchanged, so a scoped client can be handed to the part of
+    /// an application that handles one tenant's or one end user's work while
+    /// the unscoped one keeps doing administrative reads.
+    pub fn scoped(&self, scope: Scope) -> Result<Self, NvokenError> {
+        let scope = narrowing_scope(scope)?;
+        Self::build(
+            self.configuration.base_path.clone(),
+            self.configuration
+                .bearer_access_token
+                .clone()
+                .unwrap_or_default(),
+            self.retry_policy.clone(),
+            Some(scope),
+            Some(self.session_locks.clone()),
+        )
+    }
+
+    /// Reports the scope this client stamps, `None` when it stamps none.
+    pub fn scope(&self) -> Option<&Scope> {
+        self.scope.as_ref()
+    }
+
+    fn build(
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        retry_policy: RetryPolicy,
+        scope: Option<Scope>,
+        session_locks: Option<Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>>,
+    ) -> Result<Self, NvokenError> {
         let base_url = base_url.into().trim_end_matches('/').to_owned();
         let api_key = api_key.into();
         if base_url.is_empty() || api_key.is_empty() {
@@ -1525,6 +1693,7 @@ impl Client {
         let user_agent = format!("nvoken-rust/{}", crate::VERSION);
         let transport = reqwest::Client::builder()
             .user_agent(&user_agent)
+            .default_headers(scope_headers(scope.as_ref())?)
             .build()
             .map_err(|error| NvokenError::transport(error.to_string()))?;
         let response_metadata = ResponseMetadataStore::default();
@@ -1533,7 +1702,7 @@ impl Client {
                 metadata: response_metadata.clone(),
             })
             .with(ReplaySafeRetry {
-                policy: retry_policy,
+                policy: retry_policy.clone(),
             })
             .build();
         let configuration = apis::configuration::Configuration {
@@ -1547,7 +1716,9 @@ impl Client {
             configuration: Arc::new(configuration),
             stream_client: transport,
             response_metadata,
-            session_locks: Arc::new(Mutex::new(HashMap::new())),
+            retry_policy,
+            scope,
+            session_locks: session_locks.unwrap_or_else(|| Arc::new(Mutex::new(HashMap::new()))),
         })
     }
 
@@ -1986,6 +2157,7 @@ impl Client {
         body.mcp_server_headers = mcp_server_headers;
         body.context = context;
         body.tenant_key = request.tenant_key;
+        body.user_key = request.user_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;
         body.session_options = request
@@ -1994,7 +2166,8 @@ impl Client {
                 if value.compaction.is_none()
                     && value.retention.is_none()
                     && value.pinned_revision.is_none()
-                    && value.metadata.is_none()
+                    && value.authorization_context.is_none()
+                    && value.on_conflict.is_none()
                 {
                     return Err(NvokenError::validation(
                         "session_options requires at least one member",
@@ -2031,7 +2204,11 @@ impl Client {
                     .retention
                     .map(|retention| Box::new(models::RetentionPolicy::new(retention.ttl_seconds)));
                 options.pinned_revision = value.pinned_revision.map(u64::from);
-                options.metadata = value.metadata;
+                options.authorization_context = value.authorization_context;
+                options.on_conflict = value.on_conflict.map(|policy| match policy {
+                    SessionOptionsConflict::Refuse => models::session_options::OnConflict::Refuse,
+                    SessionOptionsConflict::Join => models::session_options::OnConflict::Join,
+                });
                 Ok::<_, NvokenError>(Box::new(options))
             })
             .transpose()?;
@@ -3210,5 +3387,35 @@ mod tests {
             serde_json::to_value(stored).unwrap(),
             json!({"provider": "openai", "source": "app_byok"})
         );
+    }
+
+    // A scope is worth nothing if it is only remembered locally, so this pins
+    // the headers that actually leave the process, and that the client a scoped
+    // one was derived from keeps making unscoped requests.
+    #[test]
+    fn a_scope_stamps_headers_and_leaves_its_parent_alone() {
+        let client = Client::new("https://runtime.example.test", "key").unwrap();
+        assert!(client.scope().is_none());
+        assert!(scope_headers(None).unwrap().is_empty());
+
+        let scoped = client
+            .scoped(Scope::tenant("acme").user("user-7c1f"))
+            .unwrap();
+        let headers = scope_headers(scoped.scope()).unwrap();
+        assert_eq!(headers["x-nvoken-tenant-key"], "acme");
+        assert_eq!(headers["x-nvoken-user-key"], "user-7c1f");
+        assert!(client.scope().is_none());
+
+        let tenant_only =
+            Client::with_scope("https://runtime.example.test", "key", Scope::tenant("acme"))
+                .unwrap();
+        let headers = scope_headers(tenant_only.scope()).unwrap();
+        assert_eq!(headers["x-nvoken-tenant-key"], "acme");
+        assert!(!headers.contains_key("x-nvoken-user-key"));
+
+        // An empty scope would stamp nothing while reading as a narrowing,
+        // which is the one failure mode a scope cannot have.
+        assert!(client.scoped(Scope::default()).is_err());
+        assert!(client.scoped(Scope::tenant("   ")).is_err());
     }
 }

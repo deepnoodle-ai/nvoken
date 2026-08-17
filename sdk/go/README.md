@@ -405,3 +405,87 @@ Check `selected.Controls.Reasoning` before admission. A manual
 preserves provider defaults; unsupported values and combinations are rejected
 without aliasing. OpenAI reasoning is intentionally unavailable until its
 complete continuation representation is durable.
+
+## Invocation webhooks
+
+A turn that ends tells you so, without you holding a connection open to hear
+it. Set `InvokeRequest.Webhook` when you start the turn; omitting `Events`
+selects all three. `invocation.ended` fires once when the turn reaches a
+terminal status, `invocation.waiting` when it needs a host tool run, and
+`invocation.paused` when a spending limit stopped it.
+
+nvoken signs Invocation webhooks and tool callbacks identically, so
+`VerifyWebhook` and `VerifyCallback` are one verification path with different
+body checks:
+
+```go
+delivery, err := nvoken.VerifyWebhook(webhookSigningKey, r.Header, rawBody, time.Now())
+if err != nil {
+	// A body that genuinely failed verification is permanent: 401 is right.
+	http.Error(w, "unverified", http.StatusUnauthorized)
+	return
+}
+if delivery.Supersedes(lastApplied[delivery.InvocationID]) {
+	settle(delivery.InvocationID, delivery.Envelope.Invocation, delivery.Sequence)
+}
+w.WriteHeader(nvoken.AcceptWebhook().Status)
+```
+
+The key is the App's `webhook`-purpose signing key, not its `callback` key. A
+receiver serving both endpoints holds two, and must not try either against the
+other's deliveries.
+
+Three rules make a receiver correct:
+
+**Fold by sequence, not by arrival.** Delivery is at least once, so the same
+transition can arrive twice and a redelivery can land after a later one. Keep
+the highest `Sequence` you have applied per Invocation and apply only what
+`Supersedes` accepts. That is the deduplication too — a repeat carries a
+sequence you already applied — so nothing else is needed to make handling
+idempotent.
+
+**The payload is a pointer, not a copy.** `WebhookSubject` carries `Status`,
+`StopReason`, `FailureCode`, `WaitingToolCallIDs`, and `CreditBlock`, and
+deliberately nothing else: no transcript, no output text, no usage. Read
+`GetInvocation` or `GetInvocationResult` when you need more, so you are
+reconciling against the authoritative record rather than a staler copy of it.
+
+**Answer `RetryWebhook()` when you could not record it.** Any 5xx is
+redelivered, as are 408, 425, and 429 — `WebhookStatusIsRetried` answers for any
+status. Every other non-2xx answer is permanent and that transition is never
+delivered again, so a 400 from a receiver that was merely busy is a settlement
+you silently lost.
+
+Retries are bounded, so webhooks alone are not a settlement guarantee.
+`ListEndedInvocations` is the backstop: it walks turns in the order they ended,
+so a delivery that never landed is one you still find.
+
+## Acting for one tenant or one end user
+
+An app-wide credential can reach every tenant in its App, so an id that arrives
+from the wrong place — a stale link, a mixed-up webhook, a tampered form field
+— is an id it can act on. Say the scope once instead of re-reading the resource
+before every call:
+
+```go
+tenant, err := client.Scoped(nvoken.Scope{
+	TenantKey: "acme",
+	UserKey:   "user-7c1f",
+})
+if err != nil {
+	return err
+}
+session, err := tenant.GetSession(ctx, sessionIDFromTheRequest)
+```
+
+Anything outside the scope is reported as `not_found`, so a Session or
+Invocation belonging to somebody else cannot be read, cancelled, interrupted,
+forked, answered, or erased — and you learn nothing about whether the id
+exists. Writes take the same scope: an omitted tenant or user key in the body
+inherits it, and one naming somebody else is refused.
+
+A scope may only narrow. A credential already bound to one tenant refuses a
+scope naming another with `forbidden` rather than silently returning nothing.
+The client it was derived from is unchanged, so the unscoped one keeps doing
+administrative reads. Browser tokens already carry their tenant and end user
+and neither need this nor may send it.

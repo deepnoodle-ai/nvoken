@@ -2,7 +2,7 @@
   "tool_calls": {
     "items": [
       {
-        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+        "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
         "mode": "builtin",
         "name": "nvoken_fetch",
         "status": "completed",
@@ -13,7 +13,7 @@
         "result_origin": "builtin"
       },
       {
-        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+        "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
         "mode": "host",
         "name": "ask_user",
         "status": "running",
@@ -24,7 +24,7 @@
         "result_origin": null
       },
       {
-        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+        "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "mode": "callback",
         "name": "create_ticket",
         "status": "completed",
@@ -40,7 +40,7 @@
         "result_origin": "callback"
       },
       {
-        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+        "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "mode": "mcp",
         "name": "support__lookup",
         "status": "failed",
@@ -51,7 +51,7 @@
         "result_origin": "mcp"
       },
       {
-        "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb32a",
+        "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a",
         "mode": "callback",
         "name": "run_migration",
         "status": "completed",
@@ -77,10 +77,11 @@
     "request": {
       "nvoken": {
         "schema_version": 1,
-        "delivery_id": "cbdy_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
-        "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
-        "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "delivery_id": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
+        "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+        "tool_name": "create_ticket",
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "agent_key": "support",
         "tenant_key": "acme"
       },

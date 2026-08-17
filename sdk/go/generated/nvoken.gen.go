@@ -499,6 +499,7 @@ const (
 	ErrorCodeRateLimited                     ErrorCode = "rate_limited"
 	ErrorCodeSessionInvocationActive         ErrorCode = "session_invocation_active"
 	ErrorCodeSessionOptionsConflict          ErrorCode = "session_options_conflict"
+	ErrorCodeSessionUserKeyConflict          ErrorCode = "session_user_key_conflict"
 	ErrorCodeTenantInUse                     ErrorCode = "tenant_in_use"
 	ErrorCodeToolResultConflict              ErrorCode = "tool_result_conflict"
 	ErrorCodeToolResultExpired               ErrorCode = "tool_result_expired"
@@ -570,6 +571,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSessionInvocationActive:
 		return true
 	case ErrorCodeSessionOptionsConflict:
+		return true
+	case ErrorCodeSessionUserKeyConflict:
 		return true
 	case ErrorCodeTenantInUse:
 		return true
@@ -844,6 +847,21 @@ func (e InvocationTimelineStepKind) Valid() bool {
 	case InvocationTimelineStepKindNudge:
 		return true
 	case InvocationTimelineStepKindToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationWebhookContextSchemaVersion.
+const (
+	InvocationWebhookContextSchemaVersionN1 InvocationWebhookContextSchemaVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the InvocationWebhookContextSchemaVersion enum.
+func (e InvocationWebhookContextSchemaVersion) Valid() bool {
+	switch e {
+	case InvocationWebhookContextSchemaVersionN1:
 		return true
 	default:
 		return false
@@ -1777,6 +1795,24 @@ func (e SessionMessageRole) Valid() bool {
 	}
 }
 
+// Defines values for SessionOptionsOnConflict.
+const (
+	Join   SessionOptionsOnConflict = "join"
+	Refuse SessionOptionsOnConflict = "refuse"
+)
+
+// Valid indicates whether the value is a known member of the SessionOptionsOnConflict enum.
+func (e SessionOptionsOnConflict) Valid() bool {
+	switch e {
+	case Join:
+		return true
+	case Refuse:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StreamResyncEventType.
 const (
 	EventStreamResync StreamResyncEventType = "stream.resync"
@@ -1932,13 +1968,13 @@ func (e ToolCallStatus) Valid() bool {
 
 // Defines values for ToolCallbackContextSchemaVersion.
 const (
-	N1 ToolCallbackContextSchemaVersion = 1
+	ToolCallbackContextSchemaVersionN1 ToolCallbackContextSchemaVersion = 1
 )
 
 // Valid indicates whether the value is a known member of the ToolCallbackContextSchemaVersion enum.
 func (e ToolCallbackContextSchemaVersion) Valid() bool {
 	switch e {
-	case N1:
+	case ToolCallbackContextSchemaVersionN1:
 		return true
 	default:
 		return false
@@ -2368,15 +2404,30 @@ func (e GetUsageTimeseriesParamsGroupBy) Valid() bool {
 	}
 }
 
+// Defines values for ReceiveInvocationWebhookParamsXNvokenSignatureVersion.
+const (
+	ReceiveInvocationWebhookParamsXNvokenSignatureVersionV1 ReceiveInvocationWebhookParamsXNvokenSignatureVersion = "v1"
+)
+
+// Valid indicates whether the value is a known member of the ReceiveInvocationWebhookParamsXNvokenSignatureVersion enum.
+func (e ReceiveInvocationWebhookParamsXNvokenSignatureVersion) Valid() bool {
+	switch e {
+	case ReceiveInvocationWebhookParamsXNvokenSignatureVersionV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReceiveToolCallbackParamsXNvokenSignatureVersion.
 const (
-	V1 ReceiveToolCallbackParamsXNvokenSignatureVersion = "v1"
+	ReceiveToolCallbackParamsXNvokenSignatureVersionV1 ReceiveToolCallbackParamsXNvokenSignatureVersion = "v1"
 )
 
 // Valid indicates whether the value is a known member of the ReceiveToolCallbackParamsXNvokenSignatureVersion enum.
 func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	switch e {
-	case V1:
+	case ReceiveToolCallbackParamsXNvokenSignatureVersionV1:
 		return true
 	default:
 		return false
@@ -3061,6 +3112,44 @@ type AppSigningKeySecret struct {
 // AuthenticationMethod defines model for AuthenticationMethod.
 type AuthenticationMethod string
 
+// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+// boundary is finer than a tenant — a board, a workspace, a document —
+// this is where you say so, and nvoken carries it to your callback
+// receiver inside the signed body so authorizing a delivery costs no
+// round trip.
+//
+// Four properties, all guaranteed rather than incidental:
+//
+//   - **Written at creation only.** Set by the request that brings the
+//     Session into existence, whether that is `POST /v1/sessions`, a fork,
+//     or the admission that creates it. There is no patch path and there
+//     will not be one. A later turn that sends a different value is refused
+//     with `session_options_conflict`; one that sends a value on a Session
+//     created without one is refused rather than installing it.
+//   - **Never interpreted.** nvoken does not read it, route on it, or index
+//     it.
+//   - **Never model-visible.** It is not rendered into context and no tool
+//     can read it. This is a rule the runtime is held to, not a description
+//     of how it happens to work today.
+//   - **Carried in the signed callback envelope**, as a sibling of the
+//     `nvoken` object rather than a member of it.
+//
+// **What nvoken guarantees is integrity, not authentication.** What
+// creation recorded is what a signed delivery carries, unchanged. nvoken
+// does not verify that the values are true, or that the caller was
+// entitled to assert them. That is yours.
+//
+// The rule every callback receiver needs, in one sentence: a value
+// repeated in tool input may only agree with the authorization context,
+// never establish it. The model writes tool input; it does not write
+// this.
+//
+// Same bounds as `metadata`: at most 16 entries, keys of 1–64 bytes from
+// letters, digits, `_`, `.`, `:`, and `-`, values at most 512 bytes of
+// UTF-8. Unlike `metadata`, a `null` value is not accepted — there is no
+// merge here to delete a key from.
+type AuthorizationContext map[string]string
+
 // BrowserAccess Complete browser-direct configuration. Enabling it requires
 // App default_rate_limits and an active webhook-purpose signing key.
 type BrowserAccess struct {
@@ -3445,7 +3534,7 @@ type CreateInvocationRequest struct {
 	// same original request carries the same values anyway.
 	//
 	// Session metadata is a separate thing and can be changed — see
-	// `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
+	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
 	// OnBudgetExhausted What to do when the turn runs out of one of its spending limits.
@@ -3482,21 +3571,20 @@ type CreateInvocationRequest struct {
 
 	// SessionOptions Settings stored on the Session itself, rather than on this turn.
 	//
-	// On a new Session these are saved. On a Session that already exists,
-	// `compaction` and `retention` are checked rather than applied:
-	// matching values are fine, and a different value returns
-	// `session_options_conflict` telling you which paths disagreed. This
-	// keeps two callers from silently reconfiguring each other's
-	// conversation.
-	//
-	// `metadata` merges instead, exactly as
-	// `PATCH /v1/sessions/{session_id}` does: a present key replaces and
-	// an absent key survives. It never conflicts, so a label that drifted
-	// since the last turn cannot fail this one.
+	// On a new Session these are saved. On a Session that already exists
+	// they are checked rather than applied: matching values are fine, and
+	// a different value returns `session_options_conflict` telling you
+	// which paths disagreed. This keeps two callers from silently
+	// reconfiguring each other's conversation. Send
+	// `on_conflict: "join"` when you mean "reach whatever Session is
+	// there" rather than "it should be configured like this".
 	//
 	// If no compaction policy is stored yet, this turn can install one,
 	// because the policy needs a model to validate against and only a turn
 	// supplies that.
+	//
+	// A Session's title and other descriptive labels are not here. They
+	// are `metadata`, written with `PATCH /v1/sessions/{session_id}`.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
@@ -3506,10 +3594,16 @@ type CreateInvocationRequest struct {
 	// stored partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
-	// UserKey Optional host-owned end-user label recorded on this Invocation and
-	// its input message. The Session retains the label from the request
-	// that opened it, while later turns may identify different end users.
-	// Filtering only; not an isolation boundary.
+	// UserKey Who this turn is for. The first request that opens a Session fixes
+	// its `user_key`, including fixing it to absent; every later turn
+	// either sends the same one or leaves it out and inherits it. A turn
+	// naming a different end user is refused with
+	// `session_user_key_conflict`.
+	//
+	// It is a filter, and on an Agent whose Definition sets
+	// `memory.scope: user` it is also the memory partition — it decides
+	// whose durable memories the model can recall — so it is required on
+	// the turn that opens a Session for such an Agent.
 	UserKey *string `json:"user_key,omitempty"`
 
 	// Webhook Optional endpoint nvoken posts a signed webhook to when this
@@ -3613,27 +3707,30 @@ type CreateSessionRequest struct {
 	SessionKey *string `json:"session_key,omitempty"`
 
 	// SessionOptions Settings stored on the Session. Every field is optional, but send at
-	// least one.
+	// least one. All of them are assertions rather than descriptions: a
+	// Session's title and other descriptive data live in `metadata`, which is
+	// written only by `PATCH /v1/sessions/{session_id}`.
 	//
 	// On a new Session these are saved. When you reach an existing Session,
-	// by ID or by key, `compaction` and `retention` are checked rather than
-	// applied: matching values are accepted, and a different value returns
-	// `session_options_conflict` with `details.conflicting_paths` naming
-	// exactly what disagreed. Compaction needs a turn to install it, because
-	// the policy is validated against that turn's model.
-	//
-	// `metadata` is merged rather than checked, on the same terms as
-	// `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
-	// survives, and it never conflicts. Deleting a key stays a PATCH, since a
-	// null value is not accepted here.
+	// by ID or by key, they are checked rather than applied: matching values
+	// are accepted, and a different value returns `session_options_conflict`
+	// with `details.conflicting_paths` naming exactly what disagreed. That
+	// includes `pinned_revision`, which is immutable, and
+	// `authorization_context`, which is never installed on a Session created
+	// without one. Compaction is the single exception, and only in one
+	// direction: a Session with no policy adopts the one you send, because
+	// the policy is validated against a turn's model and so needs a turn to
+	// install it.
 	SessionOptions *SessionOptions `json:"session_options,omitempty"`
 
 	// TenantKey Optional tenant partition. Precedence is credential constraint,
 	// this explicit value, then the default partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
-	// UserKey Optional host-owned end-user label recorded on the Session.
-	// Filtering only; not an isolation boundary.
+	// UserKey Optional host-owned end-user label recorded on the Session. It is
+	// fixed here: every turn in this Session either sends the same one or
+	// leaves it out. Required if the Agent's Definition sets
+	// `memory.scope: user`, since that makes it the memory partition.
 	UserKey *string `json:"user_key,omitempty"`
 }
 
@@ -3894,21 +3991,48 @@ type ErrorResponse struct {
 }
 
 // ForkSessionOptions Creation-only options for a forked child. The child never inherits the
-// source Session's compaction policy, retention, or metadata.
+// source Session's compaction policy, retention, metadata, or
+// authorization context — a fork is a creation moment, so supply what the
+// child is bound to rather than letting it carry over.
 type ForkSessionOptions struct {
-	// Metadata Opaque host correlation data. nvoken stores it, returns it verbatim,
-	// and never interprets it — it exists so a support engineer holding an
-	// Invocation id can get back to the board, ticket, or surface the turn
-	// came from, which nvoken deliberately knows nothing about.
+	// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+	// boundary is finer than a tenant — a board, a workspace, a document —
+	// this is where you say so, and nvoken carries it to your callback
+	// receiver inside the signed body so authorizing a delivery costs no
+	// round trip.
 	//
-	// At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`,
-	// `:`, and `-`; values are at most 512 bytes of UTF-8.
+	// Four properties, all guaranteed rather than incidental:
 	//
-	// There is no `title` field on a Session by design. A title is one of
-	// these entries (`{"title": "Refund policy"}`), which keeps nvoken from
-	// forming opinions about a string only the host renders.
-	Metadata       *Metadata `json:"metadata,omitempty"`
-	PinnedRevision *int64    `json:"pinned_revision,omitempty"`
+	// - **Written at creation only.** Set by the request that brings the
+	//   Session into existence, whether that is `POST /v1/sessions`, a fork,
+	//   or the admission that creates it. There is no patch path and there
+	//   will not be one. A later turn that sends a different value is refused
+	//   with `session_options_conflict`; one that sends a value on a Session
+	//   created without one is refused rather than installing it.
+	// - **Never interpreted.** nvoken does not read it, route on it, or index
+	//   it.
+	// - **Never model-visible.** It is not rendered into context and no tool
+	//   can read it. This is a rule the runtime is held to, not a description
+	//   of how it happens to work today.
+	// - **Carried in the signed callback envelope**, as a sibling of the
+	//   `nvoken` object rather than a member of it.
+	//
+	// **What nvoken guarantees is integrity, not authentication.** What
+	// creation recorded is what a signed delivery carries, unchanged. nvoken
+	// does not verify that the values are true, or that the caller was
+	// entitled to assert them. That is yours.
+	//
+	// The rule every callback receiver needs, in one sentence: a value
+	// repeated in tool input may only agree with the authorization context,
+	// never establish it. The model writes tool input; it does not write
+	// this.
+	//
+	// Same bounds as `metadata`: at most 16 entries, keys of 1–64 bytes from
+	// letters, digits, `_`, `.`, `:`, and `-`, values at most 512 bytes of
+	// UTF-8. Unlike `metadata`, a `null` value is not accepted — there is no
+	// merge here to delete a key from.
+	AuthorizationContext *AuthorizationContext `json:"authorization_context,omitempty"`
+	PinnedRevision       *int64                `json:"pinned_revision,omitempty"`
 
 	// Retention How long a Session can sit unused before nvoken deletes it. When the
 	// window passes, the Session and everything under it are erased, exactly
@@ -3928,7 +4052,10 @@ type ForkSessionOptions struct {
 	Retention *RetentionPolicy `json:"retention,omitempty"`
 }
 
-// ForkSessionRequest defines model for ForkSessionRequest.
+// ForkSessionRequest There is no `user_key` here. A fork copies the transcript, including
+// anything a `memory.scope: user` Agent recalled into it, so the child
+// keeps the source Session's end user. Opening a copy of one person's
+// conversation for another is not a fork.
 type ForkSessionRequest struct {
 	// FromMessage Inclusive fork point, by stable message ID or sequence.
 	FromMessage ForkSessionRequest_FromMessage `json:"from_message"`
@@ -3937,11 +4064,10 @@ type ForkSessionRequest struct {
 	SessionKey *string `json:"session_key,omitempty"`
 
 	// SessionOptions Creation-only options for a forked child. The child never inherits the
-	// source Session's compaction policy, retention, or metadata.
+	// source Session's compaction policy, retention, metadata, or
+	// authorization context — a fork is a creation moment, so supply what the
+	// child is bound to rather than letting it carry over.
 	SessionOptions *ForkSessionOptions `json:"session_options,omitempty"`
-
-	// UserKey Optional opened-by label for the child Session.
-	UserKey *string `json:"user_key,omitempty"`
 }
 
 // ForkSessionRequestFromMessage1 defines model for ForkSessionRequest.FromMessage.1.
@@ -4558,6 +4684,134 @@ type InvocationTimelineStep struct {
 // InvocationTimelineStepKind defines model for InvocationTimelineStep.Kind.
 type InvocationTimelineStepKind string
 
+// InvocationWebhookContext defines model for InvocationWebhookContext.
+type InvocationWebhookContext struct {
+	AgentKey string `json:"agent_key"`
+
+	// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
+	// both are the same durable record and carry the same `dlvr_` prefix.
+	// Treat it as opaque; it appears in the signed payload and identifies the
+	// attempt when you report a delivery problem.
+	DeliveryID DeliveryID `json:"delivery_id"`
+
+	// Event `invocation.waiting` fires when a turn stops and needs you to run at
+	// least one tool. A turn waiting only on callback tools sends nothing,
+	// because nvoken delivers those to your endpoint itself and there is
+	// nothing for you to do.
+	//
+	// `invocation.paused` fires when a spending limit you opted into stopped
+	// the turn, and carries the `stop_reason` naming the limit.
+	//
+	// `invocation.ended` fires exactly once, when the turn reaches
+	// `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
+	// incomplete payloads carry `stop_reason` alongside `failure_code`.
+	Event WebhookEvent `json:"event"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID  InvocationID                          `json:"invocation_id"`
+	SchemaVersion InvocationWebhookContextSchemaVersion `json:"schema_version"`
+
+	// Sequence Counts transitions within one Invocation, from 1. Deliveries can
+	// arrive out of order, so a receiver folding state keeps the highest
+	// sequence it has seen for that Invocation and discards anything
+	// lower rather than applying whichever arrived last.
+	Sequence int64 `json:"sequence"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+
+	// TenantKey Absent for the app's default tenant.
+	TenantKey *string `json:"tenant_key,omitempty"`
+}
+
+// InvocationWebhookContextSchemaVersion defines model for InvocationWebhookContext.SchemaVersion.
+type InvocationWebhookContextSchemaVersion int
+
+// InvocationWebhookRequest defines model for InvocationWebhookRequest.
+type InvocationWebhookRequest struct {
+	// Invocation A pointer to the turn, not a projection of it. It deliberately carries
+	// no transcript content, tool arguments, structured output, usage,
+	// provenance, or failure message: a signed body that grew those would be
+	// a second, staler copy of the record, and a receiver that read them
+	// would be reconciling against the wrong source. Read
+	// `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+	// beyond what is here.
+	Invocation InvocationWebhookSubject `json:"invocation"`
+	Nvoken     InvocationWebhookContext `json:"nvoken"`
+}
+
+// InvocationWebhookSubject A pointer to the turn, not a projection of it. It deliberately carries
+// no transcript content, tool arguments, structured output, usage,
+// provenance, or failure message: a signed body that grew those would be
+// a second, staler copy of the record, and a receiver that read them
+// would be reconciling against the wrong source. Read
+// `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+// beyond what is here.
+type InvocationWebhookSubject struct {
+	// CreditBlock Present when a spending limit stopped the turn, naming the account
+	// that could not fund the next attempt.
+	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
+
+	// FailureCode Present when the turn ended in a failure.
+	FailureCode *string `json:"failure_code,omitempty"`
+
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again. Do not encode that
+	// set: an InvocationChange carries `terminal`, an Invocation carries
+	// `ended_at`, and both say the same thing without a list of yours to
+	// keep in step as this enum grows.
+	//
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
+	//
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
+	//
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means a spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit or add
+	// credits to the blocked tenant account and it continues. It still
+	// accepts interrupt, cancel, and nudge.
+	Status InvocationStatus `json:"status"`
+
+	// StopReason Why a turn stopped. Set on turns that did not fail, and which values
+	// can appear depends on the status.
+	//
+	// A `completed` turn carries `end_turn` (the model finished on its own)
+	// or `interrupted` (you asked it to stop, and it stopped at the next
+	// clean point). An `incomplete` turn carries whichever limit ran out:
+	// `max_iterations`, `deadline`, `max_output_tokens`, or
+	// `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
+	// `insufficient_credits`, never `deadline`, because a paused turn's
+	// deadlines are on hold.
+	//
+	// An interrupt is deliberately `completed` rather than `incomplete`: you
+	// asked the turn to end there, so ending there is the result you wanted,
+	// not a shortfall.
+	//
+	// Expect new values here over time.
+	StopReason *InvocationStopReason `json:"stop_reason,omitempty"`
+
+	// WaitingToolCallIds The host tools this turn is parked on. Present on
+	// `invocation.waiting` only.
+	WaitingToolCallIds *[]ToolCallID `json:"waiting_tool_call_ids,omitempty"`
+}
+
 // Limits Optional requested limits. Total time bounds the entire turn, active
 // time bounds model and tool execution, and waiting time bounds the
 // cumulative time parked for host or callback tool results. Installation
@@ -4849,6 +5103,10 @@ type MessagePhase string
 // There is no `title` field on a Session by design. A title is one of
 // these entries (`{"title": "Refund policy"}`), which keeps nvoken from
 // forming opinions about a string only the host renders.
+//
+// Metadata is correlation data, not an authorization anchor. If a value
+// decides what a callback receiver is allowed to touch, put it in
+// `session_options.authorization_context` instead.
 type Metadata map[string]string
 
 // MintAppSigningKeyRequest defines model for MintAppSigningKeyRequest.
@@ -5508,7 +5766,11 @@ type RedactedBlock struct {
 // RedactedBlockType defines model for RedactedBlock.Type.
 type RedactedBlockType string
 
-// RegisterAppRequest defines model for RegisterAppRequest.
+// RegisterAppRequest There is deliberately no `anonymous_access` here. Enabling it requires
+// browser access, finite App limits, and `credit_policy: required` to
+// already be stored, so it is set with `PATCH /v1/apps/{app_id}` once
+// the App exists rather than validated against a request that is still
+// describing itself.
 type RegisterAppRequest struct {
 	// BrowserAccess Optional complete browser configuration. Null and omission both
 	// create the App with browser access disabled.
@@ -5683,8 +5945,8 @@ type ServerToolUseBlockType string
 // required. Omission is the whole mechanism, so one schema decodes every
 // response and nothing has to be guessed from the payload. The omitted
 // set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`,
-// `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`,
-// `context`, and `usage`.
+// `compaction`, `retention`, `expires_at`, `metadata`,
+// `authorization_context`, `credit_block`, `context`, and `usage`.
 type Session struct {
 	// ActiveInvocationID The queued, running, waiting, or paused Invocation, if one exists.
 	ActiveInvocationID *InvocationID `json:"active_invocation_id"`
@@ -5695,6 +5957,10 @@ type Session struct {
 	// AgentID Null only while a Session created ahead of time has not run a turn yet.
 	// The first turn binds the Agent, and after that it never changes.
 	AgentID *AgentID `json:"agent_id,omitempty"`
+
+	// AuthorizationContext What this Session was bound to at creation, echoed so an operator
+	// holding a `sess_` id can see it. Machine audience only.
+	AuthorizationContext *AuthorizationContext `json:"authorization_context,omitempty"`
 
 	// Compaction The automatic compaction policy this Session actually applies, or
 	// null when it compacts nothing. It is echoed resolved: a request
@@ -5726,8 +5992,7 @@ type Session struct {
 	// ID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
 	ID SessionID `json:"id"`
 
-	// Metadata Host correlation data, returned verbatim. Set at creation through
-	// `session_options.metadata` and changed with
+	// Metadata Host correlation data, returned verbatim. Written only by
 	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
@@ -5755,8 +6020,12 @@ type Session struct {
 	// normalized estimate is not a billing ledger.
 	Usage *ModelUsage `json:"usage,omitempty"`
 
-	// UserKey Host-owned end-user label recorded when this Session was opened.
-	// Filtering only; not an isolation boundary.
+	// UserKey Host-owned end-user label, fixed by the request that opened this
+	// Session. Every turn carries the same one: send it again and it must
+	// match, leave it out and it is inherited. On an Agent whose
+	// Definition sets `memory.scope: user` it also selects the memory
+	// partition, which is why a turn naming a different end user is
+	// refused with `session_user_key_conflict` rather than admitted.
 	UserKey *string `json:"user_key,omitempty"`
 }
 
@@ -5932,38 +6201,75 @@ type SessionMessageList struct {
 type SessionMessageRole string
 
 // SessionOptions Settings stored on the Session. Every field is optional, but send at
-// least one.
+// least one. All of them are assertions rather than descriptions: a
+// Session's title and other descriptive data live in `metadata`, which is
+// written only by `PATCH /v1/sessions/{session_id}`.
 //
 // On a new Session these are saved. When you reach an existing Session,
-// by ID or by key, `compaction` and `retention` are checked rather than
-// applied: matching values are accepted, and a different value returns
-// `session_options_conflict` with `details.conflicting_paths` naming
-// exactly what disagreed. Compaction needs a turn to install it, because
-// the policy is validated against that turn's model.
-//
-// `metadata` is merged rather than checked, on the same terms as
-// `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
-// survives, and it never conflicts. Deleting a key stays a PATCH, since a
-// null value is not accepted here.
+// by ID or by key, they are checked rather than applied: matching values
+// are accepted, and a different value returns `session_options_conflict`
+// with `details.conflicting_paths` naming exactly what disagreed. That
+// includes `pinned_revision`, which is immutable, and
+// `authorization_context`, which is never installed on a Session created
+// without one. Compaction is the single exception, and only in one
+// direction: a Session with no policy adopts the one you send, because
+// the policy is validated against a turn's model and so needs a turn to
+// install it.
 type SessionOptions struct {
+	// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+	// boundary is finer than a tenant — a board, a workspace, a document —
+	// this is where you say so, and nvoken carries it to your callback
+	// receiver inside the signed body so authorizing a delivery costs no
+	// round trip.
+	//
+	// Four properties, all guaranteed rather than incidental:
+	//
+	// - **Written at creation only.** Set by the request that brings the
+	//   Session into existence, whether that is `POST /v1/sessions`, a fork,
+	//   or the admission that creates it. There is no patch path and there
+	//   will not be one. A later turn that sends a different value is refused
+	//   with `session_options_conflict`; one that sends a value on a Session
+	//   created without one is refused rather than installing it.
+	// - **Never interpreted.** nvoken does not read it, route on it, or index
+	//   it.
+	// - **Never model-visible.** It is not rendered into context and no tool
+	//   can read it. This is a rule the runtime is held to, not a description
+	//   of how it happens to work today.
+	// - **Carried in the signed callback envelope**, as a sibling of the
+	//   `nvoken` object rather than a member of it.
+	//
+	// **What nvoken guarantees is integrity, not authentication.** What
+	// creation recorded is what a signed delivery carries, unchanged. nvoken
+	// does not verify that the values are true, or that the caller was
+	// entitled to assert them. That is yours.
+	//
+	// The rule every callback receiver needs, in one sentence: a value
+	// repeated in tool input may only agree with the authorization context,
+	// never establish it. The model writes tool input; it does not write
+	// this.
+	//
+	// Same bounds as `metadata`: at most 16 entries, keys of 1–64 bytes from
+	// letters, digits, `_`, `.`, `:`, and `-`, values at most 512 bytes of
+	// UTF-8. Unlike `metadata`, a `null` value is not accepted — there is no
+	// merge here to delete a key from.
+	AuthorizationContext *AuthorizationContext `json:"authorization_context,omitempty"`
+
 	// Compaction Durable Session context-compaction policy. Omission of model uses the
 	// installing Invocation's primary model. An explicit model must be
 	// cataloged and use the same provider. Later Invocations automatically
 	// use this resolved policy and the latest Session summary.
 	Compaction *CompactionPolicy `json:"compaction,omitempty"`
 
-	// Metadata Opaque host correlation data. nvoken stores it, returns it verbatim,
-	// and never interprets it — it exists so a support engineer holding an
-	// Invocation id can get back to the board, ticket, or surface the turn
-	// came from, which nvoken deliberately knows nothing about.
+	// OnConflict What you are asserting about a Session that already exists.
+	// `refuse`, the default, compares every option you sent. `join` says
+	// you want to reach whatever Session is there without asserting how
+	// it is configured, so `compaction` and `retention` stop conflicting.
 	//
-	// At most 16 entries. Keys are 1–64 bytes of letters, digits, `_`, `.`,
-	// `:`, and `-`; values are at most 512 bytes of UTF-8.
-	//
-	// There is no `title` field on a Session by design. A title is one of
-	// these entries (`{"title": "Refund policy"}`), which keeps nvoken from
-	// forming opinions about a string only the host renders.
-	Metadata *Metadata `json:"metadata,omitempty"`
+	// `join` never relaxes `authorization_context`, `pinned_revision`, or
+	// `user_key`. Those exist to catch a caller acting on the wrong
+	// conversation, and a flag that suppressed them would be a way around
+	// the check rather than a way to express intent.
+	OnConflict *SessionOptionsOnConflict `json:"on_conflict,omitempty"`
 
 	// PinnedRevision Immutable Session-level Agent Definition revision pin.
 	PinnedRevision *int64 `json:"pinned_revision,omitempty"`
@@ -5985,6 +6291,17 @@ type SessionOptions struct {
 	// which stays the default.
 	Retention *RetentionPolicy `json:"retention,omitempty"`
 }
+
+// SessionOptionsOnConflict What you are asserting about a Session that already exists.
+// `refuse`, the default, compares every option you sent. `join` says
+// you want to reach whatever Session is there without asserting how
+// it is configured, so `compaction` and `retention` stop conflicting.
+//
+// `join` never relaxes `authorization_context`, `pinned_revision`, or
+// `user_key`. Those exist to catch a caller acting on the wrong
+// conversation, and a flag that suppressed them would be a way around
+// the check rather than a way to express intent.
+type SessionOptionsOnConflict string
 
 // SessionStreamEvent The JSON value carried by one SSE `data:` field. Switch on `type`.
 // Saved `transcript.update` frames carry the resume cursor as both
@@ -6333,8 +6650,19 @@ type ToolCallbackContextSchemaVersion int
 
 // ToolCallbackRequest defines model for ToolCallbackRequest.
 type ToolCallbackRequest struct {
-	Input  interface{}         `json:"input"`
-	Nvoken ToolCallbackContext `json:"nvoken"`
+	// AuthorizationContext The Session's `authorization_context`, absent when the Session was
+	// created without one.
+	//
+	// It sits beside `nvoken` rather than inside it on purpose.
+	// Everything in `nvoken` is a fact nvoken minted or resolved; this is
+	// a value you asserted at creation and nvoken carried unchanged.
+	// Signing proves it reached you as recorded, not that it is true.
+	//
+	// A value repeated in tool input may only agree with this, never
+	// establish it.
+	AuthorizationContext *AuthorizationContext `json:"authorization_context,omitempty"`
+	Input                interface{}           `json:"input"`
+	Nvoken               ToolCallbackContext   `json:"nvoken"`
 }
 
 // ToolCallbackResponse Strict callback reply. The encoded content is limited to 256 KiB and
@@ -6842,6 +7170,9 @@ type InvalidRequest = ErrorResponse
 
 // MCPDiscoveryFailed defines model for MCPDiscoveryFailed.
 type MCPDiscoveryFailed = ErrorResponse
+
+// MethodNotAllowed defines model for MethodNotAllowed.
+type MethodNotAllowed = ErrorResponse
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
@@ -7386,6 +7717,28 @@ type GetUsageTimeseriesParams struct {
 // GetUsageTimeseriesParamsGroupBy defines parameters for GetUsageTimeseries.
 type GetUsageTimeseriesParamsGroupBy string
 
+// ReceiveInvocationWebhookParams defines parameters for ReceiveInvocationWebhook.
+type ReceiveInvocationWebhookParams struct {
+	// XNvokenSignature HMAC-SHA256 signature of the canonical delivery string.
+	XNvokenSignature        string                                                `json:"X-Nvoken-Signature"`
+	XNvokenSignatureVersion ReceiveInvocationWebhookParamsXNvokenSignatureVersion `json:"X-Nvoken-Signature-Version"`
+
+	// XNvokenTimestamp Unix timestamp used in the signature.
+	XNvokenTimestamp         int64      `json:"X-Nvoken-Timestamp"`
+	XNvokenDeliveryID        DeliveryID `json:"X-Nvoken-Delivery-Id"`
+	XNvokenSigningKeyID      string     `json:"X-Nvoken-Signing-Key-Id"`
+	XNvokenSigningKeyVersion int64      `json:"X-Nvoken-Signing-Key-Version"`
+
+	// IdempotencyKey The delivery ID, unchanged across retries of this delivery. Unlike
+	// the callback scheme, which keys on the ToolCall, one Invocation
+	// produces several deliveries — one per transition — so this is the
+	// delivery rather than the turn.
+	IdempotencyKey DeliveryID `json:"Idempotency-Key"`
+}
+
+// ReceiveInvocationWebhookParamsXNvokenSignatureVersion defines parameters for ReceiveInvocationWebhook.
+type ReceiveInvocationWebhookParamsXNvokenSignatureVersion string
+
 // ReceiveToolCallbackParams defines parameters for ReceiveToolCallback.
 type ReceiveToolCallbackParams struct {
 	// XNvokenSignature HMAC-SHA256 signature of the canonical delivery string.
@@ -7476,6 +7829,9 @@ type UpdateSessionJSONRequestBody = UpdateSessionRequest
 
 // ForkSessionJSONRequestBody defines body for ForkSession for application/json ContentType.
 type ForkSessionJSONRequestBody = ForkSessionRequest
+
+// ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody defines body for ReceiveInvocationWebhook for application/vnd.nvoken.invocation-webhook+json; version=1 ContentType.
+type ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody = InvocationWebhookRequest
 
 // ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody defines body for ReceiveToolCallback for application/vnd.nvoken.tool-callback+json; version=1 ContentType.
 type ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody = ToolCallbackRequest
@@ -8778,6 +9134,25 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// GetHealth Liveness
+	//
+	// Answers 200 as long as the process is running. It touches nothing —
+	// no database, no provider — so it stays honest as a restart signal:
+	// a dependency being down is not a reason to kill the process.
+	//
+	// Corresponds with GET /health (the `GetHealth` operationId).
+	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReadiness Readiness
+	//
+	// Answers 200 when the process can serve requests, which here means
+	// Postgres answered a ping. Route traffic on this rather than on
+	// `/health`: nvoken's execution authority is the database, so a process
+	// that cannot reach it has nothing to serve.
+	//
+	// Corresponds with GET /ready (the `GetReadiness` operationId).
+	GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAdmissions List attempts to start an Invocation, admitted and refused
 	//
 	// Every request to create an Invocation leaves one record here, whether
@@ -9511,13 +9886,18 @@ type ClientInterface interface {
 	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, and input all match. The
-	// original admitted revision is returned even if its Definition has
-	// advanced. Values are compared as sent, so omitting an override is not
-	// the same as supplying one that happens to equal the Definition. Key
-	// order inside JSON objects does not matter; array order does. Change
-	// anything material and you get `idempotency_conflict` rather than a
-	// surprise second turn.
+	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// admitted revision is returned even if its Definition has advanced.
+	// Values are compared as sent, so omitting an override is not the same as
+	// supplying one that happens to equal the Definition. Key order inside
+	// JSON objects does not matter; array order does. Change anything
+	// material and you get `idempotency_conflict` rather than a surprise
+	// second turn.
+	//
+	// `user_key` is the one exception, because it is the Session's rather
+	// than the turn's: omitting it asserts nothing and inherits what the
+	// Session already holds, while sending a different one conflicts.
 	//
 	// ## When the Session is already busy
 	//
@@ -9603,13 +9983,18 @@ type ClientInterface interface {
 	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, and input all match. The
-	// original admitted revision is returned even if its Definition has
-	// advanced. Values are compared as sent, so omitting an override is not
-	// the same as supplying one that happens to equal the Definition. Key
-	// order inside JSON objects does not matter; array order does. Change
-	// anything material and you get `idempotency_conflict` rather than a
-	// surprise second turn.
+	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// admitted revision is returned even if its Definition has advanced.
+	// Values are compared as sent, so omitting an override is not the same as
+	// supplying one that happens to equal the Definition. Key order inside
+	// JSON objects does not matter; array order does. Change anything
+	// material and you get `idempotency_conflict` rather than a surprise
+	// second turn.
+	//
+	// `user_key` is the one exception, because it is the Session's rather
+	// than the turn's: omitting it asserts nothing and inherits what the
+	// Session already holds, while sending a different one conflicts.
 	//
 	// ## When the Session is already busy
 	//
@@ -10397,9 +10782,12 @@ type ClientInterface interface {
 	// phase are preserved.
 	//
 	// Usage and compaction summaries are not copied. Child usage starts at
-	// zero and the child starts uncompacted. Retention and metadata come only
-	// from `session_options` on this request; no Session option is inherited.
-	// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+	// zero and the child starts uncompacted. Retention, the revision pin, and
+	// the authorization context come only from `session_options` on this
+	// request; no Session option is inherited, because a child's policy is
+	// the forker's choice. `user_key` is the exception and is inherited from
+	// the source, because who the conversation is about is not a policy. A
+	// `session_key` has the same tenant/Agent-scoped upsert behavior as
 	// Session creation.
 	//
 	// Takes any type of body and a specified content type.
@@ -10417,9 +10805,12 @@ type ClientInterface interface {
 	// phase are preserved.
 	//
 	// Usage and compaction summaries are not copied. Child usage starts at
-	// zero and the child starts uncompacted. Retention and metadata come only
-	// from `session_options` on this request; no Session option is inherited.
-	// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+	// zero and the child starts uncompacted. Retention, the revision pin, and
+	// the authorization context come only from `session_options` on this
+	// request; no Session option is inherited, because a child's policy is
+	// the forker's choice. `user_key` is the exception and is inherited from
+	// the source, because who the conversation is about is not a policy. A
+	// `session_key` has the same tenant/Agent-scoped upsert behavior as
 	// Session creation.
 	//
 	// Takes a body of the `application/json` content type.
@@ -10603,6 +10994,45 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetHealth Liveness
+//
+// Answers 200 as long as the process is running. It touches nothing —
+// no database, no provider — so it stays honest as a restart signal:
+// a dependency being down is not a reason to kill the process.
+//
+// Corresponds with GET /health (the `GetHealth` operationId).
+func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReadiness Readiness
+//
+// Answers 200 when the process can serve requests, which here means
+// Postgres answered a ping. Route traffic on this rather than on
+// `/health`: nvoken's execution authority is the database, so a process
+// that cannot reach it has nothing to serve.
+//
+// Corresponds with GET /ready (the `GetReadiness` operationId).
+func (c *Client) GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReadinessRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListAdmissions List attempts to start an Invocation, admitted and refused
@@ -11848,13 +12278,18 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, and input all match. The
-// original admitted revision is returned even if its Definition has
-// advanced. Values are compared as sent, so omitting an override is not
-// the same as supplying one that happens to equal the Definition. Key
-// order inside JSON objects does not matter; array order does. Change
-// anything material and you get `idempotency_conflict` rather than a
-// surprise second turn.
+// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+// `webhook`, `on_budget_exhausted`, and input all match. The original
+// admitted revision is returned even if its Definition has advanced.
+// Values are compared as sent, so omitting an override is not the same as
+// supplying one that happens to equal the Definition. Key order inside
+// JSON objects does not matter; array order does. Change anything
+// material and you get `idempotency_conflict` rather than a surprise
+// second turn.
+//
+// `user_key` is the one exception, because it is the Session's rather
+// than the turn's: omitting it asserts nothing and inherits what the
+// Session already holds, while sending a different one conflicts.
 //
 // ## When the Session is already busy
 //
@@ -11950,13 +12385,18 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, and input all match. The
-// original admitted revision is returned even if its Definition has
-// advanced. Values are compared as sent, so omitting an override is not
-// the same as supplying one that happens to equal the Definition. Key
-// order inside JSON objects does not matter; array order does. Change
-// anything material and you get `idempotency_conflict` rather than a
-// surprise second turn.
+// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+// `webhook`, `on_budget_exhausted`, and input all match. The original
+// admitted revision is returned even if its Definition has advanced.
+// Values are compared as sent, so omitting an override is not the same as
+// supplying one that happens to equal the Definition. Key order inside
+// JSON objects does not matter; array order does. Change anything
+// material and you get `idempotency_conflict` rather than a surprise
+// second turn.
+//
+// `user_key` is the one exception, because it is the Session's rather
+// than the turn's: omitting it asserts nothing and inherits what the
+// Session already holds, while sending a different one conflicts.
 //
 // ## When the Session is already busy
 //
@@ -13224,9 +13664,12 @@ func (c *Client) ListSessionCompactions(ctx context.Context, sessionID SessionID
 // phase are preserved.
 //
 // Usage and compaction summaries are not copied. Child usage starts at
-// zero and the child starts uncompacted. Retention and metadata come only
-// from `session_options` on this request; no Session option is inherited.
-// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+// zero and the child starts uncompacted. Retention, the revision pin, and
+// the authorization context come only from `session_options` on this
+// request; no Session option is inherited, because a child's policy is
+// the forker's choice. `user_key` is the exception and is inherited from
+// the source, because who the conversation is about is not a policy. A
+// `session_key` has the same tenant/Agent-scoped upsert behavior as
 // Session creation.
 //
 // Takes any type of body and a specified content type.
@@ -13254,9 +13697,12 @@ func (c *Client) ForkSessionWithBody(ctx context.Context, sessionID SessionID, c
 // phase are preserved.
 //
 // Usage and compaction summaries are not copied. Child usage starts at
-// zero and the child starts uncompacted. Retention and metadata come only
-// from `session_options` on this request; no Session option is inherited.
-// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+// zero and the child starts uncompacted. Retention, the revision pin, and
+// the authorization context come only from `session_options` on this
+// request; no Session option is inherited, because a child's policy is
+// the forker's choice. `user_key` is the exception and is inherited from
+// the source, because who the conversation is about is not a policy. A
+// `session_key` has the same tenant/Agent-scoped upsert behavior as
 // Session creation.
 //
 // Takes a body of the `application/json` content type.
@@ -13539,6 +13985,60 @@ func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeser
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetHealthRequest constructs an http.Request for the GetHealth method
+func NewGetHealthRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/health")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetReadinessRequest constructs an http.Request for the GetReadiness method
+func NewGetReadinessRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ready")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAdmissionsRequest constructs an http.Request for the ListAdmissions method
@@ -19049,6 +19549,29 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// GetHealthWithResponse Liveness
+	//
+	// Answers 200 as long as the process is running. It touches nothing —
+	// no database, no provider — so it stays honest as a restart signal:
+	// a dependency being down is not a reason to kill the process.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /health (the `GetHealth` operationId).
+	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthHTTPResponse, error)
+
+	// GetReadinessWithResponse Readiness
+	//
+	// Answers 200 when the process can serve requests, which here means
+	// Postgres answered a ping. Route traffic on this rather than on
+	// `/health`: nvoken's execution authority is the database, so a process
+	// that cannot reach it has nothing to serve.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /ready (the `GetReadiness` operationId).
+	GetReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadinessHTTPResponse, error)
+
 	// ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 	//
 	// Every request to create an Invocation leaves one record here, whether
@@ -19836,13 +20359,18 @@ type ClientWithResponsesInterface interface {
 	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, and input all match. The
-	// original admitted revision is returned even if its Definition has
-	// advanced. Values are compared as sent, so omitting an override is not
-	// the same as supplying one that happens to equal the Definition. Key
-	// order inside JSON objects does not matter; array order does. Change
-	// anything material and you get `idempotency_conflict` rather than a
-	// surprise second turn.
+	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// admitted revision is returned even if its Definition has advanced.
+	// Values are compared as sent, so omitting an override is not the same as
+	// supplying one that happens to equal the Definition. Key order inside
+	// JSON objects does not matter; array order does. Change anything
+	// material and you get `idempotency_conflict` rather than a surprise
+	// second turn.
+	//
+	// `user_key` is the one exception, because it is the Session's rather
+	// than the turn's: omitting it asserts nothing and inherits what the
+	// Session already holds, while sending a different one conflicts.
 	//
 	// ## When the Session is already busy
 	//
@@ -19928,13 +20456,18 @@ type ClientWithResponsesInterface interface {
 	// finished. Keys are scoped to the tenant and Agent.
 	//
 	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, and input all match. The
-	// original admitted revision is returned even if its Definition has
-	// advanced. Values are compared as sent, so omitting an override is not
-	// the same as supplying one that happens to equal the Definition. Key
-	// order inside JSON objects does not matter; array order does. Change
-	// anything material and you get `idempotency_conflict` rather than a
-	// surprise second turn.
+	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// admitted revision is returned even if its Definition has advanced.
+	// Values are compared as sent, so omitting an override is not the same as
+	// supplying one that happens to equal the Definition. Key order inside
+	// JSON objects does not matter; array order does. Change anything
+	// material and you get `idempotency_conflict` rather than a surprise
+	// second turn.
+	//
+	// `user_key` is the one exception, because it is the Session's rather
+	// than the turn's: omitting it asserts nothing and inherits what the
+	// Session already holds, while sending a different one conflicts.
 	//
 	// ## When the Session is already busy
 	//
@@ -20776,9 +21309,12 @@ type ClientWithResponsesInterface interface {
 	// phase are preserved.
 	//
 	// Usage and compaction summaries are not copied. Child usage starts at
-	// zero and the child starts uncompacted. Retention and metadata come only
-	// from `session_options` on this request; no Session option is inherited.
-	// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+	// zero and the child starts uncompacted. Retention, the revision pin, and
+	// the authorization context come only from `session_options` on this
+	// request; no Session option is inherited, because a child's policy is
+	// the forker's choice. `user_key` is the exception and is inherited from
+	// the source, because who the conversation is about is not a policy. A
+	// `session_key` has the same tenant/Agent-scoped upsert behavior as
 	// Session creation.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -20796,9 +21332,12 @@ type ClientWithResponsesInterface interface {
 	// phase are preserved.
 	//
 	// Usage and compaction summaries are not copied. Child usage starts at
-	// zero and the child starts uncompacted. Retention and metadata come only
-	// from `session_options` on this request; no Session option is inherited.
-	// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+	// zero and the child starts uncompacted. Retention, the revision pin, and
+	// the authorization context come only from `session_options` on this
+	// request; no Session option is inherited, because a child's policy is
+	// the forker's choice. `user_key` is the exception and is inherited from
+	// the source, because who the conversation is about is not a policy. A
+	// `session_key` has the same tenant/Agent-scoped upsert behavior as
 	// Session creation.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -21000,6 +21539,102 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
+}
+
+// GetHealthHTTPResponse405Headers the declared response headers of an HTTP 405 response for GetHealth
+type GetHealthHTTPResponse405Headers struct {
+	Allow *string
+}
+
+type GetHealthHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *MethodNotAllowed
+	// Headers405 the parsed response headers for an HTTP 405 response
+	Headers405 *GetHealthHTTPResponse405Headers
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r GetHealthHTTPResponse) GetJSON405() *MethodNotAllowed {
+	return r.JSON405
+}
+
+// GetBody returns the raw response body bytes
+func (r GetHealthHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHealthHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHealthHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetHealthHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetReadinessHTTPResponse405Headers the declared response headers of an HTTP 405 response for GetReadiness
+type GetReadinessHTTPResponse405Headers struct {
+	Allow *string
+}
+
+type GetReadinessHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *MethodNotAllowed
+	// Headers405 the parsed response headers for an HTTP 405 response
+	Headers405 *GetReadinessHTTPResponse405Headers
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r GetReadinessHTTPResponse) GetJSON405() *MethodNotAllowed {
+	return r.JSON405
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReadinessHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReadinessHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReadinessHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReadinessHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListAdmissionsHTTPResponse struct {
@@ -28447,6 +29082,41 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	return ""
 }
 
+// GetHealthWithResponse Liveness
+//
+// Answers 200 as long as the process is running. It touches nothing —
+// no database, no provider — so it stays honest as a restart signal:
+// a dependency being down is not a reason to kill the process.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /health (the `GetHealth` operationId).
+func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthHTTPResponse, error) {
+	rsp, err := c.GetHealth(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHealthHTTPResponse(rsp)
+}
+
+// GetReadinessWithResponse Readiness
+//
+// Answers 200 when the process can serve requests, which here means
+// Postgres answered a ping. Route traffic on this rather than on
+// `/health`: nvoken's execution authority is the database, so a process
+// that cannot reach it has nothing to serve.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /ready (the `GetReadiness` operationId).
+func (c *ClientWithResponses) GetReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadinessHTTPResponse, error) {
+	rsp, err := c.GetReadiness(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReadinessHTTPResponse(rsp)
+}
+
 // ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 //
 // Every request to create an Invocation leaves one record here, whether
@@ -29540,13 +30210,18 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, and input all match. The
-// original admitted revision is returned even if its Definition has
-// advanced. Values are compared as sent, so omitting an override is not
-// the same as supplying one that happens to equal the Definition. Key
-// order inside JSON objects does not matter; array order does. Change
-// anything material and you get `idempotency_conflict` rather than a
-// surprise second turn.
+// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+// `webhook`, `on_budget_exhausted`, and input all match. The original
+// admitted revision is returned even if its Definition has advanced.
+// Values are compared as sent, so omitting an override is not the same as
+// supplying one that happens to equal the Definition. Key order inside
+// JSON objects does not matter; array order does. Change anything
+// material and you get `idempotency_conflict` rather than a surprise
+// second turn.
+//
+// `user_key` is the one exception, because it is the Session's rather
+// than the turn's: omitting it asserts nothing and inherits what the
+// Session already holds, while sending a different one conflicts.
 //
 // ## When the Session is already busy
 //
@@ -29638,13 +30313,18 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // finished. Keys are scoped to the tenant and Agent.
 //
 // A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, and input all match. The
-// original admitted revision is returned even if its Definition has
-// advanced. Values are compared as sent, so omitting an override is not
-// the same as supplying one that happens to equal the Definition. Key
-// order inside JSON objects does not matter; array order does. Change
-// anything material and you get `idempotency_conflict` rather than a
-// surprise second turn.
+// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+// `webhook`, `on_budget_exhausted`, and input all match. The original
+// admitted revision is returned even if its Definition has advanced.
+// Values are compared as sent, so omitting an override is not the same as
+// supplying one that happens to equal the Definition. Key order inside
+// JSON objects does not matter; array order does. Change anything
+// material and you get `idempotency_conflict` rather than a surprise
+// second turn.
+//
+// `user_key` is the one exception, because it is the Session's rather
+// than the turn's: omitting it asserts nothing and inherits what the
+// Session already holds, while sending a different one conflicts.
 //
 // ## When the Session is already busy
 //
@@ -30774,9 +31454,12 @@ func (c *ClientWithResponses) ListSessionCompactionsWithResponse(ctx context.Con
 // phase are preserved.
 //
 // Usage and compaction summaries are not copied. Child usage starts at
-// zero and the child starts uncompacted. Retention and metadata come only
-// from `session_options` on this request; no Session option is inherited.
-// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+// zero and the child starts uncompacted. Retention, the revision pin, and
+// the authorization context come only from `session_options` on this
+// request; no Session option is inherited, because a child's policy is
+// the forker's choice. `user_key` is the exception and is inherited from
+// the source, because who the conversation is about is not a policy. A
+// `session_key` has the same tenant/Agent-scoped upsert behavior as
 // Session creation.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -30800,9 +31483,12 @@ func (c *ClientWithResponses) ForkSessionWithBodyWithResponse(ctx context.Contex
 // phase are preserved.
 //
 // Usage and compaction summaries are not copied. Child usage starts at
-// zero and the child starts uncompacted. Retention and metadata come only
-// from `session_options` on this request; no Session option is inherited.
-// A `session_key` has the same tenant/Agent-scoped upsert behavior as
+// zero and the child starts uncompacted. Retention, the revision pin, and
+// the authorization context come only from `session_options` on this
+// request; no Session option is inherited, because a child's policy is
+// the forker's choice. `user_key` is the exception and is inherited from
+// the source, because who the conversation is about is not a policy. A
+// `session_key` has the same tenant/Agent-scoped upsert behavior as
 // Session creation.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -31063,6 +31749,84 @@ func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetUsageTimeseriesHTTPResponse(rsp)
+}
+
+// ParseGetHealthHTTPResponse parses an HTTP response from a GetHealthWithResponse call
+func ParseGetHealthHTTPResponse(rsp *http.Response) (*GetHealthHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHealthHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 405:
+		var headers GetHealthHTTPResponse405Headers
+		if values := rsp.Header.Values("Allow"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Allow", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Allow = &value
+		}
+		response.Headers405 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetReadinessHTTPResponse parses an HTTP response from a GetReadinessWithResponse call
+func ParseGetReadinessHTTPResponse(rsp *http.Response) (*GetReadinessHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReadinessHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 405:
+		var headers GetReadinessHTTPResponse405Headers
+		if values := rsp.Header.Values("Allow"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Allow", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Allow = &value
+		}
+		response.Headers405 = &headers
+	}
+
+	return response, nil
 }
 
 // ParseListAdmissionsHTTPResponse parses an HTTP response from a ListAdmissionsWithResponse call
@@ -37619,10 +38383,39 @@ func (p *WebhookInitiator) applyWebhookEditors(ctx context.Context, req *http.Re
 
 // WebhookInitiatorInterface is the interface specification for the webhook initiator.
 type WebhookInitiatorInterface interface {
+	// ReceiveInvocationWebhookWithBody fires the invocationWebhook webhook with any body
+	ReceiveInvocationWebhookWithBody(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReceiveInvocationWebhookWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReceiveToolCallbackWithBody fires the toolCallback webhook with any body
 	ReceiveToolCallbackWithBody(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReceiveToolCallbackWithApplicationVndNvokenToolCallbackPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, body ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (p *WebhookInitiator) ReceiveInvocationWebhookWithBody(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := p.applyWebhookEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return p.Client.Do(req)
+}
+
+func (p *WebhookInitiator) ReceiveInvocationWebhookWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(targetURL, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := p.applyWebhookEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return p.Client.Do(req)
 }
 
 func (p *WebhookInitiator) ReceiveToolCallbackWithBody(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -37647,6 +38440,103 @@ func (p *WebhookInitiator) ReceiveToolCallbackWithApplicationVndNvokenToolCallba
 		return nil, err
 	}
 	return p.Client.Do(req)
+}
+
+// NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body builds a application/vnd.nvoken.invocation-webhook+json; version=1 POST request for the invocationWebhook webhook
+func NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL, params, "application/vnd.nvoken.invocation-webhook+json; version=1", bodyReader)
+}
+
+// NewReceiveInvocationWebhookWebhookRequestWithBody builds a POST request for the invocationWebhook webhook with any body
+func NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+	_ = err
+
+	reqURL, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, reqURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signature", params.XNvokenSignature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signature", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signature-Version", params.XNvokenSignatureVersion, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signature-Version", headerParam1)
+
+		var headerParam2 string
+
+		headerParam2, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Timestamp", params.XNvokenTimestamp, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "integer", Format: "int64"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Timestamp", headerParam2)
+
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Delivery-Id", params.XNvokenDeliveryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Delivery-Id", headerParam3)
+
+		var headerParam4 string
+
+		headerParam4, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signing-Key-Id", params.XNvokenSigningKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signing-Key-Id", headerParam4)
+
+		var headerParam5 string
+
+		headerParam5, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signing-Key-Version", params.XNvokenSigningKeyVersion, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "integer", Format: "int64"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signing-Key-Version", headerParam5)
+
+		var headerParam6 string
+
+		headerParam6, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam6)
+
+	}
+	return req, nil
 }
 
 // NewReceiveToolCallbackWebhookRequestWithApplicationVndNvokenToolCallbackPlusJSONVersion1Body builds a application/vnd.nvoken.tool-callback+json; version=1 POST request for the toolCallback webhook

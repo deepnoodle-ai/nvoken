@@ -67,7 +67,7 @@ If the original client exits while the API restarts, recover without
 readmitting:
 
 ```bash
-export NVOKEN_INVOCATION_ID=invk_...
+export NVOKEN_INVOCATION_ID=inv_...
 go run ./examples/mcp-recovery run
 ```
 

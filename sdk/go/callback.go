@@ -2,18 +2,11 @@ package nvoken
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
-
-const CallbackTimestampWindow = 5 * time.Minute
 
 type CallbackEnvelope struct {
 	Nvoken struct {
@@ -44,42 +37,16 @@ type VerifiedCallback struct {
 	Timestamp  time.Time
 }
 
+// VerifyCallback checks one tool-callback delivery and returns its signed
+// body. The signature scheme is shared with VerifyWebhook; only the checks
+// below, which are about what a callback body must say, are particular to it.
 func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Time) (VerifiedCallback, error) {
-	if len(key) < 32 {
-		return VerifiedCallback{}, fmt.Errorf("callback signing key must be at least 32 bytes")
-	}
-	if header.Get("X-Nvoken-Signature-Version") != "v1" {
-		return VerifiedCallback{}, fmt.Errorf("unsupported callback signature version")
-	}
-	timestamp, err := strconv.ParseInt(header.Get("X-Nvoken-Timestamp"), 10, 64)
+	delivery, err := verifySignedDelivery(key, header, rawBody, now)
 	if err != nil {
-		return VerifiedCallback{}, fmt.Errorf("invalid callback timestamp")
+		return VerifiedCallback{}, err
 	}
-	when := time.Unix(timestamp, 0)
-	if now.Sub(when) > CallbackTimestampWindow || when.Sub(now) > CallbackTimestampWindow {
-		return VerifiedCallback{}, fmt.Errorf("callback timestamp is outside the accepted window")
-	}
-	deliveryID := header.Get("X-Nvoken-Delivery-Id")
-	toolCallID := header.Get("Idempotency-Key")
-	keyID := header.Get("X-Nvoken-Signing-Key-Id")
-	keyVersion, err := strconv.ParseInt(header.Get("X-Nvoken-Signing-Key-Version"), 10, 64)
-	if deliveryID == "" || toolCallID == "" || keyID == "" || err != nil || keyVersion <= 0 {
-		return VerifiedCallback{}, fmt.Errorf("callback identity headers are invalid")
-	}
-	provided := header.Get("X-Nvoken-Signature")
-	if !strings.HasPrefix(provided, "sha256=") {
-		return VerifiedCallback{}, fmt.Errorf("callback signature must use sha256 prefix")
-	}
-	providedBytes, err := hex.DecodeString(strings.TrimPrefix(provided, "sha256="))
-	if err != nil {
-		return VerifiedCallback{}, fmt.Errorf("callback signature must be hexadecimal")
-	}
-	mac := hmac.New(sha256.New, key)
-	_, _ = fmt.Fprintf(mac, "v1.%s.%d.", deliveryID, timestamp)
-	_, _ = mac.Write(rawBody)
-	if !hmac.Equal(providedBytes, mac.Sum(nil)) {
-		return VerifiedCallback{}, fmt.Errorf("callback signature mismatch")
-	}
+	deliveryID := delivery.DeliveryID
+	toolCallID := delivery.IdempotencyKey
 	var envelope CallbackEnvelope
 	if err := json.Unmarshal(rawBody, &envelope); err != nil {
 		return VerifiedCallback{}, fmt.Errorf("decode verified callback: %w", err)
@@ -102,9 +69,9 @@ func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Tim
 		DeliveryID: deliveryID,
 		ToolCallID: toolCallID,
 		ToolName:   envelope.Nvoken.ToolName,
-		KeyID:      keyID,
-		KeyVersion: keyVersion,
-		Timestamp:  when,
+		KeyID:      delivery.KeyID,
+		KeyVersion: delivery.KeyVersion,
+		Timestamp:  delivery.Timestamp,
 	}, nil
 }
 

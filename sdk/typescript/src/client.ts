@@ -696,9 +696,25 @@ export interface SessionOptions {
    */
   compaction?: ContextCompaction;
   retention?: SessionRetention;
-  metadata?: Metadata;
+  /**
+   * Binds the Session to your own authorization facts. Written only by the
+   * request that creates the Session, never interpreted by nvoken, never
+   * visible to the model, and carried inside the signed callback envelope so
+   * a receiver authorizes a delivery without reading the Invocation back.
+   * What nvoken guarantees is integrity, not authentication: what creation
+   * recorded is what a signed delivery carries.
+   */
+  authorizationContext?: Metadata;
   /** Immutable Agent Definition revision pin for a newly created Session. */
   pinnedRevision?: number;
+  /**
+   * What you are asserting about a Session that already exists. `refuse`, the
+   * default, compares every member you sent. `join` reaches whatever Session
+   * is there without asserting how it is configured, so `compaction` and
+   * `retention` stop conflicting. `join` never relaxes `authorizationContext`,
+   * `pinnedRevision`, or the Session's end user.
+   */
+  onConflict?: "refuse" | "join";
 }
 
 /**
@@ -920,6 +936,18 @@ export interface WebhookTarget {
 
 interface InvokeRequestBase {
   tenantKey?: string;
+  /**
+   * Who this turn is for. The first request that opens a Session fixes its
+   * user key, including fixing it to absent; every later turn either sends the
+   * same one or leaves it out and inherits it. A turn naming a different end
+   * user is refused with `session_user_key_conflict`.
+   *
+   * It is a filter, and on an Agent whose Definition sets `memory.scope: user`
+   * it is also the memory partition — it decides whose durable memories the
+   * model can recall — so it is required on the turn that opens a Session for
+   * such an Agent.
+   */
+  userKey?: string;
   /** Optional one-turn revision pin, ahead of Session and Agent pins. */
   definitionRevision?: number;
   /** Safe per-turn replacements that cannot expand Agent authority. */
@@ -947,7 +975,7 @@ interface InvokeRequestBase {
    * the admitted input, so it is immutable and material to idempotency: a
    * replay carrying different metadata conflicts rather than updating it.
    * Session metadata is separate and mutable — see
-   * {@link SessionOptions.metadata} and {@link Client.updateSession}.
+   * {@link Client.updateSession}.
    */
   metadata?: Metadata;
 }
@@ -1009,6 +1037,23 @@ export interface ClientOptions {
    * read the body: the client has not consumed it yet.
    */
   onResponse?: (observation: ResponseObservation) => void;
+  /**
+   * Narrows every request this client makes. See {@link Scope}.
+   */
+  scope?: Scope;
+}
+
+/**
+ * Narrows every request a client makes to one tenant, one end user, or both.
+ * Anything outside it is reported as not found, so an id that arrives from the
+ * wrong place cannot be acted on — which is what lets one app-wide credential
+ * serve a whole application without an ownership check written at every call
+ * site. A scope may only narrow: naming a tenant the credential is not bound
+ * to is refused rather than silently returning nothing.
+ */
+export interface Scope {
+  tenantKey?: string;
+  userKey?: string;
 }
 
 /** One observed HTTP round trip, as reported to `ClientOptions.onResponse`. */
@@ -1070,6 +1115,12 @@ export interface InvocationOptions {
   sessionId?: string;
   sessionKey?: string;
   sessionOptions?: SessionOptions;
+  /**
+   * Who this turn is for. Per-call rather than per-Agent, because one Agent
+   * serves many end users; the first turn on a Session fixes it and later
+   * turns inherit it. See {@link InvokeRequest.userKey}.
+   */
+  userKey?: string;
   idempotencyKey?: string;
   definitionRevision?: number;
   overrides?: AgentDefinitionOverrides;
@@ -1236,6 +1287,11 @@ export interface CreateCredentialOptions {
   name: string;
   profile: CredentialProfile;
   appId?: string;
+  /**
+   * Owning Org for an org-scoped credential. An org-scoped caller may omit it
+   * to use its own Org and cannot name another.
+   */
+  orgId?: string;
   tenantKey?: string;
   sessionId?: string;
   operations?: RuntimeOperation[];
@@ -1404,6 +1460,9 @@ export class Client {
   readonly retry: Required<RetryPolicy>;
   readonly fetch: typeof globalThis.fetch;
   readonly streamReconnectTimeoutMs: number;
+  /** The scope this client stamps, or undefined when it stamps none. */
+  readonly scope: Scope | undefined;
+  private readonly resolvedOptions: ClientOptions;
 
   constructor(options: ClientOptions = {}) {
     const environment = resolveEnvironment(options.envFile);
@@ -1435,11 +1494,16 @@ export class Client {
     this.fetch = options.onResponse
       ? observedFetch(transport, options.onResponse)
       : transport;
+    this.scope = scopeOrUndefined(options.scope);
+    this.resolvedOptions = { ...options, baseUrl, apiKey, fetch: transport };
     this.configuration = new Configuration({
       basePath: baseUrl.replace(/\/$/, ""),
       accessToken: apiKey,
       fetchApi: this.fetch,
-      headers: { "User-Agent": `@deepnoodle/nvoken/${VERSION}` },
+      headers: {
+        "User-Agent": `@deepnoodle/nvoken/${VERSION}`,
+        ...scopeHeaders(this.scope),
+      },
     });
     this.agents = new AgentsApi(this.configuration);
     this.credits = new CreditsApi(this.configuration);
@@ -1474,6 +1538,22 @@ export class Client {
         "retry requires maxAttempts >= 1 and 0 <= minDelayMs <= maxDelayMs",
       );
     }
+  }
+
+  /**
+   * Returns a client that stamps this scope on every request it makes. The
+   * receiver is unchanged, so a scoped client can be handed to the part of an
+   * application that handles one tenant's or one end user's work while the
+   * unscoped one keeps doing administrative reads.
+   */
+  scoped(scope: Scope): Client {
+    if (scopeOrUndefined(scope) === undefined) {
+      throw new NvokenError(
+        "validation",
+        "scope requires a tenantKey, a userKey, or both",
+      );
+    }
+    return new Client({ ...this.resolvedOptions, scope });
   }
 
   /** Every generated API, so nothing on the contract is out of reach. */
@@ -1690,6 +1770,7 @@ export class Client {
             name: options.name,
             profile: options.profile,
             appId: options.appId,
+            orgId: options.orgId,
             tenantKey: options.tenantKey,
             sessionId: options.sessionId,
             operations: options.operations === undefined
@@ -2985,6 +3066,7 @@ export class Agent<TOutput extends object = JsonObject> {
     const request: InvokeRequestBase & AgentIdentityRequest = {
       ...identity,
       tenantKey: this.options.tenantKey,
+      userKey: options.userKey,
       idempotencyKey,
       definitionRevision: options.definitionRevision,
       overrides: options.overrides,
@@ -3635,12 +3717,32 @@ function validInvokeInput(input: InvokeInput): boolean {
   return input.length > 0 && mediaInputIssue(input) === undefined;
 }
 
+function scopeOrUndefined(scope: Scope | undefined): Scope | undefined {
+  if (scope === undefined) return undefined;
+  const tenantKey = scope.tenantKey?.trim();
+  const userKey = scope.userKey?.trim();
+  if (!tenantKey && !userKey) return undefined;
+  return {
+    ...(tenantKey ? { tenantKey } : {}),
+    ...(userKey ? { userKey } : {}),
+  };
+}
+
+function scopeHeaders(scope: Scope | undefined): Record<string, string> {
+  if (scope === undefined) return {};
+  return {
+    ...(scope.tenantKey ? { "X-Nvoken-Tenant-Key": scope.tenantKey } : {}),
+    ...(scope.userKey ? { "X-Nvoken-User-Key": scope.userKey } : {}),
+  };
+}
+
 function sessionOptionsToWire(
   options: SessionOptions | undefined,
 ): GeneratedSessionOptions | undefined {
   if (options === undefined) return undefined;
   if (options.compaction === undefined && options.retention === undefined
-    && options.metadata === undefined && options.pinnedRevision === undefined) {
+    && options.authorizationContext === undefined && options.pinnedRevision === undefined
+    && options.onConflict === undefined) {
     throw new NvokenError("validation", "sessionOptions requires at least one member");
   }
   return {
@@ -3653,8 +3755,11 @@ function sessionOptionsToWire(
     retention: options.retention === undefined
       ? undefined
       : { ttlSeconds: options.retention.ttlSeconds },
-    metadata: options.metadata === undefined ? undefined : { ...options.metadata },
+    authorizationContext: options.authorizationContext === undefined
+      ? undefined
+      : { ...options.authorizationContext },
     pinnedRevision: options.pinnedRevision,
+    onConflict: options.onConflict,
   };
 }
 
@@ -3780,6 +3885,7 @@ function invocationRequestToWire<TOutput extends object>(
     agentId: "agentId" in request ? request.agentId : undefined,
     agentKey: "agentKey" in request ? request.agentKey : undefined,
     tenantKey: request.tenantKey,
+    userKey: request.userKey,
     definitionRevision: request.definitionRevision,
     overrides: request.overrides === undefined
       ? undefined

@@ -51,9 +51,13 @@ type AgentInvocationOptions struct {
 	SessionID          *string
 	SessionKey         *string
 	SessionOptions     *SessionOptions
-	IfActive           IfActivePolicy
-	OnBudgetExhausted  BudgetExhaustionBehavior
-	Webhook            *WebhookTarget
+	// UserKey says who this turn is for. Per-call rather than per-Agent,
+	// because one Agent serves many end users; the first turn on a Session
+	// fixes it and later turns inherit it.
+	UserKey           *string
+	IfActive          IfActivePolicy
+	OnBudgetExhausted BudgetExhaustionBehavior
+	Webhook           *WebhookTarget
 	// Context carries the application state snapshots to record ahead of this
 	// turn's input. Per-call rather than per-Agent, because a snapshot is what
 	// changes between turns while the Agent Definition stays fixed.
@@ -353,6 +357,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		TenantKey:          a.options.TenantKey,
 		SessionID:          options.SessionID,
 		SessionKey:         options.SessionKey,
+		UserKey:            options.UserKey,
 		SessionOptions:     options.SessionOptions,
 		IdempotencyKey:     options.IdempotencyKey,
 		DefinitionRevision: options.DefinitionRevision,
@@ -490,13 +495,16 @@ func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
 		}
 		key = "key:" + tenant + ":" + binding.SessionKey
 	}
-	a.client.sessionMu.Lock()
-	lock := a.client.sessionLocks[key]
+	// The table is shared with any scoped client derived from this one, so two
+	// views of the same Session serialize against each other rather than each
+	// keeping its own idea of the lock.
+	a.client.locks.mu.Lock()
+	lock := a.client.locks.locks[key]
 	if lock == nil {
 		lock = &sync.Mutex{}
-		a.client.sessionLocks[key] = lock
+		a.client.locks.locks[key] = lock
 	}
-	a.client.sessionMu.Unlock()
+	a.client.locks.mu.Unlock()
 	return &AgentSession{
 		agent:      a,
 		lock:       lock,

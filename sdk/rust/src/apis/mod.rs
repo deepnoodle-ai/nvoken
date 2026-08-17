@@ -132,6 +132,7 @@ pub mod invocations_api;
 pub mod mcp_api;
 pub mod memories_api;
 pub mod models_api;
+pub mod operations_api;
 pub mod orgs_api;
 pub mod provider_keys_api;
 pub mod sessions_api;

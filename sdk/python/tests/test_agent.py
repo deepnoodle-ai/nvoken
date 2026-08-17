@@ -19,9 +19,9 @@ from nvoken import (
     Tool,
 )
 
-INVOCATION_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-SESSION_ID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-TOOL_CALL_ID = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+INVOCATION_ID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+SESSION_ID = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+TOOL_CALL_ID = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 
 
 class FakeHandle:

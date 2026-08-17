@@ -42,7 +42,13 @@ import {
   answerableToolCalls,
   hostToolCalls,
   verifyCallback,
+  verifyWebhook,
+  webhookSupersedes,
+  webhookStatusIsRetried,
+  acceptWebhook,
+  retryWebhook,
   type HostTool,
+  type ClientOptions,
   type ContextItem,
   type ContextTier,
   type Credential,
@@ -69,10 +75,10 @@ import {
 } from "../index.js";
 
 const agentId = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
-const invocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
-const sessionId = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
-const toolCallId = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
-const waitId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+const invocationId = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
+const sessionId = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
+const toolCallId = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
+const waitId = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
 const exactModelId = "experimental/model?variant=雪%#1";
 
 interface Answer {
@@ -1011,7 +1017,9 @@ test("session options, metadata and provider tools match the shared fixture", as
     sessionOptions: {
       compaction: { triggerTokens: 32768 },
       retention: { ttlSeconds: 3600 },
-      metadata: { surface: "web" },
+      authorizationContext: { surface: "web" },
+      pinnedRevision: 4,
+      onConflict: "join",
     },
     input: "hello",
   });
@@ -1165,7 +1173,7 @@ test("public diagnostics stay concise and provider-aware", () => {
     },
   };
   const publicDiagnostic = formatInvocationFailure(invocationId, invocation, "openai");
-  assert.match(publicDiagnostic, /^Invocation invk_.* failed: provider_error:/);
+  assert.match(publicDiagnostic, /^Invocation inv_.* failed: provider_error:/);
   assert.match(publicDiagnostic, /"classification":"upstream_rejected"/);
   assert.match(publicDiagnostic, /https:\/\/developers\.openai\.com\/api\/docs\/models\.$/);
   assert.doesNotMatch(publicDiagnostic, /structured daemon logs/);
@@ -2098,7 +2106,7 @@ test("agent stream exposes the two-frame consumer without a reducer", async () =
 });
 
 test("bound session serializes invoke admission until the prior turn ends", async () => {
-  const secondInvocationId = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb329";
+  const secondInvocationId = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb329";
   let admissions = 0;
   let finishFirst!: () => void;
   const firstFinished = new Promise<void>((resolvePromise) => {
@@ -2250,24 +2258,54 @@ test("shared tool call mode partition", async () => {
   assert.deepEqual(hostToolCalls({ toolCalls }).map((call) => call.id), fixture.host);
 });
 
-test("shared callback signing and deduplication vector", async () => {
-  const vector = JSON.parse(await readFile(
-    new URL("../../../../docs/design/callback-signing-v1.json", import.meta.url),
-    "utf8",
-  )) as {
-    key: string;
-    now: number;
-    tool_name: string;
-    headers: Record<string, string>;
-    body: string;
+// The cross-SDK agreement on how nvoken signs a delivery. One file holds both
+// kinds because there is one scheme; a vector each is what makes that testable
+// rather than merely stated.
+interface DeliverySigningVectors {
+  key: string;
+  now: number;
+  vectors: {
+    callback: { tool_name: string; headers: Record<string, string>; body: string };
+    webhook: { event: string; sequence: number; headers: Record<string, string>; body: string };
   };
-  const key = new TextEncoder().encode(vector.key);
+}
+
+async function deliverySigningVectors(): Promise<DeliverySigningVectors> {
+  return JSON.parse(await readFile(
+    new URL("../../../../docs/design/delivery-signing-v1.json", import.meta.url),
+    "utf8",
+  )) as DeliverySigningVectors;
+}
+
+// The mutations the vector file names. Each must be refused by both verifiers,
+// since neither the signature nor its binding to a delivery id and a timestamp
+// is particular to a delivery kind.
+const tamperings: Array<(headers: Headers, candidate: Uint8Array) => Uint8Array> = [
+  (_headers, candidate) => new Uint8Array([...candidate, 32]),
+  (headers, candidate) => {
+    headers.set("x-nvoken-timestamp", "1784635801");
+    return candidate;
+  },
+  (headers, candidate) => {
+    headers.set("x-nvoken-delivery-id", "different");
+    return candidate;
+  },
+  (headers, candidate) => {
+    headers.set("x-nvoken-signature", "sha256=00");
+    return candidate;
+  },
+];
+
+test("shared callback signing and deduplication vector", async () => {
+  const document = await deliverySigningVectors();
+  const vector = document.vectors.callback;
+  const key = new TextEncoder().encode(document.key);
   const body = new TextEncoder().encode(vector.body);
   const verified = await verifyCallback(
     key,
     new Headers(vector.headers),
     body,
-    new Date(vector.now * 1_000),
+    new Date(document.now * 1_000),
   );
   assert.equal(verified.toolCallId, toolCallId);
   // The name is inside the signed body, so a receiver dispatches on it without
@@ -2275,25 +2313,10 @@ test("shared callback signing and deduplication vector", async () => {
   assert.equal(verified.toolName, vector.tool_name);
   assert.equal(verified.envelope.nvoken.tool_name, vector.tool_name);
 
-  const mutations: Array<(headers: Headers, candidate: Uint8Array) => Uint8Array> = [
-    (_headers, candidate) => new Uint8Array([...candidate, 32]),
-    (headers, candidate) => {
-      headers.set("x-nvoken-timestamp", "1784635801");
-      return candidate;
-    },
-    (headers, candidate) => {
-      headers.set("x-nvoken-delivery-id", "different");
-      return candidate;
-    },
-    (headers, candidate) => {
-      headers.set("x-nvoken-signature", "sha256=00");
-      return candidate;
-    },
-  ];
-  for (const mutate of mutations) {
+  for (const mutate of tamperings) {
     const headers = new Headers(vector.headers);
     const candidate = mutate(headers, body);
-    await assert.rejects(verifyCallback(key, headers, candidate, new Date(vector.now * 1_000)));
+    await assert.rejects(verifyCallback(key, headers, candidate, new Date(document.now * 1_000)));
   }
 
   let stored: { ok: boolean } | undefined;
@@ -2308,6 +2331,49 @@ test("shared callback signing and deduplication vector", async () => {
   const duplicate = await deduplicateCallbackResult(store, toolCallId, { ok: false });
   assert.equal(duplicate.replayed, true);
   assert.deepEqual(duplicate.value, { ok: true });
+});
+
+// The callback vector's twin, and the point of having both: the same key, the
+// same canonical string, the same tampering set, a different verifier. A scheme
+// that drifted apart for one delivery kind would fail here rather than at an
+// integrator who believed the promise that there is only one.
+test("shared webhook signing vector", async () => {
+  const document = await deliverySigningVectors();
+  const vector = document.vectors.webhook;
+  const key = new TextEncoder().encode(document.key);
+  const body = new TextEncoder().encode(vector.body);
+  const now = new Date(document.now * 1_000);
+  const verified = await verifyWebhook(key, new Headers(vector.headers), body, now);
+  assert.equal(verified.event, vector.event);
+  assert.equal(verified.sequence, vector.sequence);
+  assert.equal(verified.invocationId, invocationId);
+  assert.equal(verified.sessionId, sessionId);
+
+  for (const mutate of tamperings) {
+    const headers = new Headers(vector.headers);
+    const candidate = mutate(headers, body);
+    await assert.rejects(verifyWebhook(key, headers, candidate, now));
+  }
+
+  // A webhook's key is the App's webhook-purpose key and a callback's is its
+  // callback key. Nothing in the wire format says which is which, so a receiver
+  // that crossed them would verify nothing; each vector must refuse the other's
+  // verifier.
+  const callback = document.vectors.callback;
+  await assert.rejects(verifyWebhook(
+    key,
+    new Headers(callback.headers),
+    new TextEncoder().encode(callback.body),
+    now,
+  ));
+  await assert.rejects(verifyCallback(key, new Headers(vector.headers), body, now));
+
+  // Delivery is at least once and a redelivery can land after a later
+  // transition, so folding is by sequence rather than by arrival.
+  assert.equal(webhookSupersedes(verified, vector.sequence - 1), true);
+  assert.equal(webhookSupersedes(verified, vector.sequence), false);
+  assert.equal(webhookStatusIsRetried(acceptWebhook().status), false);
+  assert.equal(webhookStatusIsRetried(retryWebhook().status), true);
 });
 
 test("shared invocation webhook fixture stays expressible and stays a pointer", async () => {
@@ -2495,7 +2561,7 @@ test("shared invocation-nudge fixture pins the steering contract", async () => {
   // The drained receipt is what tells a host the model actually saw the input.
   const drained = raw.NudgeFromJSON({
     id: "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-    invocation_id: "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+    invocation_id: "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
     status: raw.NudgeStatus.Drained,
     content: "focus on the marine segment",
     created_at: "2026-08-02T09:15:00Z",
@@ -3109,4 +3175,41 @@ test("deleteSession forwards force and updateSession deletes a metadata key", as
 
   await client.updateSession("ses_1", { metadata: { title: "Refund", stale: null } });
   assert.deepEqual(patch, { metadata: { title: "Refund", stale: null } });
+});
+
+// A scope is worth nothing if it is only remembered locally, so this asserts
+// what actually leaves the process, and that the client it was derived from
+// keeps making unscoped requests.
+test("a scoped client stamps every request and leaves its parent alone", async () => {
+  const headers: Array<Record<string, string>> = [];
+  const observe = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    headers.push(
+      Object.fromEntries(new Headers(init?.headers).entries()),
+    );
+    return Response.json({ items: [], has_more: false, next_cursor: null });
+  };
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: observe as ClientOptions["fetch"],
+  });
+
+  await client.listSessions();
+  const scoped = client.scoped({ tenantKey: "acme", userKey: "user-7c1f" });
+  await scoped.listSessions();
+  await client.listSessions();
+
+  assert.equal(headers[0]?.["x-nvoken-tenant-key"], undefined);
+  assert.equal(headers[0]?.["x-nvoken-user-key"], undefined);
+  assert.equal(headers[1]?.["x-nvoken-tenant-key"], "acme");
+  assert.equal(headers[1]?.["x-nvoken-user-key"], "user-7c1f");
+  assert.equal(headers[2]?.["x-nvoken-tenant-key"], undefined);
+  assert.deepEqual(client.scope, undefined);
+  assert.deepEqual(scoped.scope, { tenantKey: "acme", userKey: "user-7c1f" });
+
+  // An empty scope would stamp nothing while reading as a narrowing, which is
+  // the one failure mode a scope cannot have.
+  assert.throws(() => client.scoped({}), NvokenError);
+  assert.throws(() => client.scoped({ tenantKey: "   " }), NvokenError);
 });

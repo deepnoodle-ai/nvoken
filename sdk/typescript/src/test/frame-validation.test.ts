@@ -4,7 +4,7 @@ import { NvokenError } from "../client.js";
 import { Reducer } from "../stream.js";
 
 const CHANGE = {
-  invocation_id: "invk_1",
+  invocation_id: "inv_1",
   revision: 1,
   status: "completed",
   terminal: true,
@@ -20,7 +20,7 @@ function frame(changes: object[]) {
     id: "cursor-1",
     data: {
       type: "transcript.update",
-      session_id: "sesn_1",
+      session_id: "sess_1",
       messages: [],
       invocation_changes: changes,
       cursor: "cursor-1",
@@ -45,7 +45,7 @@ test("refuses a change missing a required field", () => {
 test("accepts the same change once it is complete", () => {
   const reducer = new Reducer();
   reducer.apply(frame([CHANGE]));
-  assert.equal(reducer.settled("invk_1"), true);
+  assert.equal(reducer.settled("inv_1"), true);
 });
 
 // The Session subscription folds through the Reducer and never calls the
@@ -66,5 +66,5 @@ test("refuses a frame missing a required field", () => {
 test("ignores fields it does not recognize", () => {
   const reducer = new Reducer();
   reducer.apply(frame([{ ...CHANGE, added_later: 1 }]));
-  assert.equal(reducer.settled("invk_1"), true);
+  assert.equal(reducer.settled("inv_1"), true);
 });

@@ -7,8 +7,8 @@
         "ttl_seconds": 86400
       }
     },
-    "metadata_only": {
-      "metadata": {
+    "authorization_context_only": {
+      "authorization_context": {
         "board": "brand-2026",
         "trace_id": "018f-4a"
       }
@@ -20,9 +20,11 @@
       "retention": {
         "ttl_seconds": 3600
       },
-      "metadata": {
+      "authorization_context": {
         "surface": "web"
-      }
+      },
+      "pinned_revision": 4,
+      "on_conflict": "join"
     }
   },
   "retention_bounds": {

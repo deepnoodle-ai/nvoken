@@ -3,6 +3,8 @@ export * from "./invocation-status.js";
 export * from "./diagnostics.js";
 export * from "./stream.js";
 export * from "./callback.js";
+export * from "./signed-delivery.js";
+export * from "./webhook.js";
 export * from "./ask-user.js";
 export * from "./version.js";
 export type {
