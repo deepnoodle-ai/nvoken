@@ -284,6 +284,11 @@ async function* readStream(
   signal?: AbortSignal,
 ): AsyncGenerator<StreamUpdate> {
   let retryMs = 1_000;
+  // The current run of consecutive connect failures. A stream that connects
+  // clears it, so this measures "cannot connect at all", not "has been
+  // streaming for a long time".
+  let failingSince: number | undefined;
+  let consecutiveFailures = 0;
   for (;;) {
     const request = await client.sessions.streamSessionRequestOpts({
       sessionId,
@@ -296,12 +301,35 @@ async function* readStream(
     let response: Response;
     try {
       response = await fetchStream(client, request, signal);
+      failingSince = undefined;
+      consecutiveFailures = 0;
     } catch (error) {
       const normalized = await normalizeError(error);
       if (!streamRetryable(normalized)) throw normalized;
-      // Reconnecting is unbounded — the turn is already durable, so there is
-      // nothing to re-admit and nothing an attempt cap would protect.
-      await delay(streamDelay(client, 1, retryMs, normalized), signal);
+      // Reconnecting is otherwise unbounded, because the turn is already
+      // durable and a brief outage should not end a stream that will heal.
+      // But a retry that can never succeed — a runtime whose fetch always
+      // throws, a URL that never resolves — must not spin silently while the
+      // turn it was meant to drive parks forever. Failing to connect for a
+      // continuous window says the difference: it survives a long outage and
+      // still surfaces a stream that is simply broken.
+      const now = Date.now();
+      failingSince ??= now;
+      consecutiveFailures += 1;
+      if (now - failingSince >= client.streamReconnectTimeoutMs) {
+        throw new NvokenError(
+          normalized.category,
+          `stream could not reconnect after ${consecutiveFailures} attempts over `
+            + `${Math.round((now - failingSince) / 1_000)}s: ${normalized.message}`,
+          normalized.status,
+          normalized.code,
+          normalized.requestId,
+          normalized.retryAfterMs,
+          normalized.details,
+          { cause: normalized },
+        );
+      }
+      await delay(streamDelay(client, consecutiveFailures, retryMs, normalized), signal);
       continue;
     }
 

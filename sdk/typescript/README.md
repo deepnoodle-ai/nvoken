@@ -70,17 +70,19 @@ base URL, API key, provider, and model:
 import { Client } from "@deepnoodle/nvoken";
 
 const client = new Client();
+
+// Both creates are keyed and idempotent: definitionKey and
+// (tenantKey, agentKey) are unique, so restating one returns what it already
+// names. Safe to run on every deploy.
 const definition = await client.createAgentDefinition({
   definitionKey: "support",
-  name: "Support",
   definition: {
     instructions: "Be concise and helpful.",
-    model: { provider: "anthropic", id: "claude-sonnet-5" },
+    model: "anthropic/claude-sonnet-5",
   },
 });
 const instance = await client.createAgent({
   agentKey: "support",
-  name: "Support",
   agentDefinitionId: definition.id,
 });
 const agent = client.agent({ agentId: instance.id });
@@ -97,14 +99,33 @@ console.log(await agent.text("Why was I charged twice?"));
 4. `http://localhost:8080` for the base URL.
 
 It never loads an arbitrary `.env` or mutates `process.env`. `NVOKEN_API_KEY` is
-required. `NVOKEN_PROVIDER` and `NVOKEN_MODEL` must be supplied together when
-they are used as a safe per-turn model override:
+required.
+
+There is no client-level default model. An Agent Definition is durable,
+versioned, App-owned configuration shared across tenants, so the model it
+publishes must come from the definition rather than from whichever process
+happened to publish it. Name it per definition, and override per turn:
 
 ```ts
 const client = new Client({
   baseUrl: "https://runtime.example.com",
   apiKey: process.env.RUNTIME_KEY,
-  defaultModel: { provider: "anthropic", id: "claude-sonnet-5" },
+  // Every response the client sees, for latency and status metrics.
+  onResponse: ({ method, url, status, durationMs }) =>
+    metrics.record({ method, url, status, durationMs }),
+});
+```
+
+A model is nameable as `"provider/id"` or as the object form, anywhere a model
+appears:
+
+```ts
+await client.createAgentDefinition({
+  definitionKey: "support",
+  definition: {
+    instructions: "Be concise and helpful.",
+    model: "anthropic/claude-sonnet-5",
+  },
 });
 ```
 

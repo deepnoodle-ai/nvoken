@@ -323,8 +323,8 @@ class AgentDefinitionsApi:
     @validate_call
     async def create_agent_definition(
         self,
-        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         agent_definition_create: AgentDefinitionCreate,
+        idempotency_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -340,12 +340,12 @@ class AgentDefinitionsApi:
     ) -> AgentDefinitionResource:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
-        :param idempotency_key: (required)
-        :type idempotency_key: str
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
+        :param idempotency_key:
+        :type idempotency_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -369,8 +369,8 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._create_agent_definition_serialize(
-            idempotency_key=idempotency_key,
             agent_definition_create=agent_definition_create,
+            idempotency_key=idempotency_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -378,6 +378,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
             '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
@@ -401,8 +402,8 @@ class AgentDefinitionsApi:
     @validate_call
     async def create_agent_definition_with_http_info(
         self,
-        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         agent_definition_create: AgentDefinitionCreate,
+        idempotency_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -418,12 +419,12 @@ class AgentDefinitionsApi:
     ) -> ApiResponse[AgentDefinitionResource]:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
-        :param idempotency_key: (required)
-        :type idempotency_key: str
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
+        :param idempotency_key:
+        :type idempotency_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -447,8 +448,8 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._create_agent_definition_serialize(
-            idempotency_key=idempotency_key,
             agent_definition_create=agent_definition_create,
+            idempotency_key=idempotency_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -456,6 +457,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
             '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
@@ -479,8 +481,8 @@ class AgentDefinitionsApi:
     @validate_call
     async def create_agent_definition_without_preload_content(
         self,
-        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         agent_definition_create: AgentDefinitionCreate,
+        idempotency_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -496,12 +498,12 @@ class AgentDefinitionsApi:
     ) -> RESTResponseType:
         """Create an Agent Definition resource
 
-        Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+        Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create's revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
 
-        :param idempotency_key: (required)
-        :type idempotency_key: str
         :param agent_definition_create: (required)
         :type agent_definition_create: AgentDefinitionCreate
+        :param idempotency_key:
+        :type idempotency_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -525,8 +527,8 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._create_agent_definition_serialize(
-            idempotency_key=idempotency_key,
             agent_definition_create=agent_definition_create,
+            idempotency_key=idempotency_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -534,6 +536,7 @@ class AgentDefinitionsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
+            '200': "AgentDefinitionResource",
             '201': "AgentDefinitionResource",
             '400': "ErrorResponse",
             '401': "ErrorResponse",
@@ -552,8 +555,8 @@ class AgentDefinitionsApi:
 
     def _create_agent_definition_serialize(
         self,
-        idempotency_key,
         agent_definition_create,
+        idempotency_key,
         _request_auth,
         _content_type,
         _headers,
@@ -1194,6 +1197,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def list_agent_definitions(
         self,
+        definition_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`. ")] = None,
         include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1212,8 +1216,10 @@ class AgentDefinitionsApi:
     ) -> AgentDefinitionResourceList:
         """List the App's Agent Definition resources
 
-        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
 
+        :param definition_key: Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`.
+        :type definition_key: str
         :param include_archived: Include archived resources alongside live ones.
         :type include_archived: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
@@ -1243,6 +1249,7 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._list_agent_definitions_serialize(
+            definition_key=definition_key,
             include_archived=include_archived,
             cursor=cursor,
             limit=limit,
@@ -1275,6 +1282,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def list_agent_definitions_with_http_info(
         self,
+        definition_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`. ")] = None,
         include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1293,8 +1301,10 @@ class AgentDefinitionsApi:
     ) -> ApiResponse[AgentDefinitionResourceList]:
         """List the App's Agent Definition resources
 
-        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
 
+        :param definition_key: Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`.
+        :type definition_key: str
         :param include_archived: Include archived resources alongside live ones.
         :type include_archived: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
@@ -1324,6 +1334,7 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._list_agent_definitions_serialize(
+            definition_key=definition_key,
             include_archived=include_archived,
             cursor=cursor,
             limit=limit,
@@ -1356,6 +1367,7 @@ class AgentDefinitionsApi:
     @validate_call
     async def list_agent_definitions_without_preload_content(
         self,
+        definition_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`. ")] = None,
         include_archived: Annotated[Optional[StrictBool], Field(description="Include archived resources alongside live ones.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
@@ -1374,8 +1386,10 @@ class AgentDefinitionsApi:
     ) -> RESTResponseType:
         """List the App's Agent Definition resources
 
-        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+        Returns this App's stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
 
+        :param definition_key: Return only the resource this caller-owned key names. Unique per App, so the page holds zero or one item. Cannot be combined with `cursor`.
+        :type definition_key: str
         :param include_archived: Include archived resources alongside live ones.
         :type include_archived: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
@@ -1405,6 +1419,7 @@ class AgentDefinitionsApi:
         """ # noqa: E501
 
         _param = self._list_agent_definitions_serialize(
+            definition_key=definition_key,
             include_archived=include_archived,
             cursor=cursor,
             limit=limit,
@@ -1432,6 +1447,7 @@ class AgentDefinitionsApi:
 
     def _list_agent_definitions_serialize(
         self,
+        definition_key,
         include_archived,
         cursor,
         limit,
@@ -1457,6 +1473,10 @@ class AgentDefinitionsApi:
 
         # process the path parameters
         # process the query parameters
+        if definition_key is not None:
+
+            _query_params.append(('definition_key', definition_key))
+
         if include_archived is not None:
 
             _query_params.append(('include_archived', include_archived))

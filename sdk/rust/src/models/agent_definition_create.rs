@@ -16,8 +16,9 @@ pub struct AgentDefinitionCreate {
     /// Caller-chosen immutable key. Required on creation and omitted on replacement.
     #[serde(rename = "definition_key")]
     pub definition_key: String,
-    #[serde(rename = "name")]
-    pub name: String,
+    /// Display name. Defaults to `definition_key`.
+    #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Optional model instructions. Omission adds no hidden default.
     #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
@@ -48,14 +49,10 @@ pub struct AgentDefinitionCreate {
 }
 
 impl AgentDefinitionCreate {
-    pub fn new(
-        definition_key: String,
-        name: String,
-        model: models::ModelInput,
-    ) -> AgentDefinitionCreate {
+    pub fn new(definition_key: String, model: models::ModelInput) -> AgentDefinitionCreate {
         AgentDefinitionCreate {
             definition_key,
-            name,
+            name: None,
             instructions: None,
             model: Box::new(model),
             sampling: None,

@@ -345,6 +345,7 @@ class SessionsApi:
     async def delete_session(
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
+        force: Annotated[Optional[StrictBool], Field(description="Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,10 +361,12 @@ class SessionsApi:
     ) -> None:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.ended` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A Session holding a nonterminal Invocation is refused with `session_invocation_active` unless you pass `force=true`. Erasure skips settlement: a turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against — and no `invocation.ended` webhook fires for it. So if you bill or reconcile on settlement, cancel the turn and wait for its final state first, then delete. `force=true` is for erasing on an end user's behalf, where removing the transcript now outranks keeping a settled record of the turn.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
+        :param force: Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`.
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -388,6 +391,7 @@ class SessionsApi:
 
         _param = self._delete_session_serialize(
             session_id=session_id,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -400,6 +404,7 @@ class SessionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -419,6 +424,7 @@ class SessionsApi:
     async def delete_session_with_http_info(
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
+        force: Annotated[Optional[StrictBool], Field(description="Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -434,10 +440,12 @@ class SessionsApi:
     ) -> ApiResponse[None]:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.ended` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A Session holding a nonterminal Invocation is refused with `session_invocation_active` unless you pass `force=true`. Erasure skips settlement: a turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against — and no `invocation.ended` webhook fires for it. So if you bill or reconcile on settlement, cancel the turn and wait for its final state first, then delete. `force=true` is for erasing on an end user's behalf, where removing the transcript now outranks keeping a settled record of the turn.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
+        :param force: Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`.
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -462,6 +470,7 @@ class SessionsApi:
 
         _param = self._delete_session_serialize(
             session_id=session_id,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -474,6 +483,7 @@ class SessionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -493,6 +503,7 @@ class SessionsApi:
     async def delete_session_without_preload_content(
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
+        force: Annotated[Optional[StrictBool], Field(description="Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -508,10 +519,12 @@ class SessionsApi:
     ) -> RESTResponseType:
         """Erase a Session and everything under it
 
-        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against, and no `invocation.ended` webhook fires for it. If you need a record that the turn ended, cancel it and wait for its final state before deleting.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
+        Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A Session holding a nonterminal Invocation is refused with `session_invocation_active` unless you pass `force=true`. Erasure skips settlement: a turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against — and no `invocation.ended` webhook fires for it. So if you bill or reconcile on settlement, cancel the turn and wait for its final state first, then delete. `force=true` is for erasing on an end user's behalf, where removing the transcript now outranks keeping a settled record of the turn.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 
         :param session_id: (required)
         :type session_id: str
+        :param force: Erase even when the Session holds a nonterminal Invocation, discarding that turn's settlement. Without it, live work is refused with `session_invocation_active`.
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -536,6 +549,7 @@ class SessionsApi:
 
         _param = self._delete_session_serialize(
             session_id=session_id,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -548,6 +562,7 @@ class SessionsApi:
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
+            '409': "ErrorResponse",
             '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
@@ -562,6 +577,7 @@ class SessionsApi:
     def _delete_session_serialize(
         self,
         session_id,
+        force,
         _request_auth,
         _content_type,
         _headers,
@@ -586,6 +602,10 @@ class SessionsApi:
         if session_id is not None:
             _path_params['session_id'] = session_id
         # process the query parameters
+        if force is not None:
+
+            _query_params.append(('force', force))
+
         # process the header parameters
         # process the form parameters
         # process the body parameter

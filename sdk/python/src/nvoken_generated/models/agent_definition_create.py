@@ -39,7 +39,7 @@ class AgentDefinitionCreate(BaseModel):
     AgentDefinitionCreate
     """ # noqa: E501
     definition_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Caller-chosen immutable key. Required on creation and omitted on replacement.")
-    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Display name. Defaults to `definition_key`.")
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Optional model instructions. Omission adds no hidden default.")
     model: ModelInput
     sampling: Optional[Sampling] = None

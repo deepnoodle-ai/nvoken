@@ -44,8 +44,8 @@ export interface ArchiveAgentDefinitionRequest {
 }
 
 export interface CreateAgentDefinitionRequest {
-    idempotencyKey: string;
     agentDefinitionCreate: AgentDefinitionCreate;
+    idempotencyKey?: string;
 }
 
 export interface GetAgentDefinitionRequest {
@@ -58,6 +58,7 @@ export interface GetAgentDefinitionRevisionRequest {
 }
 
 export interface ListAgentDefinitionsRequest {
+    definitionKey?: string;
     includeArchived?: boolean;
     cursor?: string;
     limit?: number;
@@ -136,13 +137,6 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
      * Creates request options for createAgentDefinition without sending the request
      */
     async createAgentDefinitionRequestOpts(requestParameters: CreateAgentDefinitionRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['idempotencyKey'] == null) {
-            throw new runtime.RequiredError(
-                'idempotencyKey',
-                'Required parameter "idempotencyKey" was null or undefined when calling createAgentDefinition().'
-            );
-        }
-
         if (requestParameters['agentDefinitionCreate'] == null) {
             throw new runtime.RequiredError(
                 'agentDefinitionCreate',
@@ -181,7 +175,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
      * Create an Agent Definition resource
      */
     async createAgentDefinitionRaw(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResource>> {
@@ -192,7 +186,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Creates a stable App-owned resource at revision 1. Equal content in a separate create gets a separate ID. Retry the same canonical request with the same `Idempotency-Key` to receive the original revision-1 resource; changing the request under that key conflicts.
+     * Creates a stable App-owned resource at revision 1.  `definition_key` is unique within the App, and creation is shaped around that: restating an existing resource — same key, same name, same definition — returns it with `200` instead of creating a second one, so a deploy-time sync can call this every time. A create naming a taken key with different contents is `409 agent_definition_key_conflict`, pointing you at `PUT /v1/agent-definitions/{id}` to publish a new revision. A key held by an archived resource is `409 agent_definition_archived`; restore it or choose another key.  `Idempotency-Key` is optional, because the key already scopes replay. Supply one to pin a replay to a specific create: the same key returns that create\'s revision-1 resource even after later revisions moved the resource on, and changing the request under that key conflicts.
      * Create an Agent Definition resource
      */
     async createAgentDefinition(requestParameters: CreateAgentDefinitionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResource> {
@@ -320,6 +314,10 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     async listAgentDefinitionsRequestOpts(requestParameters: ListAgentDefinitionsRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
 
+        if (requestParameters['definitionKey'] != null) {
+            queryParameters['definition_key'] = requestParameters['definitionKey'];
+        }
+
         if (requestParameters['includeArchived'] != null) {
             queryParameters['include_archived'] = requestParameters['includeArchived'];
         }
@@ -354,7 +352,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
      * List the App\'s Agent Definition resources
      */
     async listAgentDefinitionsRaw(requestParameters: ListAgentDefinitionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AgentDefinitionResourceList>> {
@@ -365,7 +363,7 @@ export class AgentDefinitionsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.
+     * Returns this App\'s stable resources at their current revision, newest first and cursor-paginated. Archived resources are excluded unless `include_archived` is true, and then carry a non-null `archived_at`.  `definition_key` is the lookup: the key is unique within the App, so the filter returns at most one resource and never needs a cursor. Use it instead of paging the collection to resolve one definition.
      * List the App\'s Agent Definition resources
      */
     async listAgentDefinitions(requestParameters: ListAgentDefinitionsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AgentDefinitionResourceList> {

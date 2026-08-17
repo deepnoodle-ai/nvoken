@@ -17,6 +17,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./status": {
+      "types": "./dist/invocation-status.d.ts",
+      "import": "./dist/invocation-status.js"
+    },
+    "./callback": {
+      "types": "./dist/callback.d.ts",
+      "import": "./dist/callback.js"
     }
   },
   "bin": {

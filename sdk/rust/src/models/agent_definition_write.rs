@@ -17,8 +17,9 @@ pub struct AgentDefinitionWrite {
     /// Caller-chosen immutable key. Required on creation and omitted on replacement.
     #[serde(rename = "definition_key", skip_serializing_if = "Option::is_none")]
     pub definition_key: Option<String>,
-    #[serde(rename = "name")]
-    pub name: String,
+    /// Display name. Defaults to `definition_key`.
+    #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Optional model instructions. Omission adds no hidden default.
     #[serde(rename = "instructions", skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
@@ -50,10 +51,10 @@ pub struct AgentDefinitionWrite {
 
 impl AgentDefinitionWrite {
     /// Complete writable Agent Definition fields. The model string shorthand is accepted on write. Identity, revision, and timestamps are read-only.
-    pub fn new(name: String, model: models::ModelInput) -> AgentDefinitionWrite {
+    pub fn new(model: models::ModelInput) -> AgentDefinitionWrite {
         AgentDefinitionWrite {
             definition_key: None,
-            name,
+            name: None,
             instructions: None,
             model: Box::new(model),
             sampling: None,

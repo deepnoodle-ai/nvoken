@@ -434,6 +434,7 @@ func (e DocumentReferenceBlockType) Valid() bool {
 const (
 	ErrorCodeAgentArchived                   ErrorCode = "agent_archived"
 	ErrorCodeAgentDefinitionArchived         ErrorCode = "agent_definition_archived"
+	ErrorCodeAgentDefinitionKeyConflict      ErrorCode = "agent_definition_key_conflict"
 	ErrorCodeAgentDefinitionNotFound         ErrorCode = "agent_definition_not_found"
 	ErrorCodeAgentDefinitionRevisionConflict ErrorCode = "agent_definition_revision_conflict"
 	ErrorCodeAgentKeyConflict                ErrorCode = "agent_key_conflict"
@@ -475,6 +476,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeAgentArchived:
 		return true
 	case ErrorCodeAgentDefinitionArchived:
+		return true
+	case ErrorCodeAgentDefinitionKeyConflict:
 		return true
 	case ErrorCodeAgentDefinitionNotFound:
 		return true
@@ -2499,9 +2502,11 @@ type Agent struct {
 	CreatedAt  time.Time  `json:"created_at"`
 
 	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	ID             AgentID `json:"id"`
-	Name           string  `json:"name"`
-	PinnedRevision *int64  `json:"pinned_revision"`
+	ID AgentID `json:"id"`
+
+	// Name Display name. Defaults to `agent_key`.
+	Name           string `json:"name"`
+	PinnedRevision *int64 `json:"pinned_revision"`
 
 	// TenantKey Tenant that owns this Agent, or null for the App's default tenant.
 	TenantKey *string   `json:"tenant_key"`
@@ -2617,7 +2622,9 @@ type AgentDefinitionCreate struct {
 	// convenience; nvoken splits it at the first slash and always returns the
 	// object form.
 	Model ModelInput `json:"model"`
-	Name  string     `json:"name"`
+
+	// Name Display name. Defaults to `definition_key`.
+	Name *string `json:"name,omitempty"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -2806,7 +2813,9 @@ type AgentDefinitionWrite struct {
 	// convenience; nvoken splits it at the first slash and always returns the
 	// object form.
 	Model ModelInput `json:"model"`
-	Name  string     `json:"name"`
+
+	// Name Display name. Defaults to `definition_key`.
+	Name *string `json:"name,omitempty"`
 
 	// OutputSchema Self-contained JSON Schema for an object result. Compact canonical JSON
 	// is limited to 32 KiB and 16 schema positions. Supported keywords are
@@ -3272,7 +3281,7 @@ type CreateAgentRequest struct {
 	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
 	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
 	AgentKey          string            `json:"agent_key"`
-	Name              string            `json:"name"`
+	Name              *string           `json:"name,omitempty"`
 	PinnedRevision    *int64            `json:"pinned_revision,omitempty"`
 	TenantKey         *string           `json:"tenant_key,omitempty"`
 }
@@ -6878,6 +6887,11 @@ type SummarizeAdmissionsParams struct {
 
 // ListAgentDefinitionsParams defines parameters for ListAgentDefinitions.
 type ListAgentDefinitionsParams struct {
+	// DefinitionKey Return only the resource this caller-owned key names. Unique per
+	// App, so the page holds zero or one item. Cannot be combined with
+	// `cursor`.
+	DefinitionKey *string `form:"definition_key,omitempty" json:"definition_key,omitempty"`
+
 	// IncludeArchived Include archived resources alongside live ones.
 	IncludeArchived *bool `form:"include_archived,omitempty" json:"include_archived,omitempty"`
 
@@ -6890,7 +6904,7 @@ type ListAgentDefinitionsParams struct {
 
 // CreateAgentDefinitionParams defines parameters for CreateAgentDefinition.
 type CreateAgentDefinitionParams struct {
-	IdempotencyKey string `json:"Idempotency-Key"`
+	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
 // UpdateAgentDefinitionParams defines parameters for UpdateAgentDefinition.
@@ -7157,6 +7171,14 @@ type ListSessionsParams struct {
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteSessionParams defines parameters for DeleteSession.
+type DeleteSessionParams struct {
+	// Force Erase even when the Session holds a nonterminal Invocation,
+	// discarding that turn's settlement. Without it, live work is
+	// refused with `session_invocation_active`.
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 }
 
 // ListSessionCompactionsParams defines parameters for ListSessionCompactions.
@@ -8784,15 +8806,31 @@ type ClientInterface interface {
 	// first and cursor-paginated. Archived resources are excluded unless
 	// `include_archived` is true, and then carry a non-null `archived_at`.
 	//
+	// `definition_key` is the lookup: the key is unique within the App, so
+	// the filter returns at most one resource and never needs a cursor. Use
+	// it instead of paging the collection to resolve one definition.
+	//
 	// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
 	ListAgentDefinitions(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAgentDefinitionWithBody Create an Agent Definition resource
 	//
-	// Creates a stable App-owned resource at revision 1. Equal content in a
-	// separate create gets a separate ID. Retry the same canonical request
-	// with the same `Idempotency-Key` to receive the original revision-1
-	// resource; changing the request under that key conflicts.
+	// Creates a stable App-owned resource at revision 1.
+	//
+	// `definition_key` is unique within the App, and creation is shaped
+	// around that: restating an existing resource — same key, same name,
+	// same definition — returns it with `200` instead of creating a second
+	// one, so a deploy-time sync can call this every time. A create naming
+	// a taken key with different contents is `409
+	// agent_definition_key_conflict`, pointing you at
+	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+	// held by an archived resource is `409 agent_definition_archived`;
+	// restore it or choose another key.
+	//
+	// `Idempotency-Key` is optional, because the key already scopes replay.
+	// Supply one to pin a replay to a specific create: the same key returns
+	// that create's revision-1 resource even after later revisions moved
+	// the resource on, and changing the request under that key conflicts.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -8801,10 +8839,22 @@ type ClientInterface interface {
 
 	// CreateAgentDefinition Create an Agent Definition resource
 	//
-	// Creates a stable App-owned resource at revision 1. Equal content in a
-	// separate create gets a separate ID. Retry the same canonical request
-	// with the same `Idempotency-Key` to receive the original revision-1
-	// resource; changing the request under that key conflicts.
+	// Creates a stable App-owned resource at revision 1.
+	//
+	// `definition_key` is unique within the App, and creation is shaped
+	// around that: restating an existing resource — same key, same name,
+	// same definition — returns it with `200` instead of creating a second
+	// one, so a deploy-time sync can call this every time. A create naming
+	// a taken key with different contents is `409
+	// agent_definition_key_conflict`, pointing you at
+	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+	// held by an archived resource is `409 agent_definition_archived`;
+	// restore it or choose another key.
+	//
+	// `Idempotency-Key` is optional, because the key already scopes replay.
+	// Supply one to pin a replay to a specific create: the same key returns
+	// that create's revision-1 resource even after later revisions moved
+	// the resource on, and changing the request under that key conflicts.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -8872,12 +8922,38 @@ type ClientInterface interface {
 
 	// CreateAgentWithBody Create or resolve a tenant-scoped Agent
 	//
+	// Creation is an upsert on `(tenant_key, agent_key)`, so an
+	// ensure-shaped call is safe to make on every request and needs no
+	// read first. The same keys backed by the same Agent Definition return
+	// the existing Agent with `200`; a different Definition pointer is
+	// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+	// held by an archived Agent are `409 agent_archived` — restore it or
+	// choose another key — rather than silently resolving onto a record
+	// that refuses every admission.
+	//
+	// Resolution matches on the Definition pointer only. A differing `name`
+	// or `pinned_revision` in the request does not modify the existing
+	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
 	CreateAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAgent Create or resolve a tenant-scoped Agent
+	//
+	// Creation is an upsert on `(tenant_key, agent_key)`, so an
+	// ensure-shaped call is safe to make on every request and needs no
+	// read first. The same keys backed by the same Agent Definition return
+	// the existing Agent with `200`; a different Definition pointer is
+	// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+	// held by an archived Agent are `409 agent_archived` — restore it or
+	// choose another key — rather than silently resolving onto a record
+	// that refuses every admission.
+	//
+	// Resolution matches on the Definition pointer only. A differing `name`
+	// or `pinned_revision` in the request does not modify the existing
+	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10135,11 +10211,15 @@ type ClientInterface interface {
 	// bindings, and undelivered webhooks. The erasure is immediate and
 	// irreversible; a subsequent read is `not_found`.
 	//
-	// A turn still running is stopped, but no cancellation is recorded —
-	// there is nothing left to record it against, and no
-	// `invocation.ended` webhook fires for it. If you need a record that
-	// the turn ended, cancel it and wait for its final state before
-	// deleting.
+	// A Session holding a nonterminal Invocation is refused with
+	// `session_invocation_active` unless you pass `force=true`. Erasure
+	// skips settlement: a turn still running is stopped, but no
+	// cancellation is recorded — there is nothing left to record it
+	// against — and no `invocation.ended` webhook fires for it. So if you
+	// bill or reconcile on settlement, cancel the turn and wait for its
+	// final state first, then delete. `force=true` is for erasing on an end
+	// user's behalf, where removing the transcript now outranks keeping a
+	// settled record of the turn.
 	//
 	// An unknown `session_id`, or one outside your scope, returns
 	// `not_found`. So if you lose the response and retry, you can safely
@@ -10160,7 +10240,7 @@ type ClientInterface interface {
 	// only holds while the original turn still exists.
 	//
 	// Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
-	DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteSession(ctx context.Context, sessionID SessionID, params *DeleteSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSession Read authoritative Session identity and current state
 	//
@@ -10523,6 +10603,10 @@ func (c *Client) SummarizeAdmissions(ctx context.Context, params *SummarizeAdmis
 // first and cursor-paginated. Archived resources are excluded unless
 // `include_archived` is true, and then carry a non-null `archived_at`.
 //
+// `definition_key` is the lookup: the key is unique within the App, so
+// the filter returns at most one resource and never needs a cursor. Use
+// it instead of paging the collection to resolve one definition.
+//
 // Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
 func (c *Client) ListAgentDefinitions(ctx context.Context, params *ListAgentDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAgentDefinitionsRequest(c.Server, params)
@@ -10538,10 +10622,22 @@ func (c *Client) ListAgentDefinitions(ctx context.Context, params *ListAgentDefi
 
 // CreateAgentDefinitionWithBody Create an Agent Definition resource
 //
-// Creates a stable App-owned resource at revision 1. Equal content in a
-// separate create gets a separate ID. Retry the same canonical request
-// with the same `Idempotency-Key` to receive the original revision-1
-// resource; changing the request under that key conflicts.
+// Creates a stable App-owned resource at revision 1.
+//
+// `definition_key` is unique within the App, and creation is shaped
+// around that: restating an existing resource — same key, same name,
+// same definition — returns it with `200` instead of creating a second
+// one, so a deploy-time sync can call this every time. A create naming
+// a taken key with different contents is `409
+// agent_definition_key_conflict`, pointing you at
+// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+// held by an archived resource is `409 agent_definition_archived`;
+// restore it or choose another key.
+//
+// `Idempotency-Key` is optional, because the key already scopes replay.
+// Supply one to pin a replay to a specific create: the same key returns
+// that create's revision-1 resource even after later revisions moved
+// the resource on, and changing the request under that key conflicts.
 //
 // Takes any type of body and a specified content type.
 //
@@ -10560,10 +10656,22 @@ func (c *Client) CreateAgentDefinitionWithBody(ctx context.Context, params *Crea
 
 // CreateAgentDefinition Create an Agent Definition resource
 //
-// Creates a stable App-owned resource at revision 1. Equal content in a
-// separate create gets a separate ID. Retry the same canonical request
-// with the same `Idempotency-Key` to receive the original revision-1
-// resource; changing the request under that key conflicts.
+// Creates a stable App-owned resource at revision 1.
+//
+// `definition_key` is unique within the App, and creation is shaped
+// around that: restating an existing resource — same key, same name,
+// same definition — returns it with `200` instead of creating a second
+// one, so a deploy-time sync can call this every time. A create naming
+// a taken key with different contents is `409
+// agent_definition_key_conflict`, pointing you at
+// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+// held by an archived resource is `409 agent_definition_archived`;
+// restore it or choose another key.
+//
+// `Idempotency-Key` is optional, because the key already scopes replay.
+// Supply one to pin a replay to a specific create: the same key returns
+// that create's revision-1 resource even after later revisions moved
+// the resource on, and changing the request under that key conflicts.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10711,6 +10819,19 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 
 // CreateAgentWithBody Create or resolve a tenant-scoped Agent
 //
+// Creation is an upsert on `(tenant_key, agent_key)`, so an
+// ensure-shaped call is safe to make on every request and needs no
+// read first. The same keys backed by the same Agent Definition return
+// the existing Agent with `200`; a different Definition pointer is
+// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+// held by an archived Agent are `409 agent_archived` — restore it or
+// choose another key — rather than silently resolving onto a record
+// that refuses every admission.
+//
+// Resolution matches on the Definition pointer only. A differing `name`
+// or `pinned_revision` in the request does not modify the existing
+// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -10727,6 +10848,19 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 }
 
 // CreateAgent Create or resolve a tenant-scoped Agent
+//
+// Creation is an upsert on `(tenant_key, agent_key)`, so an
+// ensure-shaped call is safe to make on every request and needs no
+// read first. The same keys backed by the same Agent Definition return
+// the existing Agent with `200`; a different Definition pointer is
+// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+// held by an archived Agent are `409 agent_archived` — restore it or
+// choose another key — rather than silently resolving onto a record
+// that refuses every admission.
+//
+// Resolution matches on the Definition pointer only. A differing `name`
+// or `pinned_revision` in the request does not modify the existing
+// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12804,11 +12938,15 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 // bindings, and undelivered webhooks. The erasure is immediate and
 // irreversible; a subsequent read is `not_found`.
 //
-// A turn still running is stopped, but no cancellation is recorded —
-// there is nothing left to record it against, and no
-// `invocation.ended` webhook fires for it. If you need a record that
-// the turn ended, cancel it and wait for its final state before
-// deleting.
+// A Session holding a nonterminal Invocation is refused with
+// `session_invocation_active` unless you pass `force=true`. Erasure
+// skips settlement: a turn still running is stopped, but no
+// cancellation is recorded — there is nothing left to record it
+// against — and no `invocation.ended` webhook fires for it. So if you
+// bill or reconcile on settlement, cancel the turn and wait for its
+// final state first, then delete. `force=true` is for erasing on an end
+// user's behalf, where removing the transcript now outranks keeping a
+// settled record of the turn.
 //
 // An unknown `session_id`, or one outside your scope, returns
 // `not_found`. So if you lose the response and retry, you can safely
@@ -12829,8 +12967,8 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 // only holds while the original turn still exists.
 //
 // Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
-func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteSessionRequest(c.Server, sessionID)
+func (c *Client) DeleteSession(ctx context.Context, sessionID SessionID, params *DeleteSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSessionRequest(c.Server, sessionID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -13516,6 +13654,18 @@ func NewListAgentDefinitionsRequest(server string, params *ListAgentDefinitionsP
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.DefinitionKey != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "definition_key", *params.DefinitionKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeArchived != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_archived", *params.IncludeArchived, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -13605,14 +13755,16 @@ func NewCreateAgentDefinitionRequestWithBody(server string, params *CreateAgentD
 
 	if params != nil {
 
-		var headerParam0 string
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
 
-		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-		if err != nil {
-			return nil, err
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
 		}
-
-		req.Header.Set("Idempotency-Key", headerParam0)
 
 	}
 
@@ -17255,7 +17407,7 @@ func NewCreateSessionRequestWithBody(server string, contentType string, body io.
 }
 
 // NewDeleteSessionRequest constructs an http.Request for the DeleteSession method
-func NewDeleteSessionRequest(server string, sessionID SessionID) (*http.Request, error) {
+func NewDeleteSessionRequest(server string, sessionID SessionID, params *DeleteSessionParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -17278,6 +17430,33 @@ func NewDeleteSessionRequest(server string, sessionID SessionID) (*http.Request,
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Force != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "force", *params.Force, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -18778,6 +18957,10 @@ type ClientWithResponsesInterface interface {
 	// first and cursor-paginated. Archived resources are excluded unless
 	// `include_archived` is true, and then carry a non-null `archived_at`.
 	//
+	// `definition_key` is the lookup: the key is unique within the App, so
+	// the filter returns at most one resource and never needs a cursor. Use
+	// it instead of paging the collection to resolve one definition.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
@@ -18785,10 +18968,22 @@ type ClientWithResponsesInterface interface {
 
 	// CreateAgentDefinitionWithBodyWithResponse Create an Agent Definition resource
 	//
-	// Creates a stable App-owned resource at revision 1. Equal content in a
-	// separate create gets a separate ID. Retry the same canonical request
-	// with the same `Idempotency-Key` to receive the original revision-1
-	// resource; changing the request under that key conflicts.
+	// Creates a stable App-owned resource at revision 1.
+	//
+	// `definition_key` is unique within the App, and creation is shaped
+	// around that: restating an existing resource — same key, same name,
+	// same definition — returns it with `200` instead of creating a second
+	// one, so a deploy-time sync can call this every time. A create naming
+	// a taken key with different contents is `409
+	// agent_definition_key_conflict`, pointing you at
+	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+	// held by an archived resource is `409 agent_definition_archived`;
+	// restore it or choose another key.
+	//
+	// `Idempotency-Key` is optional, because the key already scopes replay.
+	// Supply one to pin a replay to a specific create: the same key returns
+	// that create's revision-1 resource even after later revisions moved
+	// the resource on, and changing the request under that key conflicts.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18797,10 +18992,22 @@ type ClientWithResponsesInterface interface {
 
 	// CreateAgentDefinitionWithResponse Create an Agent Definition resource
 	//
-	// Creates a stable App-owned resource at revision 1. Equal content in a
-	// separate create gets a separate ID. Retry the same canonical request
-	// with the same `Idempotency-Key` to receive the original revision-1
-	// resource; changing the request under that key conflicts.
+	// Creates a stable App-owned resource at revision 1.
+	//
+	// `definition_key` is unique within the App, and creation is shaped
+	// around that: restating an existing resource — same key, same name,
+	// same definition — returns it with `200` instead of creating a second
+	// one, so a deploy-time sync can call this every time. A create naming
+	// a taken key with different contents is `409
+	// agent_definition_key_conflict`, pointing you at
+	// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+	// held by an archived resource is `409 agent_definition_archived`;
+	// restore it or choose another key.
+	//
+	// `Idempotency-Key` is optional, because the key already scopes replay.
+	// Supply one to pin a replay to a specific create: the same key returns
+	// that create's revision-1 resource even after later revisions moved
+	// the resource on, and changing the request under that key conflicts.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18878,12 +19085,38 @@ type ClientWithResponsesInterface interface {
 
 	// CreateAgentWithBodyWithResponse Create or resolve a tenant-scoped Agent
 	//
+	// Creation is an upsert on `(tenant_key, agent_key)`, so an
+	// ensure-shaped call is safe to make on every request and needs no
+	// read first. The same keys backed by the same Agent Definition return
+	// the existing Agent with `200`; a different Definition pointer is
+	// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+	// held by an archived Agent are `409 agent_archived` — restore it or
+	// choose another key — rather than silently resolving onto a record
+	// that refuses every admission.
+	//
+	// Resolution matches on the Definition pointer only. A differing `name`
+	// or `pinned_revision` in the request does not modify the existing
+	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
 	CreateAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResponse, error)
 
 	// CreateAgentWithResponse Create or resolve a tenant-scoped Agent
+	//
+	// Creation is an upsert on `(tenant_key, agent_key)`, so an
+	// ensure-shaped call is safe to make on every request and needs no
+	// read first. The same keys backed by the same Agent Definition return
+	// the existing Agent with `200`; a different Definition pointer is
+	// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+	// held by an archived Agent are `409 agent_archived` — restore it or
+	// choose another key — rather than silently resolving onto a record
+	// that refuses every admission.
+	//
+	// Resolution matches on the Definition pointer only. A differing `name`
+	// or `pinned_revision` in the request does not modify the existing
+	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20227,11 +20460,15 @@ type ClientWithResponsesInterface interface {
 	// bindings, and undelivered webhooks. The erasure is immediate and
 	// irreversible; a subsequent read is `not_found`.
 	//
-	// A turn still running is stopped, but no cancellation is recorded —
-	// there is nothing left to record it against, and no
-	// `invocation.ended` webhook fires for it. If you need a record that
-	// the turn ended, cancel it and wait for its final state before
-	// deleting.
+	// A Session holding a nonterminal Invocation is refused with
+	// `session_invocation_active` unless you pass `force=true`. Erasure
+	// skips settlement: a turn still running is stopped, but no
+	// cancellation is recorded — there is nothing left to record it
+	// against — and no `invocation.ended` webhook fires for it. So if you
+	// bill or reconcile on settlement, cancel the turn and wait for its
+	// final state first, then delete. `force=true` is for erasing on an end
+	// user's behalf, where removing the transcript now outranks keeping a
+	// settled record of the turn.
 	//
 	// An unknown `session_id`, or one outside your scope, returns
 	// `not_found`. So if you lose the response and retry, you can safely
@@ -20254,7 +20491,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
-	DeleteSessionWithResponse(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*DeleteSessionHTTPResponse, error)
+	DeleteSessionWithResponse(ctx context.Context, sessionID SessionID, params *DeleteSessionParams, reqEditors ...RequestEditorFn) (*DeleteSessionHTTPResponse, error)
 
 	// GetSessionWithResponse Read authoritative Session identity and current state
 	//
@@ -20814,6 +21051,11 @@ func (r ListAgentDefinitionsHTTPResponse) ContentType() string {
 	return ""
 }
 
+// CreateAgentDefinitionHTTPResponse200Headers the declared response headers of an HTTP 200 response for CreateAgentDefinition
+type CreateAgentDefinitionHTTPResponse200Headers struct {
+	ETag *string
+}
+
 // CreateAgentDefinitionHTTPResponse201Headers the declared response headers of an HTTP 201 response for CreateAgentDefinition
 type CreateAgentDefinitionHTTPResponse201Headers struct {
 	ETag *string
@@ -20827,6 +21069,8 @@ type CreateAgentDefinitionHTTPResponse429Headers struct {
 type CreateAgentDefinitionHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AgentDefinitionResource
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *AgentDefinitionResource
 	// JSON400 the response for an HTTP 400 `application/json` response
@@ -20836,17 +21080,24 @@ type CreateAgentDefinitionHTTPResponse struct {
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *Forbidden
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *AppArchived
+	JSON409 *ErrorResponse
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Unavailable
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *CreateAgentDefinitionHTTPResponse200Headers
 	// Headers201 the parsed response headers for an HTTP 201 response
 	Headers201 *CreateAgentDefinitionHTTPResponse201Headers
 	// Headers429 the parsed response headers for an HTTP 429 response
 	Headers429 *CreateAgentDefinitionHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CreateAgentDefinitionHTTPResponse) GetJSON200() *AgentDefinitionResource {
+	return r.JSON200
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -20870,7 +21121,7 @@ func (r CreateAgentDefinitionHTTPResponse) GetJSON403() *Forbidden {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateAgentDefinitionHTTPResponse) GetJSON409() *AppArchived {
+func (r CreateAgentDefinitionHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
 }
 
@@ -26773,6 +27024,8 @@ type DeleteSessionHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ErrorResponse
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -26801,6 +27054,11 @@ func (r DeleteSessionHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteSessionHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteSessionHTTPResponse) GetJSON409() *ErrorResponse {
+	return r.JSON409
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -28059,6 +28317,10 @@ func (c *ClientWithResponses) SummarizeAdmissionsWithResponse(ctx context.Contex
 // first and cursor-paginated. Archived resources are excluded unless
 // `include_archived` is true, and then carry a non-null `archived_at`.
 //
+// `definition_key` is the lookup: the key is unique within the App, so
+// the filter returns at most one resource and never needs a cursor. Use
+// it instead of paging the collection to resolve one definition.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/agent-definitions (the `ListAgentDefinitions` operationId).
@@ -28072,10 +28334,22 @@ func (c *ClientWithResponses) ListAgentDefinitionsWithResponse(ctx context.Conte
 
 // CreateAgentDefinitionWithBodyWithResponse Create an Agent Definition resource
 //
-// Creates a stable App-owned resource at revision 1. Equal content in a
-// separate create gets a separate ID. Retry the same canonical request
-// with the same `Idempotency-Key` to receive the original revision-1
-// resource; changing the request under that key conflicts.
+// Creates a stable App-owned resource at revision 1.
+//
+// `definition_key` is unique within the App, and creation is shaped
+// around that: restating an existing resource — same key, same name,
+// same definition — returns it with `200` instead of creating a second
+// one, so a deploy-time sync can call this every time. A create naming
+// a taken key with different contents is `409
+// agent_definition_key_conflict`, pointing you at
+// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+// held by an archived resource is `409 agent_definition_archived`;
+// restore it or choose another key.
+//
+// `Idempotency-Key` is optional, because the key already scopes replay.
+// Supply one to pin a replay to a specific create: the same key returns
+// that create's revision-1 resource even after later revisions moved
+// the resource on, and changing the request under that key conflicts.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28090,10 +28364,22 @@ func (c *ClientWithResponses) CreateAgentDefinitionWithBodyWithResponse(ctx cont
 
 // CreateAgentDefinitionWithResponse Create an Agent Definition resource
 //
-// Creates a stable App-owned resource at revision 1. Equal content in a
-// separate create gets a separate ID. Retry the same canonical request
-// with the same `Idempotency-Key` to receive the original revision-1
-// resource; changing the request under that key conflicts.
+// Creates a stable App-owned resource at revision 1.
+//
+// `definition_key` is unique within the App, and creation is shaped
+// around that: restating an existing resource — same key, same name,
+// same definition — returns it with `200` instead of creating a second
+// one, so a deploy-time sync can call this every time. A create naming
+// a taken key with different contents is `409
+// agent_definition_key_conflict`, pointing you at
+// `PUT /v1/agent-definitions/{id}` to publish a new revision. A key
+// held by an archived resource is `409 agent_definition_archived`;
+// restore it or choose another key.
+//
+// `Idempotency-Key` is optional, because the key already scopes replay.
+// Supply one to pin a replay to a specific create: the same key returns
+// that create's revision-1 resource even after later revisions moved
+// the resource on, and changing the request under that key conflicts.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28219,6 +28505,19 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 
 // CreateAgentWithBodyWithResponse Create or resolve a tenant-scoped Agent
 //
+// Creation is an upsert on `(tenant_key, agent_key)`, so an
+// ensure-shaped call is safe to make on every request and needs no
+// read first. The same keys backed by the same Agent Definition return
+// the existing Agent with `200`; a different Definition pointer is
+// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+// held by an archived Agent are `409 agent_archived` — restore it or
+// choose another key — rather than silently resolving onto a record
+// that refuses every admission.
+//
+// Resolution matches on the Definition pointer only. A differing `name`
+// or `pinned_revision` in the request does not modify the existing
+// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -28231,6 +28530,19 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 }
 
 // CreateAgentWithResponse Create or resolve a tenant-scoped Agent
+//
+// Creation is an upsert on `(tenant_key, agent_key)`, so an
+// ensure-shaped call is safe to make on every request and needs no
+// read first. The same keys backed by the same Agent Definition return
+// the existing Agent with `200`; a different Definition pointer is
+// `409 agent_key_conflict`, naming the Agent that holds the key. Keys
+// held by an archived Agent are `409 agent_archived` — restore it or
+// choose another key — rather than silently resolving onto a record
+// that refuses every admission.
+//
+// Resolution matches on the Definition pointer only. A differing `name`
+// or `pinned_revision` in the request does not modify the existing
+// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30066,11 +30378,15 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 // bindings, and undelivered webhooks. The erasure is immediate and
 // irreversible; a subsequent read is `not_found`.
 //
-// A turn still running is stopped, but no cancellation is recorded —
-// there is nothing left to record it against, and no
-// `invocation.ended` webhook fires for it. If you need a record that
-// the turn ended, cancel it and wait for its final state before
-// deleting.
+// A Session holding a nonterminal Invocation is refused with
+// `session_invocation_active` unless you pass `force=true`. Erasure
+// skips settlement: a turn still running is stopped, but no
+// cancellation is recorded — there is nothing left to record it
+// against — and no `invocation.ended` webhook fires for it. So if you
+// bill or reconcile on settlement, cancel the turn and wait for its
+// final state first, then delete. `force=true` is for erasing on an end
+// user's behalf, where removing the transcript now outranks keeping a
+// settled record of the turn.
 //
 // An unknown `session_id`, or one outside your scope, returns
 // `not_found`. So if you lose the response and retry, you can safely
@@ -30093,8 +30409,8 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with DELETE /v1/sessions/{session_id} (the `DeleteSession` operationId).
-func (c *ClientWithResponses) DeleteSessionWithResponse(ctx context.Context, sessionID SessionID, reqEditors ...RequestEditorFn) (*DeleteSessionHTTPResponse, error) {
-	rsp, err := c.DeleteSession(ctx, sessionID, reqEditors...)
+func (c *ClientWithResponses) DeleteSessionWithResponse(ctx context.Context, sessionID SessionID, params *DeleteSessionParams, reqEditors ...RequestEditorFn) (*DeleteSessionHTTPResponse, error) {
+	rsp, err := c.DeleteSession(ctx, sessionID, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -30723,6 +31039,13 @@ func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDef
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
 		var dest AgentDefinitionResource
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -30752,7 +31075,7 @@ func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDef
 		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest AppArchived
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -30782,6 +31105,16 @@ func ParseCreateAgentDefinitionHTTPResponse(rsp *http.Response) (*CreateAgentDef
 	}
 
 	switch {
+	case rsp.StatusCode == 200:
+		var headers CreateAgentDefinitionHTTPResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
+		}
+		response.Headers200 = &headers
 	case rsp.StatusCode == 201:
 		var headers CreateAgentDefinitionHTTPResponse201Headers
 		if values := rsp.Header.Values("ETag"); len(values) > 0 {
@@ -35922,6 +36255,13 @@ func ParseDeleteSessionHTTPResponse(rsp *http.Response) (*DeleteSessionHTTPRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited

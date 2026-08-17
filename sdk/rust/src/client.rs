@@ -212,6 +212,12 @@ impl Model {
     }
 }
 
+/// Omits an empty value rather than sending it, so a field the runtime
+/// defaults stays defaulted there instead of being filled in twice.
+fn optional_name(value: &str) -> Option<String> {
+    (!value.is_empty()).then(|| value.to_string())
+}
+
 /// The error an Agent host tool handler failed with. Reported to nvoken as
 /// `{"error": message, "type": type_name}`, mirroring the Go and Python
 /// bindings' handler-failure shape.
@@ -1048,6 +1054,9 @@ pub struct UpdateAgentInput {
 
 #[derive(Debug, Clone, Default)]
 pub struct ListAgentDefinitionsOptions {
+    /// Narrows the page to the resource this caller-owned key names. The key
+    /// is unique within the App, so the page holds zero or one item.
+    pub definition_key: Option<String>,
     pub include_archived: Option<bool>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
@@ -1163,7 +1172,6 @@ pub struct Client {
     pub(crate) configuration: Arc<apis::configuration::Configuration>,
     pub(crate) stream_client: reqwest::Client,
     response_metadata: ResponseMetadataStore,
-    default_model: Option<Model>,
     /// One lock per bound Agent Session key, shared across every clone of
     /// this `Client` so two `AgentSession` handles for the same Session
     /// (even built from different `Agent` values) serialize correctly.
@@ -1213,16 +1221,8 @@ impl Client {
             configuration: Arc::new(configuration),
             stream_client: transport,
             response_metadata,
-            default_model: None,
             session_locks: Arc::new(Mutex::new(HashMap::new())),
         })
-    }
-
-    /// Sets the model used when rendering an Agent Definition whose model is
-    /// left unset.
-    pub fn with_default_model(mut self, model: Model) -> Self {
-        self.default_model = Some(model);
-        self
     }
 
     /// Returns the shared lock for one Agent Session key, creating it on
@@ -1326,10 +1326,7 @@ impl Client {
         mut definition: AgentDefinition,
     ) -> Result<models::AgentDefinitionWrite, NvokenError> {
         if definition.model.is_unset() {
-            definition.model = self
-                .default_model
-                .clone()
-                .ok_or_else(|| NvokenError::validation("model is required"))?;
+            return Err(NvokenError::validation("model is required"));
         }
         if let Some(schema) = &definition.output_schema {
             preflight_output_schema(schema)?;
@@ -1407,7 +1404,8 @@ impl Client {
             };
             tools.push(mode);
         }
-        let mut body = models::AgentDefinitionWrite::new(name.to_string(), model);
+        let mut body = models::AgentDefinitionWrite::new(model);
+        body.name = optional_name(name);
         body.instructions = definition.instructions;
         body.sampling = sampling;
         body.reasoning = reasoning;
@@ -1823,8 +1821,8 @@ impl Client {
         };
         apis::agent_definitions_api::create_agent_definition(
             &self.configuration,
-            idempotency_key,
             body,
+            optional_name(idempotency_key).as_deref(),
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
@@ -1845,6 +1843,7 @@ impl Client {
     ) -> Result<models::AgentDefinitionResourceList, NvokenError> {
         apis::agent_definitions_api::list_agent_definitions(
             &self.configuration,
+            options.definition_key.as_deref(),
             options.include_archived,
             options.cursor.as_deref(),
             options.limit,
@@ -1932,8 +1931,8 @@ impl Client {
         &self,
         input: CreateAgentInput,
     ) -> Result<models::Agent, NvokenError> {
-        let mut body =
-            models::CreateAgentRequest::new(input.agent_key, input.name, input.agent_definition_id);
+        let mut body = models::CreateAgentRequest::new(input.agent_key, input.agent_definition_id);
+        body.name = optional_name(&input.name);
         body.tenant_key = input.tenant_key;
         body.pinned_revision = input.pinned_revision.map(u64::from);
         apis::agents_api::create_agent(&self.configuration, body)
@@ -2163,10 +2162,12 @@ impl Client {
     /// checkpoints, tool calls, artifacts, and undelivered webhooks. The
     /// erasure is immediate and irreversible.
     ///
-    /// A running Invocation is stopped, and no cancellation is recorded — the
-    /// Invocation is removed rather than ended, so no `invocation.ended`
-    /// webhook is emitted for it. Cancel first if you need an ended
-    /// record.
+    /// A Session holding a nonterminal Invocation is refused unless `force`.
+    /// Erasure skips settlement — the Invocation is removed rather than ended,
+    /// so it records no terminal status and emits no `invocation.ended`
+    /// webhook — which is why a caller that bills or reconciles on settlement
+    /// must cancel first. `force` is for erasing on an end user's behalf,
+    /// where removing the transcript now outranks keeping a settled record.
     ///
     /// An unknown or out-of-scope Session is not found, so a retry after a lost
     /// response can treat that as already-done.
@@ -2174,8 +2175,8 @@ impl Client {
     /// This is not account erasure by itself: nvoken keeps no account
     /// tombstone, so a caller honouring a deletion request must stop admitting
     /// work for the tenant before paginating and deleting.
-    pub async fn delete_session(&self, session_id: &str) -> Result<(), NvokenError> {
-        apis::sessions_api::delete_session(&self.configuration, session_id)
+    pub async fn delete_session(&self, session_id: &str, force: bool) -> Result<(), NvokenError> {
+        apis::sessions_api::delete_session(&self.configuration, session_id, Some(force))
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }

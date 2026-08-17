@@ -673,6 +673,12 @@ type AgentDefinition struct {
 
 type AgentDefinitionResource = generated.AgentDefinitionResource
 
+// CreateAgentDefinitionInput declares one App-owned Agent Definition.
+// DefinitionKey is unique within the App, so creation is ensure-shaped:
+// restating an existing definition returns it, and a key already held by a
+// different definition is a conflict. Name defaults to DefinitionKey.
+// IdempotencyKey is optional, and pins replay to a specific create; the key
+// already scopes replay without it.
 type CreateAgentDefinitionInput struct {
 	DefinitionKey  string
 	Name           string
@@ -922,6 +928,10 @@ type ListAgentsOptions struct {
 	Limit             *int
 }
 
+// CreateAgentInput declares one tenant-scoped Agent. Creation is an upsert on
+// (TenantKey, AgentKey): the same keys backed by the same Definition return
+// the existing Agent, a different Definition pointer conflicts, and Name
+// defaults to AgentKey.
 type CreateAgentInput struct {
 	TenantKey         *string
 	AgentKey          string

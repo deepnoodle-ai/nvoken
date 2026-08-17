@@ -39,7 +39,7 @@ class AgentDefinitionWrite(BaseModel):
     Complete writable Agent Definition fields. The model string shorthand is accepted on write. Identity, revision, and timestamps are read-only.
     """ # noqa: E501
     definition_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Caller-chosen immutable key. Required on creation and omitted on replacement.")
-    name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Display name. Defaults to `definition_key`.")
     instructions: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Optional model instructions. Omission adds no hidden default.")
     model: ModelInput
     sampling: Optional[Sampling] = None

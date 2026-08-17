@@ -103,11 +103,15 @@ import {
   outputSchemaIssue,
   SCHEMA_PREFLIGHT_CODE,
 } from "./schema-preflight.js";
+import { isTurnOver } from "./invocation-status.js";
 import {
+  Reducer,
   streamInvocationByID,
   streamInvocationByIDWithOptions,
+  streamSessionByID,
   type SessionStreamEvent,
   type StreamOptions,
+  type StreamUpdate,
 } from "./stream.js";
 import { VERSION } from "./version.js";
 
@@ -296,9 +300,12 @@ export class NoOutputTextError<TOutput extends object = JsonObject> extends Nvok
       : producedToolOutput
         ? "tool output"
         : "no canonical assistant text";
+    const ending = result.invocation.status === "incomplete"
+      ? "stopped at a budget with"
+      : "completed with";
     super(
       "unexpected_response",
-      `Invocation ${result.invocation.id} completed with ${produced}; call run() and inspect the full result`,
+      `Invocation ${result.invocation.id} ${ending} ${produced}; call run() and inspect the full result`,
       undefined,
       "no_output_text",
       undefined,
@@ -317,6 +324,12 @@ export interface Model {
   provider: ModelProvider;
   id: string;
 }
+
+/**
+ * Either accepted spelling of a model: the object, or `"provider/id"` split at
+ * the first slash. Responses always carry the object form.
+ */
+export type ModelInput = Model | string;
 
 export type ModelProvider = string;
 
@@ -640,7 +653,7 @@ export interface Reasoning {
 
 export interface ContextCompaction {
   triggerTokens: number | "auto";
-  model?: Model;
+  model?: ModelInput;
 }
 
 /**
@@ -681,7 +694,7 @@ export interface SessionOptions {
  */
 export interface AgentDefinition<TOutput extends object = JsonObject> {
   instructions?: string;
-  model: Model;
+  model: ModelInput;
   sampling?: Sampling;
   reasoning?: Reasoning;
   toolChoice?: ToolChoice;
@@ -851,7 +864,7 @@ interface InvokeRequestBase {
 }
 
 export interface AgentDefinitionOverrides<TOutput extends object = JsonObject> {
-  model?: Model;
+  model?: ModelInput;
   sampling?: Sampling;
   reasoning?: Reasoning;
   toolChoice?: ToolChoice;
@@ -885,14 +898,38 @@ export interface RetryPolicy {
 export interface ClientOptions {
   baseUrl?: string;
   apiKey?: string;
-  defaultModel?: Model;
   /**
    * Reads only a marked nvokend quickstart file. Set false to disable the
-   * default .env lookup.
+   * default .env lookup. Probing is skipped outside Node-like runtimes, so a
+   * Worker or browser bundle needs no opt-out.
    */
   envFile?: string | false;
   fetch?: typeof globalThis.fetch;
   retry?: RetryPolicy;
+  /**
+   * How long a stream may fail to connect before it stops retrying and
+   * throws. The clock covers a run of consecutive failures and resets on any
+   * successful connection, so a long-lived stream is bounded by "cannot
+   * connect", never by how long its turn runs. Defaults to five minutes.
+   */
+  streamReconnectTimeoutMs?: number;
+  /**
+   * Called with every HTTP response the client receives, including error
+   * statuses, before it is decoded. It exists so a production consumer can
+   * see status codes and latency without wrapping `fetch` itself. It must not
+   * read the body: the client has not consumed it yet.
+   */
+  onResponse?: (observation: ResponseObservation) => void;
+}
+
+/** One observed HTTP round trip, as reported to `ClientOptions.onResponse`. */
+export interface ResponseObservation {
+  method: string;
+  url: string;
+  status: number;
+  durationMs: number;
+  /** Present when the request failed before a response existed. */
+  error?: unknown;
 }
 
 export type AgentOptions<TOutput extends object = JsonObject> =
@@ -971,8 +1008,30 @@ export type EndedInvocationHandle<TOutput extends object = JsonObject> =
     readonly deduplicated: boolean;
     sessionId: string;
     agentId: string;
-    status: "completed";
+    /**
+     * The two endings that carry work. `incomplete` is a turn that ran out of
+     * budget with everything it produced retained, so callers must branch on
+     * this rather than assume `completed`.
+     */
+    status: OutcomeStatus;
   };
+
+/**
+ * A terminal status that produced work worth reading: the turn finished, or it
+ * stopped at a budget with what it had. The other two terminal statuses,
+ * `failed` and `cancelled`, are what `InvocationError` is raised for.
+ */
+export type OutcomeStatus = "completed" | "incomplete";
+
+/**
+ * Whether a turn ended with work to read. `incomplete` counts: it means a
+ * budget stopped the turn, not that the turn produced nothing — and when a
+ * schema was demanded, an `incomplete` turn's structured output is present and
+ * validated, because an unsatisfied schema settles `failed` instead.
+ */
+export function isOutcomeStatus(status: string): status is OutcomeStatus {
+  return status === "completed" || status === "incomplete";
+}
 
 export type AgentStreamEvent<TOutput extends object = JsonObject> =
   SessionStreamEvent<TOutput> & { handle: InvocationHandle<TOutput> };
@@ -989,6 +1048,12 @@ export interface ListInvocationOptions {
 }
 
 export interface ListAgentDefinitionsOptions {
+  /**
+   * Narrows the page to the resource this key names. The key is unique within
+   * the App, so the page holds zero or one item; prefer
+   * `getAgentDefinitionByKey` when that is what you meant.
+   */
+  definitionKey?: string;
   includeArchived?: boolean;
   cursor?: string;
   limit?: number;
@@ -1115,13 +1180,27 @@ export interface ListAgentOptions {
 
 export interface CreateAgentDefinitionOptions<TOutput extends object = JsonObject> {
   definitionKey: string;
-  name: string;
+  /** Display name. Defaults to `definitionKey`. */
+  name?: string;
   definition: AgentDefinition<TOutput>;
+  /**
+   * Pins replay to this specific create, so the same key keeps returning that
+   * create's revision-1 resource even after later revisions moved it on.
+   *
+   * Leave it unset for the ordinary case. `definitionKey` is unique within the
+   * App and already scopes replay: restating a definition resolves to the
+   * existing resource at its current revision, which is what a deploy-time
+   * sync wants.
+   */
   idempotencyKey?: string;
 }
 
 export interface UpdateAgentDefinitionOptions<TOutput extends object = JsonObject> {
   expectedRevision: number;
+  /**
+   * Display name. Required here, unlike on create: an update replaces the
+   * whole resource and this call does not hold the key to fall back to.
+   */
   name: string;
   definition: AgentDefinition<TOutput>;
 }
@@ -1164,7 +1243,7 @@ export class Client {
   readonly configuration: Configuration;
   readonly retry: Required<RetryPolicy>;
   readonly fetch: typeof globalThis.fetch;
-  readonly defaultModel?: Model;
+  readonly streamReconnectTimeoutMs: number;
 
   constructor(options: ClientOptions = {}) {
     const environment = resolveEnvironment(options.envFile);
@@ -1181,8 +1260,21 @@ export class Client {
         "apiKey is required; pass it to new Client() or set NVOKEN_API_KEY",
       );
     }
-    this.defaultModel = resolveModel(options.defaultModel, environment);
-    this.fetch = options.fetch ?? globalThis.fetch;
+    this.streamReconnectTimeoutMs = options.streamReconnectTimeoutMs ?? 300_000;
+    if (!(this.streamReconnectTimeoutMs > 0)) {
+      throw new NvokenError(
+        "validation",
+        "streamReconnectTimeoutMs must be a positive number of milliseconds",
+      );
+    }
+    // Bound to globalThis, because some runtimes — workerd among them —
+    // refuse a fetch invoked with any other receiver. The REST path calls it
+    // through generated code that happens to keep the binding, so an unbound
+    // default breaks only streaming, which is the hardest place to notice.
+    const transport = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.fetch = options.onResponse
+      ? observedFetch(transport, options.onResponse)
+      : transport;
     this.configuration = new Configuration({
       basePath: baseUrl.replace(/\/$/, ""),
       accessToken: apiKey,
@@ -1669,24 +1761,31 @@ export class Client {
   }
 
   /**
-   * Creates one reusable App-owned Agent Definition resource. The idempotency
-   * key makes retries safe; equal definitions created under different keys get
-   * independent resource IDs.
+   * Creates one reusable App-owned Agent Definition resource, or returns the
+   * one `definitionKey` already names.
+   *
+   * The key is unique within the App, so this is ensure-shaped: restating an
+   * existing definition returns it rather than creating a second, and a key
+   * already held by a different definition is a conflict naming the resource
+   * to update instead. That makes it safe to call on every deploy without a
+   * caller-invented idempotency key — see `idempotencyKey` for when you still
+   * want one.
    */
   async createAgentDefinition<TOutput extends object = JsonObject>(
     options: CreateAgentDefinitionOptions<TOutput>,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
     validateAgentDefinition(options.definition);
-    if (!options.definitionKey || !options.name) {
-      throw new NvokenError("validation", "definitionKey and name are required");
+    if (!options.definitionKey) {
+      throw new NvokenError("validation", "definitionKey is required");
     }
-    const idempotencyKey = options.idempotencyKey
-      ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     return await this.replaySafe(
       () => this.agentDefinitions.createAgentDefinition(
         {
-          idempotencyKey,
+          idempotencyKey: options.idempotencyKey,
+          // An omitted name is left omitted rather than filled in with the key
+          // here: the runtime applies that default, and duplicating it would
+          // make two places to change it.
           agentDefinitionCreate: agentDefinitionToWire(
             options.definition,
             options.name,
@@ -1731,6 +1830,30 @@ export class Client {
       () => this.agentDefinitions.listAgentDefinitions(options, { signal }),
       signal,
     );
+  }
+
+  /**
+   * Reads the Agent Definition a caller-owned key names, or null when the key
+   * names none.
+   *
+   * `definitionKey` is unique within the App, so this is a lookup rather than
+   * a search: there is nothing to paginate, nothing to filter client-side, and
+   * no duplicate to detect. Archived resources are excluded unless asked for,
+   * matching the list.
+   */
+  async getAgentDefinitionByKey(
+    definitionKey: string,
+    options: { includeArchived?: boolean } = {},
+    signal?: AbortSignal,
+  ): Promise<AgentDefinitionResource | null> {
+    if (!definitionKey) {
+      throw new NvokenError("validation", "definitionKey is required");
+    }
+    const page = await this.listAgentDefinitions(
+      { definitionKey, includeArchived: options.includeArchived },
+      signal,
+    );
+    return page.items[0] ?? null;
   }
 
   updateAgentDefinition<TOutput extends object = JsonObject>(
@@ -2353,6 +2476,18 @@ export class Agent<TOutput extends object = JsonObject> {
     return { ...request, sessionOptions: options.sessionOptions };
   }
 
+  /**
+   * Runs one turn to its end, answering host tool calls along the way.
+   *
+   * Every ending that produced work returns. `result.invocation.status` is
+   * `completed` or `incomplete`, and `incomplete` is not a failure: the turn
+   * hit a budget and kept what it had, including a validated
+   * `structuredOutput` when a schema was demanded — an unsatisfiable schema
+   * settles `failed` instead. Branch on the status; do not assume `completed`.
+   *
+   * `InvocationError` is reserved for `failed` and `cancelled`, the two
+   * endings with no result to read.
+   */
   run(input: InvokeInput, options: InvocationOptions = {}): Promise<AgentResult<TOutput>> {
     return this.runLoop(input, options);
   }
@@ -2448,7 +2583,7 @@ export class Agent<TOutput extends object = JsonObject> {
       for (;;) {
         const invocation = await handle.waitForAction({ signal: scope.signal });
         if (invocation.status !== "waiting") {
-          if (invocation.status !== "completed") {
+          if (!isOutcomeStatus(invocation.status)) {
             throw new InvocationError(handle, invocation);
           }
           break;
@@ -2764,11 +2899,20 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     return this.wait({ ...options, until: "actionable" });
   }
 
+  /**
+   * Waits for the turn to end and reads its result.
+   *
+   * Throws only for the two endings that produced no work to read: `failed`
+   * and `cancelled`. An `incomplete` turn stopped at a budget with everything
+   * it produced retained — including a validated structured output, since a
+   * schema it could not satisfy would have settled `failed` instead — so it is
+   * paid-for work and comes back as a result to branch on, not an exception.
+   */
   async waitForResult(
     options: Omit<WaitOptions, "until"> = {},
   ): Promise<TypedInvocationResult<TOutput>> {
     const invocation = await this.wait({ ...options, until: "terminal" });
-    if (invocation.status !== "completed") {
+    if (!isOutcomeStatus(invocation.status)) {
       throw new InvocationError(this, invocation);
     }
     return this.result(options.signal);
@@ -2868,6 +3012,52 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
       signal,
     );
   }
+
+  /**
+   * Follows this turn with the frames already folded into a snapshot.
+   *
+   * `stream()` yields raw frames, which leaves every consumer to rediscover
+   * the four signals that void a preview — a resync, the saved message
+   * landing, the terminal change, and a rising `attempt` from a restarted
+   * execution — plus the rule that messages in a frame apply before its
+   * changes. Getting the last one wrong shows half-written text from a dead
+   * attempt; getting the ordering wrong reads a turn as settled before its
+   * final message exists. The Reducer already knows all of it, so this is the
+   * path that should be reached for, and `streamSession` already yields the
+   * same shape.
+   *
+   * The snapshot is authoritative for rendering, not for settlement: read the
+   * result with `result()` once `event` reports the terminal change.
+   */
+  async *streamReduced(
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamUpdate> {
+    yield* this.streamReducedWithOptions({}, signal);
+  }
+
+  async *streamReducedWithOptions(
+    options: StreamOptions,
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamUpdate> {
+    const sessionId = await this.requireSessionId(signal);
+    const reducer = new Reducer();
+    for await (const update of streamSessionByID(
+      this.client,
+      sessionId,
+      reducer,
+      options,
+      signal,
+    )) {
+      yield update;
+      // isTurnOver, not a status comparison: the change carries `terminal` as
+      // the protocol's own witness, and a status this build has never seen
+      // must read as live rather than end the stream early.
+      const ended = update.snapshot.invocationChanges.some(
+        (change) => change.invocationId === this.invocationId && isTurnOver(change),
+      );
+      if (ended) return;
+    }
+  }
 }
 
 // inputBlockToWire copies one facade block into the generated wire shape. The
@@ -2918,7 +3108,7 @@ function sessionOptionsToWire(
       triggerTokens: options.compaction.triggerTokens,
       model: options.compaction.model === undefined
         ? undefined
-        : { ...options.compaction.model },
+        : normalizeModel(options.compaction.model),
     },
     retention: options.retention === undefined
       ? undefined
@@ -2934,7 +3124,7 @@ function sessionOptionsToWire(
  */
 function agentDefinitionToWire<TOutput extends object>(
   definition: AgentDefinition<TOutput>,
-  name: string,
+  name: string | undefined,
   definitionKey?: string,
 ): AgentDefinitionWrite {
   const outputSchema = definition.outputSchema
@@ -2945,7 +3135,7 @@ function agentDefinitionToWire<TOutput extends object>(
     definitionKey,
     name,
     instructions: definition.instructions,
-    model: definition.model,
+    model: normalizeModel(definition.model),
     sampling: definition.sampling === undefined
         ? undefined
         : { ...definition.sampling },
@@ -3052,7 +3242,7 @@ function invocationRequestToWire<TOutput extends object>(
 function validateAgentDefinition<TOutput extends object>(
   definition: AgentDefinition<TOutput>,
 ): void {
-  validateModel(definition.model);
+  normalizeModel(definition.model);
   if (definition.instructions !== undefined && !definition.instructions.trim()) {
     throw new NvokenError("validation", "instructions cannot be blank");
   }
@@ -3065,7 +3255,7 @@ function validateAgentDefinitionOverrides<TOutput extends object>(
   if (Object.keys(overrides).length === 0) {
     throw new NvokenError("validation", "overrides require at least one member");
   }
-  if (overrides.model !== undefined) validateModel(overrides.model);
+  if (overrides.model !== undefined) normalizeModel(overrides.model);
   if (overrides.outputSchema !== undefined) {
     preflightOutputSchema(schemaToJSON(overrides.outputSchema, "output"));
   }
@@ -3079,7 +3269,7 @@ function agentDefinitionOverridesToWire<TOutput extends object>(
     : schemaToJSON(overrides.outputSchema, "output");
   if (outputSchema !== undefined) preflightOutputSchema(outputSchema);
   return {
-    model: overrides.model,
+    model: overrides.model === undefined ? undefined : normalizeModel(overrides.model),
     sampling: overrides.sampling === undefined ? undefined : { ...overrides.sampling },
     reasoning: overrides.reasoning === undefined ? undefined : { ...overrides.reasoning },
     toolChoice: overrides.toolChoice === undefined ? undefined : { ...overrides.toolChoice },
@@ -3204,7 +3394,7 @@ function asEndedHandle<TOutput extends object>(
     || !handle.sessionId
     || !handle.agentId
     || handle.deduplicated === undefined
-    || handle.status !== "completed"
+    || !isOutcomeStatus(handle.status ?? "")
   ) {
     throw new NvokenError(
       "unexpected_response",
@@ -3312,8 +3502,6 @@ function resolveEnvironment(envFile: string | false | undefined): Record<string,
   const allowed = new Set([
     "NVOKEN_API_KEY",
     "NVOKEN_BASE_URL",
-    "NVOKEN_MODEL",
-    "NVOKEN_PROVIDER",
   ]);
   const values: Record<string, string> = {};
   for (const line of lines.slice(1)) {
@@ -3336,42 +3524,75 @@ function unquoteEnvironmentValue(value: string): string {
   return trimmed;
 }
 
-function resolveModel(
-  explicit: Model | undefined,
-  fileEnvironment: Record<string, string>,
-): Model | undefined {
-  if (explicit) {
-    validateModel(explicit);
-    return explicit;
+/**
+ * Wraps a fetch so every round trip is reported, then hands back a fetch with
+ * the same contract.
+ *
+ * The observer sees failures too, because a 503 and a request that never got a
+ * response are the two things a production consumer most needs to tell apart,
+ * and without this they look identical from outside. It never sees the body:
+ * the response is returned unread so the client can decode it exactly once.
+ * An observer that throws must not take down the call it was only watching.
+ */
+function observedFetch(
+  transport: typeof globalThis.fetch,
+  onResponse: (observation: ResponseObservation) => void,
+): typeof globalThis.fetch {
+  return async (input, init) => {
+    const started = Date.now();
+    const method = init?.method
+      ?? (typeof input === "object" && "method" in input ? input.method : undefined)
+      ?? "GET";
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL ? input.toString() : input.url;
+    const report = (observation: ResponseObservation) => {
+      try {
+        onResponse(observation);
+      } catch {
+        // Observation is not part of the request's contract.
+      }
+    };
+    try {
+      const response = await transport(input, init);
+      report({ method, url, status: response.status, durationMs: Date.now() - started });
+      return response;
+    } catch (error) {
+      report({ method, url, status: 0, durationMs: Date.now() - started, error });
+      throw error;
+    }
+  };
+}
+
+/**
+ * Resolves either accepted spelling of a model to the object form.
+ *
+ * The contract promises `"provider/id"` anywhere a model is named, split at
+ * the first slash, so an id may contain slashes and a provider may not. The
+ * wire already accepts both; normalizing here keeps that promise true for
+ * callers of the handwritten types too.
+ */
+export function normalizeModel(model: ModelInput): Model {
+  if (typeof model !== "string") {
+    validateModel(model);
+    return model;
   }
-  const provider = environmentVariable("NVOKEN_PROVIDER") ?? fileEnvironment.NVOKEN_PROVIDER;
-  const id = environmentVariable("NVOKEN_MODEL") ?? fileEnvironment.NVOKEN_MODEL;
-  if (!provider && !id) return undefined;
-  if (!provider || !id) {
-    throw new NvokenError(
-      "validation",
-      "NVOKEN_PROVIDER and NVOKEN_MODEL must be set together",
-    );
-  }
-  const model = { provider, id };
-  validateModel(model);
-  return model;
+  const slash = model.indexOf("/");
+  const resolved = slash === -1
+    ? { provider: model, id: "" }
+    : { provider: model.slice(0, slash), id: model.slice(slash + 1) };
+  validateModel(resolved);
+  return resolved;
 }
 
 function validateModel(model: Model): void {
   if (!/^[a-z][a-z0-9_]*$/.test(model.provider) || !model.id) {
     throw new NvokenError(
       "validation",
-      "model requires a valid canonical provider and a non-empty id",
+      'model requires a valid canonical provider and a non-empty id, as '
+        + '{provider, id} or "provider/id"',
     );
   }
-}
-
-function missingModel(): never {
-  throw new NvokenError(
-    "validation",
-    "model is required; pass agent({ model }) or set NVOKEN_PROVIDER and NVOKEN_MODEL",
-  );
 }
 
 export async function normalizeError(error: unknown): Promise<NvokenError> {
