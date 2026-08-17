@@ -10,10 +10,8 @@ const client = new Client();
 try {
   await client.createAgentDefinition({
     definitionKey: "quickstart",
-    definition: {
-      instructions: "Answer in one short sentence.",
-      model: "anthropic/claude-sonnet-5",
-    },
+    instructions: "Answer in one short sentence.",
+    model: "anthropic/claude-sonnet-5",
   });
   // Declared from its keys. The Agent creates its own record on first use.
   const agent = client.agent({ agentKey: "quickstart", definitionKey: "quickstart" });

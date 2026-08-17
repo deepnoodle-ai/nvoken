@@ -44,10 +44,8 @@ const client = new Client();
 await client.createAgentDefinition({
   definitionKey: "support",
   name: "Support",
-  definition: {
-    instructions: "Be concise and helpful.",
-    model: "anthropic/claude-sonnet-5",
-  },
+  instructions: "Be concise and helpful.",
+  model: "anthropic/claude-sonnet-5",
 });
 // Declared from its keys; the Agent creates its record on first use.
 const agent = client.agent({ agentKey: "support", definitionKey: "support" });
@@ -79,8 +77,7 @@ nvoken auth login --profile work --default
 nvoken model list
 nvoken agent-definition create --definition-key support --name Support \
   --instructions "Be concise and helpful." \
-  --provider anthropic --model claude-sonnet-5 \
-  --idempotency-key support-definition-v1
+  --provider anthropic --model claude-sonnet-5
 nvoken agent create --agent-key support --definition-key support
 nvoken invoke --agent-key support "Hello"
 ```

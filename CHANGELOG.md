@@ -6,6 +6,74 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Breaking: Agent Definition writes are flat, in every SDK.** The first
+  argument is the definition itself, matching `AgentDefinitionWrite` on the
+  wire, and `idempotencyKey` / `expectedRevision` move to a second transport
+  argument. A read gives back the same flat shape plus `id`, `revision`, and
+  timestamps, so a read-modify-write is now a spread and a write:
+  `updateAgentDefinition(id, {...current, instructions}, {expectedRevision:
+  current.revision})`. The read-only fields are stripped on the way out. Go
+  gets `AgentDefinitionFromResource`, Python `AgentDefinition.from_resource`,
+  Rust `AgentDefinition::from_resource`; TypeScript spreads the resource
+  directly. An update replaces the whole resource, so this is the difference
+  between keeping a field and silently erasing it, and each SDK now has a
+  round-trip test that fails if any writable field is dropped.
+
+- **Breaking: `name` and `idempotencyKey` are optional everywhere.** `name`
+  defaults to the definition key, and the contract makes the Agent Definition
+  idempotency key optional — the definition key already scopes replay. Go no
+  longer rejects an empty `Name` or `IdempotencyKey`, Rust no longer takes four
+  positional arguments, and `nvoken agent-definition create` no longer requires
+  `--name` or `--idempotency-key`.
+
+- **`memory` and `client_interface` are writable from every SDK.** TypeScript
+  and Rust had neither and Go had no `ClientInterface`, so a definition using
+  durable memory or browser client tokens could not be created or, worse, could
+  be read and written back with those settings dropped.
+
+- **Breaking: TypeScript `ToolChoice` is flat.** `{mode, name?}` matching the
+  wire and the other three SDKs, in place of the discriminated union — a
+  resource read back could not be spread into a write while the union stood.
+  The mode-and-name agreement is now checked at the call boundary instead.
+
+- **Fixed: Rust could not decode tool declarations or stream frames.** The
+  generator emits these unions as internally tagged while keeping the required
+  discriminator on each branch, so every read of an Agent Definition with tools
+  failed with ``missing field `mode` `` and every write sent the discriminator
+  twice. Both are `untagged` now, like the transcript blocks already patched
+  for the same defect.
+
+- **Fixed: Go dropped an Agent Definition restate.** Creation is ensure-shaped
+  and answers `200` when it restates an existing definition — the ordinary
+  deploy-time path — and only the `201` body was read, so the successful call
+  returned a nil definition.
+
+- **Fixed: TypeScript `deleteSession` never forwarded `force`.** The wire and
+  the generated client both had it; the wrapper did not, so a caller following
+  the 0.21 notes landed their boolean in the abort-signal slot and got
+  `signal?.addEventListener is not a function`.
+
+- **Breaking: options objects for the Session writes that needed room to
+  grow.** TypeScript `updateSession(id, {metadata})` and `deleteSession(id,
+  {force})`, Rust `update_session(id, UpdateSessionOptions)` and
+  `delete_session(id, DeleteSessionOptions)`. Go and Python keep their
+  signatures, which already accept a new setting without breaking callers.
+  TypeScript also exports `MetadataPatch` for the `string | null` patch value
+  the generated type cannot express.
+
+- **Every generated API is reachable.** `memories`, `usage`, `apps`, `orgs`,
+  `tenants`, and `admissions` join the nine already on the TypeScript `Client`
+  and in `raw()`. Python was missing the same six plus `identity`, and its
+  `raw()` tuple also omitted `agent_definitions` and `mcp`; all fifteen are
+  there now, appended so unpacking a prefix of it still works.
+
+- **Go generates a missing idempotency key wherever the contract requires
+  one.** Credentials, credit allocation, and provider key create and rotate
+  behaved differently from `Invoke` and from the other SDKs, refusing the call
+  instead. Nothing is invented where the contract makes the key optional.
+
 ## 0.21.0 - 2026-08-17
 
 - **Breaking: one `Agent` type, declared from its keys.** `Agent` is now the

@@ -657,41 +657,107 @@ func WebSearchProviderTool() ProviderTool {
 	return ProviderTool{Type: ProviderToolWebSearch, WebSearch: &WebSearchTool{}}
 }
 
-// AgentDefinition is reusable execution configuration stored as an App-owned
-// versioned resource. Invocations name an Agent instance rather than carrying
-// this configuration.
+// AgentDefinition is everything writable on an App-owned Agent Definition,
+// flat, matching the contract's AgentDefinitionWrite. Reads return
+// AgentDefinitionResource, which is this same flat object plus ID, Revision,
+// and timestamps, so a read-modify-write is a conversion and a field
+// assignment:
+//
+//	current, err := client.GetAgentDefinition(ctx, id)
+//	definition, err := AgentDefinitionFromResource(current)
+//	definition.Instructions = "Be concise and warm."
+//	next, err := client.UpdateAgentDefinition(ctx, id, definition,
+//		nvoken.UpdateAgentDefinitionOptions{ExpectedRevision: current.Revision})
 type AgentDefinition struct {
-	Instructions  string         `json:"instructions,omitempty"`
-	Model         Model          `json:"model"`
-	Sampling      *Sampling      `json:"sampling,omitempty"`
-	Reasoning     *Reasoning     `json:"reasoning,omitempty"`
-	ToolChoice    *ToolChoice    `json:"tool_choice,omitempty"`
-	Limits        *Limits        `json:"limits,omitempty"`
-	Tools         []Tool         `json:"tools,omitempty"`
-	MCPServers    []MCPServer    `json:"mcp_servers,omitempty"`
-	ProviderTools []ProviderTool `json:"provider_tools,omitempty"`
-	Memory        *MemoryConfig  `json:"memory,omitempty"`
-	OutputSchema  map[string]any `json:"output_schema,omitempty"`
+	// DefinitionKey is the caller-chosen immutable key, unique within the App.
+	// It is required to create. A replacement cannot move a resource to
+	// another key, so it is ignored there.
+	DefinitionKey string `json:"definition_key,omitempty"`
+	// Name defaults to DefinitionKey. Because a replacement replaces the whole
+	// resource, leaving it empty on update resets the name to the key rather
+	// than keeping the current one.
+	Name            string           `json:"name,omitempty"`
+	Instructions    string           `json:"instructions,omitempty"`
+	Model           Model            `json:"model"`
+	Sampling        *Sampling        `json:"sampling,omitempty"`
+	Reasoning       *Reasoning       `json:"reasoning,omitempty"`
+	ToolChoice      *ToolChoice      `json:"tool_choice,omitempty"`
+	Limits          *Limits          `json:"limits,omitempty"`
+	Tools           []Tool           `json:"tools,omitempty"`
+	MCPServers      []MCPServer      `json:"mcp_servers,omitempty"`
+	ProviderTools   []ProviderTool   `json:"provider_tools,omitempty"`
+	Memory          *MemoryConfig    `json:"memory,omitempty"`
+	ClientInterface *ClientInterface `json:"client_interface,omitempty"`
+	OutputSchema    map[string]any   `json:"output_schema,omitempty"`
 }
 
 type AgentDefinitionResource = generated.AgentDefinitionResource
 
-// CreateAgentDefinitionInput declares one App-owned Agent Definition.
-// DefinitionKey is unique within the App, so creation is ensure-shaped:
-// restating an existing definition returns it, and a key already held by a
-// different definition is a conflict. Name defaults to DefinitionKey.
-// IdempotencyKey is optional, and pins replay to a specific create; the key
-// already scopes replay without it.
-type CreateAgentDefinitionInput struct {
-	DefinitionKey  string
-	Name           string
-	Definition     AgentDefinition
+// ClientInterface is one definition-specific browser authorization. It grants
+// authorship and settlement only, never selective read visibility: every
+// public transcript item in a browser-reachable Session must be treated as
+// client-visible.
+//
+// A nil ClientInterface means the definition is not client-token-capable; an
+// empty one opts in with no client-authored context or tools.
+type ClientInterface struct {
+	// ContextNames are recorded-context names a client may append or
+	// supersede, contextual tier only.
+	ContextNames []string `json:"context_names,omitempty"`
+	// ToolNames are host-mode tools whose parked calls a client may see and
+	// settle.
+	ToolNames []string `json:"tool_names,omitempty"`
+}
+
+// AgentDefinitionFromResource reads a resource back into the definition that
+// produced it, so a replacement can change one field and keep the rest.
+//
+// A replacement replaces the whole resource, so a field this drops would be
+// erased on write. It therefore carries every writable field across by name
+// rather than listing them, and leaves the read-only ones — ID, Revision, and
+// the timestamps — behind.
+func AgentDefinitionFromResource(resource *AgentDefinitionResource) (AgentDefinition, error) {
+	if resource == nil {
+		return AgentDefinition{}, &Error{
+			Category: ErrorValidation,
+			Message:  "Agent Definition resource is required",
+		}
+	}
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		return AgentDefinition{}, &Error{
+			Category: ErrorValidation,
+			Message:  err.Error(),
+			Cause:    err,
+		}
+	}
+	var definition AgentDefinition
+	if err := json.Unmarshal(encoded, &definition); err != nil {
+		return AgentDefinition{}, &Error{
+			Category: ErrorValidation,
+			Message:  err.Error(),
+			Cause:    err,
+		}
+	}
+	return definition, nil
+}
+
+// CreateAgentDefinitionOptions carries what a create sends outside its body.
+type CreateAgentDefinitionOptions struct {
+	// IdempotencyKey pins replay to this specific create, so the same key keeps
+	// returning that create's revision-1 resource even after later revisions
+	// moved it on. Leave it empty for the ordinary case: DefinitionKey is
+	// unique within the App and already scopes replay. Nothing is invented on
+	// your behalf, because a key the SDK made up would be new on every attempt
+	// and so could never deduplicate one.
 	IdempotencyKey string
 }
 
-type UpdateAgentDefinitionInput struct {
-	Name             string
-	Definition       AgentDefinition
+// UpdateAgentDefinitionOptions carries what a replacement sends outside its
+// body.
+type UpdateAgentDefinitionOptions struct {
+	// ExpectedRevision is the revision the definition was read at, sent as
+	// If-Match.
 	ExpectedRevision int64
 }
 
@@ -1073,9 +1139,24 @@ func (o WaitOptions) normalized() WaitOptions {
 // signing keys, budgets, provider keys, and model lifecycle are re-checked when
 // a turn is admitted, so a definition can be created before its App is fully
 // configured to run it.
-func (d AgentDefinition) encoded() (map[string]any, error) {
+// includeKey is false for a replacement, which cannot move a resource to
+// another key. A definition read back from the server always carries one, so
+// it is dropped there rather than refused.
+func (d AgentDefinition) encoded(includeKey bool) (map[string]any, error) {
 	if d.Model.Provider == "" || d.Model.ID == "" {
 		return nil, fmt.Errorf("agent definition model is required")
+	}
+	if d.ToolChoice != nil {
+		named := d.ToolChoice.Mode == ToolChoiceNamed
+		if named && d.ToolChoice.Name == "" {
+			return nil, fmt.Errorf("tool choice mode named requires a tool name")
+		}
+		if !named && d.ToolChoice.Name != "" {
+			return nil, fmt.Errorf(
+				"tool choice mode %q cannot name a tool",
+				d.ToolChoice.Mode,
+			)
+		}
 	}
 	for _, tool := range d.Tools {
 		switch tool.Mode {
@@ -1123,6 +1204,15 @@ func (d AgentDefinition) encoded() (map[string]any, error) {
 		}
 	}
 	body := map[string]any{"model": d.Model}
+	if includeKey && d.DefinitionKey != "" {
+		body["definition_key"] = d.DefinitionKey
+	}
+	// An omitted name is left omitted rather than filled in with the key: the
+	// runtime applies that default, and duplicating it would make two places
+	// to change it.
+	if d.Name != "" {
+		body["name"] = d.Name
+	}
 	if d.Instructions != "" {
 		body["instructions"] = d.Instructions
 	}
@@ -1149,6 +1239,9 @@ func (d AgentDefinition) encoded() (map[string]any, error) {
 	}
 	if d.Memory != nil {
 		body["memory"] = d.Memory
+	}
+	if d.ClientInterface != nil {
+		body["client_interface"] = d.ClientInterface
 	}
 	if d.OutputSchema != nil {
 		body["output_schema"] = d.OutputSchema

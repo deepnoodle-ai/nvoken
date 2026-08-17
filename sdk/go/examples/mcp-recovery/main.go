@@ -131,20 +131,17 @@ func run(ctx context.Context) error {
 	var handle *nvoken.InvocationHandle
 	if invocationID == "" {
 		maxIterations := 3
-		definition, createErr := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
-			DefinitionKey:  "mcp-recovery-example",
-			Name:           "MCP recovery example",
-			IdempotencyKey: "mcp-recovery-definition",
-			Definition: nvoken.AgentDefinition{
-				Instructions: "Always call scripted__lookup with id 42 before answering.",
-				Model: nvoken.Model{
-					Provider: requiredEnvironment("NVOKEN_PROVIDER"),
-					ID:       requiredEnvironment("NVOKEN_MODEL"),
-				},
-				Limits:     &nvoken.Limits{MaxIterations: &maxIterations},
-				MCPServers: []nvoken.MCPServer{server},
+		definition, createErr := client.CreateAgentDefinition(ctx, nvoken.AgentDefinition{
+			DefinitionKey: "mcp-recovery-example",
+			Name:          "MCP recovery example",
+			Instructions:  "Always call scripted__lookup with id 42 before answering.",
+			Model: nvoken.Model{
+				Provider: requiredEnvironment("NVOKEN_PROVIDER"),
+				ID:       requiredEnvironment("NVOKEN_MODEL"),
 			},
-		})
+			Limits:     &nvoken.Limits{MaxIterations: &maxIterations},
+			MCPServers: []nvoken.MCPServer{server},
+		}, nvoken.CreateAgentDefinitionOptions{})
 		if createErr != nil {
 			return fmt.Errorf("create MCP Agent Definition: %w", createErr)
 		}

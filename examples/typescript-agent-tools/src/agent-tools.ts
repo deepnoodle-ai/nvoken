@@ -40,17 +40,15 @@ try {
   await client.createAgentDefinition({
     definitionKey: agentKey,
     name: "Order support",
-    definition: {
-      instructions: [
-        "Use lookup_order for order questions.",
-        "Remember durable Session context between turns.",
-      ].join(" "),
-      model: {
-        provider: (process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic") as "anthropic",
-        id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
-      },
-      tools: [lookupOrder],
+    instructions: [
+      "Use lookup_order for order questions.",
+      "Remember durable Session context between turns.",
+    ].join(" "),
+    model: {
+      provider: (process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic") as "anthropic",
+      id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
     },
+    tools: [lookupOrder],
   });
   // Declared from its keys, with this process's handler for the tool the
   // Definition declares. The record is created on first use.

@@ -122,11 +122,15 @@ perl -0pi -e 's/^pub mod default_api;\n//m' sdk/rust/src/apis/mod.rs
 # The Rust generator makes discriminator unions internally tagged while also
 # retaining the required discriminator field on each branch model. Serde
 # consumes that field before decoding the branch, so otherwise every valid
-# transcript block and citation fails with "missing field `type`". The exact
-# literal field on each closed branch already discriminates these unions.
-for model in session_content_block citation; do
-  perl -0pi -e 's/#\[serde\(tag = "type"\)\]/#[serde(untagged)]/' \
-    "sdk/rust/src/models/${model}.rs"
+# transcript block, citation, tool declaration, and stream frame fails with
+# "missing field `type`" or "missing field `mode`", and every one it encodes
+# carries the discriminator twice. The exact literal field on each closed
+# branch already discriminates these unions.
+for model in session_content_block citation tool_declaration session_stream_event; do
+  perl -0pi -e '
+    die "no internal tag in '"${model}"'; update sdk/scripts/generate.sh\n"
+      unless s/#\[serde\(tag = "(?:type|mode)"\)\]/#[serde(untagged)]/;
+  ' "sdk/rust/src/models/${model}.rs"
 done
 
 find \

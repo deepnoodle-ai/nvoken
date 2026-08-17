@@ -286,16 +286,12 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
       return admissionResponse();
     },
   });
-  const definition = {
-    instructions: "You are a concise billing support agent.",
-    model: { provider: "anthropic", id: "claude-sonnet-5" },
-  };
 	const resource = await client.createAgentDefinition({
 	  definitionKey: "support",
 	  name: "Billing support",
-	  definition,
-	  idempotencyKey: "definition-create",
-	});
+	  instructions: "You are a concise billing support agent.",
+	  model: { provider: "anthropic", id: "claude-sonnet-5" },
+	}, { idempotencyKey: "definition-create" });
 	assert.equal(resource.id, fixture.definition_id);
   assert.deepEqual(bodies[0], fixture.creation.request);
 
@@ -840,6 +836,58 @@ function wireAgentDefinitionResource(): Record<string, unknown> {
   };
 }
 
+/**
+ * Every writable field at once, so a read-modify-write that silently drops one
+ * fails the round-trip test rather than passing on the fields it remembered.
+ */
+function wireCompleteAgentDefinitionResource(): Record<string, unknown> {
+  return {
+    id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+    definition_key: "support",
+    name: "Billing support",
+    revision: 4,
+    instructions: "Be brief.",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+    sampling: { temperature: 0.4 },
+    reasoning: { effort: "high", budget_tokens: 2048 },
+    tool_choice: { mode: "named", name: "lookup_invoice" },
+    limits: { max_iterations: 6, max_output_tokens: 1024 },
+    output_schema: { type: "object", properties: { answer: { type: "string" } } },
+    tools: [
+      { mode: "builtin", name: "nvoken_fetch" },
+      {
+        mode: "host",
+        name: "lookup_invoice",
+        description: "Look up an invoice.",
+        input_schema: { type: "object", properties: { id: { type: "string" } } },
+      },
+      {
+        mode: "callback",
+        name: "refund",
+        description: "Issue a refund.",
+        input_schema: { type: "object", properties: { id: { type: "string" } } },
+        callback: { url: "https://tools.example.test/refund" },
+      },
+    ],
+    mcp_servers: [{
+      name: "billing",
+      url: "https://mcp.example.test/billing",
+      transport: "streamable_http",
+      allowed_tools: ["search"],
+      timeouts: { discovery_seconds: 5, call_seconds: 30 },
+    }],
+    provider_tools: [{
+      type: "web_search",
+      web_search: { max_uses: 3, allowed_domains: ["example.test"] },
+    }],
+    memory: { scope: "user", context: { mode: "index", max_bytes: 1536 } },
+    client_interface: { context_names: ["cart"], tool_names: ["lookup_invoice"] },
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:00Z",
+    archived_at: null,
+  };
+}
+
 function sseResponse(frames: Array<{ event: string; id?: string; data: unknown }>): Response {
   return new Response(
     frames.map((frame) =>
@@ -1050,10 +1098,8 @@ test("Agent Definition creation preflights converted output schemas once before 
 	  client.createAgentDefinition({
 		  definitionKey: "schema-test",
 		  name: "Schema test",
-		  definition: {
-		    model: { provider: "anthropic", id: "test-model" },
-		    outputSchema: expandOutputSchemaFixture(testCase),
-		  },
+		  model: { provider: "anthropic", id: "test-model" },
+		  outputSchema: expandOutputSchemaFixture(testCase),
 	  }),
       (error: unknown) => {
         assert.ok(error instanceof NvokenError, testCase.id);
@@ -1083,10 +1129,8 @@ test("Agent Definition creation preflights converted output schemas once before 
 	client.createAgentDefinition({
 		definitionKey: "schema-test",
 		name: "Schema test",
-		definition: {
-		  model: { provider: "anthropic", id: "test-model" },
-		  outputSchema: schema,
-		},
+		model: { provider: "anthropic", id: "test-model" },
+		outputSchema: schema,
 	}),
     (error: unknown) => {
       assert.ok(error instanceof NvokenError);
@@ -2639,7 +2683,8 @@ test("a model is nameable as provider/id everywhere it appears", async () => {
 
   await client.createAgentDefinition({
     definitionKey: "support",
-    definition: { instructions: "Be brief.", model: "anthropic/claude-sonnet-5" },
+    instructions: "Be brief.",
+    model: "anthropic/claude-sonnet-5",
   });
   assert.deepEqual(bodies[0]?.model, { provider: "anthropic", id: "claude-sonnet-5" });
   // name is not sent when it would only restate the key.
@@ -2940,4 +2985,128 @@ test("a response observer sees status and failure without touching the body", as
   await assert.rejects(() => client.listAgentDefinitions());
   assert.equal(seen[1]?.failed, true);
   assert.equal(seen[1]?.status, 0);
+});
+
+test("a read-modify-write keeps every writable field", async () => {
+  const resource = wireCompleteAgentDefinitionResource();
+  let written: Record<string, unknown> | undefined;
+  let ifMatch: string | null | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      if (init?.method === "PUT") {
+        ifMatch = new Headers(init.headers).get("If-Match");
+        written = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Response.json({ ...resource, revision: 5 }, { status: 200 });
+      }
+      assert.ok(String(input).endsWith(`/v1/agent-definitions/${resource.id as string}`));
+      return Response.json(resource, { status: 200 });
+    },
+  });
+
+  const current = await client.getAgentDefinition(resource.id as string);
+  await client.updateAgentDefinition(
+    current.id,
+    { ...current, instructions: "Be concise and warm." },
+    { expectedRevision: current.revision },
+  );
+
+  assert.equal(ifMatch, '"4"');
+  // The replacement is the resource it was read from, minus the read-only
+  // fields and the immutable key, with exactly one field changed. Anything
+  // this SDK forgets to carry across shows up as a missing key here, and an
+  // update replaces the whole resource, so a miss would be data loss.
+  const {
+    id: _id,
+    revision: _revision,
+    definition_key: _definitionKey,
+    created_at: _createdAt,
+    updated_at: _updatedAt,
+    archived_at: _archivedAt,
+    ...writable
+  } = resource;
+  assert.deepEqual(written, { ...writable, instructions: "Be concise and warm." });
+});
+
+test("a create sends the flat definition and its key", async () => {
+  let written: Record<string, unknown> | undefined;
+  let idempotencyKey: string | null | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) => {
+      idempotencyKey = new Headers(init?.headers).get("Idempotency-Key");
+      written = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json(wireAgentDefinitionResource(), { status: 201 });
+    },
+  });
+
+  await client.createAgentDefinition({
+    definitionKey: "support",
+    name: "Billing support",
+    model: "anthropic/claude-sonnet-5",
+    instructions: "Be brief.",
+    memory: { scope: "user", context: { mode: "index" } },
+    clientInterface: { contextNames: ["cart"], toolNames: [] },
+  });
+
+  // Nothing is invented: a key the SDK made up would be new on every attempt.
+  assert.equal(idempotencyKey, null);
+  assert.deepEqual(written, {
+    definition_key: "support",
+    name: "Billing support",
+    model: { provider: "anthropic", id: "claude-sonnet-5" },
+    instructions: "Be brief.",
+    memory: { scope: "user", context: { mode: "index" } },
+    client_interface: { context_names: ["cart"], tool_names: [] },
+  });
+});
+
+test("toolChoice names a tool only in named mode", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async () => Response.json(wireAgentDefinitionResource(), { status: 201 }),
+  });
+  const base = { definitionKey: "support", model: "anthropic/claude-sonnet-5" } as const;
+
+  await assert.rejects(
+    () => client.createAgentDefinition({ ...base, toolChoice: { mode: "named" } }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
+  await assert.rejects(
+    () => client.createAgentDefinition({ ...base, toolChoice: { mode: "auto", name: "x" } }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
+  await client.createAgentDefinition({ ...base, toolChoice: { mode: "named", name: "x" } });
+});
+
+test("deleteSession forwards force and updateSession deletes a metadata key", async () => {
+  const urls: string[] = [];
+  let patch: Record<string, unknown> | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      urls.push(String(input));
+      if (init?.method === "PATCH") {
+        patch = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Response.json({ id: "ses_1" }, { status: 200 });
+      }
+      return new Response(null, { status: 204 });
+    },
+  });
+
+  await client.deleteSession("ses_1");
+  assert.ok(!urls[0]?.includes("force"));
+  await client.deleteSession("ses_1", { force: true });
+  assert.ok(urls[1]?.includes("force=true"));
+
+  await client.updateSession("ses_1", { metadata: { title: "Refund", stale: null } });
+  assert.deepEqual(patch, { metadata: { title: "Refund", stale: null } });
 });

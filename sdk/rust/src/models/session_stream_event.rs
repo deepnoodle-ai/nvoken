@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 /// SessionStreamEvent : The JSON value carried by one SSE `data:` field. Switch on `type`. Saved `transcript.update` frames carry the resume cursor as both payload data and SSE `id`; preview and control frames never carry IDs.  New frame types may appear here over time, and existing ones may gain fields. Handle the types you know and ignore the rest.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 pub enum SessionStreamEvent {
     #[serde(rename = "transcript.update")]
     TranscriptUpdate(Box<models::TranscriptUpdateEvent>),

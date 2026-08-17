@@ -1,4 +1,4 @@
-use nvoken::{AgentDefinition, AgentOptions, Client, Model};
+use nvoken::{AgentDefinition, AgentOptions, Client, CreateAgentDefinitionOptions, Model};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -8,11 +8,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     client
         .create_agent_definition(
-            "quickstart-support-definition",
-            "support",
-            "Support",
             AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+                .definition_key("support")
+                .name("Support")
                 .instructions("Help the customer with billing questions."),
+            CreateAgentDefinitionOptions::default(),
         )
         .await?;
     // Declared from its keys. The Agent creates its record on first use, so

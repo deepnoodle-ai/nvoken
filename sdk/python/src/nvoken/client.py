@@ -13,9 +13,16 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Literal
 import httpx
 
 from nvoken_generated import __version__ as SDK_VERSION
+from nvoken_generated.api.admissions_api import AdmissionsApi
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi
+from nvoken_generated.api.apps_api import AppsApi
 from nvoken_generated.api.credits_api import CreditsApi
+from nvoken_generated.api.identity_api import IdentityApi
+from nvoken_generated.api.memories_api import MemoriesApi
+from nvoken_generated.api.orgs_api import OrgsApi
+from nvoken_generated.api.tenants_api import TenantsApi
+from nvoken_generated.api.usage_api import UsageApi
 from nvoken_generated.api.invocations_api import InvocationsApi
 from nvoken_generated.api.mcp_api import MCPApi
 from nvoken_generated.api.models_api import ModelsApi
@@ -96,6 +103,12 @@ from nvoken_generated.models.model_input import ModelInput as GeneratedModelInpu
 from nvoken_generated.models.model_descriptor import ModelDescriptor
 from nvoken_generated.models.model_list import ModelList
 from nvoken_generated.models.model_tool_choice_mode import ModelToolChoiceMode
+from nvoken_generated.models.memory_config import MemoryConfig as GeneratedMemoryConfig
+from nvoken_generated.models.memory_context_config import (
+    MemoryContextConfig as GeneratedMemoryContextConfig,
+)
+from nvoken_generated.models.memory_context_mode import MemoryContextMode as GeneratedMemoryContextMode
+from nvoken_generated.models.browser_client_interface import BrowserClientInterface
 from nvoken_generated.models.money import Money
 from nvoken_generated.models.provider_key import ProviderKey
 from nvoken_generated.models.provider_key_list import ProviderKeyList
@@ -481,11 +494,71 @@ class ProviderKeySelection:
     api_key: str | None = None
 
 
+MemoryScope = Literal["tenant", "user"]
+
+MemoryContextMode = Literal["index", "full", "false"]
+"""``index`` and ``full`` differ in how much memory text a turn receives."""
+
+
+@dataclass(frozen=True)
+class MemoryContextConfig:
+    mode: MemoryContextMode | None = None
+    # Defaults to 1536 for index and 131072 for full; must be zero for false.
+    max_bytes: int | None = None
+
+
+@dataclass(frozen=True)
+class MemoryConfig:
+    # User scope requires a user key on every admitted Invocation.
+    scope: MemoryScope | None = None
+    context: MemoryContextConfig | None = None
+
+
+@dataclass(frozen=True)
+class ClientInterface:
+    """One definition-specific browser authorization.
+
+    It grants authorship and settlement only, never selective read visibility:
+    every public transcript item in a browser-reachable Session must be treated
+    as client-visible. ``None`` on a definition means it is not
+    client-token-capable; an empty ``ClientInterface()`` opts in with no
+    client-authored context or tools.
+    """
+
+    # Recorded-context names a client may append or supersede, contextual tier
+    # only.
+    context_names: tuple[str, ...] = ()
+    # Host-mode tools whose parked calls a client may see and settle.
+    tool_names: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class AgentDefinition:
-    """Reusable execution configuration stored as a versioned resource."""
+    """Everything writable on an App-owned Agent Definition.
+
+    It is flat, matching the contract's ``AgentDefinitionWrite``. Reads return
+    an ``AgentDefinitionResource``, which is this same flat object plus ``id``,
+    ``revision``, and timestamps, so a read-modify-write is a conversion and a
+    ``replace``::
+
+        current = await client.get_agent_definition(definition_id)
+        definition = AgentDefinition.from_resource(current)
+        await client.update_agent_definition(
+            definition_id,
+            replace(definition, instructions="Be concise and warm."),
+            expected_revision=current.revision,
+        )
+    """
 
     model: Model
+    # Caller-chosen immutable key, unique within the App. Required to create.
+    # A replacement cannot move a resource to another key, so it is ignored
+    # there and a definition read back from the server may carry one along.
+    definition_key: str | None = None
+    # Display name. Defaults to definition_key, and because a replacement
+    # replaces the whole resource, omitting it on update resets the name to the
+    # key rather than keeping the current one.
+    name: str | None = None
     instructions: str | None = None
     sampling: Sampling | None = None
     reasoning: Reasoning | None = None
@@ -494,7 +567,20 @@ class AgentDefinition:
     tools: tuple[Tool | BuiltinTool, ...] = ()
     mcp_servers: tuple[MCPServer, ...] = ()
     provider_tools: tuple[ProviderTool, ...] = ()
+    memory: MemoryConfig | None = None
+    client_interface: ClientInterface | None = None
     output_schema: dict[str, Any] | None = None
+
+    @classmethod
+    def from_resource(cls, resource: AgentDefinitionResource) -> "AgentDefinition":
+        """Read a resource back into the definition that produced it.
+
+        A replacement replaces the whole resource, so a field this drops would
+        be erased on write. It therefore carries every writable field across by
+        name and leaves the read-only ones — ``id``, ``revision``, and the
+        timestamps — behind.
+        """
+        return _agent_definition_from_resource(cls, resource)
 
 
 @dataclass(frozen=True)
@@ -602,6 +688,17 @@ class Client:
         self.models = ModelsApi(self.api_client)
         self.provider_keys = ProviderKeysApi(self.api_client)
         self.sessions = SessionsApi(self.api_client)
+        self.identity = IdentityApi(self.api_client)
+        self.memories = MemoriesApi(self.api_client)
+        self.usage = UsageApi(self.api_client)
+        # Org-scoped control plane. These carry no hand-written wrapper because
+        # an App-scoped Runtime credential cannot reach them at all, but a
+        # caller holding an org credential should not have to reconstruct a
+        # generated client to use one.
+        self.apps = AppsApi(self.api_client)
+        self.orgs = OrgsApi(self.api_client)
+        self.tenants = TenantsApi(self.api_client)
+        self.admissions = AdmissionsApi(self.api_client)
         self.stream_client = httpx.AsyncClient(
             base_url=self.base_url,
             headers={
@@ -629,9 +726,27 @@ class Client:
         await self.api_client.close()
         await self.stream_api_client.close()
 
-    def raw(
-        self,
-    ) -> tuple[InvocationsApi, ModelsApi, ProviderKeysApi, SessionsApi, AgentsApi, CreditsApi]:
+    def raw(self) -> tuple[
+        InvocationsApi,
+        ModelsApi,
+        ProviderKeysApi,
+        SessionsApi,
+        AgentsApi,
+        CreditsApi,
+        AgentDefinitionsApi,
+        MCPApi,
+        IdentityApi,
+        MemoriesApi,
+        UsageApi,
+        AppsApi,
+        OrgsApi,
+        TenantsApi,
+        AdmissionsApi,
+    ]:
+        """Every generated API, so no endpoint is reachable only by hand.
+
+        New entries are appended, so unpacking a prefix of this keeps working.
+        """
         return (
             self.invocations,
             self.models,
@@ -639,6 +754,15 @@ class Client:
             self.sessions,
             self.agents,
             self.credits,
+            self.agent_definitions,
+            self.mcp,
+            self.identity,
+            self.memories,
+            self.usage,
+            self.apps,
+            self.orgs,
+            self.tenants,
+            self.admissions,
         )
 
     def agent(self, options: AgentOptions) -> Agent:
@@ -774,17 +898,22 @@ class Client:
         self,
         definition: AgentDefinition,
         *,
-        name: str | None,
-        definition_key: str | None = None,
+        include_key: bool,
     ) -> AgentDefinitionWrite | AgentDefinitionCreate:
         """Render one Agent Definition.
 
-        Creation and replacement share the configuration fields. Only the
-        definition's own content is checked; installation state, App signing keys, credits,
+        Creation and replacement share every configuration field; only creation
+        carries the immutable ``definition_key``. Each field is named here, which
+        is what keeps a read-only field off the wire. Only the definition's own
+        content is checked; installation state, App signing keys, credits,
         provider keys, and model lifecycle are checked again at turn admission.
         """
         if definition.model is None:
             raise NvokenError("validation", "agent definition requires model")
+        if include_key and not definition.definition_key:
+            raise NvokenError("validation", "agent definition requires definition_key")
+        if definition.tool_choice is not None:
+            _preflight_tool_choice(definition.tool_choice)
         if definition.output_schema is not None:
             preflight_output_schema(definition.output_schema)
         tools: list[GeneratedToolDeclaration] = []
@@ -826,7 +955,7 @@ class Client:
                     callback=GeneratedCallbackTarget(url=tool.callback_url),
                 )))
         body = dict(
-            name=name,
+            name=definition.name,
             instructions=definition.instructions,
             model=GeneratedModelInput(GeneratedModel(
                 provider=definition.model.provider,
@@ -861,10 +990,17 @@ class Client:
                     _generated_provider_tool(tool)
                     for tool in definition.provider_tools
                 ] or None,
+            memory=_generated_memory_config(definition.memory),
+            client_interface=_generated_client_interface(definition.client_interface),
             output_schema=definition.output_schema,
         )
-        if definition_key is not None:
-            return AgentDefinitionCreate(definition_key=definition_key, **body)
+        if include_key:
+            return AgentDefinitionCreate(
+                definition_key=definition.definition_key,
+                **body,
+            )
+        # A replacement cannot move a resource to another key, so a definition
+        # read back from the server carries one that is dropped here.
         return AgentDefinitionWrite(**body)
 
     def _mcp_server_headers(
@@ -1050,28 +1186,20 @@ class Client:
 
     async def create_agent_definition(
         self,
-        definition_key: str,
         definition: AgentDefinition,
         *,
-        name: str | None = None,
         idempotency_key: str | None = None,
     ) -> AgentDefinitionResource:
         """Create one App-owned Agent Definition, or return the one the key names.
 
-        ``definition_key`` is unique within the App, so this is ensure-shaped:
-        restating an existing definition returns it, and a key already held by
-        a different definition is a conflict naming the resource to update
-        instead. ``name`` defaults to the key. ``idempotency_key`` is optional
-        and pins replay to a specific create; the key already scopes replay
-        without it.
+        The definition's ``definition_key`` is unique within the App, so this is
+        ensure-shaped: restating an existing definition returns it, and a key
+        already held by a different definition is a conflict naming the resource
+        to update instead. ``name`` defaults to the key. ``idempotency_key`` is
+        optional and pins replay to a specific create; the key already scopes
+        replay without it.
         """
-        if not definition_key:
-            raise NvokenError("validation", "definition_key is required")
-        body = self._agent_definition_body(
-            definition,
-            name=name,
-            definition_key=definition_key,
-        )
+        body = self._agent_definition_body(definition, include_key=True)
         return await self._replay_safe(
             lambda: self.agent_definitions.create_agent_definition(
                 body,
@@ -1138,11 +1266,19 @@ class Client:
     async def update_agent_definition(
         self,
         definition_id: str,
-        expected_revision: int,
-        name: str,
         definition: AgentDefinition,
+        *,
+        expected_revision: int,
     ) -> AgentDefinitionResource:
-        body = self._agent_definition_body(definition, name=name)
+        """Replace one Agent Definition, failing when it has moved on.
+
+        This replaces the whole resource, so send back everything you want kept.
+        ``AgentDefinition.from_resource`` reads a resource back into the
+        definition that produced it, carrying every writable field across.
+        """
+        if expected_revision < 1:
+            raise NvokenError("validation", "expected_revision is required")
+        body = self._agent_definition_body(definition, include_key=False)
         return await self._replay_safe(
             lambda: self.agent_definitions.update_agent_definition(
                 f'"{expected_revision}"',
@@ -1818,6 +1954,139 @@ class Client:
 def _machine_projection(response: Any) -> Any:
     """Unwrap a generated machine-or-browser response union."""
     return getattr(response, "actual_instance", response)
+
+
+def _agent_definition_from_resource(
+    definition_type: type[AgentDefinition],
+    resource: AgentDefinitionResource,
+) -> AgentDefinition:
+    """Read one resource back into the definition that produced it.
+
+    The resource is walked as its wire dictionary rather than field by field,
+    so a writable field added to the contract arrives here without this
+    function being edited. A replacement replaces the whole resource, so a
+    field dropped here would be erased on the next write.
+    """
+    body = resource.to_dict()
+    tools: list[Tool | BuiltinTool] = []
+    for declaration in body.get("tools") or ():
+        if declaration.get("mode") == "builtin":
+            tools.append(BuiltinTool())
+            continue
+        callback = declaration.get("callback") or {}
+        tools.append(Tool(
+            mode=declaration["mode"],
+            name=declaration["name"],
+            description=declaration.get("description", ""),
+            input_schema=declaration.get("input_schema") or {},
+            callback_url=callback.get("url"),
+        ))
+    memory = body.get("memory")
+    context = (memory or {}).get("context")
+    client_interface = body.get("client_interface")
+    limits = body.get("limits")
+    sampling = body.get("sampling")
+    reasoning = body.get("reasoning")
+    tool_choice = body.get("tool_choice")
+    return definition_type(
+        model=Model(provider=body["model"]["provider"], id=body["model"]["id"]),
+        definition_key=body.get("definition_key"),
+        name=body.get("name"),
+        instructions=body.get("instructions"),
+        sampling=Sampling(temperature=sampling["temperature"]) if sampling else None,
+        reasoning=Reasoning(
+            effort=reasoning.get("effort"),
+            budget_tokens=reasoning.get("budget_tokens"),
+        ) if reasoning else None,
+        tool_choice=ToolChoice(
+            mode=tool_choice["mode"],
+            name=tool_choice.get("name"),
+        ) if tool_choice else None,
+        limits=Limits(**limits) if limits else None,
+        tools=tuple(tools),
+        mcp_servers=tuple(
+            MCPServer(
+                name=server["name"],
+                url=server["url"],
+                transport=server.get("transport", "streamable_http"),
+                allowed_tools=tuple(server.get("allowed_tools") or ()),
+                timeouts=MCPTimeouts(**server["timeouts"]) if server.get("timeouts") else None,
+            )
+            for server in body.get("mcp_servers") or ()
+        ),
+        provider_tools=tuple(
+            _provider_tool_from_wire(tool) for tool in body.get("provider_tools") or ()
+        ),
+        memory=MemoryConfig(
+            scope=memory.get("scope"),
+            context=MemoryContextConfig(
+                mode=context.get("mode"),
+                max_bytes=context.get("max_bytes"),
+            ) if context else None,
+        ) if memory else None,
+        client_interface=ClientInterface(
+            context_names=tuple(client_interface.get("context_names") or ()),
+            tool_names=tuple(client_interface.get("tool_names") or ()),
+        ) if client_interface is not None else None,
+        output_schema=body.get("output_schema"),
+    )
+
+
+def _provider_tool_from_wire(tool: dict[str, Any]) -> ProviderTool:
+    search = tool.get("web_search") or {}
+    location = search.get("user_location")
+    return ProviderTool(
+        type=tool.get("type", "web_search"),
+        web_search=WebSearchTool(
+            max_uses=search.get("max_uses"),
+            allowed_domains=tuple(search.get("allowed_domains") or ()),
+            blocked_domains=tuple(search.get("blocked_domains") or ()),
+            user_location=WebSearchLocation(**location) if location else None,
+        ),
+    )
+
+
+def _preflight_tool_choice(tool_choice: ToolChoice) -> None:
+    """Check that a tool choice names a tool exactly when its mode takes one."""
+    if tool_choice.mode == "named":
+        if not tool_choice.name:
+            raise NvokenError("validation", "tool_choice named requires name")
+        return
+    if tool_choice.name:
+        raise NvokenError(
+            "validation",
+            f"tool_choice {tool_choice.mode} cannot include name",
+        )
+
+
+def _generated_memory_config(memory: MemoryConfig | None) -> GeneratedMemoryConfig | None:
+    if memory is None:
+        return None
+    context = memory.context
+    return GeneratedMemoryConfig(
+        scope=memory.scope,
+        context=GeneratedMemoryContextConfig(
+            mode=GeneratedMemoryContextMode(context.mode) if context.mode else None,
+            max_bytes=context.max_bytes,
+        ) if context is not None else None,
+    )
+
+
+def _generated_client_interface(
+    client_interface: ClientInterface | None,
+) -> BrowserClientInterface | None:
+    """Render one browser authorization.
+
+    An empty ``ClientInterface()`` is not the same as ``None``: it opts the
+    definition into client tokens with no client-authored context or tools, so
+    the empty object has to reach the wire.
+    """
+    if client_interface is None:
+        return None
+    return BrowserClientInterface(
+        context_names=list(client_interface.context_names) or None,
+        tool_names=list(client_interface.tool_names) or None,
+    )
 
 
 def _generated_mcp_server(server: MCPServer) -> GeneratedMCPServer:

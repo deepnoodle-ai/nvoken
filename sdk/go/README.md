@@ -56,14 +56,12 @@ report the record once it is known.
 Opt into the fixed guarded public-web reader with `nvoken.FetchTool()`:
 
 ```go
-definition, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
+definition, err := client.CreateAgentDefinition(ctx, nvoken.AgentDefinition{
 	DefinitionKey: "public-summary",
 	Name:          "Public Summary",
-	Definition: nvoken.AgentDefinition{
-		Model: nvoken.Model{Provider: "anthropic", ID: "claude-sonnet-5"},
-		Tools: []nvoken.Tool{nvoken.FetchTool()},
-	},
-})
+	Model:         nvoken.Model{Provider: "anthropic", ID: "claude-sonnet-5"},
+	Tools:         []nvoken.Tool{nvoken.FetchTool()},
+}, nvoken.CreateAgentDefinitionOptions{})
 agent, err := client.Agent(nvoken.AgentOptions{
 	AgentKey:      "public-summary",
 	DefinitionKey: definition.DefinitionKey,
@@ -259,18 +257,15 @@ An App-owned Agent Definition is a reusable, versioned template. Create a
 tenant-scoped Agent instance that binds to it before admitting work:
 
 ```go
-resource, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
-	IdempotencyKey: "support-definition-v1",
-	DefinitionKey:  "support",
-	Name:           "Support",
-	Definition: nvoken.AgentDefinition{
-		Instructions: "Help with billing questions.",
-		Model: nvoken.Model{
-			Provider: "anthropic",
-			ID:       "claude-sonnet-5",
-		},
+resource, err := client.CreateAgentDefinition(ctx, nvoken.AgentDefinition{
+	DefinitionKey: "support",
+	Name:          "Support",
+	Instructions:  "Help with billing questions.",
+	Model: nvoken.Model{
+		Provider: "anthropic",
+		ID:       "claude-sonnet-5",
 	},
-})
+}, nvoken.CreateAgentDefinitionOptions{})
 
 agent, err := client.Agent(nvoken.AgentOptions{
 	AgentKey:      "support",
@@ -279,6 +274,22 @@ agent, err := client.Agent(nvoken.AgentOptions{
 
 handle, err := agent.Invoke(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
 ```
+
+`AgentDefinition` is flat and matches the wire, and a read gives back the same
+fields plus `ID`, `Revision`, and timestamps, so a change is a read, an edit,
+and a write:
+
+```go
+current, err := client.GetAgentDefinition(ctx, resource.ID)
+definition, err := nvoken.AgentDefinitionFromResource(current)
+definition.Instructions = "Be concise."
+updated, err := client.UpdateAgentDefinition(ctx, current.ID, definition,
+	nvoken.UpdateAgentDefinitionOptions{ExpectedRevision: current.Revision})
+```
+
+An update replaces the whole resource, so send back everything you want kept;
+`AgentDefinitionFromResource` is what keeps it whole. `ExpectedRevision`
+travels as `If-Match`, so a concurrent write fails rather than overwriting.
 
 Creating a Definition starts no turn. It has an immutable `DefinitionKey`, a
 stable ID, and an increasing revision; `GetAgentDefinitionRevision` reads
