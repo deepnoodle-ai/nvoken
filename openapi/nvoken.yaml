@@ -4506,10 +4506,10 @@ webhooks:
         **A delivery that never lands is not an error you will hear about.**
         Once attempts run out nvoken records the delivery failed and moves on —
         the turn is unaffected, and nothing retries later. That is what
-        `GET /v1/invocations/ended` is for: it walks every turn that ended,
-        oldest first, from a cursor you keep, so a webhook outage becomes a
-        gap you close rather than turns you never learn about. Reconcile
-        against it; do not treat webhook delivery as the ledger.
+        `GET /v1/invocations?ended=true` is for: it walks every turn that
+        ended, oldest first, from a cursor you keep, so a webhook outage
+        becomes a gap you close rather than turns you never learn about.
+        Reconcile against it; do not treat webhook delivery as the ledger.
       parameters:
         - name: X-Nvoken-Signature
           in: header
