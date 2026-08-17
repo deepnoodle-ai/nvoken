@@ -41,7 +41,7 @@ export NVOKEN_API_KEY='<your API key>'
 import { Client } from "@deepnoodle/nvoken";
 
 const client = new Client();
-const definition = await client.createAgentDefinition({
+await client.createAgentDefinition({
   definitionKey: "support",
   name: "Support",
   definition: {
@@ -49,12 +49,8 @@ const definition = await client.createAgentDefinition({
     model: { provider: "openai", id: "<model-id>" },
   },
 });
-const instance = await client.createAgent({
-  agentKey: "support",
-  name: "Support",
-  agentDefinitionId: definition.id,
-});
-const agent = client.agent({ agentId: instance.id });
+// Declared from its keys; the Agent creates its record on first use.
+const agent = client.agent({ agentKey: "support", definitionKey: "support" });
 
 console.log(await agent.text("Summarize the latest customer request."));
 ```

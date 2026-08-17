@@ -37,7 +37,7 @@ try {
   const runId = randomUUID();
   const client = new Client();
   const agentKey = `agent-tools-${runId}`;
-  const definition = await client.createAgentDefinition({
+  await client.createAgentDefinition({
     definitionKey: agentKey,
     name: "Order support",
     definition: {
@@ -52,13 +52,11 @@ try {
       tools: [lookupOrder],
     },
   });
-  await client.createAgent({
-    agentKey,
-    name: "Order support",
-    agentDefinitionId: definition.id,
-  });
+  // Declared from its keys, with this process's handler for the tool the
+  // Definition declares. The record is created on first use.
   const support = client.agent({
     agentKey,
+    definitionKey: agentKey,
     tools: [lookupOrder],
   });
   const chat = support.session({

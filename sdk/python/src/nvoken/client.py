@@ -24,7 +24,7 @@ from nvoken_generated.api.sessions_api import SessionsApi
 from nvoken_generated.api_client import ApiClient
 from nvoken_generated.configuration import Configuration
 from nvoken_generated.exceptions import ApiException
-from nvoken_generated.models.agent import Agent as AgentIdentity
+from nvoken_generated.models.agent import Agent as AgentResource
 from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
@@ -515,7 +515,7 @@ class InvokeRequest:
     """Text shorthand, or ordered blocks mixing text, images, and documents."""
     agent_id: str | None = None
     agent_key: str | None = None
-    agent_revision: int | None = None
+    definition_revision: int | None = None
     overrides: AgentDefinitionOverrides | None = None
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers, keyed to MCP server names in the definition."""
@@ -650,22 +650,35 @@ class Client:
         self,
         *,
         agent_key: str,
-        name: str,
-        agent_definition_id: str,
+        definition_id: str | None = None,
+        definition_key: str | None = None,
+        name: str | None = None,
         tenant_key: str | None = None,
         pinned_revision: int | None = None,
-    ) -> AgentIdentity:
+    ) -> AgentResource:
+        """Create or resolve one tenant's Agent record.
+
+        Name the Definition with ``definition_id`` or
+        ``definition_key`` — exactly one. ``name`` defaults to the Agent
+        key.
+        """
+        if bool(definition_id) == bool(definition_key):
+            raise NvokenError(
+                "validation",
+                "supply exactly one of definition_id and definition_key",
+            )
         return await self._replay_safe(lambda: self.agents.create_agent(
             CreateAgentRequest(
                 tenant_key=tenant_key,
                 agent_key=agent_key,
                 name=name,
-                agent_definition_id=agent_definition_id,
+                definition_id=definition_id,
+                definition_key=definition_key,
                 pinned_revision=pinned_revision,
             )
         ))
 
-    async def get_agent(self, agent_id: str) -> AgentIdentity:
+    async def get_agent(self, agent_id: str) -> AgentResource:
         return await self._replay_safe(lambda: self.agents.get_agent(agent_id))
 
     async def list_agents(
@@ -673,7 +686,7 @@ class Client:
         *,
         tenant_key: str | None = None,
         agent_key: str | None = None,
-        agent_definition_id: str | None = None,
+        definition_id: str | None = None,
         include_archived: bool | None = None,
         cursor: str | None = None,
         limit: int | None = None,
@@ -681,7 +694,7 @@ class Client:
         return await self._replay_safe(lambda: self.agents.list_agents(
             tenant_key=tenant_key,
             agent_key=agent_key,
-            agent_definition_id=agent_definition_id,
+            definition_id=definition_id,
             include_archived=include_archived,
             cursor=cursor,
             limit=limit,
@@ -691,7 +704,7 @@ class Client:
         self,
         agent_id: str,
         request: UpdateAgentRequest,
-    ) -> AgentIdentity:
+    ) -> AgentResource:
         return await self._replay_safe(
             lambda: self.agents.update_agent(agent_id, request)
         )
@@ -1024,7 +1037,7 @@ class Client:
                 if isinstance(request.input, str)
                 else [input_block_wire(block) for block in request.input]
             ),
-            agent_revision=request.agent_revision,
+            definition_revision=request.definition_revision,
             overrides=self._agent_definition_overrides(request.overrides),
             mcp_server_headers=self._mcp_server_headers(request),
             context=self._context(request),
@@ -1087,20 +1100,20 @@ class Client:
 
     async def get_agent_definition(
         self,
-        agent_definition_id: str,
+        definition_id: str,
     ) -> AgentDefinitionResource:
         return await self._replay_safe(
-            lambda: self.agent_definitions.get_agent_definition(agent_definition_id)
+            lambda: self.agent_definitions.get_agent_definition(definition_id)
         )
 
     async def get_agent_definition_revision(
         self,
-        agent_definition_id: str,
+        definition_id: str,
         revision: int,
     ) -> AgentDefinitionResource:
         return await self._replay_safe(
             lambda: self.agent_definitions.get_agent_definition_revision(
-                agent_definition_id,
+                definition_id,
                 revision,
             )
         )
@@ -1124,7 +1137,7 @@ class Client:
 
     async def update_agent_definition(
         self,
-        agent_definition_id: str,
+        definition_id: str,
         expected_revision: int,
         name: str,
         definition: AgentDefinition,
@@ -1133,19 +1146,19 @@ class Client:
         return await self._replay_safe(
             lambda: self.agent_definitions.update_agent_definition(
                 f'"{expected_revision}"',
-                agent_definition_id,
+                definition_id,
                 body,
             )
         )
 
-    async def archive_agent_definition(self, agent_definition_id: str) -> None:
+    async def archive_agent_definition(self, definition_id: str) -> None:
         await self._replay_safe(
-            lambda: self.agent_definitions.archive_agent_definition(agent_definition_id)
+            lambda: self.agent_definitions.archive_agent_definition(definition_id)
         )
 
-    async def restore_agent_definition(self, agent_definition_id: str) -> None:
+    async def restore_agent_definition(self, definition_id: str) -> None:
         await self._replay_safe(
-            lambda: self.agent_definitions.restore_agent_definition(agent_definition_id)
+            lambda: self.agent_definitions.restore_agent_definition(definition_id)
         )
 
     def invocation(self, invocation_id: str) -> InvocationHandle:

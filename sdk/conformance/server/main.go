@@ -13,14 +13,15 @@ import (
 )
 
 const (
-	agentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	sessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	invocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	waitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
-	toolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
-	definitionID = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
-	exactModelID = "experimental/model?variant=雪%#1"
-	allocationID = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	agentID       = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	sessionID     = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	invocationID  = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	waitID        = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	toolCallID    = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	definitionID  = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
+	definitionKey = "support"
+	exactModelID  = "experimental/model?variant=雪%#1"
+	allocationID  = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
 )
 
 type state struct {
@@ -185,19 +186,28 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 	case "/v1/agents":
 		if request.Method == http.MethodPost {
 			var body struct {
-				TenantKey         *string `json:"tenant_key"`
-				AgentKey          string  `json:"agent_key"`
-				Name              string  `json:"name"`
-				AgentDefinitionID string  `json:"agent_definition_id"`
-				PinnedRevision    *int    `json:"pinned_revision"`
+				TenantKey      *string `json:"tenant_key"`
+				AgentKey       string  `json:"agent_key"`
+				Name           string  `json:"name"`
+				DefinitionID   string  `json:"definition_id"`
+				DefinitionKey  string  `json:"definition_key"`
+				PinnedRevision *int    `json:"pinned_revision"`
 			}
-			if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
-				body.AgentKey != "support" || body.Name == "" || body.AgentDefinitionID != definitionID {
+			// The Definition arrives under exactly one of its two spellings,
+			// and both name the single Definition this server knows.
+			err := json.NewDecoder(request.Body).Decode(&body)
+			namedByID := body.DefinitionID == definitionID
+			namedByKey := body.DefinitionKey == definitionKey
+			if err != nil || body.AgentKey != "support" || namedByID == namedByKey {
 				writeError(response, http.StatusBadRequest, "invalid_request", "Agent did not round-trip")
 				return true
 			}
 			value := agent()
 			value["tenant_key"] = body.TenantKey
+			// name defaults to the Agent key, as the runtime does.
+			if body.Name == "" {
+				body.Name = body.AgentKey
+			}
 			value["name"] = body.Name
 			if body.PinnedRevision != nil {
 				value["pinned_revision"] = *body.PinnedRevision
@@ -870,9 +880,9 @@ func invocationWithID(id string, status string) map[string]any {
 		"agent_key":                    "support",
 		"session_id":                   sessionID,
 		"user_key":                     nil,
-		"agent_definition_id":          definitionID,
-		"agent_definition_revision":    1,
-		"agent_definition":             nil,
+		"definition_id":                definitionID,
+		"definition_revision":          1,
+		"definition":                   nil,
 		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
@@ -976,15 +986,15 @@ func session() map[string]any {
 
 func agent() map[string]any {
 	return map[string]any{
-		"id":                  agentID,
-		"tenant_key":          nil,
-		"agent_key":           "support",
-		"name":                "Support",
-		"agent_definition_id": definitionID,
-		"pinned_revision":     nil,
-		"created_at":          "2026-07-21T12:00:00Z",
-		"updated_at":          "2026-07-21T12:00:00Z",
-		"archived_at":         nil,
+		"id":              agentID,
+		"tenant_key":      nil,
+		"agent_key":       "support",
+		"name":            "Support",
+		"definition_id":   definitionID,
+		"pinned_revision": nil,
+		"created_at":      "2026-07-21T12:00:00Z",
+		"updated_at":      "2026-07-21T12:00:00Z",
+		"archived_at":     nil,
 	}
 }
 

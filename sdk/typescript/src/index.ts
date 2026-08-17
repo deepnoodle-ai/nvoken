@@ -6,7 +6,6 @@ export * from "./callback.js";
 export * from "./ask-user.js";
 export * from "./version.js";
 export type {
-  Agent as AgentIdentity,
   AgentList,
   CreditAccount,
   CreditAccountList,

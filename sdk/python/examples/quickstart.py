@@ -9,7 +9,7 @@ async def main() -> None:
         os.getenv("NVOKEN_BASE_URL", "http://localhost:8080"),
         os.environ["NVOKEN_API_KEY"],
     ) as client:
-        definition = await client.create_agent_definition(
+        await client.create_agent_definition(
             "support",
             "Support",
             AgentDefinition(
@@ -18,13 +18,8 @@ async def main() -> None:
             ),
             idempotency_key="quickstart-support-definition",
         )
-        agents = await client.list_agents(agent_key="support")
-        instance = agents.items[0] if agents.items else await client.create_agent(
-            agent_key="support",
-            name="Support",
-            agent_definition_id=definition.id,
-        )
-        agent = client.agent(AgentOptions(agent_id=instance.id))
+        # Declared from its keys. The Agent creates its record on first use.
+        agent = client.agent(AgentOptions(agent_key="support", definition_key="support"))
         print(f"agent> {await agent.text('Why was I charged twice?')}")
 
 

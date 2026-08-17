@@ -86,7 +86,7 @@ info:
     resource.
 
     A turn reports the `limits` it is really running under, after defaults and
-    minimums; the `agent_definition` it ran with, exactly as stored; and
+    minimums; the `definition` it ran with, exactly as stored; and
     `provenance`, which records what actually served the request. A Session
     reports its compaction (summarization) policy with `auto` already resolved to a real
     number and a real model, and its retention window as accepted. New
@@ -959,7 +959,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TenantKeyFilter"
         - $ref: "#/components/parameters/AgentKeyFilter"
-        - name: agent_definition_id
+        - name: definition_id
           in: query
           schema: { $ref: "#/components/schemas/AgentDefinitionID" }
         - name: include_archived
@@ -997,6 +997,12 @@ paths:
         Resolution matches on the Definition pointer only. A differing `name`
         or `pinned_revision` in the request does not modify the existing
         Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+
+        Name the Definition with either `definition_id` or
+        `definition_key` — exactly one. The key spelling lets a caller declare
+        an Agent entirely from keys it already owns, with no lookup first; it
+        is spelled the way the Agent Definition spells its own key, because it
+        is that value.
       requestBody:
         required: true
         content:
@@ -1653,7 +1659,7 @@ paths:
                   agent_key: support-triage
                   session_key: ticket-483
                   idempotency_key: ticket-483:follow-up-4
-                  agent_revision: 3
+                  definition_revision: 3
                   input: Please draft the reply.
               outputSchema:
                 summary: Require one validated machine-readable object
@@ -1692,9 +1698,9 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    agent_definition_revision: 1
-                    agent_definition: null
+                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    definition_revision: 1
+                    definition: null
                     context: null
                     status: queued
                     stop_reason: null
@@ -1725,9 +1731,9 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    agent_definition_revision: 1
-                    agent_definition: null
+                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    definition_revision: 1
+                    definition: null
                     context: null
                     status: running
                     stop_reason: null
@@ -1758,9 +1764,9 @@ paths:
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
-                    agent_definition_revision: 1
-                    agent_definition: null
+                    definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                    definition_revision: 1
+                    definition: null
                     context: null
                     status: completed
                     stop_reason: end_turn
@@ -1804,7 +1810,7 @@ paths:
                     message: The Agent Definition does not exist in this app.
                     request_id: req_01K0NV9K7Z9WR3Y3Q3RMV2G7H2
                     details:
-                      agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                      definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
         "409":
           description: |
             The idempotency key, supplied Session options, or active Session
@@ -1837,7 +1843,7 @@ paths:
                     message: The Agent Definition is archived and no longer admits Invocations.
                     request_id: req_01K0NV89D93D0W2V5CGF8BC2R9
                     details:
-                      agent_definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
+                      definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
                 activeInvocation:
                   summary: Distinct request races existing nonterminal work
                   value:
@@ -1922,9 +1928,9 @@ paths:
                     agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     user_key: null
-                    agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
-                    agent_definition_revision: 1
-                    agent_definition:
+                    definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                    definition_revision: 1
+                    definition:
                       model:
                         provider: anthropic
                         id: claude-sonnet-5
@@ -1998,9 +2004,9 @@ paths:
                       agent_key: support-triage
                       session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                       user_key: null
-                      agent_definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
-                      agent_definition_revision: 1
-                      agent_definition:
+                      definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
+                      definition_revision: 1
+                      definition:
                         model:
                           provider: anthropic
                           id: claude-sonnet-5
@@ -4316,7 +4322,7 @@ components:
         `iss` is the App ID, `kid` names one active registered client key,
         `aud` is `nvoken`, and `sub`, exactly one of `agent_id` or
         `agent_key` (with optional `tenant_key`), `iat`, and `exp` are required.
-        `agent_definition_revision`, `session_id`, and `ops` are optional.
+        `definition_revision`, `session_id`, and `ops` are optional.
         Lifetime is at most 15 minutes. Client tokens are
         accepted only in this header, never in a query parameter, and expose
         only the documented Client-prefixed response schemas and public routes.
@@ -4589,7 +4595,7 @@ components:
     Agent:
       type: object
       additionalProperties: false
-      required: [id, tenant_key, agent_key, name, agent_definition_id, pinned_revision, created_at, updated_at, archived_at]
+      required: [id, tenant_key, agent_key, name, definition_id, pinned_revision, created_at, updated_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AgentID"
@@ -4606,7 +4612,7 @@ components:
           minLength: 1
           maxLength: 255
           description: Display name. Defaults to `agent_key`.
-        agent_definition_id:
+        definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
         pinned_revision:
           type: [integer, "null"]
@@ -4629,7 +4635,7 @@ components:
     CreateAgentRequest:
       type: object
       additionalProperties: false
-      required: [agent_key, agent_definition_id]
+      required: [agent_key]
       properties:
         tenant_key:
           type: string
@@ -4643,8 +4649,19 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-        agent_definition_id:
+        definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
+        definition_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: |
+            The `definition_key` of the Agent Definition this Agent follows,
+            as an alternative spelling of `definition_id`. Supply
+            exactly one; supplying both or neither is `400`. The key is
+            resolved in the same transaction that resolves the Agent, so a
+            create and a restatement compare the same Definition however it
+            was named.
         pinned_revision:
           type: integer
           format: int64
@@ -5764,7 +5781,7 @@ components:
           $ref: "#/components/schemas/InvocationInput"
         webhook:
           $ref: "#/components/schemas/WebhookTarget"
-        agent_revision:
+        definition_revision:
           type: integer
           format: int64
           minimum: 1
@@ -7855,7 +7872,7 @@ components:
         set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
         `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
         `limits`.
-      required: [id, agent_id, agent_key, session_id, agent_definition_id, agent_definition_revision,
+      required: [id, agent_id, agent_key, session_id, definition_id, definition_revision,
                  status, stop_reason, attempt, error, structured_output,
                  active_execution_ms, deadline_at,
                  created_at, updated_at, ended_at]
@@ -7879,14 +7896,14 @@ components:
             filtering lists. It is not a security boundary — no request is
             ever refused because of it, so do not rely on it to keep one
             user's data away from another.
-        agent_definition_id:
+        definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
-        agent_definition_revision:
+        definition_revision:
           type: integer
           format: int64
           minimum: 1
           description: Immutable Agent Definition revision admitted for this turn.
-        agent_definition:
+        definition:
           oneOf:
             - $ref: "#/components/schemas/AgentDefinition"
             - type: "null"
@@ -7896,7 +7913,7 @@ components:
             servers are never stored and never appear here.
 
             Present on `GET /v1/invocations/{id}` and on the result. Null in list
-            items, where `agent_definition_id` and `agent_definition_revision`
+            items, where `definition_id` and `definition_revision`
             identify it instead.
         context:
           oneOf:
@@ -9975,7 +9992,7 @@ components:
         is the only thing you need to read to know which of the optional fields
         below are present: a machine credential carries `credential_id`,
         `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
-        `agent_key`, and `agent_definition_revision`, and is pinned to one
+        `agent_key`, and `definition_revision`, and is pinned to one
         App and Agent.
       type: object
       required: [authentication]
@@ -10008,7 +10025,7 @@ components:
             agent_id:
               $ref: "#/components/schemas/AgentID"
               description: Browser grants only. The Agent this grant is pinned to.
-            agent_definition_revision:
+            definition_revision:
               type: integer
               minimum: 1
               description: Browser grants only.

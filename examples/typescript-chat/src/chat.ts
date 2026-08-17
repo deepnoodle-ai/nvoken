@@ -5,7 +5,7 @@ import { Client, formatNvokenError } from "@deepnoodle/nvoken";
 
 const client = new Client();
 const sessionKey = process.env.NVOKEN_SESSION_KEY ?? `local-chat-${randomUUID()}`;
-const definition = await client.createAgentDefinition({
+await client.createAgentDefinition({
   definitionKey: "typescript-local-chat",
   name: "Local chat",
   definition: {
@@ -17,13 +17,9 @@ const definition = await client.createAgentDefinition({
     limits: { maxOutputTokens: 300 },
   },
 });
-await client.createAgent({
-  agentKey: "typescript-local-chat",
-  name: "Local chat",
-  agentDefinitionId: definition.id,
-});
 const chat = client.agent({
   agentKey: "typescript-local-chat",
+  definitionKey: "typescript-local-chat",
 }).session({ sessionKey });
 
 const input = createInterface({

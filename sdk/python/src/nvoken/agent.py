@@ -11,6 +11,7 @@ from nvoken_generated.models.tool_call_summary import ToolCallSummary
 
 from .client import (
     AgentDefinitionOverrides,
+    AgentResource,
     BuiltinTool,
     BudgetExhaustionBehavior,
     Client,
@@ -72,10 +73,27 @@ class NoOutputTextError(NvokenError):
 
 @dataclass(frozen=True)
 class AgentOptions(Generic[StructuredT]):
-    """Workflow binding for one deliberately created Agent instance."""
+    """A declaration of one tenant's Agent.
+
+    Nothing here reaches the server when the Agent is constructed.
+    ``(tenant_key, agent_key)`` names the record and ``definition_key`` names
+    the Agent Definition it follows, so the first use — or an explicit
+    :meth:`Agent.ensure` — creates the record if it is missing. Give
+    ``agent_id`` instead to name a record that already exists.
+    """
 
     agent_id: str | None = None
     agent_key: str | None = None
+    #: The definition_key of the Agent Definition this Agent follows.
+    #: definition_id is the same pointer by opaque ID; supply at most
+    #: one, and only alongside agent_key.
+    definition_key: str | None = None
+    definition_id: str | None = None
+    #: Holds this instance to one Definition revision. Leave it None to follow
+    #: the latest, which is what makes revising the Definition the rollout.
+    pinned_revision: int | None = None
+    #: Display name recorded at creation. Defaults to agent_key.
+    name: str | None = None
     tools: tuple[Tool | BuiltinTool, ...] = ()
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers for the MCP servers this Agent declares.
@@ -93,7 +111,7 @@ class AgentOptions(Generic[StructuredT]):
 @dataclass(frozen=True)
 class InvocationOptions:
     idempotency_key: str | None = None
-    agent_revision: int | None = None
+    definition_revision: int | None = None
     overrides: AgentDefinitionOverrides | None = None
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
@@ -147,19 +165,138 @@ class AgentStreamEvent:
 
 
 class Agent(Generic[StructuredT]):
-    def __init__(self, client: Client, options: AgentOptions[StructuredT]) -> None:
+    """One tenant's Agent: the server record and the object that runs its
+    turns, which are the same thing.
+
+    An Agent's identity and configuration live on the server; its tool
+    *handlers* are supplied by whichever process runs the turn.
+    """
+
+    def __init__(
+        self,
+        client: Client,
+        options: AgentOptions[StructuredT],
+        resource: AgentResource | None = None,
+    ) -> None:
         if bool(options.agent_id) == bool(options.agent_key):
             raise NvokenError(
                 "validation",
                 "supply exactly one of agent_id and agent_key",
             )
+        if options.definition_key and options.definition_id:
+            raise NvokenError(
+                "validation",
+                "supply at most one of definition_key and definition_id",
+            )
+        if options.agent_id and (options.definition_key or options.definition_id):
+            raise NvokenError(
+                "validation",
+                "an Agent named by agent_id already names its record; the"
+                " Definition belongs to a declaration by agent_key",
+            )
         self.client = client
         self.options = options
+        self._resource = resource
+        self._ensuring = asyncio.Lock()
         self._host_tools = {
             tool.name: tool
             for tool in options.tools
             if not isinstance(tool, BuiltinTool) and tool.mode == "host"
         }
+
+    @property
+    def resource(self) -> AgentResource | None:
+        """The server record, once :meth:`ensure` or a first use has run."""
+        return self._resource
+
+    @property
+    def id(self) -> str | None:
+        """The record's ID once it is known, and otherwise the declared one."""
+        return self._resource.id if self._resource else self.options.agent_id
+
+    @property
+    def agent_key(self) -> str | None:
+        return self._resource.agent_key if self._resource else self.options.agent_key
+
+    async def ensure(self) -> AgentResource:
+        """Create this Agent's record if it is missing and return it.
+
+        Creation never mutates: the same keys backed by the same Definition
+        resolve onto the existing record, a different Definition is
+        ``agent_key_conflict``, an archived record is ``agent_archived``, and a
+        declared ``pinned_revision`` the record does not follow is refused. A
+        first use calls this for you.
+        """
+        async with self._ensuring:
+            if self._resource is not None:
+                return self._resource
+            if self.options.definition_key or self.options.definition_id:
+                record = await self.client.create_agent(
+                    agent_key=self.options.agent_key or "",
+                    definition_id=self.options.definition_id,
+                    definition_key=self.options.definition_key,
+                    name=self.options.name,
+                    tenant_key=self.options.tenant_key,
+                    pinned_revision=self.options.pinned_revision,
+                )
+                self._verify_declaration(record)
+                self._resource = record
+                return record
+            if self.options.agent_id:
+                self._resource = await self.client.get_agent(self.options.agent_id)
+                return self._resource
+            raise NvokenError(
+                "validation",
+                f"Agent {self.options.agent_key} cannot be created without knowing"
+                " which Agent Definition it follows: declare definition_key, or"
+                " declare agent_id for a record that already exists",
+            )
+
+    async def refresh(self) -> AgentResource:
+        """Re-read the record from the server."""
+        ensured = await self.ensure()
+        self._resource = await self.client.get_agent(ensured.id)
+        return self._resource
+
+    def with_tools(self, tools: tuple[Tool | BuiltinTool, ...]) -> "Agent[StructuredT]":
+        """The same Agent with this process's tool handlers attached."""
+        return Agent(self.client, replace(self.options, tools=tools), self._resource)
+
+    def _verify_declaration(self, record: AgentResource) -> None:
+        """Refuse a record that contradicts the declaration.
+
+        Creation resolves on the Definition pointer, which the server already
+        guards; the pin is the remaining substantive field, and a declaration
+        naming a revision the record does not follow would otherwise run
+        configuration the caller never asked for. A differing name is cosmetic
+        and is left alone.
+        """
+        declared = self.options.pinned_revision
+        if declared is None or record.pinned_revision == declared:
+            return
+        following = (
+            f"revision {record.pinned_revision}"
+            if record.pinned_revision is not None
+            else "latest"
+        )
+        raise NvokenError(
+            "conflict",
+            f"Agent {record.agent_key} follows {following}, not the declared"
+            f" revision {declared}",
+            code="agent_pin_conflict",
+            details={"agent_id": record.id},
+        )
+
+    async def _ready(self) -> None:
+        """Create the record before the turn that needs it, and only when the
+        declaration says how. An Agent named by agent_id, or by agent_key
+        alone, is one the caller has said already exists.
+        """
+        if self._resource is not None:
+            return
+        if not self.options.definition_key and not self.options.definition_id:
+            return
+        await self.ensure()
 
     def _runs_locally(self, call: ToolCallSummary) -> bool:
         """Whether a pending call is this caller's to execute.
@@ -183,6 +320,7 @@ class Agent(Generic[StructuredT]):
         options: InvocationOptions | None = None,
     ) -> InvocationHandle:
         call = options or InvocationOptions()
+        await self._ready()
         return await self.client.invoke(self._request(input, call))
 
     async def run(
@@ -358,11 +496,17 @@ class Agent(Generic[StructuredT]):
         )
 
     def _request(self, input: str, options: InvocationOptions) -> InvokeRequest:
+        # The record's ID wins once it is known, so a declared Agent stops
+        # being re-resolved by key on every turn.
+        agent_id = self.options.agent_id
+        agent_key = self.options.agent_key
+        if self._resource is not None:
+            agent_id, agent_key = self._resource.id, None
         return InvokeRequest(
-            agent_id=self.options.agent_id,
-            agent_key=self.options.agent_key,
+            agent_id=agent_id,
+            agent_key=agent_key,
             input=input,
-            agent_revision=options.agent_revision,
+            definition_revision=options.definition_revision,
             overrides=options.overrides,
             mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,

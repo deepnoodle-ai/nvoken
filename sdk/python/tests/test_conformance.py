@@ -409,7 +409,7 @@ def test_shared_agent_definition_reuse_fixture_is_expressible() -> None:
         idempotency_key="agent-definition-reference",
     )).to_dict()
     assert body["agent_key"] == "support"
-    assert "agent_definition" not in body
+    assert "definition" not in body
 
 
 # Resource creation must render the complete named and keyed definition.
@@ -1112,11 +1112,11 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
             definition_calls.append(("list", kwargs))
             return SimpleNamespace(items=[SimpleNamespace(id="def_test")])
 
-        async def archive_agent_definition(agent_definition_id: str) -> None:
-            definition_calls.append(("archive", agent_definition_id))
+        async def archive_agent_definition(definition_id: str) -> None:
+            definition_calls.append(("archive", definition_id))
 
-        async def restore_agent_definition(agent_definition_id: str) -> None:
-            definition_calls.append(("restore", agent_definition_id))
+        async def restore_agent_definition(definition_id: str) -> None:
+            definition_calls.append(("restore", definition_id))
 
         client.agent_definitions.list_agent_definitions = list_agent_definitions
         client.agent_definitions.archive_agent_definition = archive_agent_definition
@@ -1395,7 +1395,7 @@ def test_shared_recorded_context_fixture_is_expressible() -> None:
         context=tuple(ContextItem(**item) for item in accepted["context"]),
     )).to_dict()
     assert body["context"] == accepted["context"]
-    assert "agent_definition" not in body
+    assert "definition" not in body
 
     # The transcript stores each snapshot as a typed reminder block whose name
     # carries the reserved prefix the request omits.

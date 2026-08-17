@@ -1,6 +1,6 @@
 from nvoken_generated import *  # noqa: F403
 from nvoken_generated import __version__ as __version__
-from nvoken_generated.models.agent import Agent as AgentIdentity
+from nvoken_generated.models.agent import Agent as AgentResource
 
 from .callback import (
     CallbackReply,
@@ -106,7 +106,7 @@ __all__ = [
     "ask_user_tool",
     "Limits",
     "Agent",
-    "AgentIdentity",
+    "AgentResource",
     "AgentOptions",
     "AgentResult",
     "AgentStreamEvent",

@@ -139,7 +139,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("agent-key", "a").Help("Stable Agent key within the effective tenant"),
 			cli.String("agent-id").Help("Opaque Agent ID; mutually exclusive with --agent-key"),
 			cli.String("idempotency-key", "i").Help("Stable admission identity; reuse it unchanged after any uncertain acknowledgement"),
-			cli.Int("agent-revision").Help("One-turn Agent Definition revision pin"),
+			cli.Int("definition-revision").Help("One-turn Agent Definition revision pin"),
 			cli.String("provider").Help("Safe one-turn model provider override; requires --model"),
 			cli.String("model", "m").Help("Safe one-turn exact model ID override; requires --provider"),
 			cli.String("tenant").Help("Tenant partition"),
@@ -175,11 +175,11 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runCreateAgentDefinition)
 	agentDefinitions.Command("get").
 		Description("Read the current revision of one Agent Definition").
-		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		Run(runGetAgentDefinition)
 	agentDefinitions.Command("revision").
 		Description("Read one immutable Agent Definition revision").
-		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		AddArg(requiredArg("revision", "Positive revision number")).
 		Run(runGetAgentDefinitionRevision)
 	agentDefinitions.Command("list").
@@ -192,7 +192,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runListAgentDefinitions)
 	agentDefinitions.Command("update").
 		Description("Replace one Agent Definition at an expected revision").
-		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		Flags(
 			cli.String("name").Required().Help("Replacement human-facing Definition name"),
 			cli.String("file", "f").Help("Replacement JSON Agent Definition; - reads stdin"),
@@ -204,11 +204,11 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runUpdateAgentDefinition)
 	agentDefinitions.Command("archive").
 		Description("Archive an Agent Definition and refuse new admissions through it").
-		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		Run(runArchiveAgentDefinition)
 	agentDefinitions.Command("restore").
 		Description("Restore an archived Agent Definition").
-		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		Run(runRestoreAgentDefinition)
 
 	apps := app.Group("app").Description("Register and read host applications")
@@ -266,8 +266,9 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Create one tenant-scoped Agent instance").
 		Flags(
 			cli.String("agent-key").Required().Help("Stable key unique within the tenant"),
-			cli.String("name").Required().Help("Human-facing Agent name"),
-			cli.String("agent-definition-id").Required().Help("Immutable Agent Definition binding"),
+			cli.String("name").Help("Human-facing Agent name; defaults to the Agent key"),
+			cli.String("definition-id").Help("Immutable Agent Definition binding by ID"),
+			cli.String("definition-key").Help("The same binding by Definition key"),
 			cli.String("tenant-key").Help("Tenant partition; omit for the default tenant"),
 			cli.Int("pinned-revision").Help("Optional default Agent Definition revision pin"),
 		).
@@ -281,7 +282,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("tenant-key").Help("Filter by tenant partition"),
 			cli.String("agent-key").Help("Filter by exact host-owned Agent key"),
-			cli.String("agent-definition-id").Help("Filter by Agent Definition"),
+			cli.String("definition-id").Help("Filter by Agent Definition"),
 			cli.Bool("include-archived").Help("Include archived Agents"),
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -891,7 +892,7 @@ func runArchiveAgentDefinition(command *cli.Context) error {
 	if err := client.ArchiveAgentDefinition(command.Context(), definitionID); err != nil {
 		return err
 	}
-	return writeMutationReceipt(command, "archived", "agent_definition_id", definitionID)
+	return writeMutationReceipt(command, "archived", "definition_id", definitionID)
 }
 
 func runRestoreAgentDefinition(command *cli.Context) error {
@@ -903,7 +904,7 @@ func runRestoreAgentDefinition(command *cli.Context) error {
 	if err := client.RestoreAgentDefinition(command.Context(), definitionID); err != nil {
 		return err
 	}
-	return writeMutationReceipt(command, "restored", "agent_definition_id", definitionID)
+	return writeMutationReceipt(command, "restored", "definition_id", definitionID)
 }
 
 // agentDefinitionFlags reads a whole definition from a file, or builds the
@@ -1081,9 +1082,9 @@ func runInvoke(command *cli.Context) error {
 			},
 		}
 	}
-	if revision := command.Int("agent-revision"); revision > 0 {
+	if revision := command.Int("definition-revision"); revision > 0 {
 		value := int64(revision)
-		request.AgentRevision = &value
+		request.DefinitionRevision = &value
 	}
 	request.TenantKey = optionalString(command.String("tenant"))
 	request.UserKey = optionalString(command.String("user"))
@@ -1107,7 +1108,7 @@ func runInvokeRequestFile(command *cli.Context, client *nvoken.Client, path stri
 		return errors.New("input and --request-file are mutually exclusive")
 	}
 	for _, flag := range []string{
-		"agent-key", "agent-id", "idempotency-key", "agent-revision", "provider", "model",
+		"agent-key", "agent-id", "idempotency-key", "definition-revision", "provider", "model",
 		"tenant", "user", "session-id", "session-key", "if-active", "webhook-url",
 		"webhook-event", "context", "context-operator", "image", "document", "image-url",
 		"document-url",
@@ -1794,10 +1795,11 @@ func runAgentCreate(command *cli.Context) error {
 		return err
 	}
 	input := nvoken.CreateAgentInput{
-		TenantKey:         optionalString(command.String("tenant-key")),
-		AgentKey:          command.String("agent-key"),
-		Name:              command.String("name"),
-		AgentDefinitionID: command.String("agent-definition-id"),
+		TenantKey:     optionalString(command.String("tenant-key")),
+		AgentKey:      command.String("agent-key"),
+		Name:          command.String("name"),
+		DefinitionID:  command.String("definition-id"),
+		DefinitionKey: command.String("definition-key"),
 	}
 	if revision := command.Int("pinned-revision"); revision > 0 {
 		value := int64(revision)
@@ -1819,12 +1821,12 @@ func runAgentList(command *cli.Context) error {
 		return err
 	}
 	page, err := client.ListAgents(command.Context(), nvoken.ListAgentsOptions{
-		TenantKey:         optionalString(command.String("tenant-key")),
-		AgentKey:          optionalString(command.String("agent-key")),
-		AgentDefinitionID: optionalString(command.String("agent-definition-id")),
-		IncludeArchived:   optionalBool(command.Bool("include-archived")),
-		Cursor:            optionalString(command.String("cursor")),
-		Limit:             optionalInt(command.Int("limit")),
+		TenantKey:       optionalString(command.String("tenant-key")),
+		AgentKey:        optionalString(command.String("agent-key")),
+		DefinitionID:    optionalString(command.String("definition-id")),
+		IncludeArchived: optionalBool(command.Bool("include-archived")),
+		Cursor:          optionalString(command.String("cursor")),
+		Limit:           optionalInt(command.Int("limit")),
 	})
 	if err != nil {
 		return err

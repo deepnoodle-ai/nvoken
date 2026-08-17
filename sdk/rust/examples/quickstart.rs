@@ -1,4 +1,4 @@
-use nvoken::{AgentDefinition, AgentOptions, Client, CreateAgentInput, ListAgentsOptions, Model};
+use nvoken::{AgentDefinition, AgentOptions, Client, Model};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -6,7 +6,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("NVOKEN_BASE_URL")?,
         std::env::var("NVOKEN_API_KEY")?,
     )?;
-    let definition = client
+    client
         .create_agent_definition(
             "quickstart-support-definition",
             "support",
@@ -15,26 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .instructions("Help the customer with billing questions."),
         )
         .await?;
-    let agents = client
-        .list_agents(ListAgentsOptions {
-            agent_key: Some("support".to_owned()),
-            ..Default::default()
-        })
-        .await?;
-    let instance = if let Some(instance) = agents.items.into_iter().next() {
-        instance
-    } else {
-        client
-            .create_agent(CreateAgentInput {
-                tenant_key: None,
-                agent_key: "support".to_owned(),
-                name: "Support".to_owned(),
-                agent_definition_id: definition.id,
-                pinned_revision: None,
-            })
-            .await?
-    };
-    let agent = client.agent(AgentOptions::from_agent_id(instance.id))?;
+    // Declared from its keys. The Agent creates its record on first use, so
+    // running this twice resolves onto the same one.
+    let agent = client.agent(AgentOptions::declared("support", "support"))?;
     println!(
         "agent> {}",
         agent

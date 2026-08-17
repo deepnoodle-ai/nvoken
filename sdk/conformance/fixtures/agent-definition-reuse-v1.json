@@ -1,9 +1,9 @@
 {
   "version": 1,
   "note": "An Agent Definition is stable, versioned, and App-scoped. A tenant-scoped Agent instance selects it; Invocations never carry writable definitions inline.",
-  "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+  "definition_id": "def_019b0a12-0000-7000-8000-000000000005",
   "reference_fields": {
-    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005"
+    "definition_id": "def_019b0a12-0000-7000-8000-000000000005"
   },
   "rules": {
     "stable_resource_id": true,
@@ -91,7 +91,7 @@
     "tenant_key": null,
     "agent_key": "support",
     "name": "Support",
-    "agent_definition_id": "def_019b0a12-0000-7000-8000-000000000005",
+    "definition_id": "def_019b0a12-0000-7000-8000-000000000005",
     "pinned_revision": null,
     "created_at": "2026-08-11T12:00:00Z",
     "updated_at": "2026-08-11T12:00:00Z",

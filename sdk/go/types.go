@@ -28,7 +28,10 @@ type ClientKey = generated.ClientKey
 // ListOrder is the sequence order for a message page.
 type ListOrder = generated.ListSessionMessagesParamsOrder
 type ClientKeyList = generated.ClientKeyList
-type AgentIdentity = generated.Agent
+
+// AgentResource is one tenant's Agent exactly as the server stores it: the
+// serialization behind Agent, reachable through (*Agent).Resource.
+type AgentResource = generated.Agent
 type AgentDefinitionResourceList = generated.AgentDefinitionResourceList
 type Session = generated.Session
 type SessionContext = generated.SessionContext
@@ -251,7 +254,7 @@ type InvocationList struct {
 
 type AgentList struct {
 	HasMore    bool            `json:"has_more"`
-	Items      []AgentIdentity `json:"items"`
+	Items      []AgentResource `json:"items"`
 	NextCursor *string         `json:"next_cursor"`
 }
 
@@ -713,16 +716,16 @@ type InvokeRequest struct {
 	// UserKey labels the host end user who admitted this turn. The Session keeps
 	// the opener's label, while each Invocation and its messages keep this one.
 	// Filtering only; not an isolation boundary.
-	UserKey           *string
-	SessionID         *string
-	SessionKey        *string
-	SessionOptions    *SessionOptions
-	IdempotencyKey    string
-	AgentRevision     *int64
-	Overrides         *AgentDefinitionOverrides
-	IfActive          IfActivePolicy
-	OnBudgetExhausted BudgetExhaustionBehavior
-	Input             string
+	UserKey            *string
+	SessionID          *string
+	SessionKey         *string
+	SessionOptions     *SessionOptions
+	IdempotencyKey     string
+	DefinitionRevision *int64
+	Overrides          *AgentDefinitionOverrides
+	IfActive           IfActivePolicy
+	OnBudgetExhausted  BudgetExhaustionBehavior
+	Input              string
 	// InputBlocks carries ordered multi-block input mixing text, images, and
 	// documents. Supply exactly one of Input and InputBlocks.
 	InputBlocks []InputBlock
@@ -920,12 +923,12 @@ type ForkSessionOptions struct {
 }
 
 type ListAgentsOptions struct {
-	TenantKey         *string
-	AgentKey          *string
-	AgentDefinitionID *string
-	IncludeArchived   *bool
-	Cursor            *string
-	Limit             *int
+	TenantKey       *string
+	AgentKey        *string
+	DefinitionID    *string
+	IncludeArchived *bool
+	Cursor          *string
+	Limit           *int
 }
 
 // CreateAgentInput declares one tenant-scoped Agent. Creation is an upsert on
@@ -933,11 +936,16 @@ type ListAgentsOptions struct {
 // the existing Agent, a different Definition pointer conflicts, and Name
 // defaults to AgentKey.
 type CreateAgentInput struct {
-	TenantKey         *string
-	AgentKey          string
-	Name              string
-	AgentDefinitionID string
-	PinnedRevision    *int64
+	TenantKey *string
+	AgentKey  string
+	Name      string
+	// DefinitionID and DefinitionKey are two spellings of one pointer:
+	// supply exactly one. The key spelling lets a caller declare an Agent from
+	// the keys it already owns, with no lookup first, and carries the
+	// Definition's own field name because it carries the Definition's value.
+	DefinitionID   string
+	DefinitionKey  string
+	PinnedRevision *int64
 }
 
 // UpdateAgentInput changes the Agent's display name and/or revision pin.
@@ -1292,8 +1300,8 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	} else {
 		wire["agent_key"] = r.AgentKey
 	}
-	if r.AgentRevision != nil {
-		wire["agent_revision"] = *r.AgentRevision
+	if r.DefinitionRevision != nil {
+		wire["definition_revision"] = *r.DefinitionRevision
 	}
 	if r.Overrides != nil {
 		overrides, err := r.Overrides.encoded()

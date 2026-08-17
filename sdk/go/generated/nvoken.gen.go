@@ -2493,13 +2493,13 @@ type AdmissionTenantCount struct {
 // pointer and key are immutable; name, revision pin, and archive state
 // are mutable.
 type Agent struct {
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
-
 	// AgentKey Stable host-owned key, unique within this tenant.
 	AgentKey   string     `json:"agent_key"`
 	ArchivedAt *time.Time `json:"archived_at"`
 	CreatedAt  time.Time  `json:"created_at"`
+
+	// DefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	DefinitionID AgentDefinitionID `json:"definition_id"`
 
 	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	ID AgentID `json:"id"`
@@ -3278,12 +3278,21 @@ type CostMetricsCostCoverage string
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
-	AgentKey          string            `json:"agent_key"`
-	Name              *string           `json:"name,omitempty"`
-	PinnedRevision    *int64            `json:"pinned_revision,omitempty"`
-	TenantKey         *string           `json:"tenant_key,omitempty"`
+	AgentKey string `json:"agent_key"`
+
+	// DefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	DefinitionID *AgentDefinitionID `json:"definition_id,omitempty"`
+
+	// DefinitionKey The `definition_key` of the Agent Definition this Agent follows,
+	// as an alternative spelling of `definition_id`. Supply
+	// exactly one; supplying both or neither is `400`. The key is
+	// resolved in the same transaction that resolves the Agent, so a
+	// create and a restatement compare the same Definition however it
+	// was named.
+	DefinitionKey  *string `json:"definition_key,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	PinnedRevision *int64  `json:"pinned_revision,omitempty"`
+	TenantKey      *string `json:"tenant_key,omitempty"`
 }
 
 // CreateClientKeyRequest defines model for CreateClientKeyRequest.
@@ -3332,9 +3341,6 @@ type CreateInvocationRequest struct {
 	// tenant. Mutually exclusive with `agent_id`.
 	AgentKey *string `json:"agent_key,omitempty"`
 
-	// AgentRevision Optional one-turn revision pin, ahead of Session and Agent pins.
-	AgentRevision *int64 `json:"agent_revision,omitempty"`
-
 	// Context Ordered application-owned state snapshots to record before this
 	// turn's input. Send a name again to supersede its prior value. An
 	// unchanged latest value is deduplicated from the transcript, while
@@ -3346,6 +3352,9 @@ type CreateInvocationRequest struct {
 	// prefix, which callers must omit here. Context is not part of the
 	// Agent Definition and never advances its revision.
 	Context *[]InvocationContextItem `json:"context,omitempty"`
+
+	// DefinitionRevision Optional one-turn revision pin, ahead of Session and Agent pins.
+	DefinitionRevision *int64 `json:"definition_revision,omitempty"`
 
 	// IdempotencyKey Your key for making retries safe. Send the same unchanged request
 	// again after a 5xx, a timeout, a dropped connection, or any case
@@ -3717,13 +3726,10 @@ type CreditPolicy string
 // is the only thing you need to read to know which of the optional fields
 // below are present: a machine credential carries `credential_id`,
 // `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
-// `agent_key`, and `agent_definition_revision`, and is pinned to one
+// `agent_key`, and `definition_revision`, and is pinned to one
 // App and Agent.
 type CurrentIdentity struct {
 	Authentication struct {
-		// AgentDefinitionRevision Browser grants only.
-		AgentDefinitionRevision *int `json:"agent_definition_revision,omitempty"`
-
 		// AgentID Browser grants only. The Agent this grant is pinned to.
 		AgentID *AgentID `json:"agent_id,omitempty"`
 
@@ -3737,6 +3743,9 @@ type CurrentIdentity struct {
 
 		// CredentialID Machine credentials only.
 		CredentialID *CredentialID `json:"credential_id,omitempty"`
+
+		// DefinitionRevision Browser grants only.
+		DefinitionRevision *int `json:"definition_revision,omitempty"`
 
 		// EffectiveProfile Machine credentials only.
 		EffectiveProfile *CredentialProfile `json:"effective_profile,omitempty"`
@@ -4024,21 +4033,6 @@ type InputBlock struct {
 type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
-	// AgentDefinition The agent definition this turn actually ran with, stored when the turn
-	// started and returned exactly as it was. Request headers for remote MCP
-	// servers are never stored and never appear here.
-	//
-	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
-	// items, where `agent_definition_id` and `agent_definition_revision`
-	// identify it instead.
-	AgentDefinition *AgentDefinition `json:"agent_definition,omitempty"`
-
-	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
-	AgentDefinitionID AgentDefinitionID `json:"agent_definition_id"`
-
-	// AgentDefinitionRevision Immutable Agent Definition revision admitted for this turn.
-	AgentDefinitionRevision int64 `json:"agent_definition_revision"`
-
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID  AgentID `json:"agent_id"`
 	AgentKey string  `json:"agent_key"`
@@ -4071,9 +4065,24 @@ type Invocation struct {
 	// Deduplicated Only present on the `POST /v1/invocations` response. False when this
 	// call created a new turn, true when your idempotency key matched one
 	// that already existed and you got that one back.
-	Deduplicated *bool              `json:"deduplicated,omitempty"`
-	EndedAt      *time.Time         `json:"ended_at"`
-	Error        *InvocationFailure `json:"error"`
+	Deduplicated *bool `json:"deduplicated,omitempty"`
+
+	// Definition The agent definition this turn actually ran with, stored when the turn
+	// started and returned exactly as it was. Request headers for remote MCP
+	// servers are never stored and never appear here.
+	//
+	// Present on `GET /v1/invocations/{id}` and on the result. Null in list
+	// items, where `definition_id` and `definition_revision`
+	// identify it instead.
+	Definition *AgentDefinition `json:"definition,omitempty"`
+
+	// DefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
+	DefinitionID AgentDefinitionID `json:"definition_id"`
+
+	// DefinitionRevision Immutable Agent Definition revision admitted for this turn.
+	DefinitionRevision int64              `json:"definition_revision"`
+	EndedAt            *time.Time         `json:"ended_at"`
+	Error              *InvocationFailure `json:"error"`
 
 	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	ID     InvocationID    `json:"id"`
@@ -6920,9 +6929,9 @@ type ListAgentsParams struct {
 
 	// AgentKey Exact host-owned Agent key. On Session and Invocation lists this is
 	// mutually exclusive with agent_id.
-	AgentKey          *AgentKeyFilter    `form:"agent_key,omitempty" json:"agent_key,omitempty"`
-	AgentDefinitionID *AgentDefinitionID `form:"agent_definition_id,omitempty" json:"agent_definition_id,omitempty"`
-	IncludeArchived   *bool              `form:"include_archived,omitempty" json:"include_archived,omitempty"`
+	AgentKey        *AgentKeyFilter    `form:"agent_key,omitempty" json:"agent_key,omitempty"`
+	DefinitionID    *AgentDefinitionID `form:"definition_id,omitempty" json:"definition_id,omitempty"`
+	IncludeArchived *bool              `form:"include_archived,omitempty" json:"include_archived,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -8935,6 +8944,12 @@ type ClientInterface interface {
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
+	// Name the Definition with either `definition_id` or
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -8954,6 +8969,12 @@ type ClientInterface interface {
 	// Resolution matches on the Definition pointer only. A differing `name`
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
+	// Name the Definition with either `definition_id` or
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10832,6 +10853,12 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
+// Name the Definition with either `definition_id` or
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -10861,6 +10888,12 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 // Resolution matches on the Definition pointer only. A differing `name`
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
+// Name the Definition with either `definition_id` or
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -14026,9 +14059,9 @@ func NewListAgentsRequest(server string, params *ListAgentsParams) (*http.Reques
 
 		}
 
-		if params.AgentDefinitionID != nil {
+		if params.DefinitionID != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "agent_definition_id", *params.AgentDefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "definition_id", *params.DefinitionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -19098,6 +19131,12 @@ type ClientWithResponsesInterface interface {
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
+	// Name the Definition with either `definition_id` or
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -19117,6 +19156,12 @@ type ClientWithResponsesInterface interface {
 	// Resolution matches on the Definition pointer only. A differing `name`
 	// or `pinned_revision` in the request does not modify the existing
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+	//
+	// Name the Definition with either `definition_id` or
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28518,6 +28563,12 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
+// Name the Definition with either `definition_id` or
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/agents (the `CreateAgent` operationId).
@@ -28543,6 +28594,12 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 // Resolution matches on the Definition pointer only. A differing `name`
 // or `pinned_revision` in the request does not modify the existing
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
+//
+// Name the Definition with either `definition_id` or
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

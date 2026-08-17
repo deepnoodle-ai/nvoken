@@ -28,11 +28,30 @@ List or read the full Agent instance without admitting work:
 ```go
 key := "support"
 agents, err := client.ListAgents(ctx, nvoken.ListAgentsOptions{AgentKey: &key})
-identity, err := client.GetAgent(ctx, agents.Items[0].ID)
+record, err := client.GetAgent(ctx, agents.Items[0].ID)
 ```
 
-The Agent records its tenant, key, display name, Definition binding, optional
-revision pin, lifecycle timestamps, and archive state.
+`AgentResource` is that record: tenant, key, display name, Definition binding,
+optional revision pin, lifecycle timestamps, and archive state. `*Agent` is the
+object that runs its turns, and it corresponds to the same row — declare one
+from the keys you already own and it creates its record on first use:
+
+```go
+agent, err := client.Agent(nvoken.AgentOptions{
+	TenantKey:     &userID,
+	AgentKey:      "support",
+	DefinitionKey: "support", // the Definition this instance follows
+	Tools:         []nvoken.Tool{lookupOrder},
+})
+```
+
+An Agent's identity and configuration live on the server; its tool handlers are
+supplied by whichever process runs the turn. `Ensure` creates the record at a
+moment you choose instead of on first use, and never mutates: the same keys and
+Definition resolve onto what exists, a different Definition is
+`agent_key_conflict`, an archived record is `agent_archived`, and a declared
+`PinnedRevision` the record does not follow is refused. `Resource` and `ID`
+report the record once it is known.
 
 Opt into the fixed guarded public-web reader with `nvoken.FetchTool()`:
 
@@ -45,15 +64,11 @@ definition, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitio
 		Tools: []nvoken.Tool{nvoken.FetchTool()},
 	},
 })
-instance, err := client.CreateAgent(ctx, nvoken.CreateAgentInput{
-	AgentKey:          "public-summary",
-	Name:              "Public Summary",
-	AgentDefinitionID: definition.ID,
+agent, err := client.Agent(nvoken.AgentOptions{
+	AgentKey:      "public-summary",
+	DefinitionKey: definition.DefinitionKey,
 })
-request := nvoken.InvokeRequest{
-	AgentID: instance.ID,
-	Input:   "Summarize the supplied URL.",
-}
+answer, err := agent.Text(ctx, "Summarize the supplied URL.", nvoken.AgentInvocationOptions{})
 ```
 
 The Runtime accepts only `{"name":"nvoken_fetch","mode":"builtin"}`. It owns
@@ -257,16 +272,12 @@ resource, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionI
 	},
 })
 
-instance, err := client.CreateAgent(ctx, nvoken.CreateAgentInput{
-	AgentKey:          "support",
-	Name:              "Support",
-	AgentDefinitionID: resource.ID,
+agent, err := client.Agent(nvoken.AgentOptions{
+	AgentKey:      "support",
+	DefinitionKey: resource.DefinitionKey,
 })
 
-handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
-	AgentID: instance.ID,
-	Input:   "Why was I charged twice?",
-})
+handle, err := agent.Invoke(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
 ```
 
 Creating a Definition starts no turn. It has an immutable `DefinitionKey`, a
@@ -303,7 +314,7 @@ snapshot every turn and get the same transcript as a host that tracks changes.
 Use `ContextTierContextual` for conversation-adjacent facts and
 `ContextTierOperator` for policy or other application-authoritative state.
 Context is Session history, not an Agent Definition field: it never changes
-`AgentDefinitionID`, and later turns keep sending it to the model even when you
+`DefinitionID`, and later turns keep sending it to the model even when you
 omit it. That is what keeps the prompt prefix stable enough for provider
 caching, which rewriting the same state into `Instructions` would break on every
 turn.

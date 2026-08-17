@@ -305,3 +305,88 @@ async def test_agent_timeout_is_typed_and_cancellation_stays_native() -> None:
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+class DeclaringClient(FakeClient):
+    """A client that records what a declared Agent creates and admits."""
+
+    def __init__(self, handles: list[FakeHandle], *, pinned_revision: int | None = None) -> None:
+        super().__init__(handles)
+        self.creates: list[dict[str, Any]] = []
+        self.pinned_revision = pinned_revision
+
+    async def create_agent(self, **kwargs: Any) -> Any:
+        self.creates.append(kwargs)
+        return SimpleNamespace(
+            id="agent_declared",
+            tenant_key=kwargs.get("tenant_key"),
+            agent_key=kwargs["agent_key"],
+            name=kwargs.get("name") or kwargs["agent_key"],
+            definition_id="def_declared",
+            pinned_revision=self.pinned_revision,
+            archived_at=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_declared_agent_creates_its_record_on_first_use() -> None:
+    client = DeclaringClient([FakeHandle(), FakeHandle()])
+    agent: Agent[Answer] = Agent(
+        client,  # type: ignore[arg-type]
+        AgentOptions(
+            tenant_key="customer-482",
+            agent_key="support",
+            definition_key="support",
+        ),
+    )
+    assert agent.id is None and agent.resource is None
+
+    await agent.invoke("first")
+    await agent.invoke("second")
+
+    assert len(client.creates) == 1
+    assert client.creates[0]["definition_key"] == "support"
+    assert client.creates[0]["definition_id"] is None
+    assert agent.id == "agent_declared"
+    # Admission uses the record's ID once it is known.
+    assert [request.agent_id for request in client.invocations] == [
+        "agent_declared",
+        "agent_declared",
+    ]
+    assert [request.agent_key for request in client.invocations] == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_declared_agent_refuses_a_contradicted_pin() -> None:
+    client = DeclaringClient([], pinned_revision=3)
+    contradicted: Agent[Answer] = Agent(
+        client,  # type: ignore[arg-type]
+        AgentOptions(agent_key="support", definition_key="support", pinned_revision=2),
+    )
+    with pytest.raises(NvokenError) as conflict:
+        await contradicted.ensure()
+    assert conflict.value.code == "agent_pin_conflict"
+
+    # Declaring no pin declares nothing about the pin.
+    silent: Agent[Answer] = Agent(
+        client,  # type: ignore[arg-type]
+        AgentOptions(agent_key="support", definition_key="support"),
+    )
+    assert (await silent.ensure()).pinned_revision == 3
+
+
+@pytest.mark.asyncio
+async def test_declared_agent_without_a_definition_cannot_create_itself() -> None:
+    agent: Agent[Answer] = Agent(
+        DeclaringClient([]),  # type: ignore[arg-type]
+        AgentOptions(agent_key="support"),
+    )
+    with pytest.raises(NvokenError) as missing:
+        await agent.ensure()
+    assert "definition_key" in str(missing.value)
+
+    with pytest.raises(NvokenError):
+        Agent(
+            DeclaringClient([]),  # type: ignore[arg-type]
+            AgentOptions(agent_id="agent_declared", definition_key="support"),
+        )

@@ -24,15 +24,35 @@ cursor iterators, resumable SSE, composed result reads (`result`,
 `list_messages`, `output_text`), and callback verification. Session-scoped
 messages use `Client.list_session_messages`.
 
-List or read the full Agent instance without admitting work:
+List or read the Agent record without admitting work:
 
 ```python
 agents = await client.list_agents(agent_key="support")
-instance = await client.get_agent(agents.items[0].id)
+record = await client.get_agent(agents.items[0].id)
 ```
 
-The Agent records its tenant, key, display name, Definition binding, optional
-revision pin, lifecycle timestamps, and archive state.
+`AgentResource` is that record: tenant, key, display name, Definition binding,
+optional revision pin, lifecycle timestamps, and archive state. `Agent` is the
+object that runs its turns, and it corresponds to the same row — declare one
+from the keys you already own and it creates its record on first use:
+
+```python
+agent = client.agent(AgentOptions(
+    tenant_key=user_id,
+    agent_key="support",
+    definition_key="support",   # the Definition this instance follows
+    tools=(lookup_order,),      # this process's handlers; never on the server
+))
+```
+
+An Agent's identity and configuration live on the server; its tool handlers are
+supplied by whichever process runs the turn. `await agent.ensure()` creates the
+record at a moment you choose instead of on first use, and never mutates: the
+same keys and Definition resolve onto what exists, a different Definition is
+`agent_key_conflict`, an archived record is `agent_archived`, and a declared
+`pinned_revision` the record does not follow is refused. `agent.resource` and
+`agent.id` report the record once it is known, and `agent.with_tools()` attaches
+handlers to an Agent read back from the server.
 
 Opt into the fixed guarded public-web reader with `fetch_tool()`:
 
@@ -48,12 +68,7 @@ definition = await client.create_agent_definition(
         tools=(fetch_tool(),),
     ),
 )
-instance = await client.create_agent(
-    agent_key="research",
-    name="Research",
-    agent_definition_id=definition.id,
-)
-options = AgentOptions(agent_id=instance.id)
+options = AgentOptions(agent_key="research", definition_key=definition.definition_key)
 ```
 
 The Runtime accepts only `{"name":"nvoken_fetch","mode":"builtin"}`. It owns
@@ -66,6 +81,7 @@ Use an Agent for the common path:
 ```python
 agent = client.agent(AgentOptions(
     agent_key="support",
+    definition_key="support",
 ))
 
 print(await agent.text("Why was I charged twice?"))
@@ -264,16 +280,12 @@ resource = await client.create_agent_definition(
     ),
     idempotency_key="support-definition-v1",
 )
-instance = await client.create_agent(
+agent = client.agent(AgentOptions(
     agent_key="support",
-    name="Support",
-    agent_definition_id=resource.id,
-)
-
-handle = await client.invoke(InvokeRequest(
-    agent_id=instance.id,
-    input="Why was I charged twice?",
+    definition_key=resource.definition_key,
 ))
+
+handle = await agent.invoke("Why was I charged twice?")
 ```
 
 Creating a Definition starts no turn. It has an immutable `definition_key`, a
@@ -315,7 +327,7 @@ snapshot every turn and get the same transcript as a host that tracks changes.
 
 Use `contextual` for conversation-adjacent facts and `operator` for policy or
 other application-authoritative state. Context is Session history, not an Agent
-Definition field: it never changes `agent_definition_id`, and later turns keep
+Definition field: it never changes `definition_id`, and later turns keep
 sending it to the model even when you omit it. That is what keeps the prompt
 prefix stable enough for provider caching, which rewriting the same state into
 `instructions` would break on every turn.

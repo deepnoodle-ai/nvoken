@@ -241,7 +241,7 @@ test("shared agent-definition-reuse fixture is expressible", async () => {
   const fixture = JSON.parse(await readFile(
     new URL("../../../conformance/fixtures/agent-definition-reuse-v1.json", import.meta.url),
     "utf8",
-  )) as { agent_definition_id: string };
+  )) as { definition_id: string };
   let body: Record<string, unknown> | undefined;
   const client = new Client({
     baseUrl: "https://runtime.example.test",
@@ -259,7 +259,7 @@ test("shared agent-definition-reuse fixture is expressible", async () => {
   });
   assert.equal(body?.agent_key, "support");
   assert.equal(body?.agent_definition, undefined);
-  assert.equal(body?.agent_definition_id, undefined);
+  assert.equal(body?.definition_id, undefined);
 });
 
 test("Agent Definition creation returns a stable resource used by Invocation ID", async () => {
@@ -267,7 +267,7 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
     new URL("../../../conformance/fixtures/agent-definition-reuse-v1.json", import.meta.url),
     "utf8",
   )) as {
-    agent_definition_id: string;
+    definition_id: string;
     creation: { request: Record<string, unknown>; response: Record<string, unknown> };
   };
   const bodies: Record<string, unknown>[] = [];
@@ -296,7 +296,7 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
 	  definition,
 	  idempotencyKey: "definition-create",
 	});
-	assert.equal(resource.id, fixture.agent_definition_id);
+	assert.equal(resource.id, fixture.definition_id);
   assert.deepEqual(bodies[0], fixture.creation.request);
 
   await client.invoke({
@@ -306,7 +306,7 @@ test("Agent Definition creation returns a stable resource used by Invocation ID"
   });
 	assert.equal(bodies[1]?.agent_key, "support");
 	assert.equal(bodies[1]?.agent_definition, undefined);
-	assert.equal(bodies[1]?.agent_definition_id, undefined);
+	assert.equal(bodies[1]?.definition_id, undefined);
 });
 
 test("Agent Definition lifecycle facade lists, archives, and restores", async () => {
@@ -796,8 +796,8 @@ function wireInvocation(
     id: invocationId,
     agent_id: agentId,
     session_id: sessionId,
-    agent_definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-    agent_definition: null,
+    definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+    definition: null,
     status,
     stop_reason: status === "completed"
       ? "end_turn"
@@ -1149,7 +1149,7 @@ test("InvocationError is actionable without a formatter", () => {
     id: invocationId,
     agentId,
     agentKey: "support",
-    agentDefinitionId: "def_conformance",
+    definitionId: "def_conformance",
     sessionId,
     userKey: null,
     context: null,
@@ -1167,8 +1167,8 @@ test("InvocationError is actionable without a formatter", () => {
     structuredOutput: null,
     structuredOutputProvenance: null,
     metadata: null,
-	agentDefinitionRevision: 1,
-    agentDefinition: null,
+	definitionRevision: 1,
+    definition: null,
     limits: {
       totalTimeoutSeconds: 300,
       activeTimeoutSeconds: 120,
@@ -1688,7 +1688,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   assert.match(String(admissionBodies[0]?.idempotency_key), /^nvoken-/);
   assert.equal(admissionBodies[0]?.if_active, "supersede");
 	assert.equal(admissionBodies[0]?.agent_key, "support");
-	assert.equal(admissionBodies[0]?.agent_definition_id, undefined);
+	assert.equal(admissionBodies[0]?.definition_id, undefined);
 });
 
 test("agent run falls back from a broken stream to authoritative reads", async () => {
@@ -2477,7 +2477,7 @@ test("shared recorded-context fixture is expressible", async () => {
         session_key: string;
         idempotency_key: string;
         input: string;
-        agent_definition_id: string;
+        definition_id: string;
         context: ContextItem[];
       };
       messages: { role: string; content: SessionMessage["content"] }[];
@@ -2668,6 +2668,168 @@ test("a model is nameable as provider/id everywhere it appears", async () => {
       invalid,
     );
   }
+});
+
+function wireAgent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: agentId,
+    tenant_key: "customer-482",
+    agent_key: "support",
+    name: "support",
+    definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+    pinned_revision: null,
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:00Z",
+    archived_at: null,
+    ...overrides,
+  };
+}
+
+test("a declared Agent creates its record on first use", async () => {
+  const creates: Array<Record<string, unknown>> = [];
+  const admissions: Array<Record<string, unknown>> = [];
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      if (url.pathname === "/v1/agents" && init?.method === "POST") {
+        creates.push(body);
+        return Response.json(wireAgent(), { status: 201 });
+      }
+      if (url.pathname === "/v1/invocations" && init?.method === "POST") {
+        admissions.push(body);
+        return admissionResponse();
+      }
+      throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+    },
+  });
+
+  // The declaration is the three keys the host already owns. Nothing has
+  // reached the server yet.
+  const support = client.agent({
+    tenantKey: "customer-482",
+    agentKey: "support",
+    definitionKey: "support",
+  });
+  assert.equal(support.id, undefined);
+  assert.equal(creates.length, 0);
+
+  await support.invoke("hello", { idempotencyKey: "first" });
+  assert.deepEqual(creates[0], {
+    tenant_key: "customer-482",
+    agent_key: "support",
+    definition_key: "support",
+  });
+  // Ensured, so the record answers for the Agent from here on.
+  assert.equal(support.id, agentId);
+  assert.equal(support.name, "support");
+  assert.equal(support.resource?.definitionId, "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323");
+  assert.equal(JSON.stringify(support), JSON.stringify(support.resource));
+
+  // A second turn neither re-creates the record nor re-resolves the key.
+  await support.invoke("again", { idempotencyKey: "second" });
+  assert.equal(creates.length, 1);
+  assert.equal(admissions[0]?.agent_id, agentId);
+  assert.equal(admissions[0]?.agent_key, undefined);
+  assert.equal(admissions[1]?.agent_id, agentId);
+});
+
+test("one Agent type, whether declared or read back", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === `/v1/agents/${agentId}` && (init?.method ?? "GET") === "GET") {
+        return Response.json(wireAgent());
+      }
+      if (url.pathname === "/v1/invocations" && init?.method === "POST") {
+        return admissionResponse();
+      }
+      throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+    },
+  });
+
+  const fetched = await client.getAgent(agentId);
+  assert.equal(fetched.id, agentId);
+  assert.equal(fetched.agentKey, "support");
+  assert.equal(fetched.resource.tenantKey, "customer-482");
+
+  // Handlers are the part the record cannot hold, so they attach afterward
+  // and the object is otherwise the same Agent.
+  const runnable = fetched.withTools([]);
+  assert.equal(runnable.id, agentId);
+  const handle = await runnable.invoke("hello", { idempotencyKey: "hydrated" });
+  assert.equal(handle.invocationId, invocationId);
+
+  // ensure() on an Agent that already knows its record is not a request.
+  assert.equal((await fetched.ensure()).id, agentId);
+});
+
+test("a declaration that contradicts the record is refused", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/agents" && init?.method === "POST") {
+        return Response.json(wireAgent({ pinned_revision: 3 }), { status: 200 });
+      }
+      throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
+    },
+  });
+
+  // The pin decides which configuration runs, so a declaration naming a
+  // revision the record does not follow is an error rather than a silent
+  // run of somebody else's revision.
+  await assert.rejects(
+    client.agent({
+      tenantKey: "customer-482",
+      agentKey: "support",
+      definitionKey: "support",
+      pinnedRevision: 2,
+    }).ensure(),
+    (error: unknown) =>
+      error instanceof NvokenError && error.code === "agent_pin_conflict",
+  );
+
+  // Declaring no pin declares nothing about the pin.
+  const untouched = await client.agent({
+    tenantKey: "customer-482",
+    agentKey: "support",
+    definitionKey: "support",
+  }).ensure();
+  assert.equal(untouched.pinnedRevision, 3);
+});
+
+test("an Agent that cannot create itself says which declaration is missing", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async () => {
+      throw new Error("ensure must not reach the server without a Definition");
+    },
+  });
+
+  await assert.rejects(
+    client.agent({ tenantKey: "customer-482", agentKey: "support" }).ensure(),
+    (error: unknown) =>
+      error instanceof NvokenError && error.category === "validation"
+      && error.message.includes("definitionKey"),
+  );
+
+  // An Agent named by ID carries its Definition already; declaring one is a
+  // contradiction rather than a second opinion.
+  assert.throws(
+    () => client.agent({ agentId, definitionKey: "support" }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
 });
 
 test("an Agent Definition is readable by its key", async () => {
