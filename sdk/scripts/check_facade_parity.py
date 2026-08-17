@@ -13,10 +13,16 @@ paths. Neither looks inside a facade signature.
 Two things are checked, and they fail differently.
 
 **Parameter parity** is a hard failure. If a language wraps an operation, every
-query parameter of that operation must appear somewhere in that language's
-hand-written sources. This is a spelling-level check rather than a signature
-parse: it answers "is this parameter reachable at all", which is the question
-that was being answered wrong.
+query parameter and every top-level request-body field of that operation must
+appear somewhere in that language's hand-written sources. This is a
+spelling-level check rather than a signature parse: it answers "is this
+parameter reachable at all", which is the question that was being answered
+wrong. Body fields are checked because query parameters alone missed the case
+that motivated the check: `user_key` was writable on the wire and on no facade
+but one, so user-scope memory was unreachable through three of four front
+doors while the contract said otherwise. Only top-level fields are walked —
+a nested object is one field the facade must name, and its shape is what the
+conformance fixtures pin.
 
 **Facade coverage** is a baseline. Not every operation needs a facade — some
 are reporting surfaces callers reach through the generated clients on purpose.
@@ -66,9 +72,27 @@ RAW_ONLY = {
     "listApps",
 }
 
+# Operations whose facade takes the generated request type as its parameter
+# rather than retyping it. Every field is reachable by construction — the
+# caller builds the wire shape — so a spelling search over the facade finds
+# none of them and would report a gap that is really a design decision. This
+# is deliberately a hand-kept list rather than an inference: a facade that
+# merely mentions the type while building it internally is the case the check
+# exists to catch, and no spelling search can tell the two apart.
+WIRE_SHAPED = {
+    ("allocateCredits", "rust"),
+    ("createSession", "typescript"),
+    ("forkSession", "typescript"),
+}
+
 # Operations one language wraps and another does not. Every line here is a
 # facade someone still has to write; the check exists so the list shrinks
 # rather than grows.
+#
+# The provisioning block below is one finding rather than many: going live —
+# register an App, set its ceilings, enable browser access, mint a signing key,
+# issue a credential — has a facade in Go and nowhere else, so three of four
+# SDKs send an integrator to the generated client for the first thing they do.
 COVERAGE_BASELINE = {
     ("getSessionTranscript", "rust"),
     ("listInvocationLogs", "typescript"),
@@ -77,18 +101,75 @@ COVERAGE_BASELINE = {
     ("listMemories", "typescript"),
     ("listMemories", "python"),
     ("listMemories", "rust"),
+    ("createSession", "python"),
+    ("createSession", "rust"),
+    ("forkSession", "python"),
+    ("forkSession", "rust"),
+    # The provisioning surface.
+    ("registerOrg", "typescript"),
+    ("registerOrg", "python"),
+    ("registerOrg", "rust"),
+    ("updateOrg", "typescript"),
+    ("updateOrg", "python"),
+    ("updateOrg", "rust"),
+    ("registerApp", "typescript"),
+    ("registerApp", "python"),
+    ("registerApp", "rust"),
+    ("updateApp", "typescript"),
+    ("updateApp", "python"),
+    ("updateApp", "rust"),
+    ("createAppClientKey", "typescript"),
+    ("createAppClientKey", "python"),
+    ("createAppClientKey", "rust"),
+    ("mintAppSigningKey", "typescript"),
+    ("mintAppSigningKey", "python"),
+    ("mintAppSigningKey", "rust"),
+    ("createCredential", "python"),
+    ("createCredential", "rust"),
+    ("rotateCredential", "rust"),
+    ("createProviderKey", "rust"),
+    ("rotateProviderKey", "rust"),
+    # A browser mints its own anonymous grant; no server-side SDK wraps it in
+    # any language, and the browser entry point that would is C7's work.
+    ("issueAnonymousToken", "go"),
+    ("issueAnonymousToken", "typescript"),
+    ("issueAnonymousToken", "python"),
+    ("issueAnonymousToken", "rust"),
 }
 
 
 def load_operations() -> dict[str, list[str]]:
-    """Operation ID to its query parameter names, path-level ones included."""
+    """Operation ID to the names a caller supplies: query and body alike."""
     spec = yaml.safe_load(CONTRACT.read_text())
     shared = spec.get("components", {}).get("parameters", {})
+    schemas = spec.get("components", {}).get("schemas", {})
 
     def resolve(parameter: dict) -> dict:
         if "$ref" in parameter:
             return shared[parameter["$ref"].rsplit("/", 1)[-1]]
         return parameter
+
+    def dereference(node: object) -> dict:
+        depth = 0
+        while isinstance(node, dict) and "$ref" in node and depth < 10:
+            node = schemas.get(node["$ref"].rsplit("/", 1)[-1], {})
+            depth += 1
+        return node if isinstance(node, dict) else {}
+
+    def body_fields(operation: dict) -> set[str]:
+        """Top-level JSON body properties, through $ref and composition."""
+        body = dereference(operation.get("requestBody"))
+        schema = body.get("content", {}).get("application/json", {}).get("schema")
+        if schema is None:
+            return set()
+        names: set[str] = set()
+        pending = [schema]
+        while pending:
+            node = dereference(pending.pop())
+            names.update(node.get("properties", {}))
+            for composition in ("allOf", "oneOf", "anyOf"):
+                pending.extend(node.get(composition, []))
+        return names
 
     operations: dict[str, list[str]] = {}
     for item in spec["paths"].values():
@@ -103,6 +184,7 @@ def load_operations() -> dict[str, list[str]]:
                 for parameter in inherited + own
                 if parameter.get("in") == "query"
             }
+            names |= body_fields(operation)
             operations[operation["operationId"]] = sorted(names)
     return operations
 
@@ -143,10 +225,20 @@ def load_sources() -> dict[str, str]:
     return sources
 
 
+# Words Go writes in full caps. A facade spelling `MCPServers` does expose
+# `mcp_servers`; a checker that only knew `McpServers` would report a gap that
+# is really a naming convention, and a reported gap nobody can act on is how a
+# check stops being read.
+GO_INITIALISMS = {"api", "id", "mcp", "sse", "ttl", "url"}
+
+
 def spelling(language: str, parameter: str) -> str:
     words = parameter.split("_")
     if language == "go":
-        return "".join("ID" if word.lower() == "id" else word.capitalize() for word in words)
+        return "".join(
+            word.upper() if word.lower() in GO_INITIALISMS else word.capitalize()
+            for word in words
+        )
     if language == "typescript":
         return words[0] + "".join(word.capitalize() for word in words[1:])
     return parameter
@@ -163,6 +255,8 @@ def main() -> int:
         if operation_id in RAW_ONLY or not parameters:
             continue
         for language, source in sorted(sources.items()):
+            if (operation_id, language) in WIRE_SHAPED:
+                continue
             missing = [
                 parameter
                 for parameter in parameters

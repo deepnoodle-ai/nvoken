@@ -8,6 +8,19 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **`user_key` is writable from every SDK.** It was reachable on the Go
+  invocation request and nowhere else, so user-scope Agent memory — where
+  `user_key` decides whose durable memories the model can recall — could only
+  be used through `raw()`. It is now on the invocation request and the
+  per-call Agent options in all four SDKs.
+
+- **The Go facade reaches the whole App configuration.** `RegisterApp` and
+  `UpdateApp` dropped `browser_access`, `anonymous_access`,
+  `default_rate_limits`, and `credit_policy`, which is the entire browser-direct
+  go-live path. `UpdateAppOptions` also distinguishes replacing a member from
+  clearing one, with `ClearBrowserAccess`, `ClearAnonymousAccess`, and
+  `ClearDefaultRateLimits`, because omitting a member preserves it.
+
 - **A client can act for one tenant or one end user.** `client.scoped({...})`
   in all four SDKs, and `--scope-tenant-key` / `--scope-user-key` on the CLI,
   stamp `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` on every request. An id

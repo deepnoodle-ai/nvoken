@@ -936,6 +936,18 @@ export interface WebhookTarget {
 
 interface InvokeRequestBase {
   tenantKey?: string;
+  /**
+   * Who this turn is for. The first request that opens a Session fixes its
+   * user key, including fixing it to absent; every later turn either sends the
+   * same one or leaves it out and inherits it. A turn naming a different end
+   * user is refused with `session_user_key_conflict`.
+   *
+   * It is a filter, and on an Agent whose Definition sets `memory.scope: user`
+   * it is also the memory partition — it decides whose durable memories the
+   * model can recall — so it is required on the turn that opens a Session for
+   * such an Agent.
+   */
+  userKey?: string;
   /** Optional one-turn revision pin, ahead of Session and Agent pins. */
   definitionRevision?: number;
   /** Safe per-turn replacements that cannot expand Agent authority. */
@@ -1103,6 +1115,12 @@ export interface InvocationOptions {
   sessionId?: string;
   sessionKey?: string;
   sessionOptions?: SessionOptions;
+  /**
+   * Who this turn is for. Per-call rather than per-Agent, because one Agent
+   * serves many end users; the first turn on a Session fixes it and later
+   * turns inherit it. See {@link InvokeRequest.userKey}.
+   */
+  userKey?: string;
   idempotencyKey?: string;
   definitionRevision?: number;
   overrides?: AgentDefinitionOverrides;
@@ -1269,6 +1287,11 @@ export interface CreateCredentialOptions {
   name: string;
   profile: CredentialProfile;
   appId?: string;
+  /**
+   * Owning Org for an org-scoped credential. An org-scoped caller may omit it
+   * to use its own Org and cannot name another.
+   */
+  orgId?: string;
   tenantKey?: string;
   sessionId?: string;
   operations?: RuntimeOperation[];
@@ -1747,6 +1770,7 @@ export class Client {
             name: options.name,
             profile: options.profile,
             appId: options.appId,
+            orgId: options.orgId,
             tenantKey: options.tenantKey,
             sessionId: options.sessionId,
             operations: options.operations === undefined
@@ -3042,6 +3066,7 @@ export class Agent<TOutput extends object = JsonObject> {
     const request: InvokeRequestBase & AgentIdentityRequest = {
       ...identity,
       tenantKey: this.options.tenantKey,
+      userKey: options.userKey,
       idempotencyKey,
       definitionRevision: options.definitionRevision,
       overrides: options.overrides,
@@ -3860,6 +3885,7 @@ function invocationRequestToWire<TOutput extends object>(
     agentId: "agentId" in request ? request.agentId : undefined,
     agentKey: "agentKey" in request ? request.agentKey : undefined,
     tenantKey: request.tenantKey,
+    userKey: request.userKey,
     definitionRevision: request.definitionRevision,
     overrides: request.overrides === undefined
       ? undefined

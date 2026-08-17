@@ -1407,14 +1407,25 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 // RegisterApp registers one host application and returns its generated app_id.
 // It requires an Org-scoped or installation Operator credential.
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
+	body := generated.RegisterAppJSONRequestBody{
+		Name:                   name,
+		ExternalRef:            options.ExternalRef,
+		DisplayName:            options.DisplayName,
+		OrgID:                  options.OrgID,
+		CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
+		DefaultRateLimits:      options.DefaultRateLimits.generated(),
+	}
+	browser, err := options.BrowserAccess.generated()
+	if err != nil {
+		return nil, err
+	}
+	body.BrowserAccess = browser
+	if options.CreditPolicy != nil {
+		policy := generated.CreditPolicy(*options.CreditPolicy)
+		body.CreditPolicy = &policy
+	}
 	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.AppRegistration], error) {
-		response, err := c.raw.RegisterAppWithResponse(ctx, generated.RegisterAppJSONRequestBody{
-			Name:                   name,
-			ExternalRef:            options.ExternalRef,
-			DisplayName:            options.DisplayName,
-			OrgID:                  options.OrgID,
-			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
-		})
+		response, err := c.raw.RegisterAppWithResponse(ctx, body)
 		if err != nil {
 			return callResult[generated.AppRegistration]{}, err
 		}
@@ -1734,22 +1745,24 @@ func (c *Client) RetireAppSigningKey(
 	return err
 }
 
-// UpdateApp changes an app's mutable presentation fields; name and
-// external_ref cannot be changed.
+// UpdateApp changes an App's mutable configuration: its presentation, its
+// admission ceilings, its credit policy, and whether browser-direct and
+// anonymous callers are allowed. Name and external_ref cannot be changed.
 func (c *Client) UpdateApp(ctx context.Context, appID string, options UpdateAppOptions) (*App, error) {
-	if options.DisplayName == nil && options.OrgID == nil &&
-		options.CallbackTimeoutSeconds == nil {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "app update requires display name, Org ID, or callback timeout",
-		}
+	// Encoded by hand because three members distinguish "leave it alone" from
+	// "turn it off", and a null is the only way to say the second. The
+	// generated body omits a nil pointer, so it can express one of the two.
+	body, err := options.encoded()
+	if err != nil {
+		return nil, err
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.App], error) {
-		response, err := c.raw.UpdateAppWithResponse(ctx, appID, generated.UpdateAppJSONRequestBody{
-			DisplayName:            options.DisplayName,
-			OrgID:                  options.OrgID,
-			CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
-		})
+		response, err := c.raw.UpdateAppWithBodyWithResponse(
+			ctx,
+			appID,
+			"application/json",
+			bytes.NewReader(body),
+		)
 		if err != nil {
 			return callResult[generated.App]{}, err
 		}

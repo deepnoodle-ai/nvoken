@@ -139,6 +139,10 @@ pub struct AgentInvocationOptions {
     pub session_id: Option<String>,
     pub session_key: Option<String>,
     pub session_options: Option<SessionOptions>,
+    /// Who this turn is for. Per-call rather than per-Agent, because one Agent
+    /// serves many end users; the first turn on a Session fixes it and later
+    /// turns inherit it. See [`InvokeRequest::user_key`].
+    pub user_key: Option<String>,
     pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub webhook: Option<WebhookTarget>,
@@ -428,6 +432,7 @@ impl Agent {
             agent_id,
             agent_key,
             tenant_key: agent_options.tenant_key.clone(),
+            user_key: options.user_key.clone(),
             session_id: options.session_id.clone(),
             session_key: options.session_key.clone(),
             session_options: options.session_options.clone(),

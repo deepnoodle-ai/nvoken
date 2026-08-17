@@ -839,9 +839,15 @@ type InvokeRequest struct {
 	AgentID   string
 	AgentKey  string
 	TenantKey *string
-	// UserKey labels the host end user who admitted this turn. The Session keeps
-	// the opener's label, while each Invocation and its messages keep this one.
-	// Filtering only; not an isolation boundary.
+	// UserKey says who this turn is for. The first request that opens a Session
+	// fixes its user key, including fixing it to absent; every later turn either
+	// sends the same one or leaves it out and inherits it. A turn naming a
+	// different end user is refused with session_user_key_conflict.
+	//
+	// It is a filter, and on an Agent whose Definition sets memory.scope: user
+	// it is also the memory partition — it decides whose durable memories the
+	// model can recall — so it is required on the turn that opens a Session for
+	// such an Agent.
 	UserKey            *string
 	SessionID          *string
 	SessionKey         *string
@@ -1123,6 +1129,231 @@ type RegisterAppOptions struct {
 	// 202 and settle later through SubmitToolResults. Webhook delivery is
 	// unaffected.
 	CallbackTimeoutSeconds *int64
+	// BrowserAccess configures browser-direct callers at registration. Omit it
+	// to register the App with browser access disabled; UpdateApp turns it on
+	// later. Enabling it requires DefaultRateLimits.
+	BrowserAccess *BrowserAccess
+	// DefaultRateLimits sets the shared App admission ceilings. Omit for
+	// unlimited machine admission, which browser access does not allow.
+	DefaultRateLimits *AppDefaultRateLimits
+	// CreditPolicy defaults to CreditPolicyOff. Anonymous browser access
+	// requires CreditPolicyRequired.
+	CreditPolicy *CreditPolicy
+}
+
+// BrowserAccess is the complete browser-direct configuration for an App. It is
+// replaced whole rather than merged, so a partial update cannot leave an origin
+// list or a ceiling behind from a configuration nobody meant to keep.
+type BrowserAccess struct {
+	// AllowedOrigins are exact origins. Wildcards, userinfo, paths, queries,
+	// and fragments are invalid, and HTTPS is required except for exact
+	// localhost and loopback origins in development. A browser request must
+	// match one exactly before nvoken emits CORS headers at all.
+	AllowedOrigins []string
+	// InvocationWebhook is where nvoken reports turns started from a browser.
+	// It is required, because a browser client is the one caller that cannot
+	// be trusted to tell the host what its own turn did.
+	InvocationWebhook BrowserInvocationWebhook
+	// Limits are the browser-specific ceilings enforced at admission, per end
+	// user and per tenant rather than App-wide.
+	Limits BrowserRateLimits
+}
+
+// BrowserInvocationWebhook is the endpoint nvoken posts browser-started turn
+// events to.
+type BrowserInvocationWebhook struct {
+	// URL is an absolute HTTPS endpoint.
+	URL string
+	// Events defaults to every Invocation webhook event when empty, and must
+	// include WebhookEventWaiting and WebhookEventEnded when set: a browser
+	// turn that parks or ends with nobody told is a turn the host never learns
+	// about.
+	Events []WebhookEvent
+}
+
+// BrowserRateLimits are the ceilings a browser-direct caller is admitted under.
+type BrowserRateLimits struct {
+	MaxAdmissionsPerUserPerMinute     int64
+	MaxConcurrentInvocationsPerTenant int64
+	MaxConcurrentInvocationsPerUser   int64
+}
+
+// AppDefaultRateLimits are the App-wide admission ceilings.
+type AppDefaultRateLimits struct {
+	MaxAdmissionsPerMinute   int64
+	MaxConcurrentInvocations int64
+}
+
+func (l *AppDefaultRateLimits) generated() *generated.AppDefaultRateLimits {
+	if l == nil {
+		return nil
+	}
+	return &generated.AppDefaultRateLimits{
+		MaxAdmissionsPerMinute:   l.MaxAdmissionsPerMinute,
+		MaxConcurrentInvocations: l.MaxConcurrentInvocations,
+	}
+}
+
+func (b *BrowserAccess) generated() (*generated.BrowserAccess, error) {
+	if b == nil {
+		return nil, nil
+	}
+	if len(b.AllowedOrigins) == 0 {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "browser access requires at least one allowed origin",
+		}
+	}
+	if b.InvocationWebhook.URL == "" {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "browser access requires an Invocation webhook URL",
+		}
+	}
+	webhook := generated.BrowserInvocationWebhook{URL: b.InvocationWebhook.URL}
+	if len(b.InvocationWebhook.Events) != 0 {
+		events := make([]generated.WebhookEvent, 0, len(b.InvocationWebhook.Events))
+		for _, event := range b.InvocationWebhook.Events {
+			if !event.valid() {
+				return nil, &Error{
+					Category: ErrorValidation,
+					Message:  fmt.Sprintf("unknown webhook event %q", string(event)),
+				}
+			}
+			events = append(events, generated.WebhookEvent(event))
+		}
+		webhook.Events = &events
+	}
+	return &generated.BrowserAccess{
+		AllowedOrigins:    append([]string(nil), b.AllowedOrigins...),
+		InvocationWebhook: webhook,
+		Limits: generated.BrowserRateLimits{
+			MaxAdmissionsPerUserPerMinute:     b.Limits.MaxAdmissionsPerUserPerMinute,
+			MaxConcurrentInvocationsPerTenant: b.Limits.MaxConcurrentInvocationsPerTenant,
+			MaxConcurrentInvocationsPerUser:   b.Limits.MaxConcurrentInvocationsPerUser,
+		},
+	}, nil
+}
+
+func (a *AnonymousAccess) generated() (*generated.AnonymousAccess, error) {
+	if a == nil {
+		return nil, nil
+	}
+	if a.AgentID == "" {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "anonymous access requires the Agent visitors reach",
+		}
+	}
+	return &generated.AnonymousAccess{
+		AgentID:                a.AgentID,
+		MaxAdmissionsPerMinute: a.MaxAdmissionsPerMinute,
+		VisitorAllowance:       a.VisitorAllowance,
+	}, nil
+}
+
+// encoded renders the update body, writing an explicit null for each member
+// the caller asked to clear. Setting a member and clearing it in the same
+// request is refused rather than resolved, because either resolution would be
+// somebody's surprise.
+func (o *UpdateAppOptions) encoded() ([]byte, error) {
+	wire := map[string]any{}
+	if o.DisplayName != nil {
+		wire["display_name"] = *o.DisplayName
+	}
+	if o.OrgID != nil {
+		wire["org_id"] = *o.OrgID
+	}
+	if o.CallbackTimeoutSeconds != nil {
+		wire["callback_timeout_seconds"] = *o.CallbackTimeoutSeconds
+	}
+	if o.CreditPolicy != nil {
+		wire["credit_policy"] = string(*o.CreditPolicy)
+	}
+	browser, err := o.BrowserAccess.generated()
+	if err != nil {
+		return nil, err
+	}
+	anonymous, err := o.AnonymousAccess.generated()
+	if err != nil {
+		return nil, err
+	}
+	for _, member := range []struct {
+		name  string
+		value any
+		clear bool
+	}{
+		{name: "browser_access", value: browser, clear: o.ClearBrowserAccess},
+		{name: "anonymous_access", value: anonymous, clear: o.ClearAnonymousAccess},
+		{
+			name:  "default_rate_limits",
+			value: o.DefaultRateLimits.generated(),
+			clear: o.ClearDefaultRateLimits,
+		},
+	} {
+		set := !isNilValue(member.value)
+		if set && member.clear {
+			return nil, &Error{
+				Category: ErrorValidation,
+				Message:  fmt.Sprintf("app update cannot both set and clear %s", member.name),
+			}
+		}
+		switch {
+		case set:
+			wire[member.name] = member.value
+		case member.clear:
+			wire[member.name] = nil
+		}
+	}
+	if len(wire) == 0 {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "app update requires at least one member",
+		}
+	}
+	return json.Marshal(wire)
+}
+
+// isNilValue reports whether an `any` holding a typed nil pointer is nil, which
+// a bare comparison against nil does not.
+func isNilValue(value any) bool {
+	switch typed := value.(type) {
+	case *generated.BrowserAccess:
+		return typed == nil
+	case *generated.AnonymousAccess:
+		return typed == nil
+	case *generated.AppDefaultRateLimits:
+		return typed == nil
+	default:
+		return value == nil
+	}
+}
+
+// CreditPolicy says whether an App's turns are admitted against a credit
+// balance.
+type CreditPolicy string
+
+const (
+	// CreditPolicyOff, the default, admits turns without consulting credits.
+	CreditPolicyOff CreditPolicy = "off"
+	// CreditPolicyRequired refuses a turn a tenant has no balance for.
+	// Anonymous browser access requires it, because a visitor with no account
+	// is the one caller nobody can be billed for after the fact.
+	CreditPolicyRequired CreditPolicy = "required"
+)
+
+// AnonymousAccess lets nvoken mint short-lived grants for visitors with no
+// account, for one Agent and one spend allowance. Enabling it requires browser
+// access, finite App limits, and CreditPolicyRequired.
+type AnonymousAccess struct {
+	AgentID string
+	// MaxAdmissionsPerMinute is shared across every anonymous visitor in the
+	// tenant rather than applied per visitor, because a visitor is not an
+	// account somebody can be held to.
+	MaxAdmissionsPerMinute int64
+	// VisitorAllowance is what one visitor may spend before the grant stops
+	// admitting turns.
+	VisitorAllowance Money
 }
 
 type ListAppsOptions struct {
@@ -1140,11 +1371,35 @@ type ListAgentDefinitionsOptions struct {
 	Limit           *int
 }
 
+// UpdateAppOptions replaces whole members rather than merging into them.
+// Every field is a replacement of the stored value; omitting one preserves it,
+// and the Clear* fields send an explicit null where the difference between
+// "leave it alone" and "turn it off" matters.
 type UpdateAppOptions struct {
 	DisplayName *string
 	OrgID       *string
 	// CallbackTimeoutSeconds replaces the App's callback HTTP reply deadline.
 	CallbackTimeoutSeconds *int64
+	// BrowserAccess replaces the whole browser configuration. Set
+	// ClearBrowserAccess instead to disable browser access without deleting
+	// the App's client keys.
+	BrowserAccess      *BrowserAccess
+	ClearBrowserAccess bool
+	// AnonymousAccess replaces the whole anonymous-visitor configuration.
+	// Set ClearAnonymousAccess to stop minting and refuse new anonymous-token
+	// requests. This is the only way to enable anonymous access: registration
+	// deliberately cannot, because it requires browser access and finite
+	// limits that must already be stored.
+	AnonymousAccess      *AnonymousAccess
+	ClearAnonymousAccess bool
+	// DefaultRateLimits replaces the App-wide ceilings. Set
+	// ClearDefaultRateLimits to restore unlimited machine admission, which is
+	// refused while browser access remains enabled.
+	DefaultRateLimits      *AppDefaultRateLimits
+	ClearDefaultRateLimits bool
+	// CreditPolicy changes enforcement for turns admitted from now on.
+	// Invocations already running keep the policy they were admitted under.
+	CreditPolicy *CreditPolicy
 }
 
 type RegisterOrgOptions struct {

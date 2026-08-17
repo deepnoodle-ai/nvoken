@@ -629,6 +629,16 @@ class InvokeRequest:
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
     tenant_key: str | None = None
+    # Who this turn is for. The first request that opens a Session fixes its
+    # user key, including fixing it to absent; every later turn either sends the
+    # same one or leaves it out and inherits it. A turn naming a different end
+    # user is refused with `session_user_key_conflict`.
+    #
+    # It is a filter, and on an Agent whose Definition sets `memory.scope: user`
+    # it is also the memory partition — it decides whose durable memories the
+    # model can recall — so it is required on the turn that opens a Session for
+    # such an Agent.
+    user_key: str | None = None
     session_id: str | None = None
     session_key: str | None = None
     session_options: SessionOptions | None = None
@@ -1225,6 +1235,7 @@ class Client:
             agent_id=request.agent_id,
             agent_key=request.agent_key,
             tenant_key=request.tenant_key,
+            user_key=request.user_key,
             session_id=request.session_id,
             session_key=request.session_key,
             session_options=_generated_session_options(request.session_options),

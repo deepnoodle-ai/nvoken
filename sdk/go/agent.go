@@ -51,9 +51,13 @@ type AgentInvocationOptions struct {
 	SessionID          *string
 	SessionKey         *string
 	SessionOptions     *SessionOptions
-	IfActive           IfActivePolicy
-	OnBudgetExhausted  BudgetExhaustionBehavior
-	Webhook            *WebhookTarget
+	// UserKey says who this turn is for. Per-call rather than per-Agent,
+	// because one Agent serves many end users; the first turn on a Session
+	// fixes it and later turns inherit it.
+	UserKey           *string
+	IfActive          IfActivePolicy
+	OnBudgetExhausted BudgetExhaustionBehavior
+	Webhook           *WebhookTarget
 	// Context carries the application state snapshots to record ahead of this
 	// turn's input. Per-call rather than per-Agent, because a snapshot is what
 	// changes between turns while the Agent Definition stays fixed.
@@ -353,6 +357,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		TenantKey:          a.options.TenantKey,
 		SessionID:          options.SessionID,
 		SessionKey:         options.SessionKey,
+		UserKey:            options.UserKey,
 		SessionOptions:     options.SessionOptions,
 		IdempotencyKey:     options.IdempotencyKey,
 		DefinitionRevision: options.DefinitionRevision,

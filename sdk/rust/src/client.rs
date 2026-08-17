@@ -1068,6 +1068,16 @@ pub struct InvokeRequest {
     pub agent_id: Option<String>,
     pub agent_key: Option<String>,
     pub tenant_key: Option<String>,
+    /// Who this turn is for. The first request that opens a Session fixes its
+    /// user key, including fixing it to absent; every later turn either sends
+    /// the same one or leaves it out and inherits it. A turn naming a different
+    /// end user is refused with `session_user_key_conflict`.
+    ///
+    /// It is a filter, and on an Agent whose Definition sets
+    /// `memory.scope: user` it is also the memory partition — it decides whose
+    /// durable memories the model can recall — so it is required on the turn
+    /// that opens a Session for such an Agent.
+    pub user_key: Option<String>,
     pub session_id: Option<String>,
     pub session_key: Option<String>,
     pub session_options: Option<SessionOptions>,
@@ -1107,6 +1117,7 @@ impl InvokeRequest {
             agent_id: None,
             agent_key: Some(agent_key.into()),
             tenant_key: None,
+            user_key: None,
             session_id: None,
             session_key: None,
             session_options: None,
@@ -1146,6 +1157,11 @@ impl InvokeRequest {
 
     pub fn tenant_key(mut self, tenant_key: impl Into<String>) -> Self {
         self.tenant_key = Some(tenant_key.into());
+        self
+    }
+
+    pub fn user_key(mut self, user_key: impl Into<String>) -> Self {
+        self.user_key = Some(user_key.into());
         self
     }
 
@@ -2141,6 +2157,7 @@ impl Client {
         body.mcp_server_headers = mcp_server_headers;
         body.context = context;
         body.tenant_key = request.tenant_key;
+        body.user_key = request.user_key;
         body.session_id = request.session_id;
         body.session_key = request.session_key;
         body.session_options = request

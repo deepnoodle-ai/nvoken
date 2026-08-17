@@ -748,6 +748,7 @@ async fn shared_fault_server_semantics() {
             agent_id: None,
             agent_key: Some("support".to_owned()),
             tenant_key: None,
+            user_key: None,
             session_id: None,
             session_key: None,
             session_options: None,
