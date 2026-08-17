@@ -31,6 +31,7 @@ release:
 scripts-check:
 	bash -n sdk/scripts/generate.sh sdk/scripts/check-generated.sh sdk/scripts/check.sh
 	python3 -m compileall -q scripts sdk/scripts/check_package_files.py sdk/scripts/check_facade_parity.py
+	python3 scripts/check_script_imports.py
 	python3 scripts/check_versions.py
 	python3 scripts/check_go_frame_keys.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py'

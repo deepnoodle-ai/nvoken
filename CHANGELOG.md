@@ -56,6 +56,15 @@ without republishing every artifact.
   of it. Comments are stripped before the check, since the facade in question
   documented the parameter it never forwarded.
 
+- **`make scripts-check` holds the Python tooling to the standard library.**
+  These checks run on whatever Python is already on the machine, and nothing
+  installs packages, so a third-party import does not fail as a missing
+  dependency: it fails as the check, and the thing being guarded goes
+  unchecked. `check_facade_parity.py` shipped importing PyYAML and did exactly
+  that. It now reads the contract with `re`, the way `check_go_frame_keys.py`
+  already did, and `check_script_imports.py` makes the rule enforceable rather
+  than remembered.
+
 - **Breaking: Agent Definition writes are flat, in every SDK.** The first
   argument is the definition itself, matching `AgentDefinitionWrite` on the
   wire, and `idempotencyKey` / `expectedRevision` move to a second transport
