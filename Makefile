@@ -1,6 +1,6 @@
 REDOCLY_VERSION := 1.34.11
 
-.PHONY: build check fmt fmt-check generate openapi-check release \
+.PHONY: build check facade-check fmt fmt-check generate openapi-check release \
 	scripts-check sdk-check sdk-generate sdk-generate-check test vet
 
 build:
@@ -16,6 +16,9 @@ fmt-check:
 	if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	cargo fmt --manifest-path sdk/rust/Cargo.toml --check
 
+facade-check:
+	python3 sdk/scripts/check_facade_parity.py
+
 generate: sdk-generate
 
 openapi-check:
@@ -27,7 +30,8 @@ release:
 
 scripts-check:
 	bash -n sdk/scripts/generate.sh sdk/scripts/check-generated.sh sdk/scripts/check.sh
-	python3 -m compileall -q scripts sdk/scripts/check_package_files.py
+	python3 -m compileall -q scripts sdk/scripts/check_package_files.py sdk/scripts/check_facade_parity.py
+	python3 scripts/check_python_deps.py
 	python3 scripts/check_versions.py
 	python3 scripts/check_go_frame_keys.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py'
@@ -47,4 +51,4 @@ test:
 vet:
 	go vet ./...
 
-check: build vet test fmt-check openapi-check scripts-check sdk-check
+check: build vet test fmt-check openapi-check scripts-check facade-check sdk-check

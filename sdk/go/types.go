@@ -247,9 +247,14 @@ type ModelList struct {
 }
 
 type InvocationList struct {
-	HasMore    bool         `json:"has_more"`
-	Items      []Invocation `json:"items"`
-	NextCursor *string      `json:"next_cursor"`
+	HasMore bool         `json:"has_more"`
+	Items   []Invocation `json:"items"`
+	// NextCursor is nil once an ordinary listing is exhausted. Under the ended
+	// feed it is always set, including on an empty page.
+	NextCursor *string `json:"next_cursor"`
+	// CompleteThrough is set only by ListEndedInvocations, where it is the
+	// instant the feed is complete to.
+	CompleteThrough *time.Time `json:"complete_through,omitempty"`
 }
 
 type AgentList struct {
@@ -938,6 +943,25 @@ type ListInvocationsOptions struct {
 	Limit         *int
 }
 
+// ListEndedInvocationsOptions filters the reconciliation feed. It takes the
+// same filters as the ordinary listing, because it is the same collection read
+// in a different order.
+type ListEndedInvocationsOptions struct {
+	TenantKey     *string
+	DefaultTenant *bool
+	UserKey       *string
+	SessionID     *string
+	AgentID       *string
+	AgentKey      *string
+	Status        *InvocationStatus
+	Statuses      []InvocationStatus
+	// EndedSince starts a feed that has no cursor yet. It is mutually exclusive
+	// with Cursor, which already carries a position.
+	EndedSince *time.Time
+	Cursor     *string
+	Limit      *int
+}
+
 type ListSessionsOptions struct {
 	TenantKey     *string
 	DefaultTenant *bool
@@ -1570,6 +1594,40 @@ var TerminalInvocationStatuses = []InvocationStatus{
 	InvocationIncomplete,
 	InvocationFailed,
 	InvocationCancelled,
+}
+
+// AllInvocationStatuses is every status the contract defines, in lifecycle
+// order. It is the source ActiveInvocationStatuses is derived from, so a status
+// added to the contract only has to be classified once.
+var AllInvocationStatuses = []InvocationStatus{
+	InvocationQueued,
+	InvocationRunning,
+	InvocationWaiting,
+	InvocationPaused,
+	InvocationCompleted,
+	InvocationIncomplete,
+	InvocationFailed,
+	InvocationCancelled,
+}
+
+// ActiveInvocationStatuses are the statuses that mean a turn is still going.
+// This is what ListInvocations wants for a teardown, sweep, or reconciler,
+// which filters server-side and takes values rather than a predicate.
+//
+// It is derived rather than written out, so a status added to the contract
+// lands here without anyone remembering to add it. That is the safe direction:
+// a turn nobody knew about shows up in "still live" and gets waited on, rather
+// than being dropped from the sweep meant to find it.
+var ActiveInvocationStatuses = activeInvocationStatuses()
+
+func activeInvocationStatuses() []InvocationStatus {
+	active := make([]InvocationStatus, 0, len(AllInvocationStatuses))
+	for _, status := range AllInvocationStatuses {
+		if !IsTerminalStatus(status) {
+			active = append(active, status)
+		}
+	}
+	return active
 }
 
 // IsTerminalStatus reports whether a status means the turn is over.

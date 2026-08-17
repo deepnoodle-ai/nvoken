@@ -874,7 +874,7 @@ func TestConformance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("resumable stream: %v", err)
 	}
-	if fmt.Sprint(eventTypes) != "[transcript.update transcript.update stream.end transcript.update transcript.update]" {
+	if fmt.Sprint(eventTypes) != "[transcript.update transcript.update connection.closing transcript.update transcript.update]" {
 		t.Fatalf("unexpected stream events: %#v", eventTypes)
 	}
 	var serverState struct {

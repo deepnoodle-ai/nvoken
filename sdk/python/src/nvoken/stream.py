@@ -205,9 +205,9 @@ async def _read_stream(
 ) -> AsyncIterator[StreamEvent]:
     """The one read loop.
 
-    It reconnects from its last durable cursor on any connection end, because
-    ``stream.end`` never says a turn is over and a silent drop says nothing at
-    all.
+    It reconnects from its last durable cursor on any connection end. A
+    ``connection.closing`` frame says only that, and a silent drop says nothing
+    at all, so neither is a reason to stop.
     """
     retry = 1.0
     while True:

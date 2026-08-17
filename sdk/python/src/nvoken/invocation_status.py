@@ -9,8 +9,35 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Every status the contract defines, in lifecycle order.
+ALL_INVOCATION_STATUSES: tuple[str, ...] = (
+    "queued",
+    "running",
+    "waiting",
+    "paused",
+    "completed",
+    "incomplete",
+    "failed",
+    "cancelled",
+)
+
 TERMINAL_INVOCATION_STATUSES = frozenset(
     {"completed", "incomplete", "failed", "cancelled"}
+)
+
+#: The statuses that mean a turn is still going — what
+#: ``list_invocations(status=[...])`` wants for a teardown, sweep, or
+#: reconciler, since it filters server-side and takes values rather than a
+#: predicate.
+#:
+#: Derived rather than written out, so a status added to the contract lands here
+#: without anyone remembering to add it. That is the safe direction: a turn
+#: nobody knew about shows up in "still live" and gets waited on, rather than
+#: being dropped from the sweep meant to find it.
+ACTIVE_INVOCATION_STATUSES: tuple[str, ...] = tuple(
+    status
+    for status in ALL_INVOCATION_STATUSES
+    if status not in TERMINAL_INVOCATION_STATUSES
 )
 
 
@@ -35,8 +62,8 @@ def is_terminal_status(status: Any) -> bool:
 def is_turn_over(change: Any) -> bool:
     """Whether a change ends the turn.
 
-    **This is the terminal signal, and there is no other** — there is no result
-    frame, and ``stream.end`` speaks only about a connection.
+    **This is the terminal signal, and there is no other.** There is no result
+    frame, and no other frame ends a turn.
 
     It answers for the change, not for the turn: a replayed ``running`` change
     reports ``False`` even after the turn has ended, which is what lets you fold

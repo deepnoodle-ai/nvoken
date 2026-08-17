@@ -211,6 +211,42 @@ func (e CompactionPolicyTriggerTokens1) Valid() bool {
 	}
 }
 
+// Defines values for ConnectionClosingEventType.
+const (
+	EventConnectionClosing ConnectionClosingEventType = "connection.closing"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionClosingEventType enum.
+func (e ConnectionClosingEventType) Valid() bool {
+	switch e {
+	case EventConnectionClosing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectionClosingReason.
+const (
+	ReasonIdle         ConnectionClosingReason = "idle"
+	ReasonRotate       ConnectionClosingReason = "rotate"
+	ReasonSlowConsumer ConnectionClosingReason = "slow_consumer"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionClosingReason enum.
+func (e ConnectionClosingReason) Valid() bool {
+	switch e {
+	case ReasonIdle:
+		return true
+	case ReasonRotate:
+		return true
+	case ReasonSlowConsumer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CostMetricsCostCoverage.
 const (
 	CostMetricsCostCoverageComplete      CostMetricsCostCoverage = "complete"
@@ -1741,42 +1777,6 @@ func (e SessionMessageRole) Valid() bool {
 	}
 }
 
-// Defines values for StreamEndEventType.
-const (
-	EventStreamEnd StreamEndEventType = "stream.end"
-)
-
-// Valid indicates whether the value is a known member of the StreamEndEventType enum.
-func (e StreamEndEventType) Valid() bool {
-	switch e {
-	case EventStreamEnd:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for StreamEndReason.
-const (
-	ReasonIdle         StreamEndReason = "idle"
-	ReasonRotate       StreamEndReason = "rotate"
-	ReasonSlowConsumer StreamEndReason = "slow_consumer"
-)
-
-// Valid indicates whether the value is a known member of the StreamEndReason enum.
-func (e StreamEndReason) Valid() bool {
-	switch e {
-	case ReasonIdle:
-		return true
-	case ReasonRotate:
-		return true
-	case ReasonSlowConsumer:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for StreamResyncEventType.
 const (
 	EventStreamResync StreamResyncEventType = "stream.resync"
@@ -3262,6 +3262,46 @@ type CompactionPolicy_TriggerTokens struct {
 	union json.RawMessage
 }
 
+// ConnectionClosingEvent This connection is closing. The stream continues and the turn is
+// unaffected, so reconnect with your last `cursor`.
+//
+// There is no cursor here. You already track your last durable one,
+// because you need it to survive a connection that drops without saying
+// anything, and a field that repeats what you must hold anyway is a
+// second spelling of it.
+type ConnectionClosingEvent struct {
+	// Reason Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
+	// with your last `cursor`. `idle` means no turn is running and the
+	// server is reclaiming the connection, so reconnect when you next need
+	// to read; nothing is lost while you are away. `slow_consumer` means
+	// this connection could not keep up with what was being written to it
+	// and was dropped; reconnect, and read faster or buffer more.
+	//
+	// Expect new values here over time. Treat a value you do not recognize
+	// as `rotate` and reconnect with your last `cursor`. Reconnecting is
+	// always safe.
+	Reason ConnectionClosingReason `json:"reason"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID                  `json:"session_id"`
+	Type      ConnectionClosingEventType `json:"type"`
+}
+
+// ConnectionClosingEventType defines model for ConnectionClosingEvent.Type.
+type ConnectionClosingEventType string
+
+// ConnectionClosingReason Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
+// with your last `cursor`. `idle` means no turn is running and the
+// server is reclaiming the connection, so reconnect when you next need
+// to read; nothing is lost while you are away. `slow_consumer` means
+// this connection could not keep up with what was being written to it
+// and was dropped; reconnect, and read faster or buffer more.
+//
+// Expect new values here over time. Treat a value you do not recognize
+// as `rotate` and reconnect with your last `cursor`. Reconnecting is
+// always safe.
+type ConnectionClosingReason string
+
 // CostMetrics defines model for CostMetrics.
 type CostMetrics struct {
 	CostCoverage                 CostMetricsCostCoverage `json:"cost_coverage"`
@@ -4334,9 +4374,18 @@ type InvocationInput1 = []InputBlock
 
 // InvocationList defines model for InvocationList.
 type InvocationList struct {
-	HasMore    bool         `json:"has_more"`
-	Items      []Invocation `json:"items"`
-	NextCursor *string      `json:"next_cursor"`
+	// CompleteThrough The instant the feed is complete to; nothing that ended at or
+	// before it will appear later. Returned only under `ended=true`,
+	// where it is the number to alarm on when settlement stalls.
+	CompleteThrough *time.Time   `json:"complete_through,omitempty"`
+	HasMore         bool         `json:"has_more"`
+	Items           []Invocation `json:"items"`
+
+	// NextCursor Your position after this page. Null once a default listing is
+	// exhausted. Under `ended=true` it is always a string, including on
+	// an empty page, because a caught-up consumer still has a place to
+	// keep.
+	NextCursor *string `json:"next_cursor"`
 }
 
 // InvocationLog defines model for InvocationLog.
@@ -5947,54 +5996,6 @@ type SessionStreamEvent struct {
 	union json.RawMessage
 }
 
-// StreamEndEvent This connection is closing. The stream continues, and the turn is
-// unaffected.
-//
-// There is no cursor here. You already track your last durable one,
-// because you need it to survive a connection that drops without saying
-// anything, and a field that repeats what you must hold anyway is a
-// second spelling of it.
-type StreamEndEvent struct {
-	// Reason Why this connection is closing. No reason here speaks about a turn:
-	// terminal state is a saved change, connection close is a connection
-	// event, and the two never mean each other.
-	//
-	// `rotate` means the server is cycling the connection, so reconnect now
-	// with your last `cursor`. `idle` means no turn is running and the
-	// server is reclaiming the connection, so reconnect when you next need
-	// to read; nothing is lost while you are away. `slow_consumer` means
-	// this connection could not keep up with what was being written to it
-	// and was dropped; reconnect, and read faster or buffer more.
-	//
-	// Expect new values here over time. Treat a value you do not recognize
-	// as `rotate` and reconnect with your last `cursor`. Reconnecting is
-	// always safe.
-	Reason StreamEndReason `json:"reason"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID          `json:"session_id"`
-	Type      StreamEndEventType `json:"type"`
-}
-
-// StreamEndEventType defines model for StreamEndEvent.Type.
-type StreamEndEventType string
-
-// StreamEndReason Why this connection is closing. No reason here speaks about a turn:
-// terminal state is a saved change, connection close is a connection
-// event, and the two never mean each other.
-//
-// `rotate` means the server is cycling the connection, so reconnect now
-// with your last `cursor`. `idle` means no turn is running and the
-// server is reclaiming the connection, so reconnect when you next need
-// to read; nothing is lost while you are away. `slow_consumer` means
-// this connection could not keep up with what was being written to it
-// and was dropped; reconnect, and read faster or buffer more.
-//
-// Expect new values here over time. Treat a value you do not recognize
-// as `rotate` and reconnect with your last `cursor`. Reconnecting is
-// always safe.
-type StreamEndReason string
-
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
 	// InvocationID The Invocation whose previews are void. Absent means every
@@ -7035,6 +7036,15 @@ type ListInvocationsParams struct {
 	// Status Repeat to select a union of statuses. Order and duplicates are
 	// normalized before cursor binding.
 	Status *[]InvocationStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Ended Walk the turns that ended, oldest first, instead of listing current
+	// state newest first. See the description above.
+	Ended *bool `form:"ended,omitempty" json:"ended,omitempty"`
+
+	// EndedSince Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed
+	// that has no cursor yet. Requires `ended=true`, and is mutually
+	// exclusive with `cursor`, which already carries a position.
+	EndedSince *time.Time `form:"ended_since,omitempty" json:"ended_since,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -8486,31 +8496,31 @@ func (t *SessionStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
 	return err
 }
 
-// AsStreamEndEvent returns the union data inside the SessionStreamEvent as a StreamEndEvent
-func (t SessionStreamEvent) AsStreamEndEvent() (StreamEndEvent, error) {
-	var body StreamEndEvent
+// AsConnectionClosingEvent returns the union data inside the SessionStreamEvent as a ConnectionClosingEvent
+func (t SessionStreamEvent) AsConnectionClosingEvent() (ConnectionClosingEvent, error) {
+	var body ConnectionClosingEvent
 	err := json.Unmarshal(t.union, &body)
 	return body, err
 }
 
-// FromStreamEndEvent overwrites any union data inside the SessionStreamEvent as the provided StreamEndEvent
-func (t *SessionStreamEvent) FromStreamEndEvent(v StreamEndEvent) error {
+// FromConnectionClosingEvent overwrites any union data inside the SessionStreamEvent as the provided ConnectionClosingEvent
+func (t *SessionStreamEvent) FromConnectionClosingEvent(v ConnectionClosingEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
 	t.union = b
 	return err
 }
 
-// MergeStreamEndEvent performs a merge with any union data inside the SessionStreamEvent, using the provided StreamEndEvent
-func (t *SessionStreamEvent) MergeStreamEndEvent(v StreamEndEvent) error {
+// MergeConnectionClosingEvent performs a merge with any union data inside the SessionStreamEvent, using the provided ConnectionClosingEvent
+func (t *SessionStreamEvent) MergeConnectionClosingEvent(v ConnectionClosingEvent) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.end"}`))
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
 	if err != nil {
 		return err
 	}
@@ -8534,10 +8544,10 @@ func (t SessionStreamEvent) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "connection.closing":
+		return t.AsConnectionClosingEvent()
 	case "message.delta":
 		return t.AsMessageDeltaEvent()
-	case "stream.end":
-		return t.AsStreamEndEvent()
 	case "stream.resync":
 		return t.AsStreamResyncEvent()
 	case "transcript.update":
@@ -8768,7 +8778,7 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// ListAdmissions List attempts to start a turn, admitted and refused
+	// ListAdmissions List attempts to start an Invocation, admitted and refused
 	//
 	// Every request to create an Invocation leaves one record here, whether
 	// or not an Invocation was created. Newest first.
@@ -9419,7 +9429,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
 	RotateCredential(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListInvocations List authoritative Invocations
+	// ListInvocations List authoritative Invocations, or walk the ones that ended
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
 	// with AND. An App credential without a tenant constraint may list all
@@ -9431,10 +9441,48 @@ type ClientInterface interface {
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
+	// ## `ended=true` makes this a reconciliation feed
+	//
+	// Set it and the same operation reverses into a feed: every Invocation
+	// that reached a terminal status, **oldest first by the moment it ended**,
+	// each appearing exactly once. Walk it and append by `id`.
+	//
+	// This is the backstop for settlement. `invocation.ended` webhooks are
+	// delivered at least once, which narrows the window but does not close
+	// it: a delivery that never lands leaves a turn nobody settles, and that
+	// failure is silent — no error, just a ledger row that was never written.
+	// Reading the feed to the end is how you find out.
+	//
+	// The default listing cannot do that job. Newest-first over current state
+	// means a turn that ends while you page moves under you, and filtering by
+	// terminal status gives you a set with no position in it. Ending order is
+	// the only order you can resume.
+	//
+	// Start with `ended_since`, or with no position at all to begin at the
+	// oldest retained turn. Then send back `next_cursor`, which in this mode
+	// is present on every response including an empty page, so a consumer
+	// that catches up keeps its position without special-casing. Keep going
+	// while `has_more` is true; when it is false you are caught up and can
+	// wait before asking again.
+	//
+	// `complete_through` is returned in this mode and is the instant the feed
+	// is complete to. Turns that ended after it are held back until their
+	// settling transactions are certainly visible, because a turn that
+	// appeared behind your cursor would be one you never see again. It trails
+	// the present by a bounded interval, so a consumer is always slightly
+	// behind and never wrong; it is also the number to alarm on, since a
+	// `complete_through` that stops advancing means settlement has stalled
+	// rather than that nothing ended.
+	//
+	// A cursor carries its mode, so one from the default listing cannot
+	// resume the feed and the reverse is also refused. Erased Sessions take
+	// their Invocations with them, so a turn deleted before you read it never
+	// appears; reconcile before you erase.
+	//
 	// Corresponds with GET /v1/invocations (the `ListInvocations` operationId).
 	ListInvocations(ctx context.Context, params *ListInvocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvocationWithBody Start one background agent turn
+	// CreateInvocationWithBody Start one Invocation in the background
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
@@ -9526,7 +9574,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocationWithBody(ctx context.Context, params *CreateInvocationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateInvocation Start one background agent turn
+	// CreateInvocation Start one Invocation in the background
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
@@ -9631,7 +9679,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id} (the `GetInvocation` operationId).
 	GetInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CancelInvocation Stop a turn and discard its work
+	// CancelInvocation Stop an Invocation and discard its work
 	//
 	// Stops a turn and discards what it produced. The turn ends `cancelled`
 	// and its work does not carry into the next turn — use interrupt instead
@@ -9648,7 +9696,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// InterruptInvocation Stop a turn but keep what it produced
+	// InterruptInvocation Stop an Invocation but keep what it produced
 	//
 	// Asks a running turn to stop at its next clean stopping point. It ends
 	// `completed` with `stop_reason: interrupted`, and everything it
@@ -9678,7 +9726,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListInvocationLogs Page through hosted structured logs for one turn
+	// ListInvocationLogs Page through hosted structured logs for one Invocation
 	//
 	// Returns the content-free structured lifecycle logs associated by the
 	// Invocation ID. Arbitrary attributes and raw error values are omitted.
@@ -9702,7 +9750,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
 	ListNudges(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateNudgeWithBody Send extra direction to a running turn
+	// CreateNudgeWithBody Send extra direction to a running Invocation
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -9744,7 +9792,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
 	CreateNudgeWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateNudge Send extra direction to a running turn
+	// CreateNudge Send extra direction to a running Invocation
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -9786,7 +9834,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
 	CreateNudge(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CancelNudge Withdraw a Nudge the turn has not taken
+	// CancelNudge Withdraw a Nudge the Invocation has not taken
 	//
 	// Withdraws direction you sent with `/nudges`, as long as the turn has not
 	// picked it up yet. Cancelling something already cancelled returns it
@@ -9800,7 +9848,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
 	CancelNudge(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetInvocationResult Read a turn together with its messages
+	// GetInvocationResult Read an Invocation together with its messages
 	//
 	// Returns the turn and the messages it produced, at any status. This is
 	// the convenient read for "what did the agent say?" — `output_text`
@@ -9817,7 +9865,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocationWithBody Raise a paused turn's limit and continue it
+	// ResumeInvocationWithBody Raise a paused Invocation's limit and continue it
 	//
 	// Continues a turn that paused because one of its own spending limits
 	// ran out. Send `limits` containing only the limit that ran out, raised
@@ -9834,7 +9882,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocation Raise a paused turn's limit and continue it
+	// ResumeInvocation Raise a paused Invocation's limit and continue it
 	//
 	// Continues a turn that paused because one of its own spending limits
 	// ran out. Send `limits` containing only the limit that ran out, raised
@@ -9851,7 +9899,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetInvocationTimeline Read the durable execution waterfall for one turn
+	// GetInvocationTimeline Read the durable execution waterfall for one Invocation
 	//
 	// Assembles lifecycle waits, model calls, tool calls, nudges, and
 	// compactions from one database snapshot. It contains timings and usage,
@@ -9927,7 +9975,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResults(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListInvocationTraces Page through hosted agent traces for one turn
+	// ListInvocationTraces Page through hosted agent traces for one Invocation
 	//
 	// Returns newest-first, content-free summaries exported from Dive through
 	// OpenTelemetry. A child-only trace is returned as `is_partial: true`
@@ -10404,7 +10452,7 @@ type ClientInterface interface {
 	// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
 	// opaque ID is your resume position and the only value you need to store
 	// — reconnect with it and you continue exactly where you left off.
-	// `message.delta`, `stream.resync`, and `stream.end` never carry an
+	// `message.delta`, `stream.resync`, and `connection.closing` never carry an
 	// `id`, because they are live previews and control frames rather than
 	// saved records.
 	//
@@ -10432,7 +10480,7 @@ type ClientInterface interface {
 	// saved, so it replays at any cursor. Read
 	// `GET /v1/invocations/{invocation_id}` for the composed result.
 	//
-	// `stream.end` is about this connection and never about a turn. Reason
+	// `connection.closing` is about this connection. Reason
 	// `rotate` means the server is cycling the connection, so reconnect now
 	// with your last `cursor`. Reason `idle` means it is reclaiming an idle
 	// connection, so reconnect when you next need to read; nothing is lost
@@ -10557,7 +10605,7 @@ type ClientInterface interface {
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// ListAdmissions List attempts to start a turn, admitted and refused
+// ListAdmissions List attempts to start an Invocation, admitted and refused
 //
 // Every request to create an Invocation leaves one record here, whether
 // or not an Invocation was created. Newest first.
@@ -11708,7 +11756,7 @@ func (c *Client) RotateCredential(ctx context.Context, credentialID CredentialID
 	return c.Client.Do(req)
 }
 
-// ListInvocations List authoritative Invocations
+// ListInvocations List authoritative Invocations, or walk the ones that ended
 //
 // Returns newest-first durable Invocation state. Exact filters combine
 // with AND. An App credential without a tenant constraint may list all
@@ -11719,6 +11767,44 @@ func (c *Client) RotateCredential(ctx context.Context, credentialID CredentialID
 // tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
+//
+// ## `ended=true` makes this a reconciliation feed
+//
+// Set it and the same operation reverses into a feed: every Invocation
+// that reached a terminal status, **oldest first by the moment it ended**,
+// each appearing exactly once. Walk it and append by `id`.
+//
+// This is the backstop for settlement. `invocation.ended` webhooks are
+// delivered at least once, which narrows the window but does not close
+// it: a delivery that never lands leaves a turn nobody settles, and that
+// failure is silent — no error, just a ledger row that was never written.
+// Reading the feed to the end is how you find out.
+//
+// The default listing cannot do that job. Newest-first over current state
+// means a turn that ends while you page moves under you, and filtering by
+// terminal status gives you a set with no position in it. Ending order is
+// the only order you can resume.
+//
+// Start with `ended_since`, or with no position at all to begin at the
+// oldest retained turn. Then send back `next_cursor`, which in this mode
+// is present on every response including an empty page, so a consumer
+// that catches up keeps its position without special-casing. Keep going
+// while `has_more` is true; when it is false you are caught up and can
+// wait before asking again.
+//
+// `complete_through` is returned in this mode and is the instant the feed
+// is complete to. Turns that ended after it are held back until their
+// settling transactions are certainly visible, because a turn that
+// appeared behind your cursor would be one you never see again. It trails
+// the present by a bounded interval, so a consumer is always slightly
+// behind and never wrong; it is also the number to alarm on, since a
+// `complete_through` that stops advancing means settlement has stalled
+// rather than that nothing ended.
+//
+// A cursor carries its mode, so one from the default listing cannot
+// resume the feed and the reverse is also refused. Erased Sessions take
+// their Invocations with them, so a turn deleted before you read it never
+// appears; reconcile before you erase.
 //
 // Corresponds with GET /v1/invocations (the `ListInvocations` operationId).
 func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11733,7 +11819,7 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 	return c.Client.Do(req)
 }
 
-// CreateInvocationWithBody Start one background agent turn
+// CreateInvocationWithBody Start one Invocation in the background
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
@@ -11835,7 +11921,7 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 	return c.Client.Do(req)
 }
 
-// CreateInvocation Start one background agent turn
+// CreateInvocation Start one Invocation in the background
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
@@ -11960,7 +12046,7 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID InvocationID, r
 	return c.Client.Do(req)
 }
 
-// CancelInvocation Stop a turn and discard its work
+// CancelInvocation Stop an Invocation and discard its work
 //
 // Stops a turn and discards what it produced. The turn ends `cancelled`
 // and its work does not carry into the next turn — use interrupt instead
@@ -11987,7 +12073,7 @@ func (c *Client) CancelInvocation(ctx context.Context, invocationID InvocationID
 	return c.Client.Do(req)
 }
 
-// InterruptInvocation Stop a turn but keep what it produced
+// InterruptInvocation Stop an Invocation but keep what it produced
 //
 // Asks a running turn to stop at its next clean stopping point. It ends
 // `completed` with `stop_reason: interrupted`, and everything it
@@ -12027,7 +12113,7 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// ListInvocationLogs Page through hosted structured logs for one turn
+// ListInvocationLogs Page through hosted structured logs for one Invocation
 //
 // Returns the content-free structured lifecycle logs associated by the
 // Invocation ID. Arbitrary attributes and raw error values are omitted.
@@ -12071,7 +12157,7 @@ func (c *Client) ListNudges(ctx context.Context, invocationID InvocationID, para
 	return c.Client.Do(req)
 }
 
-// CreateNudgeWithBody Send extra direction to a running turn
+// CreateNudgeWithBody Send extra direction to a running Invocation
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -12123,7 +12209,7 @@ func (c *Client) CreateNudgeWithBody(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// CreateNudge Send extra direction to a running turn
+// CreateNudge Send extra direction to a running Invocation
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -12175,7 +12261,7 @@ func (c *Client) CreateNudge(ctx context.Context, invocationID InvocationID, bod
 	return c.Client.Do(req)
 }
 
-// CancelNudge Withdraw a Nudge the turn has not taken
+// CancelNudge Withdraw a Nudge the Invocation has not taken
 //
 // Withdraws direction you sent with `/nudges`, as long as the turn has not
 // picked it up yet. Cancelling something already cancelled returns it
@@ -12199,7 +12285,7 @@ func (c *Client) CancelNudge(ctx context.Context, invocationID InvocationID, nud
 	return c.Client.Do(req)
 }
 
-// GetInvocationResult Read a turn together with its messages
+// GetInvocationResult Read an Invocation together with its messages
 //
 // Returns the turn and the messages it produced, at any status. This is
 // the convenient read for "what did the agent say?" — `output_text`
@@ -12226,7 +12312,7 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// ResumeInvocationWithBody Raise a paused turn's limit and continue it
+// ResumeInvocationWithBody Raise a paused Invocation's limit and continue it
 //
 // Continues a turn that paused because one of its own spending limits
 // ran out. Send `limits` containing only the limit that ran out, raised
@@ -12253,7 +12339,7 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 	return c.Client.Do(req)
 }
 
-// ResumeInvocation Raise a paused turn's limit and continue it
+// ResumeInvocation Raise a paused Invocation's limit and continue it
 //
 // Continues a turn that paused because one of its own spending limits
 // ran out. Send `limits` containing only the limit that ran out, raised
@@ -12280,7 +12366,7 @@ func (c *Client) ResumeInvocation(ctx context.Context, invocationID InvocationID
 	return c.Client.Do(req)
 }
 
-// GetInvocationTimeline Read the durable execution waterfall for one turn
+// GetInvocationTimeline Read the durable execution waterfall for one Invocation
 //
 // Assembles lifecycle waits, model calls, tool calls, nudges, and
 // compactions from one database snapshot. It contains timings and usage,
@@ -12396,7 +12482,7 @@ func (c *Client) SubmitHostToolResults(ctx context.Context, invocationID Invocat
 	return c.Client.Do(req)
 }
 
-// ListInvocationTraces Page through hosted agent traces for one turn
+// ListInvocationTraces Page through hosted agent traces for one Invocation
 //
 // Returns newest-first, content-free summaries exported from Dive through
 // OpenTelemetry. A child-only trace is returned as `is_partial: true`
@@ -13223,7 +13309,7 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 // Every non-empty `transcript.update` frame carries `id: <cursor>`. That
 // opaque ID is your resume position and the only value you need to store
 // — reconnect with it and you continue exactly where you left off.
-// `message.delta`, `stream.resync`, and `stream.end` never carry an
+// `message.delta`, `stream.resync`, and `connection.closing` never carry an
 // `id`, because they are live previews and control frames rather than
 // saved records.
 //
@@ -13251,7 +13337,7 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 // saved, so it replays at any cursor. Read
 // `GET /v1/invocations/{invocation_id}` for the composed result.
 //
-// `stream.end` is about this connection and never about a turn. Reason
+// `connection.closing` is about this connection. Reason
 // `rotate` means the server is cycling the connection, so reconnect now
 // with your last `cursor`. Reason `idle` means it is reclaiming an idle
 // connection, so reconnect when you next need to read; nothing is lost
@@ -15533,6 +15619,30 @@ func NewListInvocationsRequest(server string, params *ListInvocationsParams) (*h
 		if params.Status != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Ended != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ended", *params.Ended, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EndedSince != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ended_since", *params.EndedSince, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -18939,7 +19049,7 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// ListAdmissionsWithResponse List attempts to start a turn, admitted and refused
+	// ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 	//
 	// Every request to create an Invocation leaves one record here, whether
 	// or not an Invocation was created. Newest first.
@@ -19642,7 +19752,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/identity/credentials/{credential_id}/rotate (the `RotateCredential` operationId).
 	RotateCredentialWithResponse(ctx context.Context, credentialID CredentialID, params *RotateCredentialParams, body RotateCredentialJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateCredentialHTTPResponse, error)
 
-	// ListInvocationsWithResponse List authoritative Invocations
+	// ListInvocationsWithResponse List authoritative Invocations, or walk the ones that ended
 	//
 	// Returns newest-first durable Invocation state. Exact filters combine
 	// with AND. An App credential without a tenant constraint may list all
@@ -19654,12 +19764,50 @@ type ClientWithResponsesInterface interface {
 	// mutually exclusive; both normalize to the resolved Agent ID for cursor
 	// binding, so an equivalent cursor may resume under either spelling.
 	//
+	// ## `ended=true` makes this a reconciliation feed
+	//
+	// Set it and the same operation reverses into a feed: every Invocation
+	// that reached a terminal status, **oldest first by the moment it ended**,
+	// each appearing exactly once. Walk it and append by `id`.
+	//
+	// This is the backstop for settlement. `invocation.ended` webhooks are
+	// delivered at least once, which narrows the window but does not close
+	// it: a delivery that never lands leaves a turn nobody settles, and that
+	// failure is silent — no error, just a ledger row that was never written.
+	// Reading the feed to the end is how you find out.
+	//
+	// The default listing cannot do that job. Newest-first over current state
+	// means a turn that ends while you page moves under you, and filtering by
+	// terminal status gives you a set with no position in it. Ending order is
+	// the only order you can resume.
+	//
+	// Start with `ended_since`, or with no position at all to begin at the
+	// oldest retained turn. Then send back `next_cursor`, which in this mode
+	// is present on every response including an empty page, so a consumer
+	// that catches up keeps its position without special-casing. Keep going
+	// while `has_more` is true; when it is false you are caught up and can
+	// wait before asking again.
+	//
+	// `complete_through` is returned in this mode and is the instant the feed
+	// is complete to. Turns that ended after it are held back until their
+	// settling transactions are certainly visible, because a turn that
+	// appeared behind your cursor would be one you never see again. It trails
+	// the present by a bounded interval, so a consumer is always slightly
+	// behind and never wrong; it is also the number to alarm on, since a
+	// `complete_through` that stops advancing means settlement has stalled
+	// rather than that nothing ended.
+	//
+	// A cursor carries its mode, so one from the default listing cannot
+	// resume the feed and the reverse is also refused. Erased Sessions take
+	// their Invocations with them, so a turn deleted before you read it never
+	// appears; reconcile before you erase.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/invocations (the `ListInvocations` operationId).
 	ListInvocationsWithResponse(ctx context.Context, params *ListInvocationsParams, reqEditors ...RequestEditorFn) (*ListInvocationsHTTPResponse, error)
 
-	// CreateInvocationWithBodyWithResponse Start one background agent turn
+	// CreateInvocationWithBodyWithResponse Start one Invocation in the background
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
@@ -19751,7 +19899,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocationWithBodyWithResponse(ctx context.Context, params *CreateInvocationParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateInvocationHTTPResponse, error)
 
-	// CreateInvocationWithResponse Start one background agent turn
+	// CreateInvocationWithResponse Start one Invocation in the background
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
@@ -19858,7 +20006,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id} (the `GetInvocation` operationId).
 	GetInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationHTTPResponse, error)
 
-	// CancelInvocationWithResponse Stop a turn and discard its work
+	// CancelInvocationWithResponse Stop an Invocation and discard its work
 	//
 	// Stops a turn and discards what it produced. The turn ends `cancelled`
 	// and its work does not carry into the next turn — use interrupt instead
@@ -19877,7 +20025,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/cancel (the `CancelInvocation` operationId).
 	CancelInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*CancelInvocationHTTPResponse, error)
 
-	// InterruptInvocationWithResponse Stop a turn but keep what it produced
+	// InterruptInvocationWithResponse Stop an Invocation but keep what it produced
 	//
 	// Asks a running turn to stop at its next clean stopping point. It ends
 	// `completed` with `stop_reason: interrupted`, and everything it
@@ -19909,7 +20057,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/interrupt (the `InterruptInvocation` operationId).
 	InterruptInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*InterruptInvocationHTTPResponse, error)
 
-	// ListInvocationLogsWithResponse Page through hosted structured logs for one turn
+	// ListInvocationLogsWithResponse Page through hosted structured logs for one Invocation
 	//
 	// Returns the content-free structured lifecycle logs associated by the
 	// Invocation ID. Arbitrary attributes and raw error values are omitted.
@@ -19937,7 +20085,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/nudges (the `ListNudges` operationId).
 	ListNudgesWithResponse(ctx context.Context, invocationID InvocationID, params *ListNudgesParams, reqEditors ...RequestEditorFn) (*ListNudgesHTTPResponse, error)
 
-	// CreateNudgeWithBodyWithResponse Send extra direction to a running turn
+	// CreateNudgeWithBodyWithResponse Send extra direction to a running Invocation
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -19979,7 +20127,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
 	CreateNudgeWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error)
 
-	// CreateNudgeWithResponse Send extra direction to a running turn
+	// CreateNudgeWithResponse Send extra direction to a running Invocation
 	//
 	// Sends extra direction to a turn that is already running — "focus on
 	// the marine segment" — without stopping it and without losing the work
@@ -20021,7 +20169,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges (the `CreateNudge` operationId).
 	CreateNudgeWithResponse(ctx context.Context, invocationID InvocationID, body CreateNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNudgeHTTPResponse, error)
 
-	// CancelNudgeWithResponse Withdraw a Nudge the turn has not taken
+	// CancelNudgeWithResponse Withdraw a Nudge the Invocation has not taken
 	//
 	// Withdraws direction you sent with `/nudges`, as long as the turn has not
 	// picked it up yet. Cancelling something already cancelled returns it
@@ -20037,7 +20185,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel (the `CancelNudge` operationId).
 	CancelNudgeWithResponse(ctx context.Context, invocationID InvocationID, nudgeID NudgeID, reqEditors ...RequestEditorFn) (*CancelNudgeHTTPResponse, error)
 
-	// GetInvocationResultWithResponse Read a turn together with its messages
+	// GetInvocationResultWithResponse Read an Invocation together with its messages
 	//
 	// Returns the turn and the messages it produced, at any status. This is
 	// the convenient read for "what did the agent say?" — `output_text`
@@ -20056,7 +20204,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error)
 
-	// ResumeInvocationWithBodyWithResponse Raise a paused turn's limit and continue it
+	// ResumeInvocationWithBodyWithResponse Raise a paused Invocation's limit and continue it
 	//
 	// Continues a turn that paused because one of its own spending limits
 	// ran out. Send `limits` containing only the limit that ran out, raised
@@ -20073,7 +20221,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
 
-	// ResumeInvocationWithResponse Raise a paused turn's limit and continue it
+	// ResumeInvocationWithResponse Raise a paused Invocation's limit and continue it
 	//
 	// Continues a turn that paused because one of its own spending limits
 	// ran out. Send `limits` containing only the limit that ran out, raised
@@ -20090,7 +20238,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
 
-	// GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
+	// GetInvocationTimelineWithResponse Read the durable execution waterfall for one Invocation
 	//
 	// Assembles lifecycle waits, model calls, tool calls, nudges, and
 	// compactions from one database snapshot. It contains timings and usage,
@@ -20170,7 +20318,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/invocations/{invocation_id}/tool-results (the `SubmitHostToolResults` operationId).
 	SubmitHostToolResultsWithResponse(ctx context.Context, invocationID InvocationID, body SubmitHostToolResultsJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitHostToolResultsHTTPResponse, error)
 
-	// ListInvocationTracesWithResponse Page through hosted agent traces for one turn
+	// ListInvocationTracesWithResponse Page through hosted agent traces for one Invocation
 	//
 	// Returns newest-first, content-free summaries exported from Dive through
 	// OpenTelemetry. A child-only trace is returned as `is_partial: true`
@@ -20685,7 +20833,7 @@ type ClientWithResponsesInterface interface {
 	// Every non-empty `transcript.update` frame carries `id: <cursor>`. That
 	// opaque ID is your resume position and the only value you need to store
 	// — reconnect with it and you continue exactly where you left off.
-	// `message.delta`, `stream.resync`, and `stream.end` never carry an
+	// `message.delta`, `stream.resync`, and `connection.closing` never carry an
 	// `id`, because they are live previews and control frames rather than
 	// saved records.
 	//
@@ -20713,7 +20861,7 @@ type ClientWithResponsesInterface interface {
 	// saved, so it replays at any cursor. Read
 	// `GET /v1/invocations/{invocation_id}` for the composed result.
 	//
-	// `stream.end` is about this connection and never about a turn. Reason
+	// `connection.closing` is about this connection. Reason
 	// `rotate` means the server is cycling the connection, so reconnect now
 	// with your last `cursor`. Reason `idle` means it is reclaiming an idle
 	// connection, so reconnect when you next need to read; nothing is lost
@@ -28299,7 +28447,7 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	return ""
 }
 
-// ListAdmissionsWithResponse List attempts to start a turn, admitted and refused
+// ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 //
 // Every request to create an Invocation leaves one record here, whether
 // or not an Invocation was created. Newest first.
@@ -29302,7 +29450,7 @@ func (c *ClientWithResponses) RotateCredentialWithResponse(ctx context.Context, 
 	return ParseRotateCredentialHTTPResponse(rsp)
 }
 
-// ListInvocationsWithResponse List authoritative Invocations
+// ListInvocationsWithResponse List authoritative Invocations, or walk the ones that ended
 //
 // Returns newest-first durable Invocation state. Exact filters combine
 // with AND. An App credential without a tenant constraint may list all
@@ -29313,6 +29461,44 @@ func (c *ClientWithResponses) RotateCredentialWithResponse(ctx context.Context, 
 // tenant scope. `agent_id` and `agent_key` are
 // mutually exclusive; both normalize to the resolved Agent ID for cursor
 // binding, so an equivalent cursor may resume under either spelling.
+//
+// ## `ended=true` makes this a reconciliation feed
+//
+// Set it and the same operation reverses into a feed: every Invocation
+// that reached a terminal status, **oldest first by the moment it ended**,
+// each appearing exactly once. Walk it and append by `id`.
+//
+// This is the backstop for settlement. `invocation.ended` webhooks are
+// delivered at least once, which narrows the window but does not close
+// it: a delivery that never lands leaves a turn nobody settles, and that
+// failure is silent — no error, just a ledger row that was never written.
+// Reading the feed to the end is how you find out.
+//
+// The default listing cannot do that job. Newest-first over current state
+// means a turn that ends while you page moves under you, and filtering by
+// terminal status gives you a set with no position in it. Ending order is
+// the only order you can resume.
+//
+// Start with `ended_since`, or with no position at all to begin at the
+// oldest retained turn. Then send back `next_cursor`, which in this mode
+// is present on every response including an empty page, so a consumer
+// that catches up keeps its position without special-casing. Keep going
+// while `has_more` is true; when it is false you are caught up and can
+// wait before asking again.
+//
+// `complete_through` is returned in this mode and is the instant the feed
+// is complete to. Turns that ended after it are held back until their
+// settling transactions are certainly visible, because a turn that
+// appeared behind your cursor would be one you never see again. It trails
+// the present by a bounded interval, so a consumer is always slightly
+// behind and never wrong; it is also the number to alarm on, since a
+// `complete_through` that stops advancing means settlement has stalled
+// rather than that nothing ended.
+//
+// A cursor carries its mode, so one from the default listing cannot
+// resume the feed and the reverse is also refused. Erased Sessions take
+// their Invocations with them, so a turn deleted before you read it never
+// appears; reconcile before you erase.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29325,7 +29511,7 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 	return ParseListInvocationsHTTPResponse(rsp)
 }
 
-// CreateInvocationWithBodyWithResponse Start one background agent turn
+// CreateInvocationWithBodyWithResponse Start one Invocation in the background
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
@@ -29423,7 +29609,7 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 	return ParseCreateInvocationHTTPResponse(rsp)
 }
 
-// CreateInvocationWithResponse Start one background agent turn
+// CreateInvocationWithResponse Start one Invocation in the background
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
@@ -29542,7 +29728,7 @@ func (c *ClientWithResponses) GetInvocationWithResponse(ctx context.Context, inv
 	return ParseGetInvocationHTTPResponse(rsp)
 }
 
-// CancelInvocationWithResponse Stop a turn and discard its work
+// CancelInvocationWithResponse Stop an Invocation and discard its work
 //
 // Stops a turn and discards what it produced. The turn ends `cancelled`
 // and its work does not carry into the next turn — use interrupt instead
@@ -29567,7 +29753,7 @@ func (c *ClientWithResponses) CancelInvocationWithResponse(ctx context.Context, 
 	return ParseCancelInvocationHTTPResponse(rsp)
 }
 
-// InterruptInvocationWithResponse Stop a turn but keep what it produced
+// InterruptInvocationWithResponse Stop an Invocation but keep what it produced
 //
 // Asks a running turn to stop at its next clean stopping point. It ends
 // `completed` with `stop_reason: interrupted`, and everything it
@@ -29605,7 +29791,7 @@ func (c *ClientWithResponses) InterruptInvocationWithResponse(ctx context.Contex
 	return ParseInterruptInvocationHTTPResponse(rsp)
 }
 
-// ListInvocationLogsWithResponse Page through hosted structured logs for one turn
+// ListInvocationLogsWithResponse Page through hosted structured logs for one Invocation
 //
 // Returns the content-free structured lifecycle logs associated by the
 // Invocation ID. Arbitrary attributes and raw error values are omitted.
@@ -29645,7 +29831,7 @@ func (c *ClientWithResponses) ListNudgesWithResponse(ctx context.Context, invoca
 	return ParseListNudgesHTTPResponse(rsp)
 }
 
-// CreateNudgeWithBodyWithResponse Send extra direction to a running turn
+// CreateNudgeWithBodyWithResponse Send extra direction to a running Invocation
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -29693,7 +29879,7 @@ func (c *ClientWithResponses) CreateNudgeWithBodyWithResponse(ctx context.Contex
 	return ParseCreateNudgeHTTPResponse(rsp)
 }
 
-// CreateNudgeWithResponse Send extra direction to a running turn
+// CreateNudgeWithResponse Send extra direction to a running Invocation
 //
 // Sends extra direction to a turn that is already running — "focus on
 // the marine segment" — without stopping it and without losing the work
@@ -29741,7 +29927,7 @@ func (c *ClientWithResponses) CreateNudgeWithResponse(ctx context.Context, invoc
 	return ParseCreateNudgeHTTPResponse(rsp)
 }
 
-// CancelNudgeWithResponse Withdraw a Nudge the turn has not taken
+// CancelNudgeWithResponse Withdraw a Nudge the Invocation has not taken
 //
 // Withdraws direction you sent with `/nudges`, as long as the turn has not
 // picked it up yet. Cancelling something already cancelled returns it
@@ -29763,7 +29949,7 @@ func (c *ClientWithResponses) CancelNudgeWithResponse(ctx context.Context, invoc
 	return ParseCancelNudgeHTTPResponse(rsp)
 }
 
-// GetInvocationResultWithResponse Read a turn together with its messages
+// GetInvocationResultWithResponse Read an Invocation together with its messages
 //
 // Returns the turn and the messages it produced, at any status. This is
 // the convenient read for "what did the agent say?" — `output_text`
@@ -29788,7 +29974,7 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 	return ParseGetInvocationResultHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithBodyWithResponse Raise a paused turn's limit and continue it
+// ResumeInvocationWithBodyWithResponse Raise a paused Invocation's limit and continue it
 //
 // Continues a turn that paused because one of its own spending limits
 // ran out. Send `limits` containing only the limit that ran out, raised
@@ -29811,7 +29997,7 @@ func (c *ClientWithResponses) ResumeInvocationWithBodyWithResponse(ctx context.C
 	return ParseResumeInvocationHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithResponse Raise a paused turn's limit and continue it
+// ResumeInvocationWithResponse Raise a paused Invocation's limit and continue it
 //
 // Continues a turn that paused because one of its own spending limits
 // ran out. Send `limits` containing only the limit that ran out, raised
@@ -29834,7 +30020,7 @@ func (c *ClientWithResponses) ResumeInvocationWithResponse(ctx context.Context, 
 	return ParseResumeInvocationHTTPResponse(rsp)
 }
 
-// GetInvocationTimelineWithResponse Read the durable execution waterfall for one turn
+// GetInvocationTimelineWithResponse Read the durable execution waterfall for one Invocation
 //
 // Assembles lifecycle waits, model calls, tool calls, nudges, and
 // compactions from one database snapshot. It contains timings and usage,
@@ -29938,7 +30124,7 @@ func (c *ClientWithResponses) SubmitHostToolResultsWithResponse(ctx context.Cont
 	return ParseSubmitHostToolResultsHTTPResponse(rsp)
 }
 
-// ListInvocationTracesWithResponse Page through hosted agent traces for one turn
+// ListInvocationTracesWithResponse Page through hosted agent traces for one Invocation
 //
 // Returns newest-first, content-free summaries exported from Dive through
 // OpenTelemetry. A child-only trace is returned as `is_partial: true`
@@ -30663,7 +30849,7 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 // Every non-empty `transcript.update` frame carries `id: <cursor>`. That
 // opaque ID is your resume position and the only value you need to store
 // — reconnect with it and you continue exactly where you left off.
-// `message.delta`, `stream.resync`, and `stream.end` never carry an
+// `message.delta`, `stream.resync`, and `connection.closing` never carry an
 // `id`, because they are live previews and control frames rather than
 // saved records.
 //
@@ -30691,7 +30877,7 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 // saved, so it replays at any cursor. Read
 // `GET /v1/invocations/{invocation_id}` for the composed result.
 //
-// `stream.end` is about this connection and never about a turn. Reason
+// `connection.closing` is about this connection. Reason
 // `rotate` means the server is cycling the connection, so reconnect now
 // with your last `cursor`. Reason `idle` means it is reclaiming an idle
 // connection, so reconnect when you next need to read; nothing is lost

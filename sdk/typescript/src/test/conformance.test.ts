@@ -1468,7 +1468,7 @@ test("shared fault server semantics", async (context) => {
   assert.deepEqual(eventTypes, [
     "transcript.update",
     "transcript.update",
-    "stream.end",
+    "connection.closing",
     "transcript.update",
     "transcript.update",
   ]);

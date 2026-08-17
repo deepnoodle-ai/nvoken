@@ -8,6 +8,62 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: the `stream.end` frame is now `connection.closing`.** It never
+  said anything about a turn, but its name said the stream was over, and enough
+  readers believed the name that the contract carried a correction in four
+  places and every SDK repeated it again in its own doc comments. A name that
+  needs a footnote everywhere it appears is the wrong name. The generated types
+  are `ConnectionClosingEvent` and `ConnectionClosingReason`; the reasons
+  `rotate`, `idle`, and `slow_consumer` are unchanged, and so is everything the
+  frame does. If you switch on the frame type, change the one case. Nothing
+  else in a read loop moves, because reconnecting was always the answer to any
+  connection ending.
+
+- **One word for a turn in the contract.** `Invocation` is the name in every
+  path, field, schema, and error, and the endpoint summaries say it too, so the
+  generated doc comments no longer alternate between the two. The introduction
+  now defines the pair, and states the rule that a `*_key` is a name you choose
+  while an `id` is one nvoken mints.
+
+- **`listEndedInvocations` walks every turn that ended, oldest first.** The
+  reconciliation feed, in all four SDKs. `invocation.ended` webhooks are
+  delivered at least once, so a delivery that never lands leaves a turn nobody
+  settles — silently, because the only evidence is a ledger row that was never
+  written. `listInvocations` cannot stand in: newest-first over current state
+  has no position to resume from. `nextCursor` is set on every page including
+  an empty one, and `completeThrough` reports the instant the feed is complete
+  to. There is deliberately no auto-paging helper: the cursor is the one thing
+  that has to outlive the process.
+
+- **The TypeScript `deleteSession` doc described behavior it no longer had.**
+  It still said a live turn is stopped and silently discarded, from before the
+  server started refusing that. The four facades now say the same thing:
+  refused with `session_invocation_active` unless `force`, which exists for
+  erasing on an end user's behalf.
+
+- **`@deepnoodle/nvoken/status` exports the status values, not just the type.**
+  `listInvocations({status})` filters server-side and takes values, so a caller
+  who could only reach the type had to hand-write the list — the exact fork the
+  subpath existed to prevent. `ACTIVE_INVOCATION_STATUSES` is new in all four
+  SDKs, derived from the enum rather than written out, alongside
+  `ALL_INVOCATION_STATUSES` in Go, Python, and Rust. The subpath stays free of
+  the runtime client.
+
+- **`make facade-check` asserts every facade exposes every parameter its
+  operation has.** The hand-written facades are what integrators call and the
+  only part of the SDK not derived from the contract; nothing checked them.
+  `deleteSession` shipped without `force` in one language out of four because
+  of it. Comments are stripped before the check, since the facade in question
+  documented the parameter it never forwarded.
+
+- **`requirements-dev.txt` declares what the tooling needs.** `make check`
+  already requires Go, Node, Java, and a Rust toolchain, all declared somewhere
+  a machine can read, so a missing one fails as a missing toolchain. Python's
+  were declared nowhere, so a missing one failed as whichever check happened to
+  import it. `make scripts-check` now runs `check_python_deps.py`, which fails
+  on an import the file does not declare and on a declaration the environment
+  does not have, the second with the command to fix it.
+
 - **Breaking: Agent Definition writes are flat, in every SDK.** The first
   argument is the definition itself, matching `AgentDefinitionWrite` on the
   wire, and `idempotencyKey` / `expectedRevision` move to a second transport

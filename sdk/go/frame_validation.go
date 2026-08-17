@@ -26,9 +26,8 @@ var requiredFrameKeys = map[string][]string{
 		"content_index", "kind", "delta", "emitted_at",
 	},
 	"StreamResyncEvent": {"type", "session_id", "reason"},
-	// No StreamEndEvent: this SDK never decodes one. `stream.end` speaks only
-	// about the connection, and the read loop reconnects from its own cursor
-	// without reading the frame.
+	// No ConnectionClosingEvent: this SDK never decodes one. The read loop
+	// reconnects from its own cursor without reading the frame.
 	"InvocationChange": {
 		"invocation_id", "revision", "status", "terminal",
 		"through_message_sequence", "error", "structured_output", "occurred_at",

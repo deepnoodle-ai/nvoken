@@ -1356,6 +1356,26 @@ pub struct ListInvocationsOptions {
     pub limit: Option<u32>,
 }
 
+/// Filters for the reconciliation feed. It takes the same filters as the
+/// ordinary listing, because it is the same collection read in a different
+/// order.
+#[derive(Debug, Clone, Default)]
+pub struct ListEndedInvocationsOptions {
+    pub tenant_key: Option<String>,
+    pub default_tenant: Option<bool>,
+    pub user_key: Option<String>,
+    pub session_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub agent_key: Option<String>,
+    pub status: Option<models::InvocationStatus>,
+    pub statuses: Vec<models::InvocationStatus>,
+    /// Starts a feed that has no cursor yet. Mutually exclusive with `cursor`,
+    /// which already carries a position.
+    pub ended_since: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
+}
+
 /// One Session metadata patch: a present key replaces, a `None` value deletes,
 /// and an unmentioned key survives.
 #[derive(Debug, Clone, Default)]
@@ -2497,6 +2517,59 @@ impl Client {
             options.agent_id.as_deref(),
             options.agent_key.as_deref(),
             (!statuses.is_empty()).then_some(statuses),
+            None,
+            None,
+            options.cursor.as_deref(),
+            options.limit,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Reads one page of the reconciliation feed: turns that ended, oldest
+    /// first by the moment they ended. Walk it and append by `id`.
+    ///
+    /// This is the backstop for settlement. `invocation.ended` webhooks are
+    /// delivered at least once, so a delivery that never lands leaves a turn
+    /// nobody settles — silently, since nothing errors and the only evidence is
+    /// a ledger row that was never written. Reading this to the end is how you
+    /// find out. [`Client::list_invocations`] cannot stand in: it is
+    /// newest-first over current state, so a turn ending mid-page moves under
+    /// the caller and a terminal status filter gives a set with no position in
+    /// it.
+    ///
+    /// `next_cursor` is always set here, including on an empty page, so a
+    /// consumer that catches up keeps its place without special-casing. Keep
+    /// calling while `has_more`; when it is false you are caught up.
+    ///
+    /// `complete_through` is the instant the feed is complete to. Turns that
+    /// ended after it are held back until their settling transactions are
+    /// certainly visible, because a turn appearing behind the cursor is one you
+    /// never see again. It is also the value to alarm on: one that stops
+    /// advancing means settlement has stalled rather than that nothing ended.
+    ///
+    /// There is deliberately no auto-paging helper. The cursor is the one thing
+    /// that has to survive the process, and hiding it is how a consumer loses
+    /// its place; store it yourself between pages.
+    pub async fn list_ended_invocations(
+        &self,
+        options: ListEndedInvocationsOptions,
+    ) -> Result<models::InvocationList, NvokenError> {
+        let mut statuses = options.statuses;
+        if let Some(status) = options.status {
+            statuses.push(status);
+        }
+        apis::invocations_api::list_invocations(
+            &self.configuration,
+            options.tenant_key.as_deref(),
+            options.default_tenant,
+            options.user_key.as_deref(),
+            options.session_id.as_deref(),
+            options.agent_id.as_deref(),
+            options.agent_key.as_deref(),
+            (!statuses.is_empty()).then_some(statuses),
+            Some(true),
+            options.ended_since,
             options.cursor.as_deref(),
             options.limit,
         )
@@ -2514,12 +2587,17 @@ impl Client {
     /// checkpoints, tool calls, artifacts, and undelivered webhooks. The
     /// erasure is immediate and irreversible.
     ///
-    /// A Session holding a nonterminal Invocation is refused unless `force`.
-    /// Erasure skips settlement — the Invocation is removed rather than ended,
-    /// so it records no terminal status and emits no `invocation.ended`
-    /// webhook — which is why a caller that bills or reconciles on settlement
-    /// must cancel first. `force` is for erasing on an end user's behalf,
-    /// where removing the transcript now outranks keeping a settled record.
+    /// A Session holding a nonterminal Invocation is refused with
+    /// `session_invocation_active` unless `force`. Erasure skips settlement —
+    /// the Invocation is removed rather than ended, so it records no terminal
+    /// status and emits no `invocation.ended` webhook — which is why a caller
+    /// that bills or reconciles on settlement must cancel first and wait for
+    /// the final state.
+    ///
+    /// `force` erases anyway, over a live turn. It is for erasing on an end
+    /// user's behalf, where removing the transcript now outranks keeping a
+    /// settled record: a deletion request has to be honoured, and a refusal
+    /// thrown into that path leaves it unhonoured.
     ///
     /// An unknown or out-of-scope Session is not found, so a retry after a lost
     /// response can treat that as already-done.

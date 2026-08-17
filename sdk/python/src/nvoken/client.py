@@ -1430,10 +1430,13 @@ class Client:
         *,
         tenant_key: str | None = None,
         default_tenant: bool | None = None,
+        user_key: str | None = None,
         session_id: str | None = None,
         agent_id: str | None = None,
         agent_key: str | None = None,
         status: InvocationStatus | list[InvocationStatus] | None = None,
+        ended: bool | None = None,
+        ended_since: datetime | None = None,
         cursor: str | None = None,
         limit: int | None = None,
     ) -> InvocationList:
@@ -1441,6 +1444,7 @@ class Client:
             await self._replay_safe(lambda: self.invocations.list_invocations(
                 tenant_key=tenant_key,
                 default_tenant=default_tenant,
+                user_key=user_key,
                 session_id=session_id,
                 agent_id=agent_id,
                 agent_key=agent_key,
@@ -1449,9 +1453,69 @@ class Client:
                     if isinstance(status, list)
                     else [status] if status is not None else None
                 ),
+                ended=ended,
+                ended_since=ended_since,
                 cursor=cursor,
                 limit=limit,
             ))
+        )
+
+    async def list_ended_invocations(
+        self,
+        *,
+        tenant_key: str | None = None,
+        default_tenant: bool | None = None,
+        user_key: str | None = None,
+        session_id: str | None = None,
+        agent_id: str | None = None,
+        agent_key: str | None = None,
+        status: InvocationStatus | list[InvocationStatus] | None = None,
+        ended_since: datetime | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> InvocationList:
+        """Read one page of the reconciliation feed.
+
+        Turns that ended, oldest first by the moment they ended. Walk it and
+        append by ``id``.
+
+        This is the backstop for settlement. ``invocation.ended`` webhooks are
+        delivered at least once, so a delivery that never lands leaves a turn
+        nobody settles — silently, since nothing errors and the only evidence is
+        a ledger row that was never written. Reading this to the end is how you
+        find out. :meth:`list_invocations` cannot stand in: it is newest-first
+        over current state, so a turn ending mid-page moves under you and a
+        terminal status filter gives a set with no position in it.
+
+        ``next_cursor`` is always set here, including on an empty page, so a
+        consumer that catches up keeps its place without special-casing. Keep
+        calling while ``has_more``; when it is False you are caught up.
+
+        ``complete_through`` is the instant the feed is complete to. Turns that
+        ended after it are held back until their settling transactions are
+        certainly visible, because a turn appearing behind your cursor is one
+        you never see again. It is also the value to alarm on: one that stops
+        advancing means settlement has stalled rather than that nothing ended.
+
+        There is deliberately no auto-paging iterator. The cursor is the one
+        thing that has to survive the process, and hiding it is how a consumer
+        loses its place; store it yourself between pages.
+
+        ``ended_since`` starts a feed that has no cursor yet, and is mutually
+        exclusive with ``cursor``.
+        """
+        return await self.list_invocations(
+            tenant_key=tenant_key,
+            default_tenant=default_tenant,
+            user_key=user_key,
+            session_id=session_id,
+            agent_id=agent_id,
+            agent_key=agent_key,
+            status=status,
+            ended=True,
+            ended_since=ended_since,
+            cursor=cursor,
+            limit=limit,
         )
 
     async def invocation_items(
@@ -1545,12 +1609,17 @@ class Client:
         artifacts, and undelivered webhooks. The erasure is immediate and
         irreversible.
 
-        A Session holding a nonterminal Invocation is refused unless ``force``.
-        Erasure skips settlement — the Invocation is removed rather than ended,
-        so it records no terminal status and emits no ``invocation.ended``
-        webhook — which is why a caller that bills or reconciles on settlement
-        must cancel first. ``force`` is for erasing on an end user's behalf,
-        where removing the transcript now outranks keeping a settled record.
+        A Session holding a nonterminal Invocation is refused with
+        ``session_invocation_active`` unless ``force``. Erasure skips
+        settlement — the Invocation is removed rather than ended, so it records
+        no terminal status and emits no ``invocation.ended`` webhook — which is
+        why a caller that bills or reconciles on settlement must cancel first
+        and wait for the final state.
+
+        ``force`` erases anyway, over a live turn. It is for erasing on an end
+        user's behalf, where removing the transcript now outranks keeping a
+        settled record: a deletion request has to be honoured, and a refusal
+        thrown into that path leaves it unhonoured.
 
         An unknown or out-of-scope Session is not found, so a retry after a
         lost response can treat that as already-done.

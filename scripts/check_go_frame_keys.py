@@ -8,8 +8,10 @@ with zero values — a required bool arriving absent is a confident wrong answer
 
 The check lives here rather than in a Go test because the published `sdk/go`
 module has no YAML dependency and should not gain one to read the contract.
-This script reads the contract with the standard library for the same reason:
-`scripts-check` runs on a bare Python and installs nothing.
+That is about the published module, not about this script: the tooling may use
+what `requirements-dev.txt` declares. This reader is standard-library only
+because it was written before the file existed and there is no reason to
+disturb it, not because a rule says it must be.
 """
 
 from __future__ import annotations

@@ -85,7 +85,7 @@ the `invocation.accepted` frame goes with it.
 stays open while the Session is idle, keepalives and all, and a turn
 started later by anyone appears on it. The server remains free to shed
 idle connections, but shedding is a connection event with a name (see
-`stream.end` below), never a statement that the stream is over. Today's
+`connection.closing` below), never a statement that the stream is over. Today's
 protocol hangs up when no turn is running, and the only production client
 compensates with a 15 second poll. A protocol whose steady state is
 polling has a stream in name only.
@@ -105,7 +105,7 @@ ephemeral control.
 | `message.delta` | no | Live preview of a message the model is writing. |
 | `tool_call.progress` | no | Replaceable snapshot of a running tool call. |
 | `stream.resync` | no | Previews were lost. Discard them. |
-| `stream.end` | no | This connection is closing. The stream continues. |
+| `connection.closing` | no | This connection is closing. The stream continues. |
 
 `invocation.accepted`, `invocation.update`, and `invocation.result` do not
 exist. They were the same facts as `transcript.update` in a second
@@ -164,8 +164,8 @@ carries the entire current state. Never stored, never replayed.
 Optional, not required-and-nullable: an absent field is scope, a null
 identifier was scope wearing an identifier's name.
 
-**`stream.end`** is a connection event and only a connection event. Its
-reasons never speak about turns:
+**`connection.closing`** is a connection event and only a connection
+event. Its reasons never speak about turns:
 
 - `rotate`: the server is cycling this connection. Reconnect now with your
   cursor.
@@ -177,9 +177,10 @@ reasons never speak about turns:
 
 Whether a deployment ever sends `idle` is its own choice; the client rule
 covers both. A connection that simply drops carries no meaning: reconnect
-and resume. `stream.end` carries no cursor, because a client must already
-track its last durable cursor to survive a silent drop, and a field that
-duplicates what the client must hold anyway is a second spelling.
+and resume. `connection.closing` carries no cursor, because a client must
+already track its last durable cursor to survive a silent drop, and a
+field that duplicates what the client must hold anyway is a second
+spelling.
 
 ### One schema family
 
@@ -379,13 +380,22 @@ later reader knows they were deliberate:
 3. **The preview frames merge.** Text, thinking, and tool arguments are
    one frame discriminated by `kind` with a shared `delta` field,
    absorbing the model-side stance of design 003 area 11.
-4. **`stream.end` never speaks about turns.** Terminal state is a durable
-   change; connection close is a connection event. No reason value may
-   ever couple them again.
+4. **`connection.closing` never speaks about turns.** Terminal state is a
+   durable change; connection close is a connection event. No reason value
+   may ever couple them again. Recorded as `stream.end`; see decision 6.
 5. **`phase` stays as design 003 decision 1 scoped it**: authoritative on
    reads and nowhere else, kept because forked history is the one place it
    carries underivable information. It is not restated here because it
    already says one thing once.
+6. **`stream.end` is renamed `connection.closing`** (2026-08-17). Decision
+   4 held, and the frame never once spoke about a turn. The name did. It
+   was read as "the stream is over" often enough that the contract carried
+   a correction in four places and the SDKs repeated it in their own doc
+   comments, which is the shape of a name that is wrong. The new name
+   states the frame's whole content, and most of those corrections are
+   deleted rather than reworded. Nothing else moves: the reasons, the
+   absent cursor, and the client rule are as decision 4 and the frame
+   vocabulary above describe them.
 
 ## Related
 

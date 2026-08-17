@@ -75,7 +75,7 @@ application.
 cursor; the server writes the `retry: 1000` opener; saved state replays, from
 the cursor if one was given and otherwise from the Session origin; the
 connection goes live, interleaving durable frames with previews; and it ends
-with `stream.end` or a silent drop. From the client's side the whole algorithm
+with `connection.closing` or a silent drop. From the client's side the whole algorithm
 is one loop: connect, fold frames, remember the last durable `id`, reconnect
 with it.
 
@@ -117,7 +117,7 @@ The server omits the `id:` line entirely rather than sending an empty one.
 | `transcript.update` | yes | Ordered messages and lifecycle changes. |
 | `message.delta` | no | Live preview of a message being written. |
 | `stream.resync` | no | Previews were lost. Discard them. |
-| `stream.end` | no | Connection is closing. Read `reason`. |
+| `connection.closing` | no | Connection is closing. Read `reason`. |
 
 ### Resuming
 
@@ -235,7 +235,7 @@ You never receive this frame when `deltas=false`, because the server only
 subscribes to the live bus when previews are enabled and resyncs originate from
 that subscription.
 
-### `stream.end`
+### `connection.closing`
 
 **This frame never speaks about a turn.** Terminal state is a durable change;
 connection close is a connection event; no reason value couples them. Three
@@ -475,7 +475,7 @@ Defaults from `normalizedStreamConfig`, all configurable:
 | --- | --- | --- |
 | Poll interval | 1s | Durable drain cadence |
 | Keepalive | 15s | `: keepalive` comment on an idle stream |
-| Max lifetime | 55m | Then `stream.end`, `rotate` or `idle` |
+| Max lifetime | 55m | Then `connection.closing`, `rotate` or `idle` |
 | Write timeout | 10s | Slow consumer is dropped |
 | Suggested retry | 1000ms | Sent as the opening `retry:` frame |
 
