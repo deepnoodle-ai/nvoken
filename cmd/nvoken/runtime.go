@@ -38,6 +38,8 @@ var version = "devel"
 
 var operationCommands = map[string]string{
 	"cancelInvocation":           "invocation cancel",
+	"getHealth":                  "health",
+	"getReadiness":               "ready",
 	"interruptInvocation":        "invocation interrupt",
 	"resumeInvocation":           "invocation resume",
 	"createNudge":                "invocation nudge",

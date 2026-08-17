@@ -28,6 +28,7 @@ __all__ = [
     "MCPApi",
     "MemoriesApi",
     "ModelsApi",
+    "OperationsApi",
     "OrgsApi",
     "ProviderKeysApi",
     "SessionsApi",
@@ -135,6 +136,9 @@ __all__ = [
     "InvocationStopReason",
     "InvocationTimeline",
     "InvocationTimelineStep",
+    "InvocationWebhookContext",
+    "InvocationWebhookRequest",
+    "InvocationWebhookSubject",
     "Limits",
     "MCPListToolsRequest",
     "MCPListToolsResponse",
@@ -290,6 +294,7 @@ from nvoken_generated.api.invocations_api import InvocationsApi as InvocationsAp
 from nvoken_generated.api.mcp_api import MCPApi as MCPApi
 from nvoken_generated.api.memories_api import MemoriesApi as MemoriesApi
 from nvoken_generated.api.models_api import ModelsApi as ModelsApi
+from nvoken_generated.api.operations_api import OperationsApi as OperationsApi
 from nvoken_generated.api.orgs_api import OrgsApi as OrgsApi
 from nvoken_generated.api.provider_keys_api import ProviderKeysApi as ProviderKeysApi
 from nvoken_generated.api.sessions_api import SessionsApi as SessionsApi
@@ -401,6 +406,9 @@ from nvoken_generated.models.invocation_status import InvocationStatus as Invoca
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason as InvocationStopReason
 from nvoken_generated.models.invocation_timeline import InvocationTimeline as InvocationTimeline
 from nvoken_generated.models.invocation_timeline_step import InvocationTimelineStep as InvocationTimelineStep
+from nvoken_generated.models.invocation_webhook_context import InvocationWebhookContext as InvocationWebhookContext
+from nvoken_generated.models.invocation_webhook_request import InvocationWebhookRequest as InvocationWebhookRequest
+from nvoken_generated.models.invocation_webhook_subject import InvocationWebhookSubject as InvocationWebhookSubject
 from nvoken_generated.models.limits import Limits as Limits
 from nvoken_generated.models.mcp_list_tools_request import MCPListToolsRequest as MCPListToolsRequest
 from nvoken_generated.models.mcp_list_tools_response import MCPListToolsResponse as MCPListToolsResponse

@@ -11,60 +11,36 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// RegisterAppRequest : There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
+/// InvocationWebhookSubject : A pointer to the turn, not a projection of it. It deliberately carries no transcript content, tool arguments, structured output, usage, provenance, or failure message: a signed body that grew those would be a second, staler copy of the record, and a receiver that read them would be reconciling against the wrong source. Read `GET /v1/invocations/{invocation_id}` or its `/result` for anything beyond what is here.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RegisterAppRequest {
-    /// The unique name identifying this app. Registering a name that already exists is rejected.
-    #[serde(rename = "name")]
-    pub name: String,
-    /// Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration.
-    #[serde(rename = "org_id", skip_serializing_if = "Option::is_none")]
-    pub org_id: Option<String>,
-    /// Optional opaque owner reference.
-    #[serde(rename = "external_ref", skip_serializing_if = "Option::is_none")]
-    pub external_ref: Option<String>,
-    /// Optional human-facing label.
-    #[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    /// Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them.
+pub struct InvocationWebhookSubject {
+    #[serde(rename = "status")]
+    pub status: models::InvocationStatus,
+    #[serde(rename = "stop_reason", skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<models::InvocationStopReason>,
+    /// Present when the turn ended in a failure.
+    #[serde(rename = "failure_code", skip_serializing_if = "Option::is_none")]
+    pub failure_code: Option<String>,
+    /// The host tools this turn is parked on. Present on `invocation.waiting` only.
     #[serde(
-        rename = "callback_timeout_seconds",
+        rename = "waiting_tool_call_ids",
         skip_serializing_if = "Option::is_none"
     )]
-    pub callback_timeout_seconds: Option<u64>,
-    /// Optional shared App admission ceilings. Browser access requires a non-null value.
-    #[serde(
-        rename = "default_rate_limits",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
-    /// Optional complete browser configuration. Null and omission both create the App with browser access disabled.
-    #[serde(
-        rename = "browser_access",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
-    /// Defaults to `off`. See the schema for what each value enforces.
-    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
-    pub credit_policy: Option<models::CreditPolicy>,
+    pub waiting_tool_call_ids: Option<Vec<String>>,
+    /// Present when a spending limit stopped the turn, naming the account that could not fund the next attempt.
+    #[serde(rename = "credit_block", skip_serializing_if = "Option::is_none")]
+    pub credit_block: Option<Box<models::CreditBlock>>,
 }
 
-impl RegisterAppRequest {
-    /// There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
-    pub fn new(name: String) -> RegisterAppRequest {
-        RegisterAppRequest {
-            name,
-            org_id: None,
-            external_ref: None,
-            display_name: None,
-            callback_timeout_seconds: None,
-            default_rate_limits: None,
-            browser_access: None,
-            credit_policy: None,
+impl InvocationWebhookSubject {
+    /// A pointer to the turn, not a projection of it. It deliberately carries no transcript content, tool arguments, structured output, usage, provenance, or failure message: a signed body that grew those would be a second, staler copy of the record, and a receiver that read them would be reconciling against the wrong source. Read `GET /v1/invocations/{invocation_id}` or its `/result` for anything beyond what is here.
+    pub fn new(status: models::InvocationStatus) -> InvocationWebhookSubject {
+        InvocationWebhookSubject {
+            status,
+            stop_reason: None,
+            failure_code: None,
+            waiting_tool_call_ids: None,
+            credit_block: None,
         }
     }
 }

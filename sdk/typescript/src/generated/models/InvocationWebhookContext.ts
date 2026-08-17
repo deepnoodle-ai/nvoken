@@ -13,151 +13,141 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { AppDefaultRateLimits } from './AppDefaultRateLimits.js';
+import type { WebhookEvent } from './WebhookEvent.js';
 import {
-    AppDefaultRateLimitsFromJSON,
-    AppDefaultRateLimitsFromJSONTyped,
-    AppDefaultRateLimitsToJSON,
-    AppDefaultRateLimitsToJSONTyped,
-} from './AppDefaultRateLimits.js';
-import type { CreditPolicy } from './CreditPolicy.js';
-import {
-    CreditPolicyFromJSON,
-    CreditPolicyFromJSONTyped,
-    CreditPolicyToJSON,
-    CreditPolicyToJSONTyped,
-} from './CreditPolicy.js';
-import type { BrowserAccess } from './BrowserAccess.js';
-import {
-    BrowserAccessFromJSON,
-    BrowserAccessFromJSONTyped,
-    BrowserAccessToJSON,
-    BrowserAccessToJSONTyped,
-} from './BrowserAccess.js';
+    WebhookEventFromJSON,
+    WebhookEventFromJSONTyped,
+    WebhookEventToJSON,
+    WebhookEventToJSONTyped,
+} from './WebhookEvent.js';
 
 /**
- * There is deliberately no `anonymous_access` here. Enabling it requires
- * browser access, finite App limits, and `credit_policy: required` to
- * already be stored, so it is set with `PATCH /v1/apps/{app_id}` once
- * the App exists rather than validated against a request that is still
- * describing itself.
  *
  * @export
- * @interface RegisterAppRequest
+ * @interface InvocationWebhookContext
  */
-export interface RegisterAppRequest {
+export interface InvocationWebhookContext {
     /**
-     * The unique name identifying this app. Registering a name that
-     * already exists is rejected.
+     *
+     * @type {InvocationWebhookContextSchemaVersionEnum}
+     * @memberof InvocationWebhookContext
+     */
+    schemaVersion: InvocationWebhookContextSchemaVersionEnum;
+    /**
+     * Identifies one delivery nvoken sent you, callback or webhook alike —
+     * both are the same durable record and carry the same `dlvr_` prefix.
+     * Treat it as opaque; it appears in the signed payload and identifies the
+     * attempt when you report a delivery problem.
      *
      * @type {string}
-     * @memberof RegisterAppRequest
+     * @memberof InvocationWebhookContext
      */
-    name: string;
+    deliveryId: string;
     /**
-     * Owning Org. Org-scoped callers may omit this to use their own Org
-     * and cannot name another. Installation callers may name any
-     * registered Org or omit it during the staged migration.
      *
-     * @type {string}
-     * @memberof RegisterAppRequest
+     * @type {WebhookEvent}
+     * @memberof InvocationWebhookContext
      */
-    orgId?: string;
+    event: WebhookEvent;
     /**
-     * Optional opaque owner reference.
-     * @type {string}
-     * @memberof RegisterAppRequest
-     */
-    externalRef?: string;
-    /**
-     * Optional human-facing label.
-     * @type {string}
-     * @memberof RegisterAppRequest
-     */
-    displayName?: string;
-    /**
-     * Callback HTTP reply deadline for tools that declare none of their
-     * own. A single tool may declare up to 300 in
-     * `callback.timeout_seconds`; this App-wide value stays capped at 60
-     * so one slow tool cannot loosen loss detection for all of them.
+     * Counts transitions within one Invocation, from 1. Deliveries can
+     * arrive out of order, so a receiver folding state keeps the highest
+     * sequence it has seen for that Invocation and discards anything
+     * lower rather than applying whichever arrived last.
      *
      * @type {number}
-     * @memberof RegisterAppRequest
+     * @memberof InvocationWebhookContext
      */
-    callbackTimeoutSeconds?: number;
+    sequence: number;
     /**
-     * Optional shared App admission ceilings. Browser access requires a
-     * non-null value.
+     * Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+     * @type {string}
+     * @memberof InvocationWebhookContext
+     */
+    invocationId: string;
+    /**
+     * Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+     * @type {string}
+     * @memberof InvocationWebhookContext
+     */
+    sessionId: string;
+    /**
      *
-     * @type {AppDefaultRateLimits}
-     * @memberof RegisterAppRequest
+     * @type {string}
+     * @memberof InvocationWebhookContext
      */
-    defaultRateLimits?: AppDefaultRateLimits | null;
+    agentKey: string;
     /**
-     * Optional complete browser configuration. Null and omission both
-     * create the App with browser access disabled.
-     *
-     * @type {BrowserAccess}
-     * @memberof RegisterAppRequest
+     * Absent for the app's default tenant.
+     * @type {string}
+     * @memberof InvocationWebhookContext
      */
-    browserAccess?: BrowserAccess | null;
-    /**
-     * Defaults to `off`. See the schema for what each value enforces.
-     * @type {CreditPolicy}
-     * @memberof RegisterAppRequest
-     */
-    creditPolicy?: CreditPolicy;
+    tenantKey?: string;
 }
 
 
+/**
+ * @export
+ */
+export const InvocationWebhookContextSchemaVersionEnum = {
+    NUMBER_1: 1
+} as const;
+export type InvocationWebhookContextSchemaVersionEnum = typeof InvocationWebhookContextSchemaVersionEnum[keyof typeof InvocationWebhookContextSchemaVersionEnum];
+
 
 /**
- * Check if a given object implements the RegisterAppRequest interface.
+ * Check if a given object implements the InvocationWebhookContext interface.
  */
-export function instanceOfRegisterAppRequest(value: object): value is RegisterAppRequest {
-    if (!('name' in value) || value['name'] === undefined) return false;
+export function instanceOfInvocationWebhookContext(value: object): value is InvocationWebhookContext {
+    if (!('schemaVersion' in value) || value['schemaVersion'] === undefined) return false;
+    if (!('deliveryId' in value) || value['deliveryId'] === undefined) return false;
+    if (!('event' in value) || value['event'] === undefined) return false;
+    if (!('sequence' in value) || value['sequence'] === undefined) return false;
+    if (!('invocationId' in value) || value['invocationId'] === undefined) return false;
+    if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
+    if (!('agentKey' in value) || value['agentKey'] === undefined) return false;
     return true;
 }
 
-export function RegisterAppRequestFromJSON(json: any): RegisterAppRequest {
-    return RegisterAppRequestFromJSONTyped(json, false);
+export function InvocationWebhookContextFromJSON(json: any): InvocationWebhookContext {
+    return InvocationWebhookContextFromJSONTyped(json, false);
 }
 
-export function RegisterAppRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): RegisterAppRequest {
+export function InvocationWebhookContextFromJSONTyped(json: any, ignoreDiscriminator: boolean): InvocationWebhookContext {
     if (json == null) {
         return json;
     }
     return {
 
-        'name': json['name'],
-        'orgId': json['org_id'] == null ? undefined : json['org_id'],
-        'externalRef': json['external_ref'] == null ? undefined : json['external_ref'],
-        'displayName': json['display_name'] == null ? undefined : json['display_name'],
-        'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
-        'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
-        'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
-        'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
+        'schemaVersion': json['schema_version'],
+        'deliveryId': json['delivery_id'],
+        'event': WebhookEventFromJSON(json['event']),
+        'sequence': json['sequence'],
+        'invocationId': json['invocation_id'],
+        'sessionId': json['session_id'],
+        'agentKey': json['agent_key'],
+        'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
     };
 }
 
-export function RegisterAppRequestToJSON(json: any): RegisterAppRequest {
-    return RegisterAppRequestToJSONTyped(json, false);
+export function InvocationWebhookContextToJSON(json: any): InvocationWebhookContext {
+    return InvocationWebhookContextToJSONTyped(json, false);
 }
 
-export function RegisterAppRequestToJSONTyped(value?: RegisterAppRequest | null, ignoreDiscriminator: boolean = false): any {
+export function InvocationWebhookContextToJSONTyped(value?: InvocationWebhookContext | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'name': value['name'],
-        'org_id': value['orgId'],
-        'external_ref': value['externalRef'],
-        'display_name': value['displayName'],
-        'callback_timeout_seconds': value['callbackTimeoutSeconds'],
-        'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
-        'browser_access': BrowserAccessToJSON(value['browserAccess']),
-        'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
+        'schema_version': value['schemaVersion'],
+        'delivery_id': value['deliveryId'],
+        'event': WebhookEventToJSON(value['event']),
+        'sequence': value['sequence'],
+        'invocation_id': value['invocationId'],
+        'session_id': value['sessionId'],
+        'agent_key': value['agentKey'],
+        'tenant_key': value['tenantKey'],
     };
 }

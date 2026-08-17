@@ -13,151 +13,120 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { AppDefaultRateLimits } from './AppDefaultRateLimits.js';
+import type { InvocationStatus } from './InvocationStatus.js';
 import {
-    AppDefaultRateLimitsFromJSON,
-    AppDefaultRateLimitsFromJSONTyped,
-    AppDefaultRateLimitsToJSON,
-    AppDefaultRateLimitsToJSONTyped,
-} from './AppDefaultRateLimits.js';
-import type { CreditPolicy } from './CreditPolicy.js';
+    InvocationStatusFromJSON,
+    InvocationStatusFromJSONTyped,
+    InvocationStatusToJSON,
+    InvocationStatusToJSONTyped,
+} from './InvocationStatus.js';
+import type { InvocationStopReason } from './InvocationStopReason.js';
 import {
-    CreditPolicyFromJSON,
-    CreditPolicyFromJSONTyped,
-    CreditPolicyToJSON,
-    CreditPolicyToJSONTyped,
-} from './CreditPolicy.js';
-import type { BrowserAccess } from './BrowserAccess.js';
+    InvocationStopReasonFromJSON,
+    InvocationStopReasonFromJSONTyped,
+    InvocationStopReasonToJSON,
+    InvocationStopReasonToJSONTyped,
+} from './InvocationStopReason.js';
+import type { CreditBlock } from './CreditBlock.js';
 import {
-    BrowserAccessFromJSON,
-    BrowserAccessFromJSONTyped,
-    BrowserAccessToJSON,
-    BrowserAccessToJSONTyped,
-} from './BrowserAccess.js';
+    CreditBlockFromJSON,
+    CreditBlockFromJSONTyped,
+    CreditBlockToJSON,
+    CreditBlockToJSONTyped,
+} from './CreditBlock.js';
 
 /**
- * There is deliberately no `anonymous_access` here. Enabling it requires
- * browser access, finite App limits, and `credit_policy: required` to
- * already be stored, so it is set with `PATCH /v1/apps/{app_id}` once
- * the App exists rather than validated against a request that is still
- * describing itself.
+ * A pointer to the turn, not a projection of it. It deliberately carries
+ * no transcript content, tool arguments, structured output, usage,
+ * provenance, or failure message: a signed body that grew those would be
+ * a second, staler copy of the record, and a receiver that read them
+ * would be reconciling against the wrong source. Read
+ * `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+ * beyond what is here.
  *
  * @export
- * @interface RegisterAppRequest
+ * @interface InvocationWebhookSubject
  */
-export interface RegisterAppRequest {
+export interface InvocationWebhookSubject {
     /**
-     * The unique name identifying this app. Registering a name that
-     * already exists is rejected.
      *
+     * @type {InvocationStatus}
+     * @memberof InvocationWebhookSubject
+     */
+    status: InvocationStatus;
+    /**
+     *
+     * @type {InvocationStopReason}
+     * @memberof InvocationWebhookSubject
+     */
+    stopReason?: InvocationStopReason;
+    /**
+     * Present when the turn ended in a failure.
      * @type {string}
-     * @memberof RegisterAppRequest
+     * @memberof InvocationWebhookSubject
      */
-    name: string;
+    failureCode?: string;
     /**
-     * Owning Org. Org-scoped callers may omit this to use their own Org
-     * and cannot name another. Installation callers may name any
-     * registered Org or omit it during the staged migration.
+     * The host tools this turn is parked on. Present on
+     * `invocation.waiting` only.
      *
-     * @type {string}
-     * @memberof RegisterAppRequest
+     * @type {Array<string>}
+     * @memberof InvocationWebhookSubject
      */
-    orgId?: string;
+    waitingToolCallIds?: Array<string>;
     /**
-     * Optional opaque owner reference.
-     * @type {string}
-     * @memberof RegisterAppRequest
-     */
-    externalRef?: string;
-    /**
-     * Optional human-facing label.
-     * @type {string}
-     * @memberof RegisterAppRequest
-     */
-    displayName?: string;
-    /**
-     * Callback HTTP reply deadline for tools that declare none of their
-     * own. A single tool may declare up to 300 in
-     * `callback.timeout_seconds`; this App-wide value stays capped at 60
-     * so one slow tool cannot loosen loss detection for all of them.
+     * Present when a spending limit stopped the turn, naming the account
+     * that could not fund the next attempt.
      *
-     * @type {number}
-     * @memberof RegisterAppRequest
+     * @type {CreditBlock}
+     * @memberof InvocationWebhookSubject
      */
-    callbackTimeoutSeconds?: number;
-    /**
-     * Optional shared App admission ceilings. Browser access requires a
-     * non-null value.
-     *
-     * @type {AppDefaultRateLimits}
-     * @memberof RegisterAppRequest
-     */
-    defaultRateLimits?: AppDefaultRateLimits | null;
-    /**
-     * Optional complete browser configuration. Null and omission both
-     * create the App with browser access disabled.
-     *
-     * @type {BrowserAccess}
-     * @memberof RegisterAppRequest
-     */
-    browserAccess?: BrowserAccess | null;
-    /**
-     * Defaults to `off`. See the schema for what each value enforces.
-     * @type {CreditPolicy}
-     * @memberof RegisterAppRequest
-     */
-    creditPolicy?: CreditPolicy;
+    creditBlock?: CreditBlock;
 }
 
 
 
 /**
- * Check if a given object implements the RegisterAppRequest interface.
+ * Check if a given object implements the InvocationWebhookSubject interface.
  */
-export function instanceOfRegisterAppRequest(value: object): value is RegisterAppRequest {
-    if (!('name' in value) || value['name'] === undefined) return false;
+export function instanceOfInvocationWebhookSubject(value: object): value is InvocationWebhookSubject {
+    if (!('status' in value) || value['status'] === undefined) return false;
     return true;
 }
 
-export function RegisterAppRequestFromJSON(json: any): RegisterAppRequest {
-    return RegisterAppRequestFromJSONTyped(json, false);
+export function InvocationWebhookSubjectFromJSON(json: any): InvocationWebhookSubject {
+    return InvocationWebhookSubjectFromJSONTyped(json, false);
 }
 
-export function RegisterAppRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): RegisterAppRequest {
+export function InvocationWebhookSubjectFromJSONTyped(json: any, ignoreDiscriminator: boolean): InvocationWebhookSubject {
     if (json == null) {
         return json;
     }
     return {
 
-        'name': json['name'],
-        'orgId': json['org_id'] == null ? undefined : json['org_id'],
-        'externalRef': json['external_ref'] == null ? undefined : json['external_ref'],
-        'displayName': json['display_name'] == null ? undefined : json['display_name'],
-        'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
-        'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
-        'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
-        'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
+        'status': InvocationStatusFromJSON(json['status']),
+        'stopReason': json['stop_reason'] == null ? undefined : InvocationStopReasonFromJSON(json['stop_reason']),
+        'failureCode': json['failure_code'] == null ? undefined : json['failure_code'],
+        'waitingToolCallIds': json['waiting_tool_call_ids'] == null ? undefined : json['waiting_tool_call_ids'],
+        'creditBlock': json['credit_block'] == null ? undefined : CreditBlockFromJSON(json['credit_block']),
     };
 }
 
-export function RegisterAppRequestToJSON(json: any): RegisterAppRequest {
-    return RegisterAppRequestToJSONTyped(json, false);
+export function InvocationWebhookSubjectToJSON(json: any): InvocationWebhookSubject {
+    return InvocationWebhookSubjectToJSONTyped(json, false);
 }
 
-export function RegisterAppRequestToJSONTyped(value?: RegisterAppRequest | null, ignoreDiscriminator: boolean = false): any {
+export function InvocationWebhookSubjectToJSONTyped(value?: InvocationWebhookSubject | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'name': value['name'],
-        'org_id': value['orgId'],
-        'external_ref': value['externalRef'],
-        'display_name': value['displayName'],
-        'callback_timeout_seconds': value['callbackTimeoutSeconds'],
-        'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
-        'browser_access': BrowserAccessToJSON(value['browserAccess']),
-        'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
+        'status': InvocationStatusToJSON(value['status']),
+        'stop_reason': InvocationStopReasonToJSON(value['stopReason']),
+        'failure_code': value['failureCode'],
+        'waiting_tool_call_ids': value['waitingToolCallIds'],
+        'credit_block': CreditBlockToJSON(value['creditBlock']),
     };
 }

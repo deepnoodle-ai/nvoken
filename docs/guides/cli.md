@@ -40,6 +40,23 @@ the scope is reported as not found, which is what an operator wants when the id
 came from a ticket, a log line, or somebody else's paste. They may only narrow:
 a credential already bound to one tenant refuses a scope naming another.
 
+## Checking a deployment
+
+`nvoken health` and `nvoken ready` read the two probe endpoints and need no
+credential — a probe that required a key could not tell "the deployment is
+down" apart from "this key is wrong", and those call for opposite responses.
+
+```bash
+nvoken health --base-url https://nvoken.example   # is the process running?
+nvoken ready  --base-url https://nvoken.example   # can it serve requests?
+```
+
+Route traffic on `ready`, which answers only once Postgres has; restart on
+`health`, which touches nothing, so a database outage never reads as a reason
+to kill the process. A deployment that answers "not ready" is a successful
+probe of an unhealthy deployment: the report prints normally and the command
+exits non-zero, so a wait loop can branch on the exit code alone.
+
 ## Discovering and scripting commands
 
 `nvoken --help` prints the complete command tree. Every command has its own

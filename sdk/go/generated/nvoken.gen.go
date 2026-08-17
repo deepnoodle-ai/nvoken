@@ -853,6 +853,21 @@ func (e InvocationTimelineStepKind) Valid() bool {
 	}
 }
 
+// Defines values for InvocationWebhookContextSchemaVersion.
+const (
+	InvocationWebhookContextSchemaVersionN1 InvocationWebhookContextSchemaVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the InvocationWebhookContextSchemaVersion enum.
+func (e InvocationWebhookContextSchemaVersion) Valid() bool {
+	switch e {
+	case InvocationWebhookContextSchemaVersionN1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MCPServerTransport.
 const (
 	TransportStreamableHTTP MCPServerTransport = "streamable_http"
@@ -1953,13 +1968,13 @@ func (e ToolCallStatus) Valid() bool {
 
 // Defines values for ToolCallbackContextSchemaVersion.
 const (
-	N1 ToolCallbackContextSchemaVersion = 1
+	ToolCallbackContextSchemaVersionN1 ToolCallbackContextSchemaVersion = 1
 )
 
 // Valid indicates whether the value is a known member of the ToolCallbackContextSchemaVersion enum.
 func (e ToolCallbackContextSchemaVersion) Valid() bool {
 	switch e {
-	case N1:
+	case ToolCallbackContextSchemaVersionN1:
 		return true
 	default:
 		return false
@@ -2389,15 +2404,30 @@ func (e GetUsageTimeseriesParamsGroupBy) Valid() bool {
 	}
 }
 
+// Defines values for ReceiveInvocationWebhookParamsXNvokenSignatureVersion.
+const (
+	ReceiveInvocationWebhookParamsXNvokenSignatureVersionV1 ReceiveInvocationWebhookParamsXNvokenSignatureVersion = "v1"
+)
+
+// Valid indicates whether the value is a known member of the ReceiveInvocationWebhookParamsXNvokenSignatureVersion enum.
+func (e ReceiveInvocationWebhookParamsXNvokenSignatureVersion) Valid() bool {
+	switch e {
+	case ReceiveInvocationWebhookParamsXNvokenSignatureVersionV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReceiveToolCallbackParamsXNvokenSignatureVersion.
 const (
-	V1 ReceiveToolCallbackParamsXNvokenSignatureVersion = "v1"
+	ReceiveToolCallbackParamsXNvokenSignatureVersionV1 ReceiveToolCallbackParamsXNvokenSignatureVersion = "v1"
 )
 
 // Valid indicates whether the value is a known member of the ReceiveToolCallbackParamsXNvokenSignatureVersion enum.
 func (e ReceiveToolCallbackParamsXNvokenSignatureVersion) Valid() bool {
 	switch e {
-	case V1:
+	case ReceiveToolCallbackParamsXNvokenSignatureVersionV1:
 		return true
 	default:
 		return false
@@ -4654,6 +4684,134 @@ type InvocationTimelineStep struct {
 // InvocationTimelineStepKind defines model for InvocationTimelineStep.Kind.
 type InvocationTimelineStepKind string
 
+// InvocationWebhookContext defines model for InvocationWebhookContext.
+type InvocationWebhookContext struct {
+	AgentKey string `json:"agent_key"`
+
+	// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
+	// both are the same durable record and carry the same `dlvr_` prefix.
+	// Treat it as opaque; it appears in the signed payload and identifies the
+	// attempt when you report a delivery problem.
+	DeliveryID DeliveryID `json:"delivery_id"`
+
+	// Event `invocation.waiting` fires when a turn stops and needs you to run at
+	// least one tool. A turn waiting only on callback tools sends nothing,
+	// because nvoken delivers those to your endpoint itself and there is
+	// nothing for you to do.
+	//
+	// `invocation.paused` fires when a spending limit you opted into stopped
+	// the turn, and carries the `stop_reason` naming the limit.
+	//
+	// `invocation.ended` fires exactly once, when the turn reaches
+	// `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
+	// incomplete payloads carry `stop_reason` alongside `failure_code`.
+	Event WebhookEvent `json:"event"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID  InvocationID                          `json:"invocation_id"`
+	SchemaVersion InvocationWebhookContextSchemaVersion `json:"schema_version"`
+
+	// Sequence Counts transitions within one Invocation, from 1. Deliveries can
+	// arrive out of order, so a receiver folding state keeps the highest
+	// sequence it has seen for that Invocation and discards anything
+	// lower rather than applying whichever arrived last.
+	Sequence int64 `json:"sequence"`
+
+	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+	SessionID SessionID `json:"session_id"`
+
+	// TenantKey Absent for the app's default tenant.
+	TenantKey *string `json:"tenant_key,omitempty"`
+}
+
+// InvocationWebhookContextSchemaVersion defines model for InvocationWebhookContext.SchemaVersion.
+type InvocationWebhookContextSchemaVersion int
+
+// InvocationWebhookRequest defines model for InvocationWebhookRequest.
+type InvocationWebhookRequest struct {
+	// Invocation A pointer to the turn, not a projection of it. It deliberately carries
+	// no transcript content, tool arguments, structured output, usage,
+	// provenance, or failure message: a signed body that grew those would be
+	// a second, staler copy of the record, and a receiver that read them
+	// would be reconciling against the wrong source. Read
+	// `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+	// beyond what is here.
+	Invocation InvocationWebhookSubject `json:"invocation"`
+	Nvoken     InvocationWebhookContext `json:"nvoken"`
+}
+
+// InvocationWebhookSubject A pointer to the turn, not a projection of it. It deliberately carries
+// no transcript content, tool arguments, structured output, usage,
+// provenance, or failure message: a signed body that grew those would be
+// a second, staler copy of the record, and a receiver that read them
+// would be reconciling against the wrong source. Read
+// `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+// beyond what is here.
+type InvocationWebhookSubject struct {
+	// CreditBlock Present when a spending limit stopped the turn, naming the account
+	// that could not fund the next attempt.
+	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
+
+	// FailureCode Present when the turn ended in a failure.
+	FailureCode *string `json:"failure_code,omitempty"`
+
+	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
+	// turn reaches one of them it never changes again. Do not encode that
+	// set: an InvocationChange carries `terminal`, an Invocation carries
+	// `ended_at`, and both say the same thing without a list of yours to
+	// keep in step as this enum grows.
+	//
+	// `completed` means the turn ended the way it was asked to: the model
+	// finished on its own, or you interrupted it.
+	//
+	// `incomplete` means a limit you set stopped the turn cleanly, between
+	// steps rather than mid-request. `stop_reason` names the limit that ran
+	// out. The reply so far is valid and carries into the next turn just
+	// like a completed turn's does, so this is a stopping point rather than
+	// an error.
+	//
+	// `failed` means the turn could not stop cleanly — a deadline landing in
+	// the middle of a model request, for example — or that a turn you asked
+	// for structured output from never produced a valid object. Read `error`
+	// for the reason; the reply, if any, is not carried forward.
+	//
+	// `waiting` — `requires_action` in some other APIs — means the turn has
+	// stopped for tool calls you need to run. Nothing is executing. Send the
+	// results and the turn returns to `queued` and picks up where it left
+	// off. A turn can also return to `queued` on its own if nvoken had to
+	// restart it after an interruption; `attempt` tells the two apart, and
+	// the `revision` on each stream update tells you their order.
+	//
+	// `paused` means a spending limit stopped the turn but left it
+	// resumable. Nothing is executing, and its deadlines are on hold, so a
+	// turn cannot expire while you decide. Raise the turn's limit or add
+	// credits to the blocked tenant account and it continues. It still
+	// accepts interrupt, cancel, and nudge.
+	Status InvocationStatus `json:"status"`
+
+	// StopReason Why a turn stopped. Set on turns that did not fail, and which values
+	// can appear depends on the status.
+	//
+	// A `completed` turn carries `end_turn` (the model finished on its own)
+	// or `interrupted` (you asked it to stop, and it stopped at the next
+	// clean point). An `incomplete` turn carries whichever limit ran out:
+	// `max_iterations`, `deadline`, `max_output_tokens`, or
+	// `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
+	// `insufficient_credits`, never `deadline`, because a paused turn's
+	// deadlines are on hold.
+	//
+	// An interrupt is deliberately `completed` rather than `incomplete`: you
+	// asked the turn to end there, so ending there is the result you wanted,
+	// not a shortfall.
+	//
+	// Expect new values here over time.
+	StopReason *InvocationStopReason `json:"stop_reason,omitempty"`
+
+	// WaitingToolCallIds The host tools this turn is parked on. Present on
+	// `invocation.waiting` only.
+	WaitingToolCallIds *[]ToolCallID `json:"waiting_tool_call_ids,omitempty"`
+}
+
 // Limits Optional requested limits. Total time bounds the entire turn, active
 // time bounds model and tool execution, and waiting time bounds the
 // cumulative time parked for host or callback tool results. Installation
@@ -5608,7 +5766,11 @@ type RedactedBlock struct {
 // RedactedBlockType defines model for RedactedBlock.Type.
 type RedactedBlockType string
 
-// RegisterAppRequest defines model for RegisterAppRequest.
+// RegisterAppRequest There is deliberately no `anonymous_access` here. Enabling it requires
+// browser access, finite App limits, and `credit_policy: required` to
+// already be stored, so it is set with `PATCH /v1/apps/{app_id}` once
+// the App exists rather than validated against a request that is still
+// describing itself.
 type RegisterAppRequest struct {
 	// BrowserAccess Optional complete browser configuration. Null and omission both
 	// create the App with browser access disabled.
@@ -7009,6 +7171,9 @@ type InvalidRequest = ErrorResponse
 // MCPDiscoveryFailed defines model for MCPDiscoveryFailed.
 type MCPDiscoveryFailed = ErrorResponse
 
+// MethodNotAllowed defines model for MethodNotAllowed.
+type MethodNotAllowed = ErrorResponse
+
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
 
@@ -7552,6 +7717,28 @@ type GetUsageTimeseriesParams struct {
 // GetUsageTimeseriesParamsGroupBy defines parameters for GetUsageTimeseries.
 type GetUsageTimeseriesParamsGroupBy string
 
+// ReceiveInvocationWebhookParams defines parameters for ReceiveInvocationWebhook.
+type ReceiveInvocationWebhookParams struct {
+	// XNvokenSignature HMAC-SHA256 signature of the canonical delivery string.
+	XNvokenSignature        string                                                `json:"X-Nvoken-Signature"`
+	XNvokenSignatureVersion ReceiveInvocationWebhookParamsXNvokenSignatureVersion `json:"X-Nvoken-Signature-Version"`
+
+	// XNvokenTimestamp Unix timestamp used in the signature.
+	XNvokenTimestamp         int64      `json:"X-Nvoken-Timestamp"`
+	XNvokenDeliveryID        DeliveryID `json:"X-Nvoken-Delivery-Id"`
+	XNvokenSigningKeyID      string     `json:"X-Nvoken-Signing-Key-Id"`
+	XNvokenSigningKeyVersion int64      `json:"X-Nvoken-Signing-Key-Version"`
+
+	// IdempotencyKey The delivery ID, unchanged across retries of this delivery. Unlike
+	// the callback scheme, which keys on the ToolCall, one Invocation
+	// produces several deliveries — one per transition — so this is the
+	// delivery rather than the turn.
+	IdempotencyKey DeliveryID `json:"Idempotency-Key"`
+}
+
+// ReceiveInvocationWebhookParamsXNvokenSignatureVersion defines parameters for ReceiveInvocationWebhook.
+type ReceiveInvocationWebhookParamsXNvokenSignatureVersion string
+
 // ReceiveToolCallbackParams defines parameters for ReceiveToolCallback.
 type ReceiveToolCallbackParams struct {
 	// XNvokenSignature HMAC-SHA256 signature of the canonical delivery string.
@@ -7642,6 +7829,9 @@ type UpdateSessionJSONRequestBody = UpdateSessionRequest
 
 // ForkSessionJSONRequestBody defines body for ForkSession for application/json ContentType.
 type ForkSessionJSONRequestBody = ForkSessionRequest
+
+// ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody defines body for ReceiveInvocationWebhook for application/vnd.nvoken.invocation-webhook+json; version=1 ContentType.
+type ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody = InvocationWebhookRequest
 
 // ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody defines body for ReceiveToolCallback for application/vnd.nvoken.tool-callback+json; version=1 ContentType.
 type ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody = ToolCallbackRequest
@@ -8943,6 +9133,25 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// GetHealth Liveness
+	//
+	// Answers 200 as long as the process is running. It touches nothing —
+	// no database, no provider — so it stays honest as a restart signal:
+	// a dependency being down is not a reason to kill the process.
+	//
+	// Corresponds with GET /health (the `GetHealth` operationId).
+	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetReadiness Readiness
+	//
+	// Answers 200 when the process can serve requests, which here means
+	// Postgres answered a ping. Route traffic on this rather than on
+	// `/health`: nvoken's execution authority is the database, so a process
+	// that cannot reach it has nothing to serve.
+	//
+	// Corresponds with GET /ready (the `GetReadiness` operationId).
+	GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAdmissions List attempts to start an Invocation, admitted and refused
 	//
@@ -10785,6 +10994,45 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetHealth Liveness
+//
+// Answers 200 as long as the process is running. It touches nothing —
+// no database, no provider — so it stays honest as a restart signal:
+// a dependency being down is not a reason to kill the process.
+//
+// Corresponds with GET /health (the `GetHealth` operationId).
+func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetReadiness Readiness
+//
+// Answers 200 when the process can serve requests, which here means
+// Postgres answered a ping. Route traffic on this rather than on
+// `/health`: nvoken's execution authority is the database, so a process
+// that cannot reach it has nothing to serve.
+//
+// Corresponds with GET /ready (the `GetReadiness` operationId).
+func (c *Client) GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReadinessRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListAdmissions List attempts to start an Invocation, admitted and refused
@@ -13737,6 +13985,60 @@ func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeser
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetHealthRequest constructs an http.Request for the GetHealth method
+func NewGetHealthRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/health")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetReadinessRequest constructs an http.Request for the GetReadiness method
+func NewGetReadinessRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ready")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAdmissionsRequest constructs an http.Request for the ListAdmissions method
@@ -19247,6 +19549,29 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// GetHealthWithResponse Liveness
+	//
+	// Answers 200 as long as the process is running. It touches nothing —
+	// no database, no provider — so it stays honest as a restart signal:
+	// a dependency being down is not a reason to kill the process.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /health (the `GetHealth` operationId).
+	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthHTTPResponse, error)
+
+	// GetReadinessWithResponse Readiness
+	//
+	// Answers 200 when the process can serve requests, which here means
+	// Postgres answered a ping. Route traffic on this rather than on
+	// `/health`: nvoken's execution authority is the database, so a process
+	// that cannot reach it has nothing to serve.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /ready (the `GetReadiness` operationId).
+	GetReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadinessHTTPResponse, error)
+
 	// ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 	//
 	// Every request to create an Invocation leaves one record here, whether
@@ -21214,6 +21539,102 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseriesWithResponse(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*GetUsageTimeseriesHTTPResponse, error)
+}
+
+// GetHealthHTTPResponse405Headers the declared response headers of an HTTP 405 response for GetHealth
+type GetHealthHTTPResponse405Headers struct {
+	Allow *string
+}
+
+type GetHealthHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *MethodNotAllowed
+	// Headers405 the parsed response headers for an HTTP 405 response
+	Headers405 *GetHealthHTTPResponse405Headers
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r GetHealthHTTPResponse) GetJSON405() *MethodNotAllowed {
+	return r.JSON405
+}
+
+// GetBody returns the raw response body bytes
+func (r GetHealthHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHealthHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHealthHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetHealthHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetReadinessHTTPResponse405Headers the declared response headers of an HTTP 405 response for GetReadiness
+type GetReadinessHTTPResponse405Headers struct {
+	Allow *string
+}
+
+type GetReadinessHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON405 the response for an HTTP 405 `application/json` response
+	JSON405 *MethodNotAllowed
+	// Headers405 the parsed response headers for an HTTP 405 response
+	Headers405 *GetReadinessHTTPResponse405Headers
+}
+
+// GetJSON405 returns the response for an HTTP 405 `application/json` response
+func (r GetReadinessHTTPResponse) GetJSON405() *MethodNotAllowed {
+	return r.JSON405
+}
+
+// GetBody returns the raw response body bytes
+func (r GetReadinessHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetReadinessHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetReadinessHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetReadinessHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListAdmissionsHTTPResponse struct {
@@ -28661,6 +29082,41 @@ func (r GetUsageTimeseriesHTTPResponse) ContentType() string {
 	return ""
 }
 
+// GetHealthWithResponse Liveness
+//
+// Answers 200 as long as the process is running. It touches nothing —
+// no database, no provider — so it stays honest as a restart signal:
+// a dependency being down is not a reason to kill the process.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /health (the `GetHealth` operationId).
+func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthHTTPResponse, error) {
+	rsp, err := c.GetHealth(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHealthHTTPResponse(rsp)
+}
+
+// GetReadinessWithResponse Readiness
+//
+// Answers 200 when the process can serve requests, which here means
+// Postgres answered a ping. Route traffic on this rather than on
+// `/health`: nvoken's execution authority is the database, so a process
+// that cannot reach it has nothing to serve.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /ready (the `GetReadiness` operationId).
+func (c *ClientWithResponses) GetReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadinessHTTPResponse, error) {
+	rsp, err := c.GetReadiness(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetReadinessHTTPResponse(rsp)
+}
+
 // ListAdmissionsWithResponse List attempts to start an Invocation, admitted and refused
 //
 // Every request to create an Invocation leaves one record here, whether
@@ -31293,6 +31749,84 @@ func (c *ClientWithResponses) GetUsageTimeseriesWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetUsageTimeseriesHTTPResponse(rsp)
+}
+
+// ParseGetHealthHTTPResponse parses an HTTP response from a GetHealthWithResponse call
+func ParseGetHealthHTTPResponse(rsp *http.Response) (*GetHealthHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHealthHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 405:
+		var headers GetHealthHTTPResponse405Headers
+		if values := rsp.Header.Values("Allow"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Allow", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Allow = &value
+		}
+		response.Headers405 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetReadinessHTTPResponse parses an HTTP response from a GetReadinessWithResponse call
+func ParseGetReadinessHTTPResponse(rsp *http.Response) (*GetReadinessHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetReadinessHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 405:
+		var headers GetReadinessHTTPResponse405Headers
+		if values := rsp.Header.Values("Allow"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Allow", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Allow = &value
+		}
+		response.Headers405 = &headers
+	}
+
+	return response, nil
 }
 
 // ParseListAdmissionsHTTPResponse parses an HTTP response from a ListAdmissionsWithResponse call
@@ -37849,10 +38383,39 @@ func (p *WebhookInitiator) applyWebhookEditors(ctx context.Context, req *http.Re
 
 // WebhookInitiatorInterface is the interface specification for the webhook initiator.
 type WebhookInitiatorInterface interface {
+	// ReceiveInvocationWebhookWithBody fires the invocationWebhook webhook with any body
+	ReceiveInvocationWebhookWithBody(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReceiveInvocationWebhookWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReceiveToolCallbackWithBody fires the toolCallback webhook with any body
 	ReceiveToolCallbackWithBody(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReceiveToolCallbackWithApplicationVndNvokenToolCallbackPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, body ReceiveToolCallbackApplicationVndNvokenToolCallbackPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (p *WebhookInitiator) ReceiveInvocationWebhookWithBody(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := p.applyWebhookEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return p.Client.Do(req)
+}
+
+func (p *WebhookInitiator) ReceiveInvocationWebhookWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(ctx context.Context, targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(targetURL, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := p.applyWebhookEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return p.Client.Do(req)
 }
 
 func (p *WebhookInitiator) ReceiveToolCallbackWithBody(ctx context.Context, targetURL string, params *ReceiveToolCallbackParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -37877,6 +38440,103 @@ func (p *WebhookInitiator) ReceiveToolCallbackWithApplicationVndNvokenToolCallba
 		return nil, err
 	}
 	return p.Client.Do(req)
+}
+
+// NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body builds a application/vnd.nvoken.invocation-webhook+json; version=1 POST request for the invocationWebhook webhook
+func NewReceiveInvocationWebhookWebhookRequestWithApplicationVndNvokenInvocationWebhookPlusJSONVersion1Body(targetURL string, params *ReceiveInvocationWebhookParams, body ReceiveInvocationWebhookApplicationVndNvokenInvocationWebhookPlusJSONVersion1RequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL, params, "application/vnd.nvoken.invocation-webhook+json; version=1", bodyReader)
+}
+
+// NewReceiveInvocationWebhookWebhookRequestWithBody builds a POST request for the invocationWebhook webhook with any body
+func NewReceiveInvocationWebhookWebhookRequestWithBody(targetURL string, params *ReceiveInvocationWebhookParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+	_ = err
+
+	reqURL, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, reqURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signature", params.XNvokenSignature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signature", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signature-Version", params.XNvokenSignatureVersion, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signature-Version", headerParam1)
+
+		var headerParam2 string
+
+		headerParam2, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Timestamp", params.XNvokenTimestamp, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "integer", Format: "int64"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Timestamp", headerParam2)
+
+		var headerParam3 string
+
+		headerParam3, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Delivery-Id", params.XNvokenDeliveryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Delivery-Id", headerParam3)
+
+		var headerParam4 string
+
+		headerParam4, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signing-Key-Id", params.XNvokenSigningKeyID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signing-Key-Id", headerParam4)
+
+		var headerParam5 string
+
+		headerParam5, err = runtime.StyleParamWithOptions("simple", false, "X-Nvoken-Signing-Key-Version", params.XNvokenSigningKeyVersion, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "integer", Format: "int64"})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Nvoken-Signing-Key-Version", headerParam5)
+
+		var headerParam6 string
+
+		headerParam6, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam6)
+
+	}
+	return req, nil
 }
 
 // NewReceiveToolCallbackWebhookRequestWithApplicationVndNvokenToolCallbackPlusJSONVersion1Body builds a application/vnd.nvoken.tool-callback+json; version=1 POST request for the toolCallback webhook

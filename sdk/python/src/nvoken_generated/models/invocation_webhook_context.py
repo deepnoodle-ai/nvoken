@@ -17,19 +17,35 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Annotated
+from nvoken_generated.models.webhook_event import WebhookEvent
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class CreditBlock(BaseModel):
+class InvocationWebhookContext(BaseModel):
     """
-    CreditBlock
+    InvocationWebhookContext
     """ # noqa: E501
-    tenant_key: Optional[StrictStr] = Field(description="Account that could not fund the next provider attempt; null means the App's default tenant.")
+    schema_version: StrictInt
+    delivery_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem. ")
+    event: WebhookEvent
+    sequence: Annotated[int, Field(strict=True, ge=1)] = Field(description="Counts transitions within one Invocation, from 1. Deliveries can arrive out of order, so a receiver folding state keeps the highest sequence it has seen for that Invocation and discards anything lower rather than applying whichever arrived last. ")
+    invocation_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
+    session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
+    agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
+    tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Absent for the app's default tenant.")
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["tenant_key"]
+    __properties: ClassVar[List[str]] = ["schema_version", "delivery_id", "event", "sequence", "invocation_id", "session_id", "agent_key", "tenant_key"]
+
+    @field_validator('schema_version')
+    def schema_version_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set([1]):
+            raise ValueError("must be one of enum values (1)")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -49,7 +65,7 @@ class CreditBlock(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of CreditBlock from a JSON string"""
+        """Create an instance of InvocationWebhookContext from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -77,16 +93,11 @@ class CreditBlock(BaseModel):
             for _key, _value in self.additional_properties.items():
                 _dict[_key] = _value
 
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
-
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of CreditBlock from a dict"""
+        """Create an instance of InvocationWebhookContext from a dict"""
         if obj is None:
             return None
 
@@ -94,6 +105,13 @@ class CreditBlock(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "schema_version": obj.get("schema_version"),
+            "delivery_id": obj.get("delivery_id"),
+            "event": obj.get("event"),
+            "sequence": obj.get("sequence"),
+            "invocation_id": obj.get("invocation_id"),
+            "session_id": obj.get("session_id"),
+            "agent_key": obj.get("agent_key"),
             "tenant_key": obj.get("tenant_key")
         })
         # store additional fields in additional_properties

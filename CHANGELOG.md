@@ -8,6 +8,10 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **The deployment probes are reachable.** `nvoken health` and `nvoken ready`,
+  and `nvoken.NewProbe` in Go, read `/health` and `/ready` without a
+  credential. A refused readiness check prints its report and exits non-zero.
+
 - **`user_key` is writable from every SDK.** It was reachable on the Go
   invocation request and nowhere else, so user-scope Agent memory — where
   `user_key` decides whose durable memories the model can recall — could only

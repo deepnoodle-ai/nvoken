@@ -29,7 +29,7 @@ from pydantic_core import to_jsonable_python
 
 class RegisterAppRequest(BaseModel):
     """
-    RegisterAppRequest
+    There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
     """ # noqa: E501
     name: StrictStr = Field(description="The unique name identifying this app. Registering a name that already exists is rejected. ")
     org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration. ")

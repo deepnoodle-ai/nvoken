@@ -11,60 +11,78 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// RegisterAppRequest : There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
+use serde_repr::{Deserialize_repr, Serialize_repr};
+
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RegisterAppRequest {
-    /// The unique name identifying this app. Registering a name that already exists is rejected.
-    #[serde(rename = "name")]
-    pub name: String,
-    /// Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration.
-    #[serde(rename = "org_id", skip_serializing_if = "Option::is_none")]
-    pub org_id: Option<String>,
-    /// Optional opaque owner reference.
-    #[serde(rename = "external_ref", skip_serializing_if = "Option::is_none")]
-    pub external_ref: Option<String>,
-    /// Optional human-facing label.
-    #[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    /// Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them.
-    #[serde(
-        rename = "callback_timeout_seconds",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub callback_timeout_seconds: Option<u64>,
-    /// Optional shared App admission ceilings. Browser access requires a non-null value.
-    #[serde(
-        rename = "default_rate_limits",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
-    /// Optional complete browser configuration. Null and omission both create the App with browser access disabled.
-    #[serde(
-        rename = "browser_access",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub browser_access: Option<Option<Box<models::BrowserAccess>>>,
-    /// Defaults to `off`. See the schema for what each value enforces.
-    #[serde(rename = "credit_policy", skip_serializing_if = "Option::is_none")]
-    pub credit_policy: Option<models::CreditPolicy>,
+pub struct InvocationWebhookContext {
+    #[serde(rename = "schema_version")]
+    pub schema_version: SchemaVersion,
+    /// Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem.
+    #[serde(rename = "delivery_id")]
+    pub delivery_id: String,
+    #[serde(rename = "event")]
+    pub event: models::WebhookEvent,
+    /// Counts transitions within one Invocation, from 1. Deliveries can arrive out of order, so a receiver folding state keeps the highest sequence it has seen for that Invocation and discards anything lower rather than applying whichever arrived last.
+    #[serde(rename = "sequence")]
+    pub sequence: u64,
+    /// Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+    #[serde(rename = "invocation_id")]
+    pub invocation_id: String,
+    /// Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
+    #[serde(rename = "session_id")]
+    pub session_id: String,
+    #[serde(rename = "agent_key")]
+    pub agent_key: String,
+    /// Absent for the app's default tenant.
+    #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
+    pub tenant_key: Option<String>,
 }
 
-impl RegisterAppRequest {
-    /// There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
-    pub fn new(name: String) -> RegisterAppRequest {
-        RegisterAppRequest {
-            name,
-            org_id: None,
-            external_ref: None,
-            display_name: None,
-            callback_timeout_seconds: None,
-            default_rate_limits: None,
-            browser_access: None,
-            credit_policy: None,
+impl InvocationWebhookContext {
+    pub fn new(
+        schema_version: SchemaVersion,
+        delivery_id: String,
+        event: models::WebhookEvent,
+        sequence: u64,
+        invocation_id: String,
+        session_id: String,
+        agent_key: String,
+    ) -> InvocationWebhookContext {
+        InvocationWebhookContext {
+            schema_version,
+            delivery_id,
+            event,
+            sequence,
+            invocation_id,
+            session_id,
+            agent_key,
+            tenant_key: None,
         }
+    }
+}
+///
+#[repr(i64)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize_repr, Deserialize_repr,
+)]
+pub enum SchemaVersion {
+    Variant1 = 1,
+}
+
+impl std::fmt::Display for SchemaVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Variant1 => "1",
+            }
+        )
+    }
+}
+
+impl Default for SchemaVersion {
+    fn default() -> SchemaVersion {
+        Self::Variant1
     }
 }

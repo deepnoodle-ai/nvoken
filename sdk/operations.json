@@ -132,6 +132,11 @@
       "path": "/v1/identity"
     },
     {
+      "operation_id": "getHealth",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
       "operation_id": "getInvocation",
       "method": "GET",
       "path": "/v1/invocations/{invocation_id}"
@@ -170,6 +175,11 @@
       "operation_id": "getProviderKeyUsage",
       "method": "GET",
       "path": "/v1/provider-keys/{provider_key_id}/usage"
+    },
+    {
+      "operation_id": "getReadiness",
+      "method": "GET",
+      "path": "/ready"
     },
     {
       "operation_id": "getSession",

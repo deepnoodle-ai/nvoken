@@ -1392,3 +1392,52 @@ func TestScopeFlagsNarrowEveryRequest(t *testing.T) {
 		t.Errorf("user header = %q", got)
 	}
 }
+
+func TestProbesNeedNoCredentialAndFailLoudlyWhenRefused(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "")
+	var reached []string
+	var sawAuthorization bool
+	server := httptest.NewServer(http.HandlerFunc(func(
+		response http.ResponseWriter,
+		request *http.Request,
+	) {
+		reached = append(reached, request.URL.Path)
+		if request.Header.Get("Authorization") != "" {
+			sawAuthorization = true
+		}
+		response.Header().Set("Content-Type", "text/plain")
+		if request.URL.Path == "/ready" {
+			response.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(response, "database unavailable")
+			return
+		}
+		_, _ = io.WriteString(response, "ok")
+	}))
+	t.Cleanup(server.Close)
+
+	output, err := executeCLI(t, server.URL, true, "health")
+	if err != nil {
+		t.Fatalf("health without a credential: %v", err)
+	}
+	if !strings.Contains(output, `"ready":true`) || !strings.Contains(output, `"status":200`) {
+		t.Errorf("health output = %s", output)
+	}
+
+	output, err = executeCLI(t, server.URL, true, "ready")
+	if err == nil {
+		t.Fatal("a refused readiness probe must exit non-zero")
+	}
+	if code := cli.GetExitCode(err); code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(output, `"ready":false`) || !strings.Contains(output, "database unavailable") {
+		t.Errorf("readiness output = %s", output)
+	}
+
+	if sawAuthorization {
+		t.Error("a probe must not send a credential")
+	}
+	if len(reached) != 2 || reached[0] != "/health" || reached[1] != "/ready" {
+		t.Errorf("paths reached = %v", reached)
+	}
+}

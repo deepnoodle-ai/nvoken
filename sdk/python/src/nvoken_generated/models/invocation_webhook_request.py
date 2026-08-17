@@ -17,19 +17,22 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Any, ClassVar, Dict, List
+from nvoken_generated.models.invocation_webhook_context import InvocationWebhookContext
+from nvoken_generated.models.invocation_webhook_subject import InvocationWebhookSubject
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class CreditBlock(BaseModel):
+class InvocationWebhookRequest(BaseModel):
     """
-    CreditBlock
+    InvocationWebhookRequest
     """ # noqa: E501
-    tenant_key: Optional[StrictStr] = Field(description="Account that could not fund the next provider attempt; null means the App's default tenant.")
+    nvoken: InvocationWebhookContext
+    invocation: InvocationWebhookSubject
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["tenant_key"]
+    __properties: ClassVar[List[str]] = ["nvoken", "invocation"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -49,7 +52,7 @@ class CreditBlock(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of CreditBlock from a JSON string"""
+        """Create an instance of InvocationWebhookRequest from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -72,21 +75,22 @@ class CreditBlock(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of nvoken
+        if self.nvoken:
+            _dict['nvoken'] = self.nvoken.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of invocation
+        if self.invocation:
+            _dict['invocation'] = self.invocation.to_dict()
         # puts key-value pairs in additional_properties in the top level
         if self.additional_properties is not None:
             for _key, _value in self.additional_properties.items():
                 _dict[_key] = _value
 
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
-
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of CreditBlock from a dict"""
+        """Create an instance of InvocationWebhookRequest from a dict"""
         if obj is None:
             return None
 
@@ -94,7 +98,8 @@ class CreditBlock(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "tenant_key": obj.get("tenant_key")
+            "nvoken": InvocationWebhookContext.from_dict(obj["nvoken"]) if obj.get("nvoken") is not None else None,
+            "invocation": InvocationWebhookSubject.from_dict(obj["invocation"]) if obj.get("invocation") is not None else None
         })
         # store additional fields in additional_properties
         for _key in obj.keys():

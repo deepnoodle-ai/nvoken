@@ -10,6 +10,7 @@ export * from './InvocationsApi.js';
 export * from './MCPApi.js';
 export * from './MemoriesApi.js';
 export * from './ModelsApi.js';
+export * from './OperationsApi.js';
 export * from './OrgsApi.js';
 export * from './ProviderKeysApi.js';
 export * from './SessionsApi.js';

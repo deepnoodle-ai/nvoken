@@ -309,6 +309,55 @@ tags:
       Durable machine credential lifecycle and caller introspection. These
       credentials authenticate every other operation in this contract.
 paths:
+  /health:
+    get:
+      operationId: getHealth
+      security: []
+      tags: [Operations]
+      summary: Liveness
+      description: |
+        Answers 200 as long as the process is running. It touches nothing —
+        no database, no provider — so it stays honest as a restart signal:
+        a dependency being down is not a reason to kill the process.
+      responses:
+        "200":
+          description: The process is running.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [ok]
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /ready:
+    get:
+      operationId: getReadiness
+      security: []
+      tags: [Operations]
+      summary: Readiness
+      description: |
+        Answers 200 when the process can serve requests, which here means
+        Postgres answered a ping. Route traffic on this rather than on
+        `/health`: nvoken's execution authority is the database, so a process
+        that cannot reach it has nothing to serve.
+      responses:
+        "200":
+          description: Ready to serve.
+          content:
+            text/plain:
+              schema:
+                type: string
+                enum: [ready]
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "503":
+          description: |
+            Not ready. Stop sending traffic; do not restart the process on
+            this alone, because the dependency is what is unavailable.
+          content:
+            text/plain:
+              schema:
+                type: string
   /v1/orgs:
     get:
       tags: [Orgs]
@@ -4425,6 +4474,123 @@ webhooks:
                 content:
                   ticket_id: T-1042
                 is_error: false
+  invocationWebhook:
+    post:
+      operationId: receiveInvocationWebhook
+      security: []
+      summary: Receive a signed Invocation lifecycle delivery
+      description: |
+        nvoken sends this request to the endpoint you named in `webhook` on an
+        Invocation, or to the App's `browser_access.invocation_webhook` for a
+        turn a browser started. It reports that a turn changed state; it is not
+        the turn's result.
+
+        **It is the same signing scheme as `toolCallback`**, down to the header
+        names and the canonical string, so a host verifies one way and routes
+        on the content type. The signing key is a different one: this delivery
+        is signed with the App's `webhook` purpose key rather than its
+        `callback` key, and the headers tell you which.
+
+        **Expect duplicates and reordering.** Delivery is at-least-once, so
+        deduplicate on the delivery ID in the `Idempotency-Key` header. Two
+        transitions for one turn can also arrive out of order, so fold by
+        `nvoken.sequence` — keep the highest you have seen for that Invocation
+        and discard anything lower.
+
+        **Reply 2xx to accept, and mean it.** Any 2xx settles the delivery.
+        nvoken retries connection failures and HTTP 408, 425, 429, 500, 502,
+        503, and 504 with exponential backoff, up to five attempts; any other
+        status is permanent and is not retried. The body is ignored and read
+        only up to 8 KiB.
+
+        **A delivery that never lands is not an error you will hear about.**
+        Once attempts run out nvoken records the delivery failed and moves on —
+        the turn is unaffected, and nothing retries later. That is what
+        `GET /v1/invocations/ended` is for: it walks every turn that ended,
+        oldest first, from a cursor you keep, so a webhook outage becomes a
+        gap you close rather than turns you never learn about. Reconcile
+        against it; do not treat webhook delivery as the ledger.
+      parameters:
+        - name: X-Nvoken-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: "^sha256=[0-9a-f]{64}$"
+          description: HMAC-SHA256 signature of the canonical delivery string.
+        - name: X-Nvoken-Signature-Version
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [v1]
+        - name: X-Nvoken-Timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Unix timestamp used in the signature.
+        - name: X-Nvoken-Delivery-Id
+          in: header
+          required: true
+          schema:
+            $ref: "#/components/schemas/DeliveryID"
+        - name: X-Nvoken-Signing-Key-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: X-Nvoken-Signing-Key-Version
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            $ref: "#/components/schemas/DeliveryID"
+          description: |
+            The delivery ID, unchanged across retries of this delivery. Unlike
+            the callback scheme, which keys on the ToolCall, one Invocation
+            produces several deliveries — one per transition — so this is the
+            delivery rather than the turn.
+      requestBody:
+        required: true
+        content:
+          "application/vnd.nvoken.invocation-webhook+json; version=1":
+            schema:
+              $ref: "#/components/schemas/InvocationWebhookRequest"
+            example:
+              nvoken:
+                schema_version: 1
+                delivery_id: dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb327
+                event: invocation.ended
+                sequence: 2
+                invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                agent_key: support
+                tenant_key: acme
+              invocation:
+                status: completed
+                stop_reason: end_turn
+      responses:
+        "2XX":
+          description: |
+            Delivery accepted. The body is ignored, so there is nothing to
+            return; reply 200 or 204 once you have durably recorded it.
+        "4XX":
+          description: |
+            Permanent. nvoken does not retry, and the delivery is recorded
+            failed. Reply 429 instead if you want the retry.
+        "5XX":
+          description: |
+            Retried with backoff for 500, 502, 503, and 504. Any other 5xx is
+            permanent.
 components:
   securitySchemes:
     bearerAuth:
@@ -4450,6 +4616,14 @@ components:
         Lifetime is at most 15 minutes. Client tokens are
         accepted only in this header, never in a query parameter, and expose
         only the documented Client-prefixed response schemas and public routes.
+
+        An App with anonymous access enabled has a fourth class: a token
+        nvoken itself mints and signs (HS256, `typ: nvoken-anon-access`) from
+        `POST /v1/anonymous-tokens`, for a visitor with no account. It is
+        presented in this same header and is authorized exactly like a client
+        token, narrowed to the one Agent the App named. It is short-lived and
+        paired with a renewable visitor token; a host never signs it, which is
+        the difference from the class above.
   headers:
     ETag:
       description: Strong validator for this exact JSON representation.
@@ -5160,6 +5334,12 @@ components:
         credit_policy:
           $ref: "#/components/schemas/CreditPolicy"
           description: Defaults to `off`. See the schema for what each value enforces.
+      description: |
+        There is deliberately no `anonymous_access` here. Enabling it requires
+        browser access, finite App limits, and `credit_policy: required` to
+        already be stored, so it is set with `PATCH /v1/apps/{app_id}` once
+        the App exists rather than validated against a request that is still
+        describing itself.
     UpdateAppRequest:
       type: object
       additionalProperties: false
@@ -8621,6 +8801,83 @@ components:
             A value repeated in tool input may only agree with this, never
             establish it.
         input: {}
+    InvocationWebhookContext:
+      type: object
+      additionalProperties: false
+      required: [schema_version, delivery_id, event, sequence, invocation_id,
+                 session_id, agent_key]
+      properties:
+        schema_version:
+          type: integer
+          enum: [1]
+        delivery_id:
+          $ref: "#/components/schemas/DeliveryID"
+        event:
+          $ref: "#/components/schemas/WebhookEvent"
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Counts transitions within one Invocation, from 1. Deliveries can
+            arrive out of order, so a receiver folding state keeps the highest
+            sequence it has seen for that Invocation and discards anything
+            lower rather than applying whichever arrived last.
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        agent_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+        tenant_key:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Absent for the app's default tenant.
+    InvocationWebhookSubject:
+      type: object
+      additionalProperties: false
+      required: [status]
+      description: |
+        A pointer to the turn, not a projection of it. It deliberately carries
+        no transcript content, tool arguments, structured output, usage,
+        provenance, or failure message: a signed body that grew those would be
+        a second, staler copy of the record, and a receiver that read them
+        would be reconciling against the wrong source. Read
+        `GET /v1/invocations/{invocation_id}` or its `/result` for anything
+        beyond what is here.
+      properties:
+        status:
+          $ref: "#/components/schemas/InvocationStatus"
+        stop_reason:
+          $ref: "#/components/schemas/InvocationStopReason"
+        failure_code:
+          type: string
+          minLength: 1
+          description: Present when the turn ended in a failure.
+        waiting_tool_call_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallID"
+          description: |
+            The host tools this turn is parked on. Present on
+            `invocation.waiting` only.
+        credit_block:
+          $ref: "#/components/schemas/CreditBlock"
+          description: |
+            Present when a spending limit stopped the turn, naming the account
+            that could not fund the next attempt.
+    InvocationWebhookRequest:
+      type: object
+      additionalProperties: false
+      required: [nvoken, invocation]
+      properties:
+        nvoken:
+          $ref: "#/components/schemas/InvocationWebhookContext"
+        invocation:
+          $ref: "#/components/schemas/InvocationWebhookSubject"
     ToolCallbackResponse:
       type: object
       additionalProperties: false
@@ -10327,6 +10584,23 @@ components:
           example:
             code: not_found
             message: The requested resource was not found.
+            request_id: req_01K0NVASB4CF29K41VZA271H23
+    MethodNotAllowed:
+      description: |
+        The request method is not allowed on this path. The `Allow` header
+        names the one that is.
+      headers:
+        Allow:
+          description: The allowed method.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: invalid_request
+            message: The request method is not allowed.
             request_id: req_01K0NVASB4CF29K41VZA271H23
     Conflict:
       description: The resource state conflicts with the requested lifecycle transition.
