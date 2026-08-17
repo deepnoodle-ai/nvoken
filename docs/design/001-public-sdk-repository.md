@@ -72,7 +72,7 @@ each SDK, dependencies flow from handwritten facade to generated transport;
 generated code never imports the facade. The CLI depends on the public Go SDK
 and one private local-storage package. It does not import service internals.
 
-### Contract ownership and synchronization
+### Contract ownership and publication
 
 The service's contract is authoritative. This repository commits a
 byte-for-byte copy under `openapi/` so a public pull request can regenerate and

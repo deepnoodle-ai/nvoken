@@ -110,7 +110,7 @@ Useful focused targets:
 
 ```bash
 make sdk-check              # all SDKs, conformance, examples, and CLI tests
-make sdk-generate           # regenerate from the committed OpenAPI snapshot
+make sdk-generate           # regenerate from the published OpenAPI contract
 make sdk-generate-check     # prove generated transports are current
 ```
 

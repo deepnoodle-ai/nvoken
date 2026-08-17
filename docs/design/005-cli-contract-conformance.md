@@ -12,7 +12,7 @@ operations, but operation-level registration is not enough to prove parity.
 Several commands omit supported request fields or query parameters, some
 pageable text outputs omit their continuation cursor, successful `204`
 mutations can be completely silent, and many command and argument descriptions
-are blank. The CLI must track the authoritative `openapi/nvoken.yaml` snapshot
+are blank. The CLI must track the authoritative `openapi/nvoken.yaml` contract
 and the public Go SDK while remaining a focused client/operator tool rather
 than a second API implementation.
 
