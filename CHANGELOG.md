@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.21.0 - 2026-08-17
 
 - **Breaking: one `Agent` type, declared from its keys.** `Agent` is now the
   server record and the object that runs its turns; the wire shape is
