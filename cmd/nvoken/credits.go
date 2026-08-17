@@ -61,7 +61,7 @@ func runCreditAccounts(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, list.NextCursor)
 	})
 }
 
@@ -94,7 +94,7 @@ func runCreditAllocations(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, list.NextCursor)
 	})
 }
 

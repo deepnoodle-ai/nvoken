@@ -1010,6 +1010,13 @@ type TranscriptOptions struct {
 
 type StreamOptions struct {
 	Deltas *bool
+	// Cursor starts the first connection after a durable stream cursor. Once a
+	// newer durable event arrives, reconnects resume from that newer cursor.
+	Cursor *string
+	// InvocationID narrows a Session subscription to one Invocation. An
+	// InvocationHandle already supplies its own ID, so this field is for
+	// Client.StreamSessionWithOptions.
+	InvocationID *string
 }
 
 type WaitOptions struct {

@@ -271,7 +271,15 @@ func (c *Client) StreamSessionWithOptions(
 	consume func(StreamEvent, ReducedSnapshot) error,
 ) error {
 	return c.readStream(ctx, sessionID, nil, options, func(event StreamEvent, reducer *Reducer) error {
-		return consume(event, reducer.Snapshot())
+		if consume != nil {
+			if err := consume(event, reducer.Snapshot()); err != nil {
+				return err
+			}
+		}
+		if options.InvocationID != nil && reducer.Settled(*options.InvocationID) {
+			return ErrStopStream
+		}
+		return nil
 	})
 }
 
@@ -287,6 +295,10 @@ func (c *Client) readStream(
 ) error {
 	reducer := NewReducer()
 	retryDelay := time.Second
+	if invocationID == nil && options.InvocationID != nil {
+		value := generated.InvocationID(*options.InvocationID)
+		invocationID = &value
+	}
 	for {
 		params := &generated.StreamSessionParams{
 			Deltas:       options.Deltas,
@@ -294,6 +306,9 @@ func (c *Client) readStream(
 		}
 		if cursor := reducer.Snapshot().Cursor; cursor != "" {
 			params.LastEventID = &cursor
+		} else if options.Cursor != nil {
+			cursor := generated.Cursor(*options.Cursor)
+			params.Cursor = &cursor
 		}
 		response, err := c.raw.ClientInterface.StreamSession(ctx, generated.SessionID(sessionID), params)
 		if err != nil {

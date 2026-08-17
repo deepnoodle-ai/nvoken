@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	nvoken "github.com/deepnoodle-ai/nvoken/sdk/go"
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 	"github.com/deepnoodle-ai/wonton/cli"
 
 	"github.com/deepnoodle-ai/nvoken/internal/authstore"
@@ -131,8 +133,9 @@ type runtimeConfig struct {
 func registerRuntimeCommands(app *cli.App) {
 	app.Command("invoke").
 		Description("Admit a durable turn; text mode streams and prints its answer").
-		Args("input").
+		AddArg(optionalArg("input", "User text for the turn; omit only with --request-file")).
 		Flags(
+			cli.String("request-file", "f").Help("Complete CreateInvocationRequest JSON; - reads stdin and replaces all request flags"),
 			cli.String("agent-key", "a").Help("Stable Agent key within the effective tenant"),
 			cli.String("agent-id").Help("Opaque Agent ID; mutually exclusive with --agent-key"),
 			cli.String("idempotency-key", "i").Help("Stable admission identity; reuse it unchanged after any uncertain acknowledgement"),
@@ -170,11 +173,17 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("idempotency-key").Required().Help("Stable create request identity"),
 		).
 		Run(runCreateAgentDefinition)
-	agentDefinitions.Command("get").Args("agent-definition-id").Run(runGetAgentDefinition)
+	agentDefinitions.Command("get").
+		Description("Read the current revision of one Agent Definition").
+		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		Run(runGetAgentDefinition)
 	agentDefinitions.Command("revision").
-		Args("agent-definition-id", "revision").
+		Description("Read one immutable Agent Definition revision").
+		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		AddArg(requiredArg("revision", "Positive revision number")).
 		Run(runGetAgentDefinitionRevision)
 	agentDefinitions.Command("list").
+		Description("List Agent Definitions visible to the current App").
 		Flags(
 			cli.Bool("include-archived").Help("Include archived Agent Definitions"),
 			cli.String("cursor").Help("Continue a previous page"),
@@ -183,7 +192,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runListAgentDefinitions)
 	agentDefinitions.Command("update").
 		Description("Replace one Agent Definition at an expected revision").
-		Args("agent-definition-id").
+		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
 		Flags(
 			cli.String("name").Required().Help("Replacement human-facing Definition name"),
 			cli.String("file", "f").Help("Replacement JSON Agent Definition; - reads stdin"),
@@ -193,21 +202,31 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.Int("revision").Required().Help("Current revision from GET"),
 		).
 		Run(runUpdateAgentDefinition)
-	agentDefinitions.Command("archive").Args("agent-definition-id").Run(runArchiveAgentDefinition)
-	agentDefinitions.Command("restore").Args("agent-definition-id").Run(runRestoreAgentDefinition)
+	agentDefinitions.Command("archive").
+		Description("Archive an Agent Definition and refuse new admissions through it").
+		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		Run(runArchiveAgentDefinition)
+	agentDefinitions.Command("restore").
+		Description("Restore an archived Agent Definition").
+		AddArg(requiredArg("agent-definition-id", "Opaque Agent Definition ID")).
+		Run(runRestoreAgentDefinition)
 
 	apps := app.Group("app").Description("Register and read host applications")
 	apps.Command("register").
 		Description("Register one app; requires a credential not associated with an app").
-		Args("name").
+		AddArg(optionalArg("name", "Unique host-chosen App name; omit only with --request-file")).
 		Flags(
+			cli.String("request-file", "f").Help("Complete RegisterAppRequest JSON; - reads stdin and replaces the name and request flags"),
 			cli.String("external-ref").Help("Opaque owner reference grounding console issuer tokens"),
 			cli.String("display-name").Help("Human-facing label; name stays the unique handle"),
 			cli.String("org-id").Help("Owning Org; Org-scoped callers may omit this to use their own"),
 			cli.Int("callback-timeout").Help("Callback HTTP reply deadline in seconds, 1 to 60; default 10"),
 		).
 		Run(runAppRegister)
-	apps.Command("get").Args("app-id").Run(runAppGet)
+	apps.Command("get").
+		Description("Read one host application").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Run(runAppGet)
 	apps.Command("list").
 		Description("List visible apps; an app-bound credential sees only its own").
 		Flags(
@@ -216,19 +235,26 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runAppList)
 	apps.Command("update").
-		Description("Update an app's display name or transfer its owning Org").
-		Args("app-id").
+		Description("Update an App's mutable configuration").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
 		Flags(
+			cli.String("request-file", "f").Help("Complete UpdateAppRequest JSON, including explicit nulls; - reads stdin and replaces request flags"),
 			cli.String("display-name").Help("Replacement human-facing label"),
 			cli.String("org-id").Help("Replacement owning Org; installation administrators only"),
 			cli.Int("callback-timeout").Help("Replacement callback HTTP reply deadline in seconds, 1 to 60"),
 		).
 		Run(runAppUpdate)
-	apps.Command("archive").Args("app-id").Run(runAppArchive)
-	apps.Command("restore").Args("app-id").Run(runAppRestore)
+	apps.Command("archive").
+		Description("Archive an App and refuse new admissions and grant minting").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Run(runAppArchive)
+	apps.Command("restore").
+		Description("Restore an archived App").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Run(runAppRestore)
 	apps.Command("anonymous-token").
 		Description("Mint public browser access without machine authentication").
-		Args("app-id").
+		AddArg(requiredArg("app-id", "App configured for managed anonymous access")).
 		Flags(
 			cli.String("origin").Required().Help("Exact browser origin configured on the App"),
 			cli.String("visitor-token").Help("Previously returned visitor token; omit on a first visit"),
@@ -237,6 +263,7 @@ func registerRuntimeCommands(app *cli.App) {
 
 	agents := app.Group("agent").Description("Manage tenant-scoped Agent instances")
 	agents.Command("create").
+		Description("Create one tenant-scoped Agent instance").
 		Flags(
 			cli.String("agent-key").Required().Help("Stable key unique within the tenant"),
 			cli.String("name").Required().Help("Human-facing Agent name"),
@@ -247,9 +274,10 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runAgentCreate)
 	agents.Command("get").
 		Description("Read one Agent instance").
-		Args("agent-id").
+		AddArg(requiredArg("agent-id", "Opaque Agent ID")).
 		Run(runAgentGet)
 	agents.Command("list").
+		Description("List tenant-scoped Agent instances").
 		Flags(
 			cli.String("tenant-key").Help("Filter by tenant partition"),
 			cli.String("agent-key").Help("Filter by exact host-owned Agent key"),
@@ -260,29 +288,39 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runAgentList)
 	agents.Command("update").
-		Args("agent-id").
+		Description("Update an Agent's name or default Definition revision pin").
+		AddArg(requiredArg("agent-id", "Opaque Agent ID")).
 		Flags(
 			cli.String("name").Help("Replacement human-facing name"),
 			cli.Int("pinned-revision").Help("Replacement revision pin"),
 			cli.Bool("clear-pinned-revision").Help("Remove the revision pin"),
 		).
 		Run(runAgentUpdate)
-	agents.Command("archive").Args("agent-id").Run(runAgentArchive)
-	agents.Command("restore").Args("agent-id").Run(runAgentRestore)
+	agents.Command("archive").
+		Description("Archive an Agent and refuse new admissions through it").
+		AddArg(requiredArg("agent-id", "Opaque Agent ID")).
+		Run(runAgentArchive)
+	agents.Command("restore").
+		Description("Restore an archived Agent").
+		AddArg(requiredArg("agent-id", "Opaque Agent ID")).
+		Run(runAgentRestore)
 
 	invocations := app.Group("invocation").Description("Inspect and control Invocations")
-	invocations.Command("get").Args("invocation-id").Run(runInvocationGet)
+	invocations.Command("get").
+		Description("Read authoritative state for one Invocation").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
+		Run(runInvocationGet)
 	invocations.Command("result").
 		Description("Read the composed result: Invocation, messages, and assistant text").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Run(runInvocationResult)
 	invocations.Command("timeline").
 		Description("Read the durable execution waterfall without prompts or tool payloads").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Run(runInvocationTimeline)
 	invocations.Command("traces").
 		Description("List hosted agent traces; the durable timeline remains authoritative").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -290,7 +328,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvocationTraces)
 	invocations.Command("logs").
 		Description("List bounded operational logs without prompt or tool payload content").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -299,27 +337,31 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvocationLogs)
 	invocations.Command("wait").
 		Description("Wait until terminal or actionable; waiting requires a tool result or cancellation").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.Int("timeout").Help("Local wait timeout in seconds; zero waits indefinitely"),
 			cli.String("until").Default("terminal").Enum("terminal", "actionable").Help("Stop condition"),
 		).
 		Run(runInvocationWait)
 	invocations.Command("stream").
-		Description("Follow one turn until its terminal change; reconnect with the durable cursor after interruption").
-		Args("invocation-id").
+		Description("Follow one turn until its terminal change; resume with a durable cursor after interruption").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.Bool("deltas").Default(true).Help("Include provisional message deltas"),
+			cli.String("cursor").Help("Durable stream cursor to resume after"),
 		).
 		Run(runInvocationStream)
-	invocations.Command("cancel").Args("invocation-id").Run(runInvocationCancel)
+	invocations.Command("cancel").
+		Description("Cancel an Invocation immediately and discard unfinished work").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
+		Run(runInvocationCancel)
 	invocations.Command("interrupt").
 		Description("Stop gracefully at the next seam and keep the work; cancel discards it").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Run(runInvocationInterrupt)
 	invocations.Command("resume").
 		Description("Raise the exhausted turn ceiling and continue a paused Invocation").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque paused Invocation ID")).
 		Flags(
 			cli.Int("max-iterations").Help("Replacement model-call ceiling"),
 			cli.Int("max-output-tokens").Help("Replacement output-token ceiling"),
@@ -328,14 +370,15 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvocationResume)
 	invocations.Command("nudge").
 		Description("Append steering to a running Invocation; the model sees it at the next seam").
-		Args("invocation-id", "content").
+		AddArg(requiredArg("invocation-id", "Opaque running Invocation ID")).
+		AddArg(requiredArg("content", "Text direction to stage at the next execution seam")).
 		Flags(
 			cli.String("idempotency-key").Help("Per-Invocation retry key; the same key and content stages once"),
 		).
 		Run(runInvocationNudge)
 	invocations.Command("nudges").
 		Description("List nudges in the order the turn will consume them").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.String("status").Enum("pending", "drained", "expired", "cancelled").Help("Restrict to one status"),
 			cli.String("cursor").Help("Opaque continuation cursor"),
@@ -344,7 +387,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvocationNudges)
 	invocations.Command("tool-calls").
 		Description("List durable ToolCall lifecycle records in discovery order").
-		Args("invocation-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -352,12 +395,16 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runInvocationToolCalls)
 	invocations.Command("cancel-nudge").
 		Description("Withdraw a nudge the turn has not taken yet").
-		Args("invocation-id", "nudge-id").
+		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
+		AddArg(requiredArg("nudge-id", "Pending Nudge ID to withdraw")).
 		Run(runInvocationCancelNudge)
 	invocations.Command("list").
+		Description("List authoritative Invocations with exact filters").
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
+			cli.String("tenant").Help("Filter by one non-default tenant partition"),
+			cli.Bool("default-tenant").Help("Filter by the App default tenant"),
 			cli.String("session-id").Help("Filter by Session ID"),
 			cli.String("agent-id").Help("Filter by Agent ID"),
 			cli.String("agent-key").Help("Filter by host-owned Agent key; mutually exclusive with --agent-id"),
@@ -369,32 +416,34 @@ func registerRuntimeCommands(app *cli.App) {
 	traces := app.Group("trace").Description("Inspect hosted agent traces")
 	traces.Command("get").
 		Description("Read the bounded span tree for one trace").
-		Args("trace-id").
+		AddArg(requiredArg("trace-id", "W3C trace ID attributed to an Invocation")).
 		Run(runTraceGet)
 
 	models := app.Group("model").Description("Discover and inspect models")
 	models.Command("list").
+		Description("List the installed model catalog and pricing status").
 		Flags(
-			cli.String("provider").Enum("anthropic", "openai", "xai", "google").Help("Limit results to one provider"),
+			cli.String("provider").Help("Limit results to one installed canonical provider"),
 			cli.Bool("include-deprecated").Help("Include deprecated catalog entries"),
 		).
 		Run(runModelList)
 	models.Command("get").
+		Description("Inspect one exact provider and model selection").
 		Flags(
-			cli.String("provider").Required().Enum("anthropic", "openai", "xai", "google").Help("Model provider"),
+			cli.String("provider").Required().Help("Installed canonical model provider"),
 			cli.String("model", "m").Required().Help("Exact model ID"),
 		).
 		Run(runModelGet)
 	models.Command("pricing").
 		Description("Inspect the standard price evidence for an exact model").
 		Flags(
-			cli.String("provider").Required().Enum("anthropic", "openai", "xai", "google").Help("Model provider"),
+			cli.String("provider").Required().Help("Installed canonical model provider"),
 			cli.String("model", "m").Required().Help("Exact model ID"),
 		).
 		Run(runModelPricing)
 	models.Command("check").
 		Description("Run a small billed probe to verify configured provider access").
-		Args("selection").
+		AddArg(requiredArg("selection", "Exact provider/model selection, split at the first slash")).
 		Flags(
 			cli.String("agent").Default("nvoken-model-check").Help("Stable Agent key used for the probe"),
 			cli.String("tenant").Help("Tenant partition whose configured credential should be checked"),
@@ -407,6 +456,8 @@ func registerRuntimeCommands(app *cli.App) {
 	sessions.Command("create").
 		Description("Create or seed a Session without admitting an Invocation").
 		Flags(
+			cli.String("request-file", "f").Help("Complete CreateSessionRequest JSON; - reads stdin and replaces request flags"),
+			cli.String("agent-id").Help("Optional Agent ID; mutually exclusive with --agent-key"),
 			cli.String("agent-key").Help("Optional Agent key; omitted leaves the Session unbound until its first Invocation"),
 			cli.String("tenant").Help("Tenant partition"),
 			cli.String("user").Help("End-user label recorded on the Session; filtering only"),
@@ -416,23 +467,29 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runSessionCreate)
 	sessions.Command("fork").
 		Description("Copy a transcript prefix into a new Session; the source is unchanged").
-		Args("session-id", "from-message").
+		AddArg(requiredArg("session-id", "Source Session ID")).
+		AddArg(optionalArg("from-message", "Inclusive source message ID or sequence; omit only with --request-file")).
 		Flags(
+			cli.String("request-file", "f").Help("Complete ForkSessionRequest JSON; - reads stdin and replaces request flags"),
 			cli.String("session-key").Help("Caller key for the child; makes the fork an upsert"),
 			cli.String("user").Help("End-user label recorded as the child Session opener"),
 			cli.Int("retention-seconds").Help("Idle retention window for the child"),
 			cli.String("metadata").Help(`JSON string map recorded on the child, such as {"branch":"alternative"}`),
 		).
 		Run(runSessionFork)
-	sessions.Command("get").Args("session-id").Run(runSessionGet)
+	sessions.Command("get").
+		Description("Read authoritative Session identity and current state").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
+		Run(runSessionGet)
 	sessions.Command("delete").
 		Description("Erase a Session and its whole transcript; immediate and irreversible").
-		Args("session-id").
+		AddArg(requiredArg("session-id", "Session ID to erase")).
 		Flags(cli.Bool("yes").Required().Help("Confirm the erasure; required, because this cannot be undone")).
 		Run(runSessionDelete)
 	sessions.Command("set-metadata").
 		Description("Merge host correlation metadata into a Session").
-		Args("session-id", "patch").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
+		AddArg(requiredArg("patch", "JSON object whose string values set keys and null values delete them")).
 		Run(runSessionSetMetadata)
 	sessions.Command("resolve").
 		Description("Recover a Session by caller-owned host keys").
@@ -445,6 +502,7 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runSessionResolve)
 	sessions.Command("list").
+		Description("List Sessions with tenant, Agent, key, and user filters").
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -457,15 +515,17 @@ func registerRuntimeCommands(app *cli.App) {
 		).
 		Run(runSessionList)
 	sessions.Command("messages").
-		Args("session-id").
+		Description("Page through canonical persisted Session messages").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
+			cli.String("order").Default("asc").Enum("asc", "desc").Help("Message sequence order; a cursor is bound to this direction"),
 		).
 		Run(runSessionMessages)
 	sessions.Command("compactions").
 		Description("Display immutable applied and fell-through compaction records").
-		Args("session-id").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
 		Flags(
 			cli.String("cursor").Help("Opaque continuation cursor"),
 			cli.Int("limit").Help("Maximum page size"),
@@ -473,7 +533,7 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runSessionCompactions)
 	sessions.Command("transcript").
 		Description("Display the fixed-cut durable transcript; text mode drains and renders messages").
-		Args("session-id").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
 		Flags(
 			cli.String("cursor").Help("Durable transcript cursor"),
 			cli.String("page-token").Help("Fixed-cut page token"),
@@ -482,17 +542,22 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runSessionTranscript)
 	sessions.Command("stream").
 		Description("Subscribe to a Session; stays open while it is idle, so interrupt to stop").
-		Args("session-id").
+		AddArg(requiredArg("session-id", "Opaque Session ID")).
 		Flags(
 			cli.Bool("deltas").Default(true).Help("Include provisional message deltas"),
+			cli.String("invocation-id").Help("Narrow frames to one Invocation and close when it settles"),
+			cli.String("cursor").Help("Durable stream cursor to resume after"),
 		).
 		Run(runSessionStream)
 
 	tools := app.Group("tool-result").Description("Submit durable host ToolCall results")
 	tools.Command("submit").
-		Args("invocation-id", "content").
+		Description("Settle one or more pending host or callback ToolCalls").
+		AddArg(requiredArg("invocation-id", "Invocation holding the pending ToolCalls")).
+		AddArg(optionalArg("content", "Single result content as JSON; omit with --file")).
 		Flags(
-			cli.String("tool-call-id").Required().Help("Durable ToolCall identity"),
+			cli.String("file", "f").Help("JSON result array with tool_call_id, content, and optional is_error; - reads stdin"),
+			cli.String("tool-call-id").Help("Durable ToolCall identity; required in single-result mode"),
 			cli.Bool("error").Help("Mark the result as an error"),
 		).
 		Run(runToolResultSubmit)
@@ -790,7 +855,7 @@ func runListAgentDefinitions(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, resources.NextCursor)
 	})
 }
 
@@ -822,7 +887,11 @@ func runArchiveAgentDefinition(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.ArchiveAgentDefinition(command.Context(), command.Arg(0))
+	definitionID := command.Arg(0)
+	if err := client.ArchiveAgentDefinition(command.Context(), definitionID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "archived", "agent_definition_id", definitionID)
 }
 
 func runRestoreAgentDefinition(command *cli.Context) error {
@@ -830,7 +899,11 @@ func runRestoreAgentDefinition(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.RestoreAgentDefinition(command.Context(), command.Arg(0))
+	definitionID := command.Arg(0)
+	if err := client.RestoreAgentDefinition(command.Context(), definitionID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "restored", "agent_definition_id", definitionID)
 }
 
 // agentDefinitionFlags reads a whole definition from a file, or builds the
@@ -875,6 +948,49 @@ func readDefinitionFile(command *cli.Context, path string) ([]byte, error) {
 	payload, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return payload, nil
+}
+
+func readJSONRequestFile(command *cli.Context, path string, maximum int64) ([]byte, error) {
+	payload, err := readRequestFile(command, path, maximum)
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &object); err != nil || object == nil {
+		if err == nil {
+			err = errors.New("top-level value is not an object")
+		}
+		return nil, fmt.Errorf("parse request file %s as a JSON object: %w", path, err)
+	}
+	return payload, nil
+}
+
+func readRequestFile(command *cli.Context, path string, maximum int64) ([]byte, error) {
+	var (
+		reader io.Reader
+		close  func() error
+	)
+	if path == "-" {
+		reader = command.Stdin()
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, fmt.Errorf("open request file %s: %w", path, err)
+		}
+		reader = file
+		close = file.Close
+	}
+	if close != nil {
+		defer close()
+	}
+	payload, err := io.ReadAll(io.LimitReader(reader, maximum+1))
+	if err != nil {
+		return nil, fmt.Errorf("read request file %s: %w", path, err)
+	}
+	if int64(len(payload)) > maximum {
+		return nil, fmt.Errorf("request file %s exceeds %d bytes", path, maximum)
 	}
 	return payload, nil
 }
@@ -925,6 +1041,9 @@ func runInvoke(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if path := command.String("request-file"); path != "" {
+		return runInvokeRequestFile(command, client, path)
+	}
 	agentID := command.String("agent-id")
 	agentKey := command.String("agent-key")
 	if (agentID == "") == (agentKey == "") {
@@ -940,6 +1059,9 @@ func runInvoke(command *cli.Context) error {
 		return err
 	}
 	input := command.Arg(0)
+	if input == "" && len(blocks) == 0 {
+		return errors.New("input is required unless --request-file supplies the complete request")
+	}
 	if len(blocks) != 0 {
 		input = ""
 	}
@@ -977,6 +1099,56 @@ func runInvoke(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	return renderAcceptedInvocation(command, handle)
+}
+
+func runInvokeRequestFile(command *cli.Context, client *nvoken.Client, path string) error {
+	if command.Arg(0) != "" {
+		return errors.New("input and --request-file are mutually exclusive")
+	}
+	for _, flag := range []string{
+		"agent-key", "agent-id", "idempotency-key", "agent-revision", "provider", "model",
+		"tenant", "user", "session-id", "session-key", "if-active", "webhook-url",
+		"webhook-event", "context", "context-operator", "image", "document", "image-url",
+		"document-url",
+	} {
+		if command.IsSet(flag) {
+			return fmt.Errorf("--request-file cannot be combined with --%s", flag)
+		}
+	}
+	payload, err := readJSONRequestFile(command, path, 25<<20)
+	if err != nil {
+		return err
+	}
+	response, err := client.Raw().CreateInvocationWithBodyWithResponse(
+		command.Context(),
+		&generated.CreateInvocationParams{},
+		"application/json",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return err
+	}
+	if response.JSON202 == nil {
+		return responseError(response.StatusCode(), response.Body)
+	}
+	accepted := response.JSON202
+	handle := client.Invocation(accepted.ID)
+	handle.SessionID = accepted.SessionID
+	handle.AgentID = accepted.AgentID
+	handle.Status = accepted.Status
+	handle.Deduplicated = accepted.Deduplicated
+	handle.DeadlineAt = accepted.DeadlineAt
+	var identity struct {
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if json.Unmarshal(payload, &identity) == nil {
+		handle.IdempotencyKey = identity.IdempotencyKey
+	}
+	return renderAcceptedInvocation(command, handle)
+}
+
+func renderAcceptedInvocation(command *cli.Context, handle *nvoken.InvocationHandle) error {
 	if jsonOutput(command) {
 		return writeOutput(command, handle, nil)
 	}
@@ -1220,7 +1392,10 @@ func runInvocationStream(command *cli.Context) error {
 	handle := client.Invocation(command.Arg(0))
 	renderedDelta := false
 	deltas := command.Bool("deltas")
-	return handle.StreamWithOptions(command.Context(), nvoken.StreamOptions{Deltas: &deltas}, func(event nvoken.StreamEvent) error {
+	return handle.StreamWithOptions(command.Context(), nvoken.StreamOptions{
+		Deltas: &deltas,
+		Cursor: optionalString(command.String("cursor")),
+	}, func(event nvoken.StreamEvent) error {
 		if jsonOutput(command) {
 			return json.NewEncoder(command.Stdout()).Encode(map[string]any{
 				"id":       event.ID,
@@ -1354,7 +1529,7 @@ func runInvocationNudges(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 
@@ -1388,7 +1563,7 @@ func runInvocationToolCalls(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 
@@ -1423,6 +1598,35 @@ func runAppRegister(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if path := command.String("request-file"); path != "" {
+		if command.Arg(0) != "" {
+			return errors.New("name and --request-file are mutually exclusive")
+		}
+		for _, flag := range []string{"external-ref", "display-name", "org-id", "callback-timeout"} {
+			if command.IsSet(flag) {
+				return fmt.Errorf("--request-file cannot be combined with --%s", flag)
+			}
+		}
+		payload, err := readJSONRequestFile(command, path, 1<<20)
+		if err != nil {
+			return err
+		}
+		response, err := client.Raw().RegisterAppWithBodyWithResponse(
+			command.Context(),
+			"application/json",
+			bytes.NewReader(payload),
+		)
+		if err != nil {
+			return err
+		}
+		if response.JSON201 == nil {
+			return responseError(response.StatusCode(), response.Body)
+		}
+		return writeAppRegistration(command, response.JSON201)
+	}
+	if strings.TrimSpace(command.Arg(0)) == "" {
+		return errors.New("name is required unless --request-file supplies the complete request")
+	}
 	registered, err := client.RegisterApp(command.Context(), command.Arg(0), nvoken.RegisterAppOptions{
 		ExternalRef:            optionalString(command.String("external-ref")),
 		DisplayName:            optionalString(command.String("display-name")),
@@ -1432,6 +1636,10 @@ func runAppRegister(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	return writeAppRegistration(command, registered)
+}
+
+func writeAppRegistration(command *cli.Context, registered *nvoken.AppRegistration) error {
 	return writeOutput(command, registered, func(writer io.Writer) error {
 		if _, err := fmt.Fprintf(writer, "%s\t%s\n", registered.App.ID, registered.App.Name); err != nil {
 			return err
@@ -1465,6 +1673,30 @@ func runAppUpdate(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if path := command.String("request-file"); path != "" {
+		for _, flag := range []string{"display-name", "org-id", "callback-timeout"} {
+			if command.IsSet(flag) {
+				return fmt.Errorf("--request-file cannot be combined with --%s", flag)
+			}
+		}
+		payload, err := readJSONRequestFile(command, path, 1<<20)
+		if err != nil {
+			return err
+		}
+		response, err := client.Raw().UpdateAppWithBodyWithResponse(
+			command.Context(),
+			command.Arg(0),
+			"application/json",
+			bytes.NewReader(payload),
+		)
+		if err != nil {
+			return err
+		}
+		if response.JSON200 == nil {
+			return responseError(response.StatusCode(), response.Body)
+		}
+		return writeApp(command, response.JSON200)
+	}
 	updated, err := client.UpdateApp(command.Context(), command.Arg(0), nvoken.UpdateAppOptions{
 		DisplayName:            optionalString(command.String("display-name")),
 		OrgID:                  optionalString(command.String("org-id")),
@@ -1473,12 +1705,16 @@ func runAppUpdate(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return writeOutput(command, updated, func(writer io.Writer) error {
-		name := updated.Name
-		if updated.DisplayName != nil {
-			name = *updated.DisplayName
+	return writeApp(command, updated)
+}
+
+func writeApp(command *cli.Context, app *nvoken.App) error {
+	return writeOutput(command, app, func(writer io.Writer) error {
+		name := app.Name
+		if app.DisplayName != nil {
+			name = *app.DisplayName
 		}
-		_, err := fmt.Fprintf(writer, "%s\t%s\n", updated.ID, name)
+		_, err := fmt.Fprintf(writer, "%s\t%s\n", app.ID, name)
 		return err
 	})
 }
@@ -1510,7 +1746,11 @@ func runAppArchive(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.ArchiveApp(command.Context(), command.Arg(0))
+	appID := command.Arg(0)
+	if err := client.ArchiveApp(command.Context(), appID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "archived", "app_id", appID)
 }
 
 func runAppRestore(command *cli.Context) error {
@@ -1518,7 +1758,11 @@ func runAppRestore(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.RestoreApp(command.Context(), command.Arg(0))
+	appID := command.Arg(0)
+	if err := client.RestoreApp(command.Context(), appID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "restored", "app_id", appID)
 }
 
 func optionalArchiveStatus(value string) *nvoken.ArchiveStatus {
@@ -1623,7 +1867,11 @@ func runAgentArchive(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.ArchiveAgent(command.Context(), command.Arg(0))
+	agentID := command.Arg(0)
+	if err := client.ArchiveAgent(command.Context(), agentID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "archived", "agent_id", agentID)
 }
 
 func runAgentRestore(command *cli.Context) error {
@@ -1631,7 +1879,11 @@ func runAgentRestore(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.RestoreAgent(command.Context(), command.Arg(0))
+	agentID := command.Arg(0)
+	if err := client.RestoreAgent(command.Context(), agentID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "restored", "agent_id", agentID)
 }
 
 func runInvocationList(command *cli.Context) error {
@@ -1644,13 +1896,15 @@ func runInvocationList(command *cli.Context) error {
 		statuses[index] = nvoken.InvocationStatus(status)
 	}
 	page, err := client.ListInvocations(command.Context(), nvoken.ListInvocationsOptions{
-		UserKey:   optionalString(command.String("user")),
-		SessionID: optionalString(command.String("session-id")),
-		AgentID:   optionalString(command.String("agent-id")),
-		AgentKey:  optionalString(command.String("agent-key")),
-		Statuses:  statuses,
-		Cursor:    optionalString(command.String("cursor")),
-		Limit:     optionalInt(command.Int("limit")),
+		TenantKey:     optionalString(command.String("tenant")),
+		DefaultTenant: optionalBool(command.Bool("default-tenant")),
+		UserKey:       optionalString(command.String("user")),
+		SessionID:     optionalString(command.String("session-id")),
+		AgentID:       optionalString(command.String("agent-id")),
+		AgentKey:      optionalString(command.String("agent-key")),
+		Statuses:      statuses,
+		Cursor:        optionalString(command.String("cursor")),
+		Limit:         optionalInt(command.Int("limit")),
 	})
 	if err != nil {
 		return err
@@ -1729,6 +1983,32 @@ func runSessionCreate(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if path := command.String("request-file"); path != "" {
+		for _, flag := range []string{"agent-id", "agent-key", "tenant", "user", "session-key", "seed-messages"} {
+			if command.IsSet(flag) {
+				return fmt.Errorf("--request-file cannot be combined with --%s", flag)
+			}
+		}
+		payload, err := readJSONRequestFile(command, path, 1<<20)
+		if err != nil {
+			return err
+		}
+		response, err := client.Raw().CreateSessionWithBodyWithResponse(
+			command.Context(),
+			"application/json",
+			bytes.NewReader(payload),
+		)
+		if err != nil {
+			return err
+		}
+		if response.JSON201 == nil {
+			return responseError(response.StatusCode(), response.Body)
+		}
+		return writeSession(command, response.JSON201)
+	}
+	if command.String("agent-id") != "" && command.String("agent-key") != "" {
+		return errors.New("--agent-id and --agent-key are mutually exclusive")
+	}
 	var seeds []nvoken.SeedMessage
 	if encoded := command.String("seed-messages"); encoded != "" {
 		if err := json.Unmarshal([]byte(encoded), &seeds); err != nil {
@@ -1739,6 +2019,7 @@ func runSessionCreate(command *cli.Context) error {
 		}
 	}
 	session, err := client.CreateSession(command.Context(), nvoken.CreateSessionOptions{
+		AgentID:      optionalString(command.String("agent-id")),
 		AgentKey:     optionalString(command.String("agent-key")),
 		TenantKey:    optionalString(command.String("tenant")),
 		UserKey:      optionalString(command.String("user")),
@@ -1756,7 +2037,37 @@ func runSessionFork(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if path := command.String("request-file"); path != "" {
+		if command.Arg(1) != "" {
+			return errors.New("from-message and --request-file are mutually exclusive")
+		}
+		for _, flag := range []string{"session-key", "user", "retention-seconds", "metadata"} {
+			if command.IsSet(flag) {
+				return fmt.Errorf("--request-file cannot be combined with --%s", flag)
+			}
+		}
+		payload, err := readJSONRequestFile(command, path, 1<<20)
+		if err != nil {
+			return err
+		}
+		response, err := client.Raw().ForkSessionWithBodyWithResponse(
+			command.Context(),
+			command.Arg(0),
+			"application/json",
+			bytes.NewReader(payload),
+		)
+		if err != nil {
+			return err
+		}
+		if response.JSON201 == nil {
+			return responseError(response.StatusCode(), response.Body)
+		}
+		return writeSession(command, response.JSON201)
+	}
 	point := command.Arg(1)
+	if strings.TrimSpace(point) == "" {
+		return errors.New("from-message is required unless --request-file supplies the complete request")
+	}
 	options := nvoken.ForkSessionOptions{
 		SessionKey: optionalString(command.String("session-key")),
 		UserKey:    optionalString(command.String("user")),
@@ -1850,6 +2161,7 @@ func runSessionMessages(command *cli.Context) error {
 	page, err := client.ListSessionMessages(command.Context(), command.Arg(0), nvoken.MessageListOptions{
 		Cursor: optionalString(command.String("cursor")),
 		Limit:  optionalInt(command.Int("limit")),
+		Order:  optionalListOrder(command.String("order")),
 	})
 	if err != nil {
 		return err
@@ -1948,7 +2260,11 @@ func runSessionStream(command *cli.Context) error {
 		return err
 	}
 	deltas := command.Bool("deltas")
-	return client.StreamSessionWithOptions(command.Context(), command.Arg(0), nvoken.StreamOptions{Deltas: &deltas}, func(event nvoken.StreamEvent, snapshot nvoken.ReducedSnapshot) error {
+	return client.StreamSessionWithOptions(command.Context(), command.Arg(0), nvoken.StreamOptions{
+		Deltas:       &deltas,
+		Cursor:       optionalString(command.String("cursor")),
+		InvocationID: optionalString(command.String("invocation-id")),
+	}, func(event nvoken.StreamEvent, snapshot nvoken.ReducedSnapshot) error {
 		if jsonOutput(command) {
 			return json.NewEncoder(command.Stdout()).Encode(map[string]any{
 				"event": map[string]any{
@@ -1994,15 +2310,55 @@ func runToolResultSubmit(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var content any
-	if err := json.Unmarshal([]byte(command.Arg(1)), &content); err != nil {
-		return fmt.Errorf("parse result content as JSON: %w", err)
+	var results []nvoken.ToolResult
+	if path := command.String("file"); path != "" {
+		if command.Arg(1) != "" || command.String("tool-call-id") != "" || command.IsSet("error") {
+			return errors.New("--file cannot be combined with content, --tool-call-id, or --error")
+		}
+		payload, err := readRequestFile(command, path, 1<<20)
+		if err != nil {
+			return err
+		}
+		var fileResults []struct {
+			ToolCallID string `json:"tool_call_id"`
+			Content    any    `json:"content"`
+			IsError    bool   `json:"is_error,omitempty"`
+		}
+		if err := json.Unmarshal(payload, &fileResults); err != nil {
+			return fmt.Errorf("parse result file %s as a JSON array: %w", path, err)
+		}
+		if len(fileResults) == 0 || len(fileResults) > 32 {
+			return errors.New("result file must contain between 1 and 32 results")
+		}
+		results = make([]nvoken.ToolResult, 0, len(fileResults))
+		for index, item := range fileResults {
+			if strings.TrimSpace(item.ToolCallID) == "" {
+				return fmt.Errorf("result %d is missing tool_call_id", index+1)
+			}
+			results = append(results, nvoken.ToolResult{
+				ToolCallID: item.ToolCallID,
+				Content:    item.Content,
+				IsError:    item.IsError,
+			})
+		}
+	} else {
+		if strings.TrimSpace(command.String("tool-call-id")) == "" {
+			return errors.New("--tool-call-id is required without --file")
+		}
+		if command.Arg(1) == "" {
+			return errors.New("content is required without --file")
+		}
+		var content any
+		if err := json.Unmarshal([]byte(command.Arg(1)), &content); err != nil {
+			return fmt.Errorf("parse result content as JSON: %w", err)
+		}
+		results = []nvoken.ToolResult{{
+			ToolCallID: command.String("tool-call-id"),
+			Content:    content,
+			IsError:    command.Bool("error"),
+		}}
 	}
-	result, err := client.SubmitToolResults(command.Context(), command.Arg(0), []nvoken.ToolResult{{
-		ToolCallID: command.String("tool-call-id"),
-		Content:    content,
-		IsError:    command.Bool("error"),
-	}})
+	result, err := client.SubmitToolResults(command.Context(), command.Arg(0), results)
 	if err != nil {
 		return err
 	}
@@ -2113,6 +2469,17 @@ func writeOutput(command *cli.Context, value any, text func(io.Writer) error) er
 		return encoder.Encode(value)
 	}
 	return text(command.Stdout())
+}
+
+func writeMutationReceipt(command *cli.Context, action, resource, id string) error {
+	receipt := map[string]string{
+		"action": action,
+		resource: id,
+	}
+	return writeOutput(command, receipt, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "%s\t%s\n", action, id)
+		return err
+	})
 }
 
 // outputTextDelta pulls the assistant prose out of a preview frame. Reasoning
@@ -2236,6 +2603,14 @@ func optionalBool(value bool) *bool {
 		return nil
 	}
 	return &value
+}
+
+func optionalListOrder(value string) *nvoken.ListOrder {
+	if value == "" {
+		return nil
+	}
+	order := nvoken.ListOrder(value)
+	return &order
 }
 
 // notifyTargetFlags refuses --webhook-event without --webhook-url rather than

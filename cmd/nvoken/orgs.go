@@ -11,16 +11,31 @@ import (
 func registerOrgCommands(app *cli.App) {
 	orgs := app.Group("org").Description("Manage customer ownership boundaries containing Apps")
 	orgs.Command("register").
-		Args("display-name").
+		Description("Register one customer Organization").
+		AddArg(requiredArg("display-name", "Human-facing Organization name")).
 		Flags(cli.String("external-ref").Help("Unique identity-provider Org identifier; makes registration idempotent")).
 		Run(runOrgRegister)
-	orgs.Command("get").Args("org-id").Run(runOrgGet)
+	orgs.Command("get").
+		Description("Read one Organization").
+		AddArg(requiredArg("org-id", "Opaque Organization ID")).
+		Run(runOrgGet)
 	orgs.Command("list").
+		Description("List Organizations visible to the current credential").
 		Flags(cli.String("status").Enum("active", "archived", "all").Help("Filter by archive status; defaults to active")).
 		Run(runOrgList)
-	orgs.Command("update").Args("org-id", "display-name").Run(runOrgUpdate)
-	orgs.Command("archive").Args("org-id").Run(runOrgArchive)
-	orgs.Command("restore").Args("org-id").Run(runOrgRestore)
+	orgs.Command("update").
+		Description("Replace an Organization's human-facing name").
+		AddArg(requiredArg("org-id", "Opaque Organization ID")).
+		AddArg(requiredArg("display-name", "Replacement human-facing name")).
+		Run(runOrgUpdate)
+	orgs.Command("archive").
+		Description("Archive an Organization and refuse new Apps and Org credentials").
+		AddArg(requiredArg("org-id", "Opaque Organization ID")).
+		Run(runOrgArchive)
+	orgs.Command("restore").
+		Description("Restore an archived Organization").
+		AddArg(requiredArg("org-id", "Opaque Organization ID")).
+		Run(runOrgRestore)
 }
 
 func runOrgRegister(command *cli.Context) error {
@@ -75,7 +90,11 @@ func runOrgArchive(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.ArchiveOrg(command.Context(), command.Arg(0))
+	orgID := command.Arg(0)
+	if err := client.ArchiveOrg(command.Context(), orgID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "archived", "org_id", orgID)
 }
 
 func runOrgRestore(command *cli.Context) error {
@@ -83,7 +102,11 @@ func runOrgRestore(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.RestoreOrg(command.Context(), command.Arg(0))
+	orgID := command.Arg(0)
+	if err := client.RestoreOrg(command.Context(), orgID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "restored", "org_id", orgID)
 }
 
 func runOrgUpdate(command *cli.Context) error {

@@ -10,14 +10,14 @@ import (
 
 func registerTenantCommands(app *cli.App) {
 	tenants := app.Group("tenant").Description("Inspect interned tenant partitions")
-	tenants.Command("list").Flags(
+	tenants.Command("list").Description("List interned tenant partitions and their credit position").Flags(
 		cli.String("tenant-key").Help("Limit to one exact tenant key"),
 		cli.String("cursor").Help("Opaque continuation cursor"),
 		cli.Int("limit").Help("Maximum page size"),
 	).Run(runTenantList)
 	tenants.Command("delete").
 		Description("Delete a tenant that has never run work").
-		Args("tenant-id").
+		AddArg(requiredArg("tenant-id", "Opaque non-default tenant ID")).
 		Run(runTenantDelete)
 }
 
@@ -53,7 +53,7 @@ func runTenantList(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 
@@ -62,5 +62,9 @@ func runTenantDelete(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.DeleteTenant(command.Context(), command.Arg(0))
+	tenantID := command.Arg(0)
+	if err := client.DeleteTenant(command.Context(), tenantID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "deleted", "tenant_id", tenantID)
 }

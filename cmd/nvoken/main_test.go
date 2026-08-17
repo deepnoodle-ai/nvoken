@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/deepnoodle-ai/wonton/cli"
 )
 
 const (
@@ -734,12 +736,326 @@ func TestEveryOperationHasACommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, operation := range manifest.Operations {
-		if operationCommands[operation.OperationID] == "" {
+		path := operationCommands[operation.OperationID]
+		if path == "" {
 			t.Errorf("operation %s has no CLI command", operation.OperationID)
+			continue
 		}
+		assertDocumentedCommandHelp(t, path)
 	}
 	if len(operationCommands) != len(manifest.Operations) {
 		t.Fatalf("command coverage has %d entries for %d operations", len(operationCommands), len(manifest.Operations))
+	}
+}
+
+func TestEveryCompositeAndLocalCommandHasDocumentedHelp(t *testing.T) {
+	for _, path := range []string{
+		"completion",
+		"invocation wait",
+		"invocation stream",
+		"model pricing",
+		"model check",
+		"session resolve",
+		"auth login",
+		"auth list",
+		"auth use",
+		"auth logout",
+		"auth revoke",
+	} {
+		assertDocumentedCommandHelp(t, path)
+	}
+}
+
+func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "test-key")
+	captured := make(map[string]map[string]any)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		key := request.Method + " " + request.URL.Path
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode %s: %v", key, err)
+			http.Error(response, err.Error(), http.StatusBadRequest)
+			return
+		}
+		captured[key] = body
+		response.Header().Set("Content-Type", "application/json")
+		switch key {
+		case "POST /v1/invocations":
+			response.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(response, `{
+				"id":"inv_test","agent_id":"agent_test","agent_key":"support",
+				"session_id":"sesn_test","agent_definition_id":"def_test",
+				"agent_definition_revision":1,"status":"queued","active_execution_ms":0,
+				"attempt":0,"created_at":"2026-08-16T12:00:00Z","updated_at":"2026-08-16T12:00:00Z"
+			}`)
+		case "POST /v1/apps":
+			response.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(response, `{"app":{"id":"app_test","name":"raw-app"},"signing_keys":[]}`)
+		case "PATCH /v1/apps/app_test":
+			_, _ = io.WriteString(response, `{"id":"app_test","name":"raw-app"}`)
+		case "POST /v1/sessions":
+			response.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(response, `{"id":"sesn_test"}`)
+		case "POST /v1/sessions/sesn_source/fork":
+			response.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(response, `{"id":"sesn_fork"}`)
+		case "POST /v1/invocations/inv_test/tool-results":
+			response.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(response, `{"invocation_id":"inv_test","session_id":"sesn_test","status":"queued","results":[]}`)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	writeRequest := func(name, value string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "invocation",
+			args: []string{"invoke", "--request-file", writeRequest("invocation.json", `{
+				"agent_key":"support","input":"hello","idempotency_key":"raw-invoke",
+				"session_options":{"metadata":{"case":"42"},"retention":{"ttl_seconds":3600}},
+				"on_budget_exhausted":"pause"
+			}`)},
+		},
+		{
+			name: "app register",
+			args: []string{"app", "register", "--request-file", writeRequest("app.json", `{
+				"name":"raw-app","anonymous_access":{"enabled":true},
+				"default_rate_limits":{"invocations_per_minute":12}
+			}`)},
+		},
+		{
+			name: "app update",
+			args: []string{"app", "update", "app_test", "--request-file", writeRequest("app-update.json", `{
+				"display_name":null,"callback_timeout_seconds":20
+			}`)},
+		},
+		{
+			name: "session create",
+			args: []string{"session", "create", "--request-file", writeRequest("session.json", `{
+				"agent_id":"agent_test","session_options":{"metadata":{"branch":"root"},"retention":{"ttl_seconds":3600}}
+			}`)},
+		},
+		{
+			name: "session fork",
+			args: []string{"session", "fork", "sesn_source", "--request-file", writeRequest("fork.json", `{
+				"from_message":7,"session_options":{"metadata":{"branch":"alternate"}}
+			}`)},
+		},
+		{
+			name: "tool result batch",
+			args: []string{"tool-result", "submit", "inv_test", "--file", writeRequest("results.json", `[
+				{"tool_call_id":"call_one","content":{"answer":1}},
+				{"tool_call_id":"call_two","content":"failed","is_error":true}
+			]`)},
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := executeCLI(t, server.URL, true, test.args...)
+			if err != nil || !json.Valid([]byte(output)) {
+				t.Fatalf("output=%q err=%v", output, err)
+			}
+		})
+	}
+
+	invocation := captured["POST /v1/invocations"]
+	options, ok := invocation["session_options"].(map[string]any)
+	if !ok || options["metadata"].(map[string]any)["case"] != "42" || invocation["on_budget_exhausted"] != "pause" {
+		t.Fatalf("complete Invocation request was not preserved: %#v", invocation)
+	}
+	registered := captured["POST /v1/apps"]
+	if registered["anonymous_access"].(map[string]any)["enabled"] != true || registered["default_rate_limits"] == nil {
+		t.Fatalf("complete App request was not preserved: %#v", registered)
+	}
+	updated := captured["PATCH /v1/apps/app_test"]
+	if value, present := updated["display_name"]; !present || value != nil {
+		t.Fatalf("explicit App null was not preserved: %#v", updated)
+	}
+	createdSession := captured["POST /v1/sessions"]
+	if createdSession["agent_id"] != "agent_test" || createdSession["session_options"] == nil {
+		t.Fatalf("complete Session request was not preserved: %#v", createdSession)
+	}
+	forkedSession := captured["POST /v1/sessions/sesn_source/fork"]
+	if forkedSession["from_message"] != float64(7) || forkedSession["session_options"] == nil {
+		t.Fatalf("complete fork request was not preserved: %#v", forkedSession)
+	}
+	results, ok := captured["POST /v1/invocations/inv_test/tool-results"]["results"].([]any)
+	if !ok || len(results) != 2 || results[1].(map[string]any)["is_error"] != true {
+		t.Fatalf("batch tool results were not preserved: %#v", captured["POST /v1/invocations/inv_test/tool-results"])
+	}
+}
+
+func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "test-key")
+	queries := make(map[string]map[string][]string)
+	var credentialBody map[string]any
+	var credentialIdempotency string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		key := request.Method + " " + request.URL.Path
+		queries[key] = request.URL.Query()
+		response.Header().Set("Content-Type", "application/json")
+		switch key {
+		case "GET /v1/invocations":
+			_, _ = io.WriteString(response, `{"items":[],"has_more":false,"next_cursor":null}`)
+		case "GET /v1/sessions/sesn_test/messages":
+			_, _ = io.WriteString(response, `{"items":[],"has_more":false,"next_cursor":null}`)
+		case "GET /v1/usage/timeseries":
+			_, _ = io.WriteString(response, `{
+				"buckets":[],"start_at":"2026-08-01T00:00:00Z","end_at":"2026-08-02T00:00:00Z",
+				"interval":"day","timezone":"UTC","totals":{
+					"activity":{"invocations":0},"model":{"model_calls":0,"input_tokens":0,"output_tokens":0},
+					"tools":{"tool_calls":0},"cost":{"model_cost":{"amount":"0","currency":"USD"}}
+				}
+			}`)
+		case "GET /v1/usage/records":
+			response.Header().Set("Content-Type", "text/csv")
+			response.Header().Set("X-Nvoken-Next-Cursor", "usage-page-2")
+			_, _ = io.WriteString(response, "id,status\ncall_1,succeeded\n")
+		case "GET /v1/models/future_provider/future-model":
+			_, _ = io.WriteString(response, `{"provider":"future_provider","id":"future-model","cataloged":true,"pricing":{"status":"unpriced"}}`)
+		case "POST /v1/identity/credentials":
+			credentialIdempotency = request.Header.Get("Idempotency-Key")
+			if err := json.NewDecoder(request.Body).Decode(&credentialBody); err != nil {
+				t.Errorf("decode credential: %v", err)
+				http.Error(response, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(response, `{
+				"credential":{"id":"cred_test","name":"reporter","prefix":"nvk_test","status":"active",
+				"profile":"operator","operations":[],"org_id":"org_test",
+				"created_at":"2026-08-16T12:00:00Z","updated_at":"2026-08-16T12:00:00Z"},
+				"secret":"nvk_test.secret","delivery_expires_at":"2026-08-16T12:05:00Z","replayed":false
+			}`)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	commands := [][]string{
+		{"invocation", "list", "--tenant", "tenant-a", "--default-tenant"},
+		{"session", "messages", "sesn_test", "--order", "desc"},
+		{
+			"usage", "timeseries",
+			"--start-at", "2026-08-01T00:00:00Z", "--end-at", "2026-08-02T00:00:00Z", "--interval", "day",
+			"--provider-key-source", "tenant_byok", "--provider-key-id", "pkey_test",
+			"--credential-family-id", "cfam_test", "--authentication-method", "api_key",
+			"--call-kind", "generation", "--tool-name", "lookup", "--tool-mode", "host",
+			"--group-by", "authentication_method",
+		},
+		{"model", "get", "--provider", "future_provider", "--model", "future-model"},
+		{
+			"credentials", "create", "--name", "reporter", "--credential-profile", "operator",
+			"--org-id", "org_test", "--idempotency-key", "credential-retry-key",
+		},
+	}
+	for _, arguments := range commands {
+		output, err := executeCLI(t, server.URL, true, arguments...)
+		if err != nil || !json.Valid([]byte(output)) {
+			t.Fatalf("%v output=%q err=%v", arguments, output, err)
+		}
+	}
+	csv, err := executeCLI(
+		t,
+		server.URL,
+		false,
+		"usage", "records",
+		"--start-at", "2026-08-01T00:00:00Z",
+		"--end-at", "2026-08-02T00:00:00Z",
+		"--format", "csv",
+	)
+	if err != nil || csv != "id,status\ncall_1,succeeded\n" {
+		t.Fatalf("CSV output=%q err=%v", csv, err)
+	}
+
+	invocationQuery := queries["GET /v1/invocations"]
+	if invocationQuery["tenant_key"][0] != "tenant-a" || invocationQuery["default_tenant"][0] != "true" {
+		t.Fatalf("Invocation query = %#v", invocationQuery)
+	}
+	messageQuery := queries["GET /v1/sessions/sesn_test/messages"]
+	if messageQuery["order"][0] != "desc" {
+		t.Fatalf("Session message query = %#v", messageQuery)
+	}
+	usageQuery := queries["GET /v1/usage/timeseries"]
+	for key, expected := range map[string]string{
+		"provider_key_source":   "tenant_byok",
+		"provider_key_id":       "pkey_test",
+		"credential_family_id":  "cfam_test",
+		"authentication_method": "api_key",
+		"call_kind":             "generation",
+		"tool_name":             "lookup",
+		"tool_mode":             "host",
+		"group_by":              "authentication_method",
+	} {
+		if len(usageQuery[key]) != 1 || usageQuery[key][0] != expected {
+			t.Errorf("usage query %s = %#v, want %q", key, usageQuery[key], expected)
+		}
+	}
+	if credentialIdempotency != "credential-retry-key" || credentialBody["org_id"] != "org_test" {
+		t.Fatalf("credential request key=%q body=%#v", credentialIdempotency, credentialBody)
+	}
+	if recordsQuery := queries["GET /v1/usage/records"]; recordsQuery["format"][0] != "csv" {
+		t.Fatalf("usage records query = %#v", recordsQuery)
+	}
+}
+
+func assertDocumentedCommandHelp(t *testing.T, path string) {
+	t.Helper()
+	t.Run(strings.ReplaceAll(path, " ", "/"), func(t *testing.T) {
+		arguments := append(strings.Fields(path), "--help")
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		app := newApp().SetStdout(&stdout).SetStderr(&stderr)
+		if err := app.ExecuteContext(context.Background(), arguments); err != nil && !cli.IsHelpRequested(err) {
+			t.Fatalf("render help: %v\nstderr: %s", err, stderr.String())
+		}
+		help := stdout.String()
+		firstLine, _, _ := strings.Cut(help, "\n")
+		_, description, found := strings.Cut(firstLine, " - ")
+		if !found || strings.TrimSpace(description) == "" {
+			t.Fatalf("missing command description:\n%s", help)
+		}
+		assertHelpRowsDocumented(t, help, "Arguments:")
+		assertHelpRowsDocumented(t, help, "Flags:")
+	})
+}
+
+func assertHelpRowsDocumented(t *testing.T, help, heading string) {
+	t.Helper()
+	section := false
+	for _, line := range strings.Split(help, "\n") {
+		if line == heading {
+			section = true
+			continue
+		}
+		if !section {
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
+			return
+		}
+		fields := strings.Fields(line)
+		minimum := 2
+		if strings.Contains(line, ", --") {
+			minimum = 3
+		}
+		if len(fields) < minimum {
+			t.Errorf("undocumented %s row %q\n%s", strings.TrimSuffix(heading, ":"), line, help)
+		}
 	}
 }
 
@@ -831,7 +1147,8 @@ func TestAnonymousTokenAndMemoryCommands(t *testing.T) {
 		!strings.Contains(output, "Use dark mode.") {
 		t.Fatalf("memory get output=%q err=%v", output, err)
 	}
-	if _, err = executeCLI(t, server.URL, false, "memory", "delete", testMemoryID); err != nil {
+	output, err = executeCLI(t, server.URL, false, "memory", "delete", testMemoryID)
+	if err != nil || output != "deleted\t"+testMemoryID+"\n" {
 		t.Fatalf("memory delete: %v", err)
 	}
 	if requests != 4 {
@@ -891,8 +1208,12 @@ func TestArchiveLifecycleCommands(t *testing.T) {
 		{"org", "restore", "org_test"},
 	}
 	for _, arguments := range commands {
-		if _, err := executeCLI(t, server.URL, false, arguments...); err != nil {
+		output, err := executeCLI(t, server.URL, false, arguments...)
+		if err != nil {
 			t.Fatalf("%v: %v", arguments, err)
+		}
+		if (arguments[1] == "archive" || arguments[1] == "restore") && strings.TrimSpace(output) == "" {
+			t.Fatalf("%v returned no mutation receipt", arguments)
 		}
 	}
 	if requests != len(commands) {

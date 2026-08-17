@@ -14,24 +14,27 @@ import (
 func registerCredentialCommands(app *cli.App) {
 	group := app.Group("credentials").Description("Machine credential lifecycle")
 	group.Command("list").Description("List installation credentials").Use(requireAuth()).Flags(
-		cli.String("status", "").Enum("active", "revoked").Help("filter by credential status"),
-		cli.String("cursor", "").Help("opaque continuation cursor"),
-		cli.Int("limit", "").Help("maximum page size"),
+		cli.String("status", "").Enum("active", "revoked").Help("Filter by credential status"),
+		cli.String("cursor", "").Help("Opaque continuation cursor"),
+		cli.Int("limit", "").Help("Maximum page size"),
 	).Run(runCredentialList)
 	group.Command("create").Description("Create a machine credential").Use(requireAuth()).Flags(
-		cli.String("name", "").Help("credential name"),
-		cli.String("credential-profile", "").Default("runtime").Enum("runtime", "viewer", "operator").Help("fixed authorization profile"),
-		cli.String("app-id", "").Help("target App when provisioning from an app-less Operator"),
-		cli.String("tenant-ref", "").Help("optional tenant constraint"),
-		cli.String("session-id", "").Help("optional Session constraint"),
-		cli.Strings("operation", "").Help("repeatable operation constraint"),
-		cli.String("expires-at", "").Help("optional RFC3339 expiry"),
+		cli.String("name", "").Required().Help("Human-facing credential name"),
+		cli.String("credential-profile", "").Default("runtime").Enum("runtime", "viewer", "operator").Help("Fixed authorization profile"),
+		cli.String("app-id", "").Help("Target App; mutually exclusive with --org-id"),
+		cli.String("org-id", "").Help("Target Organization; installation administrators only and mutually exclusive with --app-id"),
+		cli.String("tenant-ref", "").Help("Optional tenant constraint"),
+		cli.String("session-id", "").Help("Optional Session constraint"),
+		cli.Strings("operation", "").Help("Operation constraint; repeatable"),
+		cli.String("expires-at", "").Help("Optional RFC3339 expiry"),
+		cli.String("idempotency-key", "").Help("Stable retry identity; generated when omitted"),
 	).Run(runCredentialCreate)
-	group.Command("get").Description("Read credential metadata").Use(requireAuth()).AddArg(&cli.Arg{Name: "id", Required: true}).Run(runCredentialGet)
+	group.Command("get").Description("Read credential metadata").Use(requireAuth()).AddArg(requiredArg("id", "Opaque credential ID")).Run(runCredentialGet)
 	group.Command("rotate").Description("Rotate a machine credential").Use(requireAuth()).Flags(
-		cli.Duration("overlap", "").Default(0).Help("bounded predecessor overlap (maximum 24h)"),
-	).AddArg(&cli.Arg{Name: "id", Required: true}).Run(runCredentialRotate)
-	group.Command("revoke").Description("Revoke a credential").Use(requireAuth()).AddArg(&cli.Arg{Name: "id", Required: true}).Run(runCredentialRevoke)
+		cli.Duration("overlap", "").Default(0).Help("Bounded predecessor overlap; maximum 24h"),
+		cli.String("idempotency-key", "").Help("Stable retry identity; generated when omitted"),
+	).AddArg(requiredArg("id", "Opaque credential ID")).Run(runCredentialRotate)
+	group.Command("revoke").Description("Revoke a credential").Use(requireAuth()).AddArg(requiredArg("id", "Opaque credential ID")).Run(runCredentialRevoke)
 }
 
 func credentialClient(ctx *cli.Context) (*generated.ClientWithResponses, error) {
@@ -65,7 +68,7 @@ func runCredentialList(ctx *cli.Context) error {
 	for _, credential := range response.JSON200.Items {
 		ctx.Printf("%s\t%s\t%s\t%s\n", credential.ID, credential.Profile, credential.Status, credential.Name)
 	}
-	return nil
+	return writeNextCursor(ctx.Stdout(), response.JSON200.NextCursor)
 }
 
 func runCredentialCreate(ctx *cli.Context) error {
@@ -80,6 +83,12 @@ func runCredentialCreate(ctx *cli.Context) error {
 	body := generated.CreateCredentialRequest{Name: name, Profile: generated.CredentialProfile(ctx.String("credential-profile"))}
 	if value := strings.TrimSpace(ctx.String("app-id")); value != "" {
 		body.AppID = &value
+	}
+	if value := strings.TrimSpace(ctx.String("org-id")); value != "" {
+		body.OrgID = &value
+	}
+	if body.AppID != nil && body.OrgID != nil {
+		return errors.New("--app-id and --org-id are mutually exclusive")
 	}
 	if value := strings.TrimSpace(ctx.String("tenant-ref")); value != "" {
 		body.TenantKey = &value
@@ -101,9 +110,12 @@ func runCredentialCreate(ctx *cli.Context) error {
 		}
 		body.ExpiresAt = &expiresAt
 	}
-	key, err := newIdempotencyKey()
-	if err != nil {
-		return err
+	key := strings.TrimSpace(ctx.String("idempotency-key"))
+	if key == "" {
+		key, err = newIdempotencyKey()
+		if err != nil {
+			return err
+		}
 	}
 	response, err := client.CreateCredentialWithResponse(ctx.Context(), &generated.CreateCredentialParams{IdempotencyKey: key}, body)
 	if err != nil {
@@ -139,9 +151,12 @@ func runCredentialRotate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	key, err := newIdempotencyKey()
-	if err != nil {
-		return err
+	key := strings.TrimSpace(ctx.String("idempotency-key"))
+	if key == "" {
+		key, err = newIdempotencyKey()
+		if err != nil {
+			return err
+		}
 	}
 	overlap := ctx.Duration("overlap")
 	if overlap < 0 || overlap > 24*time.Hour {

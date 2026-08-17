@@ -11,7 +11,7 @@ import (
 
 func registerAdmissionCommands(app *cli.App) {
 	admissions := app.Group("admission").Description("Inspect admitted and refused turn attempts")
-	admissions.Command("list").Flags(
+	admissions.Command("list").Description("List admitted and refused attempts to start turns").Flags(
 		cli.String("outcome").Enum("admitted", "refused").Help("Limit to one outcome"),
 		cli.String("error-code").Help("Limit to one refusal code"),
 		cli.String("tenant-key").Help("Limit to one tenant key"),
@@ -21,7 +21,7 @@ func registerAdmissionCommands(app *cli.App) {
 		cli.String("cursor").Help("Opaque continuation cursor"),
 		cli.Int("limit").Help("Maximum page size"),
 	).Run(runAdmissionList)
-	admissions.Command("summary").Flags(
+	admissions.Command("summary").Description("Count admission outcomes, refusal reasons, and tenant keys").Flags(
 		cli.String("start-at").Help("Inclusive UTC RFC3339 lower bound; default 24 hours ago"),
 		cli.String("end-at").Help("Exclusive UTC RFC3339 upper bound; default now"),
 	).Run(runAdmissionSummary)
@@ -75,7 +75,7 @@ func runAdmissionList(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 

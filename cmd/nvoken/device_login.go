@@ -138,14 +138,18 @@ func runDeviceAuthLogin(ctx *cli.Context) error {
 	parsedApprovalURL.RawQuery = query.Encode()
 	approvalURL := parsedApprovalURL.String()
 
-	ctx.Printf("User code: %s\n", code.UserCode)
-	ctx.Printf("Open this URL: %s\n", approvalURL)
+	progress := ctx.Stdout()
+	if jsonOutput(ctx) {
+		progress = ctx.Stderr()
+	}
+	_, _ = fmt.Fprintf(progress, "User code: %s\n", code.UserCode)
+	_, _ = fmt.Fprintf(progress, "Open this URL: %s\n", approvalURL)
 	if !ctx.Bool("no-browser") {
 		if err := openDeviceLoginBrowser(approvalURL); err != nil {
 			_, _ = fmt.Fprintf(ctx.Stderr(), "nvoken: could not open a browser: %v\n", err)
 		}
 	}
-	ctx.Printf("Waiting for approval...\n")
+	_, _ = fmt.Fprintln(progress, "Waiting for approval...")
 
 	grant, err := pollForDeviceGrant(ctx.Context(), client, code)
 	if err != nil {
@@ -169,6 +173,17 @@ func runDeviceAuthLogin(ctx *cli.Context) error {
 		return fmt.Errorf("save credential: %w", err)
 	}
 	path, _ := authstore.Path()
+	if jsonOutput(ctx) {
+		return renderJSON(ctx, map[string]any{
+			"action":           "saved",
+			"profile":          name,
+			"endpoint":         profile.Endpoint,
+			"credential_id":    profile.CredentialID,
+			"org_id":           profile.OrgID,
+			"org_display_name": profile.OrgDisplayName,
+			"credentials_file": path,
+		})
+	}
 	ctx.Success("Authenticated to %s. Profile %q saved to %s", grant.OrgDisplayName, name, path)
 	return nil
 }
