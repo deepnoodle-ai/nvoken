@@ -11,6 +11,13 @@ from .callback import (
     deduplicate_callback_result,
     verify_callback,
 )
+from .client_token import (
+    CLIENT_TOKEN_LIFETIME_LIMIT,
+    CLIENT_TOKEN_TYPE,
+    ClientTokenClaims,
+    all_browser_operations,
+    mint_client_token,
+)
 from .signed_delivery import (
     SIGNATURE_TIMESTAMP_WINDOW,
     SignedDelivery,
@@ -202,6 +209,11 @@ __all__ = [
     "ToolChoice",
     "ToolResult",
     "TranscriptDrain",
+    "CLIENT_TOKEN_LIFETIME_LIMIT",
+    "CLIENT_TOKEN_TYPE",
+    "ClientTokenClaims",
+    "all_browser_operations",
+    "mint_client_token",
     "SIGNATURE_TIMESTAMP_WINDOW",
     "SignedDelivery",
     "VerifiedCallback",

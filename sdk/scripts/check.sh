@@ -53,6 +53,8 @@ npm ci --prefix examples/typescript-agent-tools
 npm run build --prefix examples/typescript-agent-tools
 npm ci --prefix examples/typescript-chat
 npm run build --prefix examples/typescript-chat
+npm ci --prefix examples/typescript-browser-direct
+npm run build --prefix examples/typescript-browser-direct
 
 python3 -m venv sdk/python/.venv
 sdk/python/.venv/bin/python -m pip install --quiet --upgrade pip

@@ -8,6 +8,26 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **A browser can talk to nvoken directly.** `mintClientToken` signs a grant in
+  all four SDKs, `nvoken client-key generate` produces and registers the
+  keypair the CLI previously demanded but would not create, and
+  `@deepnoodle/nvoken/browser` gives a page a client that refuses an `nvk_` API
+  key. The server side has been complete since 0.20; this is the half that let
+  anyone use it.
+
+- **Minting refuses what the runtime refuses,** including an unscoped
+  `operations` list — nvoken reads an absent one as the whole browser ceiling,
+  so wanting everything and not having thought about it are now spelled
+  differently. `allBrowserOperations()` is the deliberate form.
+
+- **`Operation` is exported from the TypeScript root,** and Go gained
+  `OperationInterruptInvocation` and `OperationManageInvocationNudges`, two of
+  the eleven operations a client token may carry that no facade could name.
+
+- **`ClientOptions.apiKey` accepts a function** in TypeScript, resolved per
+  request. A client token expires in minutes, so a page holding one static
+  string stops working mid-session.
+
 - **Invocation webhooks can be received.** `verifyWebhook` returns a typed
   envelope in all four SDKs, alongside sequence folding (`supersedes`), the
   reply discipline (`acceptWebhook`, `retryWebhook`, `webhookStatusIsRetried`),

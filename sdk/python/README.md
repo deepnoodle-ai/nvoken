@@ -464,6 +464,45 @@ Retries are bounded, so webhooks alone are not a settlement guarantee.
 `client.list_ended_invocations` is the backstop: it walks turns in the order
 they ended, so a delivery that never landed is one you still find.
 
+## Browser-direct access
+
+Your page can talk to nvoken itself, with no server of yours in the path. Mint
+a short-lived grant in backend code and hand the browser that:
+
+```python
+token = mint_client_token(
+    client_key_seed,
+    ClientTokenClaims(
+        app_id=app_id,
+        key_id=client_key_id,
+        subject=user.id,          # from your session, never from the request
+        tenant_key=user.workspace_id,
+        agent_key="support",
+        operations=["create_invocation", "get_session_transcript"],
+        lifetime=timedelta(minutes=10),
+    ),
+)
+```
+
+Signing needs Ed25519, which the standard library does not provide, so install
+`nvoken[client-tokens]` for it.
+
+`nvoken client-key generate <app-id> --name web` produces the keypair and
+registers its public half in one step. The private seed is the App's browser
+authority — whoever holds it can mint a grant for any end user — so it belongs
+in backend configuration and never in a bundle.
+
+Three things are worth deciding rather than defaulting. `operations` is
+required: nvoken reads an absent list as every operation a browser may perform,
+so this SDK refuses to spell "I did not think about scope" the same way as
+`all_browser_operations()`. `session_id` confines the token to one
+conversation, which a single-conversation UI should set. And a lifetime is
+capped at fifteen minutes, because short lifetimes are the whole safety story
+of a bearer token in a page.
+
+**Invocation webhooks stop being optional here.** The browser holds the stream,
+so your backend never observes settlement any other way.
+
 ## Acting for one tenant or one end user
 
 An app-wide credential can reach every tenant in its App, so an id that arrives

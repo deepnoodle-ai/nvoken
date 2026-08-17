@@ -189,6 +189,8 @@ const (
 	OperationGetInvocation                            = generated.GetInvocation
 	OperationSubmitToolResults                        = generated.SubmitToolResults
 	OperationCancelInvocation                         = generated.CancelInvocation
+	OperationInterruptInvocation                      = generated.InterruptInvocation
+	OperationManageInvocationNudges                   = generated.ManageInvocationNudges
 	OperationResumeInvocation                         = generated.ResumeInvocation
 	OperationListInvocations                          = generated.ListInvocations
 	OperationGetSession                               = generated.GetSession

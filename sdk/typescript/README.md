@@ -787,6 +787,55 @@ const transcript = await client.drainTranscript("sess_...", {
 `drainTranscript()` holds one fixed snapshot cut across pages and returns the
 next durable `resumeCursor`.
 
+## Browser-direct access
+
+Your page can talk to nvoken itself, with no server of yours in the path. Mint
+a short-lived grant in backend code and hand the browser that:
+
+```ts
+const token = await mintClientToken(clientKeySeed, {
+  appId,
+  keyId: clientKeyId,
+  subject: user.id,          // from your session, never from the request
+  tenantKey: user.workspaceId,
+  agentKey: "support",
+  operations: ["create_invocation", "get_session_transcript"],
+  lifetimeMs: 10 * 60 * 1_000,
+});
+```
+
+The page then uses the browser entry, which takes a function so it can refresh:
+
+```ts
+import { createBrowserClient } from "@deepnoodle/nvoken/browser";
+
+const client = createBrowserClient({
+  baseUrl: "https://api.nvoken.example",
+  clientToken: async () => (await fetch("/api/nvoken-token", { method: "POST" })).json()
+    .then((body) => body.token),
+});
+```
+
+It refuses an `nvk_` API key outright. A machine credential in a page is
+readable by everyone who loads it and reaches every tenant in the App, and
+nothing about the request would look wrong — it would simply work, for anyone.
+
+`nvoken client-key generate <app-id> --name web` produces the keypair and
+registers its public half in one step. The private seed is the App's browser
+authority, so it belongs in backend configuration and never in a bundle.
+
+Three things are worth deciding rather than defaulting. `operations` is
+required: nvoken reads an absent list as every operation a browser may perform,
+so this SDK refuses to spell "I did not think about scope" the same way as
+`allBrowserOperations()`. `sessionId` confines the token to one conversation,
+which a single-conversation UI should set. And a lifetime is capped at fifteen
+minutes, because short lifetimes are the whole safety story of a bearer token
+in a page.
+
+**Invocation webhooks stop being optional here.** The browser holds the stream,
+so your backend never observes settlement any other way. See
+`examples/typescript-browser-direct` for both halves.
+
 ## Acting for one tenant or one end user
 
 An app-wide credential can reach every tenant in its App, so an id that arrives

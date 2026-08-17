@@ -25,6 +25,14 @@
     "./callback": {
       "types": "./dist/callback.d.ts",
       "import": "./dist/callback.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./client-token": {
+      "types": "./dist/client-token.d.ts",
+      "import": "./dist/client-token.js"
     }
   },
   "bin": {
@@ -34,8 +42,12 @@
   "files": [
     "dist/ask-user.d.ts",
     "dist/ask-user.js",
+    "dist/browser.d.ts",
+    "dist/browser.js",
     "dist/callback.d.ts",
     "dist/callback.js",
+    "dist/client-token.d.ts",
+    "dist/client-token.js",
     "dist/client.d.ts",
     "dist/client.js",
     "dist/diagnostics.d.ts",

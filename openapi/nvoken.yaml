@@ -4609,17 +4609,21 @@ components:
         with the App's durable owner; `admin: true` retains its bypass.
 
         Browser-direct calls use a separate App-signed Ed25519 JWT trust class:
-        `iss` is the App ID, `kid` names one active registered client key,
-        `aud` is `nvoken`, and `sub`, exactly one of `agent_id` or
-        `agent_key` (with optional `tenant_key`), `iat`, and `exp` are required.
-        `definition_revision`, `session_id`, and `ops` are optional.
-        Lifetime is at most 15 minutes. Client tokens are
+        `typ` is `nvoken-client+jwt`, `iss` is the App ID, `kid` names one
+        active registered client key, `aud` is `nvoken`, and `sub`, exactly one
+        of `agent_id` or `agent_key` (with optional `tenant_key`), `iat`, and
+        `exp` are required. `definition_revision`, `session_id`, and `ops` are
+        optional. `typ` is required because you sign these with a keypair you
+        own and may sign other things with the same one; without it, `aud` is
+        the only thing separating a browser grant from any other EdDSA JWT you
+        mint. Lifetime is at most 15 minutes. Client tokens are
         accepted only in this header, never in a query parameter, and expose
         only the documented Client-prefixed response schemas and public routes.
 
         An App with anonymous access enabled has a fourth class: a token
-        nvoken itself mints and signs (HS256, `typ: nvoken-anon-access`) from
-        `POST /v1/anonymous-tokens`, for a visitor with no account. It is
+        nvoken itself mints and signs (HS256, `typ: nvoken-anonymous-access+jwt`)
+        from `POST /v1/apps/{app_id}/anonymous-tokens`, for a visitor with no
+        account. It is
         presented in this same header and is authorized exactly like a client
         token, narrowed to the one Agent the App named. It is short-lived and
         paired with a renewable visitor token; a host never signs it, which is
