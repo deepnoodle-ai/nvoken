@@ -375,6 +375,24 @@ spreading the resource is what keeps it whole, and the read-only fields it
 carries are dropped on the way to the wire. `expectedRevision` travels as
 `If-Match`, so a concurrent write fails rather than overwriting.
 
+Both writes are ensure-shaped: restating what nvoken already holds publishes
+nothing and returns the current revision. So a deploy step that owns its
+definitions in source does not read anything first — `syncDefinitions()` writes
+them all and reports what moved:
+
+```ts
+for (const { definitionKey, outcome } of await client.syncDefinitions(definitions)) {
+  if (outcome !== "unchanged") console.log(`${definitionKey}: ${outcome}`);
+}
+```
+
+Each definition costs one call, or two when its contents differ: the create
+conflict names the resource to replace, so nothing has to be looked up. Do not
+compare a definition against what you read back to decide whether to write —
+nvoken canonicalizes one before comparing it, and a second copy of that rule in
+your code is free to disagree the first time either side gains a field. Write
+unconditionally and read the outcome.
+
 Creating a Definition starts no turn. It has an immutable `definitionKey`, a
 stable ID, and an increasing revision; `getAgentDefinitionRevision()` reads
 historical revisions. Updating a Definition does not rewrite an Agent's

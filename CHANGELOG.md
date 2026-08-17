@@ -8,6 +8,21 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **`syncDefinitions` replaces hand-rolled drift detection.**
+  `syncDefinitions` / `SyncDefinitions` / `sync_definitions` writes a whole set
+  of Agent Definitions and reports `created`, `updated`, or `unchanged` per
+  key. Both write paths are ensure-shaped, so nvoken decides what moved: a
+  restated definition publishes no revision. Nothing is read back and nothing
+  is compared client-side — nvoken canonicalizes a definition before comparing
+  it, and a host reproducing that rule was maintaining a second copy free to
+  disagree.
+
+- **`If-Match: *` on a definition replacement,** meaning "I read no revision;
+  replace whichever is current" — `expectedRevision: "*"` in TypeScript and
+  Python, `AnyDefinitionRevision` / `ANY_DEFINITION_REVISION` in Go and Rust. A
+  numeric revision keeps its own meaning, so one that has since moved is still
+  refused even when the replacement happens to match it.
+
 - **A receiver, not just a verifier.** `createCallbackReceiver` and
   `createWebhookReceiver` (`NewCallbackReceiver` / `CallbackReceiver` per
   language) own the `(key_id, version)` key table with two-version rotation,

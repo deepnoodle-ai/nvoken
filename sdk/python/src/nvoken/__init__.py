@@ -66,6 +66,8 @@ from .client import (
     AgentDefinition,
     AgentDefinitionOverrides,
     BuiltinTool,
+    DefinitionSync,
+    DefinitionSyncOutcome,
     BudgetExhaustionBehavior,
     ClientInterface,
     Limits,
@@ -127,6 +129,8 @@ from .stream import Reducer, ReducedSnapshot, StreamEvent, StreamPreview, stream
 __all__ = [
     "AgentDefinition",
     "AgentDefinitionOverrides",
+    "DefinitionSync",
+    "DefinitionSyncOutcome",
     "ACTIVE_INVOCATION_STATUSES",
     "ALL_INVOCATION_STATUSES",
     "TERMINAL_INVOCATION_STATUSES",

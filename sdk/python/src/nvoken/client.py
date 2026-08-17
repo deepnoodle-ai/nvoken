@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, AsyncIterator, Awaitable, Callable, Literal
+from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Sequence
 
 import httpx
 
@@ -601,6 +601,24 @@ class AgentDefinition:
         timestamps — behind.
         """
         return _agent_definition_from_resource(cls, resource)
+
+
+DefinitionSyncOutcome = Literal["created", "updated", "unchanged"]
+"""What one definition's :meth:`NvokenClient.sync_definitions` call did.
+
+``created`` — the key named nothing and now names this. ``updated`` — a
+revision was published over different contents. ``unchanged`` — nvoken already
+held exactly this, so nothing was published and the revision did not move.
+"""
+
+
+@dataclass(frozen=True)
+class DefinitionSync:
+    """One definition's result from :meth:`NvokenClient.sync_definitions`."""
+
+    definition_key: str
+    outcome: DefinitionSyncOutcome
+    definition: AgentDefinitionResource
 
 
 @dataclass(frozen=True)
@@ -1274,13 +1292,31 @@ class Client:
         optional and pins replay to a specific create; the key already scopes
         replay without it.
         """
+        resource, _ = await self._ensure_agent_definition(
+            definition,
+            idempotency_key=idempotency_key,
+        )
+        return resource
+
+    async def _ensure_agent_definition(
+        self,
+        definition: AgentDefinition,
+        *,
+        idempotency_key: str | None = None,
+    ) -> tuple[AgentDefinitionResource, bool]:
+        """The created-or-resolved resource, and whether this call minted it.
+
+        The status carries that and the body does not: 201 for a create, 200
+        for a restatement that resolved to what already existed.
+        """
         body = self._agent_definition_body(definition, include_key=True)
-        return await self._replay_safe(
-            lambda: self.agent_definitions.create_agent_definition(
+        response = await self._replay_safe(
+            lambda: self.agent_definitions.create_agent_definition_with_http_info(
                 body,
                 idempotency_key=idempotency_key,
             )
         )
+        return response.data, response.status_code == 201
 
     async def get_agent_definition_by_key(
         self,
@@ -1343,24 +1379,129 @@ class Client:
         definition_id: str,
         definition: AgentDefinition,
         *,
-        expected_revision: int,
+        expected_revision: int | Literal["*"],
     ) -> AgentDefinitionResource:
         """Replace one Agent Definition, failing when it has moved on.
 
         This replaces the whole resource, so send back everything you want kept.
         ``AgentDefinition.from_resource`` reads a resource back into the
         definition that produced it, carrying every writable field across.
+
+        Replacement is ensure-shaped: a definition already matching the current
+        revision publishes nothing and returns that revision unchanged. So this
+        is safe to call with contents you are not sure differ — see
+        :meth:`sync_definitions`, which is that call in a loop.
+
+        ``expected_revision`` may be ``"*"``, meaning "I read no revision;
+        replace whichever is current" — the honest precondition for a caller
+        syncing from its own source of truth, which has nothing to be stale
+        against. It is never refused as stale, and it still cannot create: the
+        Definition must already exist. A number keeps its own meaning, "I am
+        replacing the revision I read", so one that has since moved is refused
+        even if the replacement happens to match it.
         """
-        if expected_revision < 1:
-            raise NvokenError("validation", "expected_revision is required")
+        resource, _ = await self._replace_agent_definition(
+            definition_id,
+            definition,
+            expected_revision,
+        )
+        return resource
+
+    async def _replace_agent_definition(
+        self,
+        definition_id: str,
+        definition: AgentDefinition,
+        expected_revision: int | Literal["*"],
+    ) -> tuple[AgentDefinitionResource, bool]:
+        """The replacement, and whether a revision was published.
+
+        The status carries that and the body does not: 201 for a published
+        revision, 200 for a request the current revision already satisfied.
+        """
+        if expected_revision != "*" and expected_revision < 1:
+            raise NvokenError("validation", 'expected_revision must be positive, or "*"')
+        if_match = "*" if expected_revision == "*" else f'"{expected_revision}"'
         body = self._agent_definition_body(definition, include_key=False)
-        return await self._replay_safe(
-            lambda: self.agent_definitions.update_agent_definition(
-                f'"{expected_revision}"',
+        response = await self._replay_safe(
+            lambda: self.agent_definitions.update_agent_definition_with_http_info(
+                if_match,
                 definition_id,
                 body,
             )
         )
+        return response.data, response.status_code == 201
+
+    async def sync_definitions(
+        self,
+        definitions: Sequence[AgentDefinition],
+    ) -> list[DefinitionSync]:
+        """Make nvoken hold exactly these definitions, publishing only differences.
+
+        This is a write-only loop: nothing is read back and nothing is compared
+        here. Both write paths are ensure-shaped, so nvoken decides what moved —
+        which matters because it canonicalizes a definition before comparing it,
+        and a caller reproducing that comparison would be maintaining a second
+        copy of the rule, in another language, free to disagree the first time
+        either side gains a field.
+
+        ::
+
+            for synced in await client.sync_definitions(definitions):
+                if synced.outcome != "unchanged":
+                    print(f"{synced.definition_key}: {synced.outcome}")
+
+        Each definition costs one call, or two when its contents changed: the
+        create conflict names the resource to replace, so nothing has to be
+        looked up.
+
+        It is sequential and stops at the first error, which is the useful
+        behavior for a deploy step. A key held by an archived Definition is one
+        of those errors rather than an outcome: restoring it is a decision, not
+        a sync.
+        """
+        results: list[DefinitionSync] = []
+        for definition in definitions:
+            if not definition.definition_key:
+                raise NvokenError("validation", "definition_key is required")
+            try:
+                resource, created = await self._ensure_agent_definition(definition)
+            except NvokenError as conflict:
+                # The conflict names the resource holding the key, so the
+                # replacement it points at needs no lookup first.
+                definition_id = (
+                    (conflict.details or {}).get("definition_id")
+                    if conflict.code == "agent_definition_key_conflict"
+                    else None
+                )
+                if not isinstance(definition_id, str) or not definition_id:
+                    raise
+                # "*", because nothing was read: the conflict proves the
+                # resource exists and differs, not which revision it is at.
+                resource, published = await self._replace_agent_definition(
+                    definition_id,
+                    definition,
+                    "*",
+                )
+                results.append(
+                    DefinitionSync(
+                        definition_key=definition.definition_key,
+                        # Not published means someone else published these
+                        # contents between the two calls.
+                        outcome="updated" if published else "unchanged",
+                        definition=resource,
+                    )
+                )
+                continue
+            # The create either minted the resource or resolved to one already
+            # holding these exact contents. Either way nvoken now holds them.
+            results.append(
+                DefinitionSync(
+                    definition_key=definition.definition_key,
+                    outcome="created" if created else "unchanged",
+                    definition=resource,
+                )
+            )
+        return results
 
     async def archive_agent_definition(self, definition_id: str) -> None:
         await self._replay_safe(

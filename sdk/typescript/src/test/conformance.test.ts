@@ -3329,6 +3329,115 @@ test("a create sends the flat definition and its key", async () => {
   });
 });
 
+test("a sync writes without reading, and reports what each write did", async () => {
+  const requests: { method: string; path: string; ifMatch: string | null; body: Record<string, unknown> }[] = [];
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      const method = init?.method ?? "GET";
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      requests.push({ method, path, ifMatch: new Headers(init?.headers).get("If-Match"), body });
+      const resource = { ...wireAgentDefinitionResource(), definition_key: body.definition_key ?? "changed" };
+      if (method === "POST") {
+        // A key the App has never used, then a restatement of one it holds, then
+        // one whose contents differ.
+        switch (body.definition_key) {
+          case "new":
+            return Response.json(resource, { status: 201 });
+          case "same":
+            return Response.json({ ...resource, revision: 3 }, { status: 200 });
+          default:
+            return Response.json({
+              code: "agent_definition_key_conflict",
+              message: "definition_key is held by a different definition",
+              details: { definition_id: "def_changed", definition_key: "changed" },
+            }, { status: 409 });
+        }
+      }
+      return Response.json({ ...resource, revision: 7 }, { status: 201 });
+    },
+  });
+
+  const model = "anthropic/claude-sonnet-5" as const;
+  const synced = await client.syncDefinitions([
+    { definitionKey: "new", model },
+    { definitionKey: "same", model },
+    { definitionKey: "changed", model, instructions: "Be warm." },
+  ]);
+
+  assert.deepEqual(synced.map(({ definitionKey, outcome }) => [definitionKey, outcome]), [
+    ["new", "created"],
+    ["same", "unchanged"],
+    ["changed", "updated"],
+  ]);
+  assert.equal(synced[2]?.definition.revision, 7);
+  // Nothing was read: three creates, and one replacement the conflict addressed.
+  assert.deepEqual(requests.map(({ method, path }) => `${method} ${path}`), [
+    "POST /v1/agent-definitions",
+    "POST /v1/agent-definitions",
+    "POST /v1/agent-definitions",
+    "PUT /v1/agent-definitions/def_changed",
+  ]);
+  // "*", because the conflict proves the resource exists and differs, not
+  // which revision it is at. The replacement drops the immutable key.
+  assert.equal(requests[3]?.ifMatch, "*");
+  assert.equal(requests[3]?.body.definition_key, undefined);
+  assert.equal(requests[3]?.body.instructions, "Be warm.");
+});
+
+test("a sync reports a raced replacement as unchanged", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) =>
+      init?.method === "POST"
+        ? Response.json({
+            code: "agent_definition_key_conflict",
+            message: "definition_key is held by a different definition",
+            details: { definition_id: "def_raced" },
+          }, { status: 409 })
+        // Someone else published these exact contents between the two calls, so
+        // the replacement had nothing left to publish.
+        : Response.json(wireAgentDefinitionResource(), { status: 200 }),
+  });
+
+  const synced = await client.syncDefinitions([
+    { definitionKey: "support", model: "anthropic/claude-sonnet-5" },
+  ]);
+  assert.equal(synced[0]?.outcome, "unchanged");
+});
+
+test("a sync stops at the first error rather than skipping it", async () => {
+  let posts = 0;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async () => {
+      posts += 1;
+      // Restoring an archived key is a decision, not a sync step.
+      return Response.json({
+        code: "agent_definition_archived",
+        message: "definition_key is held by an archived definition",
+        details: { definition_id: "def_archived" },
+      }, { status: 409 });
+    },
+  });
+
+  await assert.rejects(
+    () => client.syncDefinitions([
+      { definitionKey: "gone", model: "anthropic/claude-sonnet-5" },
+      { definitionKey: "next", model: "anthropic/claude-sonnet-5" },
+    ]),
+    (error: unknown) => error instanceof NvokenError && error.code === "agent_definition_archived",
+  );
+  assert.equal(posts, 1);
+});
+
 test("toolChoice names a tool only in named mode", async () => {
   const client = new Client({
     baseUrl: "https://runtime.example.test",

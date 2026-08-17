@@ -6,6 +6,7 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	mathrand "math/rand/v2"
 	"net/http"
@@ -306,7 +307,18 @@ func (c *Client) CreateAgentDefinition(
 	if definition.DefinitionKey == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition key is required"}
 	}
-	encoded, err := definition.encoded(true)
+	body, err := definitionBody(definition, true)
+	if err != nil {
+		return nil, err
+	}
+	resource, _, err := c.createAgentDefinition(ctx, body, options.IdempotencyKey)
+	return resource, err
+}
+
+// definitionBody encodes one definition for the wire. withKey keeps
+// definition_key, which a create needs and a replacement may not send.
+func definitionBody(definition AgentDefinition, withKey bool) ([]byte, error) {
+	encoded, err := definition.encoded(withKey)
 	if err != nil {
 		if sdkError, ok := err.(*Error); ok {
 			return nil, sdkError
@@ -317,6 +329,18 @@ func (c *Client) CreateAgentDefinition(
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
+	return body, nil
+}
+
+// createAgentDefinition also reports whether this call minted the resource,
+// which the status carries and the body does not: 201 for a create, 200 for a
+// restatement that resolved to what already existed.
+func (c *Client) createAgentDefinition(
+	ctx context.Context,
+	body []byte,
+	idempotencyKey string,
+) (*AgentDefinitionResource, bool, error) {
+	created := false
 	resource, err := callReplaySafe(
 		ctx,
 		c.retry,
@@ -324,7 +348,7 @@ func (c *Client) CreateAgentDefinition(
 		func() (callResult[generated.AgentDefinitionResource], error) {
 			response, callErr := c.raw.CreateAgentDefinitionWithBodyWithResponse(
 				ctx,
-				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(options.IdempotencyKey)},
+				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(idempotencyKey)},
 				"application/json",
 				bytes.NewReader(body),
 			)
@@ -334,6 +358,7 @@ func (c *Client) CreateAgentDefinition(
 			// A restated definition answers 200 with the existing resource
 			// rather than 201, which is the ordinary deploy-time outcome and
 			// not an error.
+			created = response.JSON201 != nil
 			value := response.JSON201
 			if value == nil {
 				value = response.JSON200
@@ -347,9 +372,9 @@ func (c *Client) CreateAgentDefinition(
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return resource, nil
+	return resource, created, nil
 }
 
 func (c *Client) GetAgentDefinition(ctx context.Context, id string) (*AgentDefinitionResource, error) {
@@ -424,44 +449,147 @@ func (c *Client) ListAgentDefinitions(
 // A field left at its zero value is cleared, not kept, which is why starting
 // from AgentDefinitionFromResource rather than restating the definition by
 // hand is the safe habit.
+//
+// Replacement is ensure-shaped: a definition already matching the current
+// revision publishes nothing and returns that revision unchanged. So this is
+// safe to call with contents you are not sure differ — see SyncDefinitions,
+// which is that call in a loop.
 func (c *Client) UpdateAgentDefinition(
 	ctx context.Context,
 	id string,
 	definition AgentDefinition,
 	options UpdateAgentDefinitionOptions,
 ) (*AgentDefinitionResource, error) {
-	if options.ExpectedRevision < 1 {
-		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive"}
+	if options.ExpectedRevision < 0 {
+		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive, or AnyDefinitionRevision"}
 	}
-	encoded, err := definition.encoded(false)
+	body, err := definitionBody(definition, false)
 	if err != nil {
-		if sdkError, ok := err.(*Error); ok {
-			return nil, sdkError
-		}
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+		return nil, err
 	}
-	body, err := json.Marshal(encoded)
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
+	resource, _, err := c.updateAgentDefinition(ctx, id, body, options.ExpectedRevision)
+	return resource, err
+}
+
+// updateAgentDefinition also reports whether a revision was published, which
+// the status carries and the body does not: 201 for a published revision, 200
+// for a request the current revision already satisfied.
+func (c *Client) updateAgentDefinition(
+	ctx context.Context,
+	id string,
+	body []byte,
+	expectedRevision int64,
+) (*AgentDefinitionResource, bool, error) {
+	ifMatch := "*"
+	if expectedRevision != AnyDefinitionRevision {
+		ifMatch = fmt.Sprintf("\"%d\"", expectedRevision)
 	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
+	published := false
+	resource, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
 		response, callErr := c.raw.UpdateAgentDefinitionWithBodyWithResponse(
 			ctx,
 			id,
-			&generated.UpdateAgentDefinitionParams{IfMatch: fmt.Sprintf("\"%d\"", options.ExpectedRevision)},
+			&generated.UpdateAgentDefinitionParams{IfMatch: ifMatch},
 			"application/json",
 			bytes.NewReader(body),
 		)
 		if callErr != nil {
 			return callResult[generated.AgentDefinitionResource]{}, callErr
 		}
+		published = response.JSON201 != nil
+		value := response.JSON201
+		if value == nil {
+			value = response.JSON200
+		}
 		return callResult[generated.AgentDefinitionResource]{
-			Value:  response.JSON200,
+			Value:  value,
 			Status: response.StatusCode(),
 			Header: responseHeader(response.HTTPResponse),
 			Body:   response.Body,
 		}, nil
 	})
+	if err != nil {
+		return nil, false, err
+	}
+	return resource, published, nil
+}
+
+// SyncDefinitions makes nvoken hold exactly the definitions given, publishing
+// a revision only where one differs.
+//
+// This is a write-only loop: nothing is read back and nothing is compared
+// here. Both write paths are ensure-shaped, so nvoken decides what moved —
+// which matters because it canonicalizes a definition before comparing it, and
+// a caller reproducing that comparison would be maintaining a second copy of
+// the rule, in another language, free to disagree the first time either side
+// gains a field.
+//
+// Each definition costs one call, or two when its contents changed: the create
+// conflict names the resource to replace, so nothing has to be looked up.
+//
+// It is sequential and stops at the first error, which is the useful behavior
+// for a deploy step. A key held by an archived Definition is one of those
+// errors rather than an outcome: restoring it is a decision, not a sync.
+func (c *Client) SyncDefinitions(
+	ctx context.Context,
+	definitions []AgentDefinition,
+) ([]DefinitionSync, error) {
+	results := make([]DefinitionSync, 0, len(definitions))
+	for _, definition := range definitions {
+		if definition.DefinitionKey == "" {
+			return results, &Error{Category: ErrorValidation, Message: "Agent Definition key is required"}
+		}
+		createBody, err := definitionBody(definition, true)
+		if err != nil {
+			return results, err
+		}
+		resource, created, err := c.createAgentDefinition(ctx, createBody, "")
+		if err == nil {
+			// The create either minted the resource or resolved to one already
+			// holding these exact contents. Either way nvoken now holds them.
+			outcome := DefinitionCreated
+			if !created {
+				outcome = DefinitionUnchanged
+			}
+			results = append(results, DefinitionSync{
+				DefinitionKey: definition.DefinitionKey,
+				Outcome:       outcome,
+				Definition:    resource,
+			})
+			continue
+		}
+		var conflict *Error
+		if !errors.As(err, &conflict) || conflict.Code != "agent_definition_key_conflict" {
+			return results, err
+		}
+		// The conflict names the resource holding the key, so the replacement
+		// it points at needs no lookup first.
+		id, _ := conflict.Details["definition_id"].(string)
+		if id == "" {
+			return results, err
+		}
+		updateBody, err := definitionBody(definition, false)
+		if err != nil {
+			return results, err
+		}
+		// AnyDefinitionRevision, because nothing was read: the conflict proves
+		// the resource exists and differs, not which revision it is at.
+		resource, published, updateErr := c.updateAgentDefinition(ctx, id, updateBody, AnyDefinitionRevision)
+		if updateErr != nil {
+			return results, updateErr
+		}
+		outcome := DefinitionUpdated
+		if !published {
+			// Someone else published these contents between the two calls.
+			outcome = DefinitionUnchanged
+		}
+		results = append(results, DefinitionSync{
+			DefinitionKey: definition.DefinitionKey,
+			Outcome:       outcome,
+			Definition:    resource,
+		})
+	}
+	return results, nil
 }
 
 func (c *Client) ArchiveAgentDefinition(ctx context.Context, id string) error {

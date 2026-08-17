@@ -1318,6 +1318,13 @@ paths:
         held by an archived resource is `409 agent_definition_archived`;
         restore it or choose another key.
 
+        Both conflicts carry `details.definition_id` and
+        `details.definition_key` naming the resource already holding the key,
+        so the `PUT` they point at needs no lookup first. A full sync is
+        therefore at most two calls per definition and never a read: `POST`,
+        and on `agent_definition_key_conflict`, `PUT` that `definition_id`
+        with `If-Match: *`.
+
         `Idempotency-Key` is optional, because the key already scopes replay.
         Supply one to pin a replay to a specific create: the same key returns
         that create's revision-1 resource even after later revisions moved
@@ -1433,8 +1440,21 @@ paths:
     put:
       tags: [Agent Definitions]
       operationId: updateAgentDefinition
-      summary: Replace an Agent Definition and create its next revision
-      description: >-
+      summary: Replace an Agent Definition, publishing a revision if anything changed
+      description: |
+        Replacement is ensure-shaped, as creation is: a request whose
+        definition and `name` already match the current revision publishes
+        nothing and answers `200` with that revision, `updated_at` included.
+        A request that changes either publishes the next revision and answers
+        `201`. Read which happened from the status; you do not need to
+        compare representations to find out.
+
+        This is what makes deploy-time sync a write-only loop. Send every
+        definition you own on every deploy with `If-Match: *` and let nvoken
+        decide which ones moved — rather than reading each one back and
+        reimplementing nvoken's canonicalization to decide for yourself,
+        which is the same comparison in a second place, free to disagree.
+
         If the App currently selects this Definition for anonymous access, the
         replacement must retain client_interface and either omit memory or set
         memory.scope to user.
@@ -1443,7 +1463,20 @@ paths:
           in: header
           required: true
           schema: {type: string}
-          description: One strong decimal revision ETag returned by GET or PUT.
+          description: |
+            One strong decimal revision ETag returned by GET or PUT, or `*`.
+
+            The two say different things about a revision that has moved. An
+            ETag means "I am replacing the revision I read", so a revision
+            that has since moved is `412` — even if the replacement happens
+            to match it, the caller is acting on a state it has not seen. `*`
+            means "I read no revision; replace whichever is current", which
+            is the honest form for a caller syncing from its own source of
+            truth. It is never stale, and it still cannot create: the
+            Definition must already exist.
+
+            The header stays required in both forms, so an omitted
+            precondition is `428` rather than a silent overwrite.
       requestBody:
         required: true
         content:
@@ -1452,7 +1485,18 @@ paths:
               $ref: "#/components/schemas/AgentDefinitionWrite"
       responses:
         "200":
-          description: The committed next revision.
+          description: >-
+            Nothing was published: the current revision already carried this
+            definition and name, and is returned unchanged.
+          headers:
+            ETag:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDefinitionResource"
+        "201":
+          description: The published next revision.
           headers:
             ETag:
               schema: {type: string}
