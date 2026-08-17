@@ -214,6 +214,26 @@ func registerRuntimeCommands(app *cli.App) {
 		Run(runRestoreAgentDefinition)
 
 	apps := app.Group("app").Description("Register and read host applications")
+	apps.Command("init").
+		Description("Register an App and emit its ready-to-use environment").
+		AddArg(requiredArg("name", "Unique host-chosen App name")).
+		Flags(
+			cli.String("external-ref").Help("Opaque owner reference grounding console issuer tokens"),
+			cli.String("display-name").Help("Human-facing label; name stays the unique handle"),
+			cli.String("org-id").Help("Owning Org; Org-scoped callers may omit this to use their own"),
+			cli.Int("callback-timeout").Help("Callback HTTP reply deadline in seconds, 1 to 60; default 10"),
+			cli.String("credential-name").Help("Runtime credential name; defaults to '<App name> runtime'"),
+			cli.Bool("browser").Help("Enable browser access and generate and register an Ed25519 client keypair"),
+			cli.Strings("origin").Help("Exact allowed browser origin; repeatable and required with --browser"),
+			cli.String("webhook-url").Help("HTTPS Invocation webhook URL; required with --browser"),
+			cli.String("client-key-name").Default("browser").Help("Operator-facing browser client-key name"),
+			cli.Int("max-concurrent-invocations").Default(50).Help("App-wide concurrent Invocation limit in browser mode"),
+			cli.Int("max-admissions-per-minute").Default(300).Help("App-wide admission limit in browser mode"),
+			cli.Int("max-concurrent-invocations-per-tenant").Default(20).Help("Per-tenant browser concurrency limit"),
+			cli.Int("max-concurrent-invocations-per-user").Default(3).Help("Per-user browser concurrency limit"),
+			cli.Int("max-admissions-per-user-per-minute").Default(20).Help("Per-user browser admission limit"),
+		).
+		Run(runAppInit)
 	apps.Command("register").
 		Description("Register one app; requires a credential not associated with an app").
 		AddArg(optionalArg("name", "Unique host-chosen App name; omit only with --request-file")).

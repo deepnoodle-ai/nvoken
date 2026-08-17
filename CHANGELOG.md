@@ -8,6 +8,12 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **`nvoken app init` turns App provisioning into one command.** It registers
+  the App, issues an App-bound Runtime credential, preserves both one-time
+  delivery signing keys, and prints a ready `.env` block. `--browser` also
+  enables the browser boundary and generates and registers an Ed25519 client
+  keypair while keeping its private seed local.
+
 - **`syncDefinitions` replaces hand-rolled drift detection.**
   `syncDefinitions` / `SyncDefinitions` / `sync_definitions` writes a whole set
   of Agent Definitions and reports `created`, `updated`, or `unchanged` per
