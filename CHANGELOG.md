@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.22.0 - 2026-08-17
 
 - **Breaking: resumable budget exhaustion is now a budget hold.** Invocation
   status `paused` is `budget_hold`, `on_budget_exhausted: pause` is `hold`, the
