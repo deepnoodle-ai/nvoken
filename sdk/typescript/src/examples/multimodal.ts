@@ -21,7 +21,7 @@ const mediaBlock = imageMediaType === undefined
   : imageBlock(imageMediaType, encoded);
 
 const client = new Client({
-  baseUrl: process.env.NVOKEN_BASE_URL ?? "http://localhost:8080",
+  baseUrl: process.env.NVOKEN_BASE_URL,
   apiKey: process.env.NVOKEN_API_KEY ?? "",
 });
 

@@ -81,61 +81,36 @@ RAW_ONLY = {
 # exists to catch, and no spelling search can tell the two apart.
 WIRE_SHAPED = {
     ("allocateCredits", "rust"),
-    ("createSession", "typescript"),
-    ("forkSession", "typescript"),
-}
-
-# Operations one language wraps and another does not. Every line here is a
-# facade someone still has to write; the check exists so the list shrinks
-# rather than grows.
-#
-# The provisioning block below is one finding rather than many: going live —
-# register an App, set its ceilings, enable browser access, mint a signing key,
-# issue a credential — has a facade in Go and nowhere else, so three of four
-# SDKs send an integrator to the generated client for the first thing they do.
-COVERAGE_BASELINE = {
-    ("getSessionTranscript", "rust"),
-    ("listInvocationLogs", "typescript"),
-    ("listInvocationLogs", "python"),
-    ("listInvocationLogs", "rust"),
-    ("listMemories", "typescript"),
-    ("listMemories", "python"),
-    ("listMemories", "rust"),
-    ("createSession", "python"),
-    ("createSession", "rust"),
-    ("forkSession", "python"),
-    ("forkSession", "rust"),
-    # The provisioning surface.
-    ("registerOrg", "typescript"),
-    ("registerOrg", "python"),
-    ("registerOrg", "rust"),
-    ("updateOrg", "typescript"),
-    ("updateOrg", "python"),
-    ("updateOrg", "rust"),
-    ("registerApp", "typescript"),
-    ("registerApp", "python"),
-    ("registerApp", "rust"),
-    ("updateApp", "typescript"),
-    ("updateApp", "python"),
-    ("updateApp", "rust"),
     ("createAppClientKey", "typescript"),
     ("createAppClientKey", "python"),
     ("createAppClientKey", "rust"),
+    ("createCredential", "rust"),
+    ("createProviderKey", "rust"),
+    ("createSession", "typescript"),
+    ("createSession", "python"),
+    ("createSession", "rust"),
+    ("forkSession", "typescript"),
+    ("forkSession", "python"),
+    ("forkSession", "rust"),
     ("mintAppSigningKey", "typescript"),
     ("mintAppSigningKey", "python"),
     ("mintAppSigningKey", "rust"),
-    ("createCredential", "python"),
-    ("createCredential", "rust"),
+    ("registerApp", "typescript"),
+    ("registerApp", "python"),
+    ("registerApp", "rust"),
+    ("registerOrg", "rust"),
     ("rotateCredential", "rust"),
-    ("createProviderKey", "rust"),
     ("rotateProviderKey", "rust"),
-    # A browser mints its own anonymous grant; no server-side SDK wraps it in
-    # any language, and the browser entry point that would is C7's work.
-    ("issueAnonymousToken", "go"),
-    ("issueAnonymousToken", "typescript"),
-    ("issueAnonymousToken", "python"),
-    ("issueAnonymousToken", "rust"),
+    ("updateApp", "typescript"),
+    ("updateApp", "python"),
+    ("updateApp", "rust"),
+    ("updateOrg", "rust"),
 }
+
+# Operations one language wraps and another does not belong here temporarily.
+# Keep the baseline empty; a new entry is an explicit debt, not a way to make a
+# parity failure pass.
+COVERAGE_BASELINE: set[tuple[str, str]] = set()
 
 
 def load_operations() -> dict[str, list[str]]:

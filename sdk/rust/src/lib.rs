@@ -32,28 +32,41 @@ pub use callback::{
     CallbackResultStore, CallbackTool, VerifiedCallback,
 };
 pub use client::{
-    fetch_tool, AgentDefinition, AgentDefinitionOverrides, BudgetExhaustionBehavior, Client,
-    ClientInterface, CompactionListOptions, ContextCompaction, ContextCompactionTrigger,
-    ContextItem, ContextTier, CreateAgentDefinitionOptions, CreateAgentInput, DefinitionSync,
-    DefinitionSyncOutcome, DeleteSessionOptions, ErrorCategory, HostToolHandler, IfActivePolicy,
-    InvocationHandle, InvokeRequest, Limits, ListAgentDefinitionsOptions, ListAgentsOptions,
-    ListInvocationsOptions, ListModelsOptions, ListOrder, ListSessionsOptions, McpServer,
-    McpServerHeaders, McpTimeouts, MemoryConfig, MemoryContextConfig, MemoryContextMode,
+    fetch_tool, is_not_found, issue_anonymous_token, AgentDefinition, AgentDefinitionOverrides,
+    BudgetExhaustionBehavior, Client, ClientInterface, CompactionListOptions, ContextCompaction,
+    ContextCompactionTrigger, ContextItem, ContextTier, CreateAgentDefinitionOptions,
+    CreateAgentInput, DefinitionSync, DefinitionSyncOutcome, DeleteSessionOptions, ErrorCategory,
+    HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits,
+    ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationLogsOptions,
+    ListInvocationsOptions, ListMemoriesOptions, ListModelsOptions, ListOrder, ListSessionsOptions,
+    McpServer, McpServerHeaders, McpTimeouts, MemoryConfig, MemoryContextConfig, MemoryContextMode,
     MemoryScope, MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource,
     ProviderTool, Reasoning, ReasoningEffort, RetryPolicy, Sampling, Scope, SessionOptions,
     SessionOptionsConflict, SessionRetention, StreamOptions, Tool, ToolCallListOptions, ToolChoice,
-    ToolHandlerError, ToolMode, ToolResult, UpdateAgentDefinitionOptions, UpdateAgentInput,
-    UpdateSessionOptions, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
-    WebhookEvent, WebhookTarget, ANY_DEFINITION_REVISION,
+    ToolHandlerError, ToolMode, ToolResult, TranscriptOptions, UpdateAgentDefinitionOptions,
+    UpdateAgentInput, UpdateSessionOptions, WaitCondition, WaitOptions, WebSearchLocation,
+    WebSearchTool, WebhookEvent, WebhookTarget, ANY_DEFINITION_REVISION,
 };
 pub use client_token::{
     all_browser_operations, mint_client_token, ClientTokenClaims, ClientTokenError,
     CLIENT_TOKEN_LIFETIME_LIMIT, CLIENT_TOKEN_TYPE,
 };
-pub use invocation_status::{is_terminal_status, is_turn_over, TERMINAL_INVOCATION_STATUSES};
+pub use invocation_status::{
+    is_terminal_status, is_turn_over, ACTIVE_INVOCATION_STATUSES, ALL_INVOCATION_STATUSES,
+    TERMINAL_INVOCATION_STATUSES,
+};
 pub use media_preflight::{
     document_block, document_url_block, image_block, image_url_block, preflight_input_blocks,
     text_block, MediaIssue,
+};
+pub use models::{
+    AnonymousTokenRequest, AnonymousTokenResponse, App, AppRegistration, AppSigningKeySecret,
+    ClientKey, CreateClientKeyRequest, CreateCredentialRequest, CreateProviderKeyRequest,
+    CreateSessionRequest, CredentialIssuance, CredentialProfile, ForkSessionRequest, Invocation,
+    InvocationLog, InvocationLogList, InvocationStatus, Memory, MemoryKind, MemoryList,
+    MemorySearchMode, MintAppSigningKeyRequest, Operation, Org, ProviderKey, RegisterAppRequest,
+    RegisterOrgRequest, RotateCredentialRequest, RotateProviderKeyRequest, Session,
+    TranscriptSnapshot, UpdateAppRequest, UpdateOrgRequest,
 };
 pub use schema_preflight::{preflight_output_schema, SchemaIssue};
 pub use signed_delivery::{

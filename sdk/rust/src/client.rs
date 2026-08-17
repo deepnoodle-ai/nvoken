@@ -1464,6 +1464,25 @@ pub struct ListEndedInvocationsOptions {
     pub limit: Option<u32>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ListInvocationLogsOptions {
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
+    pub trace_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ListMemoriesOptions {
+    pub agent_id: String,
+    pub tenant_key: Option<String>,
+    pub user_key: Option<String>,
+    pub query: Option<String>,
+    pub search_mode: Option<models::MemorySearchMode>,
+    pub kind: Option<models::MemoryKind>,
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
+}
+
 /// One Session metadata patch: a present key replaces, a `None` value deletes,
 /// and an unmentioned key survives.
 #[derive(Debug, Clone, Default)]
@@ -1519,6 +1538,13 @@ pub struct MessageListOptions {
     pub limit: Option<u32>,
     /// Defaults to [`ListOrder::Ascending`], oldest first.
     pub order: Option<ListOrder>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TranscriptOptions {
+    pub cursor: Option<String>,
+    pub page_token: Option<String>,
+    pub limit: Option<u32>,
 }
 
 /// Sequence order for a message page.
@@ -1658,6 +1684,7 @@ fn non_blank(value: String) -> Option<String> {
 #[derive(Clone)]
 pub struct Client {
     pub(crate) configuration: Arc<apis::configuration::Configuration>,
+    once_configuration: Arc<apis::configuration::Configuration>,
     pub(crate) stream_client: reqwest::Client,
     response_metadata: ResponseMetadataStore,
     retry_policy: RetryPolicy,
@@ -1745,15 +1772,28 @@ impl Client {
                 policy: retry_policy.clone(),
             })
             .build();
+        let once_middleware = MiddlewareClientBuilder::new(transport.clone())
+            .with(ResponseMetadataObserver {
+                metadata: response_metadata.clone(),
+            })
+            .build();
         let configuration = apis::configuration::Configuration {
+            base_path: base_url.clone(),
+            user_agent: Some(user_agent.clone()),
+            client: middleware,
+            bearer_access_token: Some(api_key.clone()),
+            ..Default::default()
+        };
+        let once_configuration = apis::configuration::Configuration {
             base_path: base_url,
             user_agent: Some(user_agent),
-            client: middleware,
+            client: once_middleware,
             bearer_access_token: Some(api_key),
             ..Default::default()
         };
         Ok(Self {
             configuration: Arc::new(configuration),
+            once_configuration: Arc::new(once_configuration),
             stream_client: transport,
             response_metadata,
             retry_policy,
@@ -1822,6 +1862,132 @@ impl Client {
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn register_org(
+        &self,
+        request: models::RegisterOrgRequest,
+    ) -> Result<models::Org, NvokenError> {
+        let configuration = if request.external_ref.is_some() {
+            &self.configuration
+        } else {
+            &self.once_configuration
+        };
+        apis::orgs_api::register_org(configuration, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn update_org(
+        &self,
+        org_id: &str,
+        request: models::UpdateOrgRequest,
+    ) -> Result<models::Org, NvokenError> {
+        apis::orgs_api::update_org(&self.configuration, org_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn register_app(
+        &self,
+        request: models::RegisterAppRequest,
+    ) -> Result<models::AppRegistration, NvokenError> {
+        apis::apps_api::register_app(&self.once_configuration, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn update_app(
+        &self,
+        app_id: &str,
+        request: models::UpdateAppRequest,
+    ) -> Result<models::App, NvokenError> {
+        apis::apps_api::update_app(&self.configuration, app_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn create_app_client_key(
+        &self,
+        app_id: &str,
+        request: models::CreateClientKeyRequest,
+    ) -> Result<models::ClientKey, NvokenError> {
+        apis::apps_api::create_app_client_key(&self.once_configuration, app_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Mints a receiver secret that is returned exactly once.
+    pub async fn mint_app_signing_key(
+        &self,
+        app_id: &str,
+        request: models::MintAppSigningKeyRequest,
+    ) -> Result<models::AppSigningKeySecret, NvokenError> {
+        apis::apps_api::mint_app_signing_key(&self.once_configuration, app_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn create_credential(
+        &self,
+        request: models::CreateCredentialRequest,
+        idempotency_key: Option<&str>,
+    ) -> Result<models::CredentialIssuance, NvokenError> {
+        let generated_key;
+        let key = match idempotency_key {
+            Some(key) if !key.is_empty() => key,
+            _ => {
+                generated_key = generated_idempotency_key();
+                &generated_key
+            }
+        };
+        apis::identity_api::create_credential(&self.configuration, key, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn rotate_credential(
+        &self,
+        credential_id: &str,
+        request: models::RotateCredentialRequest,
+        idempotency_key: Option<&str>,
+    ) -> Result<models::CredentialIssuance, NvokenError> {
+        let generated_key;
+        let key = match idempotency_key {
+            Some(key) if !key.is_empty() => key,
+            _ => {
+                generated_key = generated_idempotency_key();
+                &generated_key
+            }
+        };
+        apis::identity_api::rotate_credential(&self.configuration, key, credential_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn create_provider_key(
+        &self,
+        mut request: models::CreateProviderKeyRequest,
+    ) -> Result<models::ProviderKey, NvokenError> {
+        if request.idempotency_key.is_empty() {
+            request.idempotency_key = generated_idempotency_key();
+        }
+        apis::provider_keys_api::create_provider_key(&self.configuration, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    pub async fn rotate_provider_key(
+        &self,
+        provider_key_id: &str,
+        mut request: models::RotateProviderKeyRequest,
+    ) -> Result<models::ProviderKey, NvokenError> {
+        if request.idempotency_key.is_empty() {
+            request.idempotency_key = generated_idempotency_key();
+        }
+        apis::provider_keys_api::rotate_provider_key(&self.configuration, provider_key_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
     }
 
     pub async fn invoke(&self, request: InvokeRequest) -> Result<InvocationHandle, NvokenError> {
@@ -2687,6 +2853,43 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
+    /// Reads bounded, content-free operational logs for one Invocation.
+    pub async fn list_invocation_logs(
+        &self,
+        invocation_id: &str,
+        options: ListInvocationLogsOptions,
+    ) -> Result<models::InvocationLogList, NvokenError> {
+        apis::invocations_api::list_invocation_logs(
+            &self.configuration,
+            invocation_id,
+            options.cursor.as_deref(),
+            options.limit,
+            options.trace_id.as_deref(),
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Browses or searches durable memories for one Agent and scope.
+    pub async fn list_memories(
+        &self,
+        options: ListMemoriesOptions,
+    ) -> Result<models::MemoryList, NvokenError> {
+        apis::memories_api::list_memories(
+            &self.configuration,
+            &options.agent_id,
+            options.tenant_key.as_deref(),
+            options.user_key.as_deref(),
+            options.query.as_deref(),
+            options.search_mode,
+            options.kind,
+            options.cursor.as_deref(),
+            options.limit,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
     pub async fn create_agent(
         &self,
         input: CreateAgentInput,
@@ -2972,6 +3175,39 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
+    /// Creates an empty or seeded Session without starting a turn. A keyed
+    /// request is replay-safe; an unkeyed create is attempted only once.
+    pub async fn create_session(
+        &self,
+        request: models::CreateSessionRequest,
+    ) -> Result<models::Session, NvokenError> {
+        let configuration = if request.session_key.is_some() {
+            &self.configuration
+        } else {
+            &self.once_configuration
+        };
+        apis::sessions_api::create_session(configuration, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Copies a Session prefix into a new Session. A keyed child is
+    /// replay-safe; an unkeyed fork is attempted only once.
+    pub async fn fork_session(
+        &self,
+        source_session_id: &str,
+        request: models::ForkSessionRequest,
+    ) -> Result<models::Session, NvokenError> {
+        let configuration = if request.session_key.is_some() {
+            &self.configuration
+        } else {
+            &self.once_configuration
+        };
+        apis::sessions_api::fork_session(configuration, source_session_id, request)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
     pub async fn get_session(&self, session_id: &str) -> Result<models::Session, NvokenError> {
         apis::sessions_api::get_session(&self.configuration, session_id)
             .await
@@ -3088,6 +3324,22 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
+    pub async fn get_session_transcript(
+        &self,
+        session_id: &str,
+        options: TranscriptOptions,
+    ) -> Result<models::TranscriptSnapshot, NvokenError> {
+        apis::sessions_api::get_session_transcript(
+            &self.configuration,
+            session_id,
+            options.cursor.as_deref(),
+            options.page_token.as_deref(),
+            options.limit,
+        )
+        .await
+        .map_err(|error| self.normalize_generated_error(error))
+    }
+
     /// Returns newest-first immutable records for applied and fell-through
     /// Session compaction passes.
     pub async fn list_session_compactions(
@@ -3121,6 +3373,45 @@ impl Client {
 
 pub fn fetch_tool() -> Tool {
     Tool::fetch()
+}
+
+/// Mints or renews credential-free browser access for one configured App.
+/// No machine credential is attached to this request.
+pub async fn issue_anonymous_token(
+    base_url: &str,
+    app_id: &str,
+    origin: &str,
+    visitor_token: Option<String>,
+) -> Result<models::AnonymousTokenResponse, NvokenError> {
+    let base_url = base_url.trim_end_matches('/');
+    if base_url.is_empty() || app_id.is_empty() || origin.is_empty() {
+        return Err(NvokenError::validation(
+            "base URL, App ID, and origin are required",
+        ));
+    }
+    let user_agent = format!("nvoken-rust/{}", crate::VERSION);
+    let transport = reqwest::Client::builder()
+        .user_agent(&user_agent)
+        .build()
+        .map_err(|error| NvokenError::transport(error.to_string()))?;
+    let configuration = apis::configuration::Configuration {
+        base_path: base_url.to_owned(),
+        user_agent: Some(user_agent),
+        client: MiddlewareClientBuilder::new(transport).build(),
+        bearer_access_token: None,
+        ..Default::default()
+    };
+    let mut request = models::AnonymousTokenRequest::new();
+    request.visitor_token = visitor_token;
+    apis::apps_api::issue_anonymous_token(&configuration, app_id, origin, request)
+        .await
+        .map_err(normalize_generated_error)
+}
+
+/// Whether an SDK operation failed because its resource was not found or was
+/// outside the client's asserted scope.
+pub fn is_not_found(error: &NvokenError) -> bool {
+    error.category == ErrorCategory::NotFound
 }
 
 fn provider_key_selection(

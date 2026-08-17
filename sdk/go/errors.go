@@ -49,6 +49,13 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Cause }
 
+// IsNotFound reports whether an SDK operation failed because the requested
+// resource was not found or was outside the client's asserted scope.
+func IsNotFound(err error) bool {
+	var nvokenError *Error
+	return errors.As(err, &nvokenError) && nvokenError.Category == ErrorNotFound
+}
+
 func errorFromResponse(status int, header http.Header, body []byte) error {
 	payload := struct {
 		Code      string         `json:"code"`

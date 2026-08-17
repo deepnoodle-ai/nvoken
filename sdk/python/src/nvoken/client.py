@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Sequence
+from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Sequence, TypeGuard
 
 import httpx
 
@@ -45,6 +45,11 @@ from nvoken_generated.models.create_agent_request import CreateAgentRequest
 from nvoken_generated.models.update_agent_request import UpdateAgentRequest
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult
+from nvoken_generated.models.anonymous_token_request import AnonymousTokenRequest
+from nvoken_generated.models.anonymous_token_response import AnonymousTokenResponse
+from nvoken_generated.models.app import App
+from nvoken_generated.models.app_registration import AppRegistration
+from nvoken_generated.models.app_signing_key_secret import AppSigningKeySecret
 from nvoken_generated.models.credit_account_list import CreditAccountList
 from nvoken_generated.models.credit_allocation_list import CreditAllocationList
 from nvoken_generated.models.callback_target import CallbackTarget as GeneratedCallbackTarget
@@ -52,6 +57,12 @@ from nvoken_generated.models.callback_tool_declaration import CallbackToolDeclar
 from nvoken_generated.models.create_provider_key_request import (
     CreateProviderKeyRequest,
 )
+from nvoken_generated.models.client_key import ClientKey
+from nvoken_generated.models.create_client_key_request import CreateClientKeyRequest
+from nvoken_generated.models.create_credential_request import CreateCredentialRequest
+from nvoken_generated.models.create_session_request import CreateSessionRequest
+from nvoken_generated.models.credential_issuance import CredentialIssuance
+from nvoken_generated.models.credential_profile import CredentialProfile
 from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import (
     CompactionPolicyTriggerTokens,
@@ -74,6 +85,7 @@ from nvoken_generated.models.create_invocation_request import CreateInvocationRe
 from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as GeneratedMCPServerHeaders
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_change import InvocationChange
+from nvoken_generated.models.invocation_log_list import InvocationLogList
 from nvoken_generated.models.invocation_context_item import (
     InvocationContextItem as GeneratedInvocationContextItem,
 )
@@ -94,6 +106,7 @@ from nvoken_generated.models.provider_key_selection_one_of1 import (
 )
 from nvoken_generated.models.invocation_result import InvocationResult
 from nvoken_generated.models.invocation_status import InvocationStatus
+from nvoken_generated.models.fork_session_request import ForkSessionRequest
 from nvoken_generated.models.mcp_list_tools_request import MCPListToolsRequest
 from nvoken_generated.models.mcp_list_tools_response import MCPListToolsResponse
 from nvoken_generated.models.mcp_server import MCPServer as GeneratedMCPServer
@@ -108,6 +121,10 @@ from nvoken_generated.models.memory_context_config import (
     MemoryContextConfig as GeneratedMemoryContextConfig,
 )
 from nvoken_generated.models.memory_context_mode import MemoryContextMode as GeneratedMemoryContextMode
+from nvoken_generated.models.memory_kind import MemoryKind
+from nvoken_generated.models.memory_list import MemoryList
+from nvoken_generated.models.memory_search_mode import MemorySearchMode
+from nvoken_generated.models.mint_app_signing_key_request import MintAppSigningKeyRequest
 from nvoken_generated.models.browser_client_interface import BrowserClientInterface
 from nvoken_generated.models.money import Money
 from nvoken_generated.models.provider_key import ProviderKey
@@ -115,6 +132,10 @@ from nvoken_generated.models.provider_key_list import ProviderKeyList
 from nvoken_generated.models.provider_key_scope import ProviderKeyScope
 from nvoken_generated.models.provider_key_usage import ProviderKeyUsage
 from nvoken_generated.models.provider_static_key import ProviderStaticKey
+from nvoken_generated.models.operation import Operation
+from nvoken_generated.models.org import Org
+from nvoken_generated.models.register_app_request import RegisterAppRequest
+from nvoken_generated.models.register_org_request import RegisterOrgRequest
 from nvoken_generated.models.rotate_provider_key_request import (
     RotateProviderKeyRequest,
 )
@@ -142,6 +163,8 @@ from nvoken_generated.models.submit_host_tool_results_response import SubmitHost
 from nvoken_generated.models.tool_choice import ToolChoice as GeneratedToolChoice
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
 from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
+from nvoken_generated.models.update_app_request import UpdateAppRequest
+from nvoken_generated.models.update_org_request import UpdateOrgRequest
 
 from .stream import (
     ReducedSnapshot,
@@ -969,6 +992,80 @@ class Client:
             model.id,
         ))
 
+    async def register_org(
+        self,
+        display_name: str,
+        *,
+        external_ref: str | None = None,
+    ) -> Org:
+        body = RegisterOrgRequest(
+            display_name=display_name,
+            external_ref=external_ref,
+        )
+        call = lambda: self.orgs.register_org(body)
+        return await (self._call_once(call) if external_ref is None else self._replay_safe(call))
+
+    async def update_org(self, org_id: str, display_name: str) -> Org:
+        return await self._replay_safe(
+            lambda: self.orgs.update_org(
+                org_id,
+                UpdateOrgRequest(display_name=display_name),
+            )
+        )
+
+    async def register_app(self, request: RegisterAppRequest) -> AppRegistration:
+        return await self._call_once(lambda: self.apps.register_app(request))
+
+    async def update_app(self, app_id: str, request: UpdateAppRequest) -> App:
+        return await self._replay_safe(lambda: self.apps.update_app(app_id, request))
+
+    async def create_app_client_key(
+        self,
+        app_id: str,
+        request: CreateClientKeyRequest,
+    ) -> ClientKey:
+        return await self._call_once(
+            lambda: self.apps.create_app_client_key(app_id, request)
+        )
+
+    async def mint_app_signing_key(
+        self,
+        app_id: str,
+        request: MintAppSigningKeyRequest,
+    ) -> AppSigningKeySecret:
+        """Mint a receiver secret that is returned exactly once."""
+        return await self._call_once(
+            lambda: self.apps.mint_app_signing_key(app_id, request)
+        )
+
+    async def create_credential(
+        self,
+        *,
+        name: str,
+        profile: CredentialProfile,
+        app_id: str | None = None,
+        org_id: str | None = None,
+        tenant_key: str | None = None,
+        session_id: str | None = None,
+        operations: Sequence[Operation] | None = None,
+        expires_at: datetime | None = None,
+        idempotency_key: str | None = None,
+    ) -> CredentialIssuance:
+        body = CreateCredentialRequest(
+            name=name,
+            profile=profile,
+            app_id=app_id,
+            org_id=org_id,
+            tenant_key=tenant_key,
+            session_id=session_id,
+            operations=list(operations) if operations is not None else None,
+            expires_at=expires_at,
+        )
+        key = idempotency_key or f"nvoken-{uuid.uuid4()}"
+        return await self._replay_safe(
+            lambda: self.identity.create_credential(key, body)
+        )
+
     async def invoke(self, request: InvokeRequest) -> InvocationHandle:
         body = self._invocation_body(request)
         idempotency_key = body.idempotency_key
@@ -1641,6 +1738,50 @@ class Client:
             lambda: self.invocations.submit_host_tool_results(invocation_id, body)
         )
 
+    async def list_invocation_logs(
+        self,
+        invocation_id: str,
+        *,
+        cursor: str | None = None,
+        limit: int | None = None,
+        trace_id: str | None = None,
+    ) -> InvocationLogList:
+        """Read bounded, content-free operational logs for one Invocation."""
+        return await self._replay_safe(
+            lambda: self.invocations.list_invocation_logs(
+                invocation_id,
+                cursor=cursor,
+                limit=limit,
+                trace_id=trace_id,
+            )
+        )
+
+    async def list_memories(
+        self,
+        *,
+        agent_id: str,
+        tenant_key: str | None = None,
+        user_key: str | None = None,
+        query: str | None = None,
+        search_mode: MemorySearchMode | None = None,
+        kind: MemoryKind | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> MemoryList:
+        """Browse or search durable memories for one Agent and scope."""
+        return await self._replay_safe(
+            lambda: self.memories.list_memories(
+                agent_id,
+                tenant_key=tenant_key,
+                user_key=user_key,
+                query=query,
+                search_mode=search_mode,
+                kind=kind,
+                cursor=cursor,
+                limit=limit,
+            )
+        )
+
     async def list_invocations(
         self,
         *,
@@ -1817,6 +1958,34 @@ class Client:
         return _machine_projection(
             await self._replay_safe(lambda: self.sessions.get_session(session_id))
         )
+
+    async def create_session(
+        self,
+        request: CreateSessionRequest | None = None,
+    ) -> Session:
+        """Create an empty or seeded Session without starting a turn."""
+        body = request or CreateSessionRequest()
+        call = lambda: self.sessions.create_session(body)
+        response = await (
+            self._replay_safe(call)
+            if body.session_key is not None
+            else self._call_once(call)
+        )
+        return _machine_projection(response)
+
+    async def fork_session(
+        self,
+        source_session_id: str,
+        request: ForkSessionRequest,
+    ) -> Session:
+        """Copy a Session prefix into a new Session."""
+        call = lambda: self.sessions.fork_session(source_session_id, request)
+        response = await (
+            self._replay_safe(call)
+            if request.session_key is not None
+            else self._call_once(call)
+        )
+        return _machine_projection(response)
 
     async def delete_session(self, session_id: str, *, force: bool = False) -> None:
         """Erase a Session and everything under it.
@@ -2213,6 +2382,12 @@ class Client:
         deltas: bool = True,
     ) -> None:
         await stream_session(self, session_id, reducer, consume, deltas=deltas)
+
+    async def _call_once(self, operation: Callable[[], Awaitable[Any]]) -> Any:
+        try:
+            return await operation()
+        except (ApiException, httpx.HTTPError) as error:
+            raise normalize_error(error) from error
 
     async def _replay_safe(self, operation: Callable[[], Awaitable[Any]]) -> Any:
         last_error: NvokenError | None = None
@@ -2796,6 +2971,34 @@ def normalize_error(error: ApiException | httpx.HTTPError) -> NvokenError:
         retry_after=parse_retry_after(headers.get("retry-after")),
         details=body.get("details"),
     )
+
+
+def is_not_found(error: object) -> TypeGuard[NvokenError]:
+    """Whether an SDK call failed because its resource was not found."""
+    return isinstance(error, NvokenError) and error.category == "not_found"
+
+
+async def issue_anonymous_token(
+    base_url: str,
+    app_id: str,
+    origin: str,
+    *,
+    visitor_token: str | None = None,
+) -> AnonymousTokenResponse:
+    """Mint or renew credential-free browser access for one configured App."""
+    if not base_url:
+        raise NvokenError("validation", "base_url is required")
+    configuration = Configuration(host=base_url.rstrip("/"))
+    configuration.discard_unknown_keys = False
+    try:
+        async with ApiClient(configuration) as api_client:
+            return await AppsApi(api_client).issue_anonymous_token(
+                app_id,
+                origin,
+                AnonymousTokenRequest(visitor_token=visitor_token),
+            )
+    except ApiException as error:
+        raise normalize_error(error) from error
 
 
 async def normalize_httpx_response(response: httpx.Response) -> NvokenError:
