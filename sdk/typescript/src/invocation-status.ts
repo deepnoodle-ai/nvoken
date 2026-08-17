@@ -1,4 +1,16 @@
-import type { InvocationStatus } from "./generated/models/index.js";
+// Imported from the generated module rather than the barrel deliberately. This
+// subpath has to stay reachable without pulling the runtime client in, and that
+// file has no imports of its own.
+import { InvocationStatus } from "./generated/models/InvocationStatus.js";
+
+/**
+ * Every Invocation status, as values rather than as a type.
+ *
+ * Re-exported here because `listInvocations({ status })` filters server-side
+ * and takes values, so a caller who could only reach the type had to hand-write
+ * the list — which is the exact fork this module exists to prevent.
+ */
+export { InvocationStatus };
 
 /**
  * The statuses that mean a turn has stopped for good.
@@ -15,6 +27,20 @@ export const TERMINAL_INVOCATION_STATUSES: readonly InvocationStatus[] = [
 ];
 
 const TERMINAL = new Set<string>(TERMINAL_INVOCATION_STATUSES);
+
+/**
+ * The statuses that mean a turn is still going — what
+ * `listInvocations({ status: [...] })` wants for a teardown, sweep, or
+ * reconciler.
+ *
+ * Derived from the enum rather than written out, so a status added to the
+ * contract lands here on the next release without anyone remembering to add
+ * it. That is the safe direction: a turn you did not know about shows up in
+ * "still live" and gets waited on, rather than being silently dropped from the
+ * sweep that was supposed to find it.
+ */
+export const ACTIVE_INVOCATION_STATUSES: readonly InvocationStatus[] =
+  Object.values(InvocationStatus).filter((status) => !TERMINAL.has(status));
 
 /**
  * Whether a status means the turn is over.

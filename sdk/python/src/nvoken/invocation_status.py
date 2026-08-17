@@ -9,8 +9,35 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Every status the contract defines, in lifecycle order.
+ALL_INVOCATION_STATUSES: tuple[str, ...] = (
+    "queued",
+    "running",
+    "waiting",
+    "paused",
+    "completed",
+    "incomplete",
+    "failed",
+    "cancelled",
+)
+
 TERMINAL_INVOCATION_STATUSES = frozenset(
     {"completed", "incomplete", "failed", "cancelled"}
+)
+
+#: The statuses that mean a turn is still going — what
+#: ``list_invocations(status=[...])`` wants for a teardown, sweep, or
+#: reconciler, since it filters server-side and takes values rather than a
+#: predicate.
+#:
+#: Derived rather than written out, so a status added to the contract lands here
+#: without anyone remembering to add it. That is the safe direction: a turn
+#: nobody knew about shows up in "still live" and gets waited on, rather than
+#: being dropped from the sweep meant to find it.
+ACTIVE_INVOCATION_STATUSES: tuple[str, ...] = tuple(
+    status
+    for status in ALL_INVOCATION_STATUSES
+    if status not in TERMINAL_INVOCATION_STATUSES
 )
 
 

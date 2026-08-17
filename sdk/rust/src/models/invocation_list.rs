@@ -17,8 +17,12 @@ pub struct InvocationList {
     pub items: Vec<models::Invocation>,
     #[serde(rename = "has_more")]
     pub has_more: bool,
+    /// Your position after this page. Null once a default listing is exhausted. Under `ended=true` it is always a string, including on an empty page, because a caught-up consumer still has a place to keep.
     #[serde(rename = "next_cursor", deserialize_with = "Option::deserialize")]
     pub next_cursor: Option<String>,
+    /// The instant the feed is complete to; nothing that ended at or before it will appear later. Returned only under `ended=true`, where it is the number to alarm on when settlement stalls.
+    #[serde(rename = "complete_through", skip_serializing_if = "Option::is_none")]
+    pub complete_through: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 impl InvocationList {
@@ -31,6 +35,7 @@ impl InvocationList {
             items,
             has_more,
             next_cursor,
+            complete_through: None,
         }
     }
 }

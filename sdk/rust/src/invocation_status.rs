@@ -15,6 +15,35 @@ pub const TERMINAL_INVOCATION_STATUSES: [models::InvocationStatus; 4] = [
     models::InvocationStatus::Cancelled,
 ];
 
+/// Every status the contract defines, in lifecycle order.
+pub const ALL_INVOCATION_STATUSES: [models::InvocationStatus; 8] = [
+    models::InvocationStatus::Queued,
+    models::InvocationStatus::Running,
+    models::InvocationStatus::Waiting,
+    models::InvocationStatus::Paused,
+    models::InvocationStatus::Completed,
+    models::InvocationStatus::Incomplete,
+    models::InvocationStatus::Failed,
+    models::InvocationStatus::Cancelled,
+];
+
+/// The statuses that mean a turn is still going.
+///
+/// This is what [`Client::list_invocations`](crate::Client::list_invocations)
+/// wants for a teardown, sweep, or reconciler, which filters server-side and
+/// takes values rather than a predicate.
+///
+/// It is the complement of [`TERMINAL_INVOCATION_STATUSES`] over
+/// [`ALL_INVOCATION_STATUSES`], and `active_and_terminal_partition_the_enum`
+/// keeps it that way, so a status added to the contract only has to be
+/// classified once.
+pub const ACTIVE_INVOCATION_STATUSES: [models::InvocationStatus; 4] = [
+    models::InvocationStatus::Queued,
+    models::InvocationStatus::Running,
+    models::InvocationStatus::Waiting,
+    models::InvocationStatus::Paused,
+];
+
 /// Whether a status means the turn is over.
 ///
 /// There are eight statuses and four of them are terminal, so the interesting
@@ -79,6 +108,25 @@ mod tests {
             assert_eq!(is_terminal_status(status), terminal, "{status:?}");
         }
         assert_eq!(TERMINAL_INVOCATION_STATUSES.len(), 4);
+    }
+
+    /// The two lists are a partition of the enum. Rust cannot derive one from
+    /// the other in a const, so this is what keeps a status added to the
+    /// contract from landing in neither — or in both.
+    #[test]
+    fn active_and_terminal_partition_the_enum() {
+        for status in ALL_INVOCATION_STATUSES {
+            let active = ACTIVE_INVOCATION_STATUSES.contains(&status);
+            let terminal = TERMINAL_INVOCATION_STATUSES.contains(&status);
+            assert!(
+                active != terminal,
+                "{status:?} is in {active} and {terminal}"
+            );
+        }
+        assert_eq!(
+            ACTIVE_INVOCATION_STATUSES.len() + TERMINAL_INVOCATION_STATUSES.len(),
+            ALL_INVOCATION_STATUSES.len()
+        );
     }
 
     /// A paused turn stopped on spending capacity with its deadlines on hold. It

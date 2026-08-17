@@ -8,6 +8,37 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **`listEndedInvocations` walks every turn that ended, oldest first.** The
+  reconciliation feed, in all four SDKs. `invocation.ended` webhooks are
+  delivered at least once, so a delivery that never lands leaves a turn nobody
+  settles — silently, because the only evidence is a ledger row that was never
+  written. `listInvocations` cannot stand in: newest-first over current state
+  has no position to resume from. `nextCursor` is set on every page including
+  an empty one, and `completeThrough` reports the instant the feed is complete
+  to. There is deliberately no auto-paging helper: the cursor is the one thing
+  that has to outlive the process.
+
+- **The TypeScript `deleteSession` doc described behavior it no longer had.**
+  It still said a live turn is stopped and silently discarded, from before the
+  server started refusing that. The four facades now say the same thing:
+  refused with `session_invocation_active` unless `force`, which exists for
+  erasing on an end user's behalf.
+
+- **`@deepnoodle/nvoken/status` exports the status values, not just the type.**
+  `listInvocations({status})` filters server-side and takes values, so a caller
+  who could only reach the type had to hand-write the list — the exact fork the
+  subpath existed to prevent. `ACTIVE_INVOCATION_STATUSES` is new in all four
+  SDKs, derived from the enum rather than written out, alongside
+  `ALL_INVOCATION_STATUSES` in Go, Python, and Rust. The subpath stays free of
+  the runtime client.
+
+- **`make facade-check` asserts every facade exposes every parameter its
+  operation has.** The hand-written facades are what integrators call and the
+  only part of the SDK not derived from the contract; nothing checked them.
+  `deleteSession` shipped without `force` in one language out of four because
+  of it. Comments are stripped before the check, since the facade in question
+  documented the parameter it never forwarded.
+
 - **Breaking: Agent Definition writes are flat, in every SDK.** The first
   argument is the definition itself, matching `AgentDefinitionWrite` on the
   wire, and `idempotencyKey` / `expectedRevision` move to a second transport

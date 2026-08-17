@@ -851,7 +851,7 @@ pub async fn list_invocation_traces(
     }
 }
 
-/// Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
+/// Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Invocation that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `invocation.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Sessions take their Invocations with them, so a turn deleted before you read it never appears; reconcile before you erase.
 pub async fn list_invocations(
     configuration: &configuration::Configuration,
     tenant_key: Option<&str>,
@@ -861,6 +861,8 @@ pub async fn list_invocations(
     agent_id: Option<&str>,
     agent_key: Option<&str>,
     status: Option<Vec<models::InvocationStatus>>,
+    ended: Option<bool>,
+    ended_since: Option<chrono::DateTime<chrono::FixedOffset>>,
     cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::InvocationList, Error<ListInvocationsError>> {
@@ -872,6 +874,8 @@ pub async fn list_invocations(
     let p_query_agent_id = agent_id;
     let p_query_agent_key = agent_key;
     let p_query_status = status;
+    let p_query_ended = ended;
+    let p_query_ended_since = ended_since;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
 
@@ -914,6 +918,12 @@ pub async fn list_invocations(
                     .to_string(),
             )]),
         };
+    }
+    if let Some(ref param_value) = p_query_ended {
+        req_builder = req_builder.query(&[("ended", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_ended_since {
+        req_builder = req_builder.query(&[("ended_since", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_cursor {
         req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);

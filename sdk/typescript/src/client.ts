@@ -1156,12 +1156,23 @@ export type AgentStreamEvent<TOutput extends object = JsonObject> =
 export interface ListInvocationOptions {
   tenantKey?: string;
   defaultTenant?: boolean;
+  userKey?: string;
   sessionId?: string;
   agentId?: string;
   agentKey?: string;
   status?: InvocationStatus | InvocationStatus[];
   cursor?: string;
   limit?: number;
+}
+
+export interface EndedInvocationOptions
+  extends Omit<ListInvocationOptions, "cursor"> {
+  /**
+   * Where to start a feed that has no cursor yet. Mutually exclusive with
+   * `cursor`, which already carries a position.
+   */
+  endedSince?: Date;
+  cursor?: string;
 }
 
 export interface ListAgentDefinitionsOptions {
@@ -2287,7 +2298,7 @@ export class Client {
   }
 
   listInvocations(
-    options: ListInvocationOptions = {},
+    options: ListInvocationOptions & { ended?: boolean; endedSince?: Date } = {},
     signal?: AbortSignal,
   ): Promise<InvocationList> {
     const request = {
@@ -2312,6 +2323,51 @@ export class Client {
       yield* page.items;
       cursor = page.nextCursor ?? undefined;
     } while (cursor);
+  }
+
+  /**
+   * One page of the reconciliation feed: turns that ended, oldest first by the
+   * moment they ended. Walk it and append by `id`.
+   *
+   * This is the backstop for settlement. `invocation.ended` webhooks are
+   * delivered at least once, so a delivery that never lands leaves a turn
+   * nobody settles — silently, since nothing errors and the only evidence is a
+   * ledger row that was never written. Reading this to the end is how you find
+   * out. {@link listInvocations} cannot stand in: it is newest-first over
+   * current state, so a turn ending mid-page moves under you and a terminal
+   * status filter gives you a set with no position in it.
+   *
+   * `nextCursor` is always a string here, including on an empty page, so a
+   * consumer that catches up keeps its place without special-casing. Keep
+   * calling while `hasMore`; when it is false you are caught up.
+   *
+   * `completeThrough` is the instant the feed is complete to. Turns that ended
+   * after it are held back until their settling transactions are certainly
+   * visible, because a turn appearing behind your cursor is one you never see
+   * again. It is also the value to alarm on: one that stops advancing means
+   * settlement has stalled rather than that nothing ended.
+   *
+   * There is deliberately no auto-paging generator for this one. A generator
+   * would hide the cursor, and the cursor is the only thing that has to survive
+   * the process — losing it is the failure this feed exists to prevent. Store
+   * it yourself between pages:
+   *
+   * ```ts
+   * let cursor = await loadCursor();
+   * for (;;) {
+   *   const page = await client.listEndedInvocations({ cursor });
+   *   for (const invocation of page.items) await settle(invocation);
+   *   cursor = page.nextCursor!;
+   *   await saveCursor(cursor);
+   *   if (!page.hasMore) break;
+   * }
+   * ```
+   */
+  listEndedInvocations(
+    options: EndedInvocationOptions = {},
+    signal?: AbortSignal,
+  ): Promise<InvocationList> {
+    return this.listInvocations({ ...options, ended: true }, signal);
   }
 
   listSessions(
@@ -2392,9 +2448,17 @@ export class Client {
    * checkpoints, tool calls, artifacts, and undelivered webhooks. The
    * erasure is immediate and irreversible.
    *
-   * A running Invocation is stopped, and no cancellation is recorded — the
-   * Invocation is removed rather than ended, so no `invocation.ended`
-   * webhook is emitted for it. Cancel first if you need an ended record.
+   * A Session holding a nonterminal Invocation is refused with
+   * `session_invocation_active` unless `options.force`. Erasure skips
+   * settlement — the Invocation is removed rather than ended, so it records no
+   * terminal status and emits no `invocation.ended` webhook — which is why a
+   * caller that bills or reconciles on settlement must cancel first and wait
+   * for the final state.
+   *
+   * `force` erases anyway, over a live turn. It is for erasing on an end
+   * user's behalf, where removing the transcript now outranks keeping a
+   * settled record: a deletion request has to be honoured, and a refusal
+   * thrown into that path leaves it unhonoured.
    *
    * An unknown or out-of-scope Session is not found, so a retry after a lost
    * response can treat that as already-done.

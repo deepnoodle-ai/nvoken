@@ -15,6 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
+from datetime import datetime
 from pydantic import Field, StrictBool, field_validator
 from typing import List, Optional
 from typing_extensions import Annotated
@@ -3356,6 +3357,8 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
+        ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3371,9 +3374,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> InvocationList:
-        """List authoritative Invocations
+        """List authoritative Invocations, or walk the ones that ended
 
-        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
+        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Invocation that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `invocation.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Sessions take their Invocations with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -3389,6 +3392,10 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
+        :type ended: bool
+        :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
+        :type ended_since: datetime
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
@@ -3423,6 +3430,8 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            ended=ended,
+            ended_since=ended_since,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -3461,6 +3470,8 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
+        ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3476,9 +3487,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[InvocationList]:
-        """List authoritative Invocations
+        """List authoritative Invocations, or walk the ones that ended
 
-        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
+        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Invocation that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `invocation.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Sessions take their Invocations with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -3494,6 +3505,10 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
+        :type ended: bool
+        :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
+        :type ended_since: datetime
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
@@ -3528,6 +3543,8 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            ended=ended,
+            ended_since=ended_since,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -3566,6 +3583,8 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
+        ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3581,9 +3600,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """List authoritative Invocations
+        """List authoritative Invocations, or walk the ones that ended
 
-        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.
+        Returns newest-first durable Invocation state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. `agent_id` and `agent_key` are mutually exclusive; both normalize to the resolved Agent ID for cursor binding, so an equivalent cursor may resume under either spelling.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Invocation that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `invocation.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Sessions take their Invocations with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
         :param tenant_key: Exact non-default tenant partition reference.
         :type tenant_key: str
@@ -3599,6 +3618,10 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
+        :type ended: bool
+        :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
+        :type ended_since: datetime
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit: Maximum items in this page. Defaults to 100.
@@ -3633,6 +3656,8 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            ended=ended,
+            ended_since=ended_since,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -3666,6 +3691,8 @@ class InvocationsApi:
         agent_id,
         agent_key,
         status,
+        ended,
+        ended_since,
         cursor,
         limit,
         _request_auth,
@@ -3718,6 +3745,23 @@ class InvocationsApi:
         if status is not None:
 
             _query_params.append(('status', status))
+
+        if ended is not None:
+
+            _query_params.append(('ended', ended))
+
+        if ended_since is not None:
+            if isinstance(ended_since, datetime):
+                _query_params.append(
+                    (
+                        'ended_since',
+                        ended_since.strftime(
+                            self.api_client.configuration.datetime_format
+                        )
+                    )
+                )
+            else:
+                _query_params.append(('ended_since', ended_since))
 
         if cursor is not None:
 

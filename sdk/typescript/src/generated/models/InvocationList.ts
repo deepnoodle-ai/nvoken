@@ -40,11 +40,24 @@ export interface InvocationList {
      */
     hasMore: boolean;
     /**
+     * Your position after this page. Null once a default listing is
+     * exhausted. Under `ended=true` it is always a string, including on
+     * an empty page, because a caught-up consumer still has a place to
+     * keep.
      *
      * @type {string}
      * @memberof InvocationList
      */
     nextCursor: string | null;
+    /**
+     * The instant the feed is complete to; nothing that ended at or
+     * before it will appear later. Returned only under `ended=true`,
+     * where it is the number to alarm on when settlement stalls.
+     *
+     * @type {Date}
+     * @memberof InvocationList
+     */
+    completeThrough?: Date;
 }
 
 /**
@@ -70,6 +83,7 @@ export function InvocationListFromJSONTyped(json: any, ignoreDiscriminator: bool
         'items': ((json['items'] as Array<any>).map(InvocationFromJSON)),
         'hasMore': json['has_more'],
         'nextCursor': json['next_cursor'],
+        'completeThrough': json['complete_through'] == null ? undefined : (new Date(json['complete_through'])),
     };
 }
 
@@ -87,5 +101,6 @@ export function InvocationListToJSONTyped(value?: InvocationList | null, ignoreD
         'items': ((value['items'] as Array<any>).map(InvocationToJSON)),
         'has_more': value['hasMore'],
         'next_cursor': value['nextCursor'],
+        'complete_through': value['completeThrough'] == null ? value['completeThrough'] : value['completeThrough'].toISOString(),
     };
 }

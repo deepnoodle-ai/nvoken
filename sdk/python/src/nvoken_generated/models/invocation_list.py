@@ -17,7 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from nvoken_generated.models.invocation import Invocation
 from typing import Optional, Set
@@ -30,8 +31,9 @@ class InvocationList(BaseModel):
     """ # noqa: E501
     items: List[Invocation]
     has_more: StrictBool
-    next_cursor: Optional[StrictStr]
-    __properties: ClassVar[List[str]] = ["items", "has_more", "next_cursor"]
+    next_cursor: Optional[StrictStr] = Field(description="Your position after this page. Null once a default listing is exhausted. Under `ended=true` it is always a string, including on an empty page, because a caught-up consumer still has a place to keep. ")
+    complete_through: Optional[datetime] = Field(default=None, description="The instant the feed is complete to; nothing that ended at or before it will appear later. Returned only under `ended=true`, where it is the number to alarm on when settlement stalls. ")
+    __properties: ClassVar[List[str]] = ["items", "has_more", "next_cursor", "complete_through"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -98,6 +100,7 @@ class InvocationList(BaseModel):
         _obj = cls.model_validate({
             "items": [Invocation.from_dict(_item) for _item in obj["items"]] if obj.get("items") is not None else None,
             "has_more": obj.get("has_more"),
-            "next_cursor": obj.get("next_cursor")
+            "next_cursor": obj.get("next_cursor"),
+            "complete_through": obj.get("complete_through")
         })
         return _obj

@@ -1971,6 +1971,15 @@ func (c *Client) ListAgents(ctx context.Context, options ListAgentsOptions) (*Ag
 }
 
 func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*InvocationList, error) {
+	return c.listInvocations(ctx, options, nil, nil)
+}
+
+func (c *Client) listInvocations(
+	ctx context.Context,
+	options ListInvocationsOptions,
+	ended *bool,
+	endedSince *time.Time,
+) (*InvocationList, error) {
 	statuses := append([]InvocationStatus(nil), options.Statuses...)
 	if options.Status != nil {
 		statuses = append(statuses, *options.Status)
@@ -1987,6 +1996,8 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 		AgentID:       options.AgentID,
 		AgentKey:      options.AgentKey,
 		Status:        statusFilter,
+		Ended:         ended,
+		EndedSince:    endedSince,
 		Cursor:        options.Cursor,
 		Limit:         options.Limit,
 	}
@@ -2001,10 +2012,51 @@ func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOpt
 		return nil, err
 	}
 	return &InvocationList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
+		HasMore:         result.HasMore,
+		Items:           result.Items,
+		NextCursor:      result.NextCursor,
+		CompleteThrough: result.CompleteThrough,
 	}, nil
+}
+
+// ListEndedInvocations reads one page of the reconciliation feed: turns that
+// ended, oldest first by the moment they ended. Walk it and append by ID.
+//
+// This is the backstop for settlement. invocation.ended webhooks are delivered
+// at least once, so a delivery that never lands leaves a turn nobody settles —
+// silently, since nothing errors and the only evidence is a ledger row that was
+// never written. Reading this to the end is how you find out. ListInvocations
+// cannot stand in: it is newest-first over current state, so a turn ending
+// mid-page moves under the caller and a terminal status filter gives a set with
+// no position in it.
+//
+// NextCursor is always set here, including on an empty page, so a consumer that
+// catches up keeps its place without special-casing. Keep calling while
+// HasMore; when it is false you are caught up.
+//
+// CompleteThrough is the instant the feed is complete to. Turns that ended
+// after it are held back until their settling transactions are certainly
+// visible, because a turn appearing behind the cursor is one you never see
+// again. It is also the value to alarm on: one that stops advancing means
+// settlement has stalled rather than that nothing ended.
+//
+// There is deliberately no auto-paging helper. The cursor is the one thing that
+// has to survive the process, and hiding it is how a consumer loses its place;
+// store it yourself between pages.
+func (c *Client) ListEndedInvocations(ctx context.Context, options ListEndedInvocationsOptions) (*InvocationList, error) {
+	ended := true
+	return c.listInvocations(ctx, ListInvocationsOptions{
+		TenantKey:     options.TenantKey,
+		DefaultTenant: options.DefaultTenant,
+		UserKey:       options.UserKey,
+		SessionID:     options.SessionID,
+		AgentID:       options.AgentID,
+		AgentKey:      options.AgentKey,
+		Status:        options.Status,
+		Statuses:      options.Statuses,
+		Cursor:        options.Cursor,
+		Limit:         options.Limit,
+	}, &ended, options.EndedSince)
 }
 
 func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*SessionList, error) {
@@ -2126,12 +2178,17 @@ func (c *Client) ForkSession(
 // transcript, checkpoints, tool calls, artifacts, and undelivered
 // webhooks. The erasure is immediate and irreversible.
 //
-// A Session holding a nonterminal Invocation is refused unless options set
-// Force. Erasure skips settlement — the Invocation is removed rather than
-// ended, so it records no terminal status and emits no invocation.ended
-// webhook — which is why a caller that bills or reconciles on settlement must
-// cancel first. Force is for erasing on an end user's behalf, where removing
-// the transcript now outranks keeping a settled record.
+// A Session holding a nonterminal Invocation is refused with
+// session_invocation_active unless options set Force. Erasure skips
+// settlement — the Invocation is removed rather than ended, so it records no
+// terminal status and emits no invocation.ended webhook — which is why a
+// caller that bills or reconciles on settlement must cancel first and wait for
+// the final state.
+//
+// Force erases anyway, over a live turn. It is for erasing on an end user's
+// behalf, where removing the transcript now outranks keeping a settled record:
+// a deletion request has to be honoured, and a refusal thrown into that path
+// leaves it unhonoured.
 //
 // An unknown or out-of-scope Session is not found, so a retry after a lost
 // response can treat that as already-done.
