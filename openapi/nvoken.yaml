@@ -2547,17 +2547,18 @@ paths:
     post:
       tags: [Invocations]
       operationId: resumeInvocation
-      summary: Raise a paused Invocation's limit and continue it
+      summary: Raise a held Invocation's limit and continue it
       description: |
-        Continues a turn that paused because one of its own spending limits
-        ran out. Send `limits` containing only the limit that ran out, raised
-        above both its old value and what the turn has already used, and still
-        within what your installation allows.
+        Continues a turn on `budget_hold` because one of its own consumption
+        limits ran out. Send `limits` containing only the limit that ran out,
+        raised above both its old value and what the turn has already used,
+        and still within what your installation allows.
 
-        If the turn paused because the tenant ran out of credits rather than
+        If the turn is held because the tenant ran out of credits rather than
         on a limit of its own, allocate credits to that account instead — this
         endpoint refuses it, and funding the account continues the turn on its
-        own. Deadlines never pause a turn, so they never bring you here.
+        own. Deadlines never put a turn on budget hold, so they never bring you
+        here.
       requestBody:
         required: true
         content:
@@ -2577,9 +2578,9 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
-            The Invocation is not paused on a raisable ceiling, or the App is
-            archived (`app_archived`): a paused Invocation on an archived App
-            can be cancelled, not continued.
+            The Invocation is not on a raisable budget hold, or the App is
+            archived (`app_archived`): a held Invocation on an archived App can
+            be cancelled, not continued.
           content:
             application/json:
               schema:
@@ -3526,6 +3527,10 @@ paths:
         metadata for the exact provider/model selection. It does not prove that
         the caller's provider account, region, or selected provider key can access
         the model. Ordering is deterministic but has no semantic meaning.
+
+        Authentication is required, but no scoped operation is: this is
+        installation-wide capability metadata and contains no App or tenant
+        data. Browser grants cannot reach the model catalog.
       parameters:
         - name: provider
           in: query
@@ -5136,7 +5141,7 @@ components:
     App:
       type: object
       additionalProperties: false
-      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, browser_access, anonymous_access, credit_policy, created_at, archived_at]
+      required: [id, org_id, name, external_ref, display_name, callback_timeout_seconds, default_rate_limits, machine_concurrency_limits, browser_access, anonymous_access, credit_policy, created_at, archived_at]
       properties:
         id:
           $ref: "#/components/schemas/AppID"
@@ -5185,6 +5190,14 @@ components:
             App-wide admission ceilings shared by machine, client-token, and
             anonymous-token callers. Null means unlimited machine admission;
             browser access requires finite values.
+        machine_concurrency_limits:
+          oneOf:
+            - $ref: "#/components/schemas/MachineConcurrencyLimits"
+            - type: "null"
+          description: |
+            Optional per-tenant and per-user concurrency ceilings for machine
+            credentials. Null leaves machine traffic subject only to the
+            App-wide default_rate_limits.
         browser_access:
           oneOf:
             - $ref: "#/components/schemas/BrowserAccess"
@@ -5372,6 +5385,13 @@ components:
           description: |
             Optional shared App admission ceilings. Browser access requires a
             non-null value.
+        machine_concurrency_limits:
+          oneOf:
+            - $ref: "#/components/schemas/MachineConcurrencyLimits"
+            - type: "null"
+          description: |
+            Optional machine-credential fairness ceilings. Null and omission
+            both create the App without per-tenant or per-user machine limits.
         browser_access:
           oneOf:
             - $ref: "#/components/schemas/BrowserAccess"
@@ -5420,6 +5440,13 @@ components:
             Replace the whole member, or send null to restore unlimited
             machine admission. Clearing is rejected while browser access
             remains enabled. Omission preserves the stored value.
+        machine_concurrency_limits:
+          oneOf:
+            - $ref: "#/components/schemas/MachineConcurrencyLimits"
+            - type: "null"
+          description: |
+            Replace both machine concurrency ceilings, or send null to disable
+            them. Omission preserves the stored value.
         browser_access:
           oneOf:
             - $ref: "#/components/schemas/BrowserAccess"
@@ -5478,6 +5505,28 @@ components:
       description: |
         The one App-wide admission contract shared by machine and browser
         callers. Both positive values are required and enforced at admission.
+    MachineConcurrencyLimits:
+      type: object
+      additionalProperties: false
+      required: [max_concurrent_invocations_per_tenant, max_concurrent_invocations_per_user]
+      properties:
+        max_concurrent_invocations_per_tenant:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Maximum nonterminal Invocations in the resolved tenant.
+        max_concurrent_invocations_per_user:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Maximum nonterminal Invocations for one user_key in the resolved
+            tenant. Machine admissions without user_key are governed only by
+            the tenant and App-wide ceilings.
+      description: |
+        Optional machine-credential fairness limits enforced transactionally
+        at Invocation admission. The counts include nonterminal Invocations
+        admitted through any credential class in the same tenant or user.
     BrowserAccess:
       type: object
       additionalProperties: false
@@ -6107,12 +6156,12 @@ components:
             idempotency purposes.
         on_budget_exhausted:
           type: string
-          enum: [stop, pause]
+          enum: [stop, hold]
           default: stop
           description: |
-            What to do when the turn runs out of one of its spending limits.
-            `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
-            you can raise the limit and continue it.
+            What to do when the turn runs out of one of its consumption
+            limits. `stop` ends it as `incomplete`. `hold` leaves it as
+            `budget_hold` so you can raise the limit and continue it.
 
             Covers the iteration, output-token, and per-turn estimated-cost
             limits, and exhausted tenant credits. Deadlines are not covered —
@@ -6360,16 +6409,16 @@ components:
             listening. Order does not affect replay comparison.
     WebhookEvent:
       type: string
-      enum: [invocation.waiting, invocation.paused, invocation.ended]
-      x-enum-varnames: [WebhookEventWaiting, WebhookEventPaused, WebhookEventEnded]
+      enum: [invocation.waiting, invocation.budget_hold, invocation.ended]
+      x-enum-varnames: [WebhookEventWaiting, WebhookEventBudgetHold, WebhookEventEnded]
       description: |
         `invocation.waiting` fires when a turn stops and needs you to run at
         least one tool. A turn waiting only on callback tools sends nothing,
         because nvoken delivers those to your endpoint itself and there is
         nothing for you to do.
 
-        `invocation.paused` fires when a spending limit you opted into stopped
-        the turn, and carries the `stop_reason` naming the limit.
+        `invocation.budget_hold` fires when a consumption limit you opted into
+        stopped the turn, and carries the `stop_reason` naming the limit.
 
         `invocation.ended` fires exactly once, when the turn reaches
         `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
@@ -6433,7 +6482,7 @@ components:
     CreditAccount:
       type: object
       additionalProperties: false
-      required: [tenant_key, allocated, used, held, available, paused_invocations, created_at, updated_at]
+      required: [tenant_key, allocated, used, held, available, budget_hold_invocations, created_at, updated_at]
       properties:
         tenant_key:
           oneOf:
@@ -6449,7 +6498,7 @@ components:
         available:
           $ref: "#/components/schemas/Money"
           description: max(0, allocated - used - held).
-        paused_invocations:
+        budget_hold_invocations:
           type: integer
           format: int64
           minimum: 0
@@ -8205,7 +8254,7 @@ components:
           $ref: "#/components/schemas/Limits"
       description: |
         Replacement for the one turn-level consumption ceiling named by the
-        paused Invocation's stop_reason. Exactly that field must be present
+        held Invocation's `stop_reason`. Exactly that field must be present
         and must be raised above both the previous ceiling and usage so far.
     Model:
       type: object
@@ -8231,7 +8280,7 @@ components:
         object form.
     InvocationStatus:
       type: string
-      enum: [queued, running, waiting, paused, completed, incomplete, failed, cancelled]
+      enum: [queued, running, waiting, budget_hold, completed, incomplete, failed, cancelled]
       description: |
         `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
         turn reaches one of them it never changes again. Do not encode that
@@ -8260,11 +8309,12 @@ components:
         restart it after an interruption; `attempt` tells the two apart, and
         the `revision` on each stream update tells you their order.
 
-        `paused` means a spending limit stopped the turn but left it
+        `budget_hold` means a consumption limit stopped the turn but left it
         resumable. Nothing is executing, and its deadlines are on hold, so a
         turn cannot expire while you decide. Raise the turn's limit or add
         credits to the blocked tenant account and it continues. It still
-        accepts interrupt, cancel, and nudge.
+        accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+        iteration, output-token, estimated-cost, and credit ceilings.
     InvocationStopReason:
       type: string
       enum: [end_turn, interrupted, max_iterations, deadline,
@@ -8277,9 +8327,9 @@ components:
         or `interrupted` (you asked it to stop, and it stopped at the next
         clean point). An `incomplete` turn carries whichever limit ran out:
         `max_iterations`, `deadline`, `max_output_tokens`, or
-        `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
-        `insufficient_credits`, never `deadline`, because a paused turn's
-        deadlines are on hold.
+        `max_estimated_cost`. A `budget_hold` turn carries `max_iterations`,
+        `max_output_tokens`, `max_estimated_cost`, or `insufficient_credits`,
+        never `deadline`, because a held turn's deadlines are on hold.
 
         An interrupt is deliberately `completed` rather than `incomplete`: you
         asked the turn to end there, so ending there is the result you wanted,
@@ -8368,10 +8418,10 @@ components:
             - $ref: "#/components/schemas/InvocationStopReason"
             - type: "null"
           description: |
-            Why the turn stopped or paused. Present on `completed`,
-            `incomplete`, and `paused`; null on every other status — a failure
-            keeps `error` as the authority. Treat an unrecognized value as an
-            ordinary end.
+            Why the turn stopped or entered `budget_hold`. Present on
+            `completed`, `incomplete`, and `budget_hold`; null on every other
+            status — a failure keeps `error` as the authority. Treat an
+            unrecognized value as an ordinary end.
         credit_block:
           oneOf:
             - $ref: "#/components/schemas/CreditBlock"
@@ -9218,18 +9268,18 @@ components:
           oneOf:
             - $ref: "#/components/schemas/InvocationID"
             - type: "null"
-          description: The queued, running, waiting, or paused Invocation, if one exists.
+          description: The queued, running, waiting, or budget-held Invocation, if one exists.
         active_invocation_status:
           oneOf:
             - type: string
-              enum: [queued, running, waiting, paused]
+              enum: [queued, running, waiting, budget_hold]
             - type: "null"
           description: Status of active_invocation_id; null exactly when that ID is null.
         credit_block:
           oneOf:
             - $ref: "#/components/schemas/CreditBlock"
             - type: "null"
-          description: Tenant credit account blocking the active paused Invocation, otherwise null.
+          description: Tenant credit account blocking the active held Invocation, otherwise null.
         context:
           oneOf:
             - $ref: "#/components/schemas/SessionContext"
@@ -9847,7 +9897,7 @@ components:
 
         A change carries what a turn's own projection carries about where it
         stands: `terminal` for whether this change is the end, `stop_reason`
-        for a turn that ended, `credit_block` for one paused on spend, and
+        for a turn that ended, `credit_block` for one held on credits, and
         `tool_calls` for what its tools are doing, with `arguments` on the ones
         waiting for you to run them. You never need a second request to find
         out why a turn is not moving.
@@ -9885,7 +9935,7 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CreditBlock"
             - type: "null"
-          description: Present while the turn is paused on spending capacity.
+          description: Present while the turn is on budget hold for spending capacity.
         tool_calls:
           type: array
           items:
@@ -10353,7 +10403,7 @@ components:
         - provider_key_conflict
         - session_invocation_active
         - invocation_not_waiting
-        - invocation_not_paused
+        - invocation_not_budget_hold
         - app_archived
         - org_archived
         - agent_definition_archived
@@ -10535,7 +10585,7 @@ components:
       properties:
         authentication:
           type: object
-          required: [app_id, operations, method, assurance]
+          required: [app_id, operations, method]
           properties:
             credential_id:
               $ref: "#/components/schemas/CredentialID"
@@ -10545,8 +10595,9 @@ components:
                 - $ref: "#/components/schemas/AppID"
                 - type: "null"
               description: |
-                Null only for an Org-scoped machine credential. A browser grant
-                is always App-scoped, so this is never null for one.
+                Null for installation- and Org-scoped machine credentials. A
+                browser grant is always App-scoped, so this is never null for
+                one.
             org_id:
               oneOf:
                 - $ref: "#/components/schemas/OrgID"
@@ -10587,9 +10638,6 @@ components:
                 How this caller authenticated. New values may be added; handle
                 a value you do not recognize as an unknown caller rather than
                 refusing the response.
-            assurance:
-              type: string
-              const: bearer
   responses:
     InvalidRequest:
       description: The request is invalid or contains a deferred field.
@@ -10657,8 +10705,8 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
           example:
-            code: invocation_not_paused
-            message: The Invocation is not paused on a turn-level budget.
+            code: invocation_not_budget_hold
+            message: The Invocation is not on a turn-level budget hold.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97S
     AppArchived:
       description: |

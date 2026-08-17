@@ -11,14 +11,14 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// WebhookEvent : `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.paused` fires when a spending limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
-/// `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.paused` fires when a spending limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
+/// WebhookEvent : `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.budget_hold` fires when a consumption limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
+/// `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.budget_hold` fires when a consumption limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum WebhookEvent {
     #[serde(rename = "invocation.waiting")]
     WebhookEventWaiting,
-    #[serde(rename = "invocation.paused")]
-    WebhookEventPaused,
+    #[serde(rename = "invocation.budget_hold")]
+    WebhookEventBudgetHold,
     #[serde(rename = "invocation.ended")]
     WebhookEventEnded,
 }
@@ -27,7 +27,7 @@ impl std::fmt::Display for WebhookEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::WebhookEventWaiting => write!(f, "invocation.waiting"),
-            Self::WebhookEventPaused => write!(f, "invocation.paused"),
+            Self::WebhookEventBudgetHold => write!(f, "invocation.budget_hold"),
             Self::WebhookEventEnded => write!(f, "invocation.ended"),
         }
     }

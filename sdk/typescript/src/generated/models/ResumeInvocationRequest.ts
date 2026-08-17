@@ -23,7 +23,7 @@ import {
 
 /**
  * Replacement for the one turn-level consumption ceiling named by the
- * paused Invocation's stop_reason. Exactly that field must be present
+ * held Invocation's `stop_reason`. Exactly that field must be present
  * and must be raised above both the previous ceiling and usage so far.
  *
  * @export

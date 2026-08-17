@@ -10,7 +10,7 @@
       "max_estimated_cost",
       "insufficient_credits"
     ],
-    "present_only_on_statuses": ["completed", "incomplete", "paused"],
+    "present_only_on_statuses": ["completed", "incomplete", "budget_hold"],
     "by_status": {
       "completed": ["end_turn", "interrupted"],
       "incomplete": [
@@ -19,14 +19,14 @@
         "max_output_tokens",
         "max_estimated_cost"
       ],
-      "paused": [
+      "budget_hold": [
         "max_iterations",
         "max_output_tokens",
         "max_estimated_cost",
         "insufficient_credits"
       ]
     },
-    "note": "`completed` means the turn ended the way it was asked to. A budget enforced at a coherent seam settles `incomplete` by default or `paused` when the caller opted into resumable exhaustion; deadlines never pause. An interrupt stays `completed` because the caller asked the turn to end there.",
+    "note": "`completed` means the turn ended the way it was asked to. A budget enforced at a coherent seam settles `incomplete` by default or `budget_hold` when the caller opted into resumable exhaustion; deadlines never pause. An interrupt stays `completed` because the caller asked the turn to end there.",
     "seam_exhaustion_incomplete": {
       "iterations": "max_iterations",
       "total": "deadline",
@@ -45,7 +45,7 @@
       "stop_reason": "end_turn",
       "position": "last assistant message of the turn"
     },
-    "note": "Every assistant message of an interrupted, incomplete, or paused turn is commentary, so a turn with no final_answer is visibly unfinished."
+    "note": "Every assistant message of an interrupted, incomplete, or budget-held turn is commentary, so a turn with no final_answer is visibly unfinished."
   },
   "failure_details": {
     "deadline_exceeded": {

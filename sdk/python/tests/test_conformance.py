@@ -273,7 +273,7 @@ def test_shared_agent_request_fixture() -> None:
     # short retention window matters most.
     options = InvocationOptions(
         idempotency_key="conformance",
-        on_budget_exhausted="pause",
+        on_budget_exhausted="hold",
         metadata={"board": "brand-2026", "surface": "web"},
         session_options=SessionOptions(
             retention=SessionRetention(ttl_seconds=86400),
@@ -318,7 +318,7 @@ def test_shared_settlement_legibility_fixture_pins_the_stop_reasons() -> None:
         [
             InvocationStatus.COMPLETED.value,
             InvocationStatus.INCOMPLETE.value,
-            InvocationStatus.PAUSED.value,
+            InvocationStatus.BUDGET_HOLD.value,
         ]
     )
     # The wait helpers stop at exactly these statuses; a terminal the SDK does
@@ -1772,7 +1772,7 @@ def test_shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() 
     for name in (
         "example_ended_payload",
         "example_waiting_payload",
-        "example_paused_payload",
+        "example_budget_hold_payload",
     ):
         payload = fixture[name]
         assert sorted(payload) == ["invocation", "nvoken"]

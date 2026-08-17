@@ -111,14 +111,14 @@ func TestSharedSettlementLegibilityFixture(t *testing.T) {
 			t.Fatalf("terminal status %q is not treated as terminal", value)
 		}
 	}
-	for _, status := range []InvocationStatus{InvocationQueued, InvocationRunning, InvocationWaiting, InvocationPaused} {
+	for _, status := range []InvocationStatus{InvocationQueued, InvocationRunning, InvocationWaiting, InvocationBudgetHold} {
 		if terminal(status) {
 			t.Fatalf("%q must not be treated as terminal", status)
 		}
 	}
 	for _, value := range fixture.StopReason.PresentOnlyOnStatuses {
 		if status := InvocationStatus(value); status != InvocationCompleted &&
-			status != InvocationIncomplete && status != InvocationPaused {
+			status != InvocationIncomplete && status != InvocationBudgetHold {
 			t.Fatalf("stop reasons are pinned to status %q", value)
 		}
 	}
@@ -282,7 +282,7 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 	// short retention window matters most.
 	body, err := agent.request("hello", AgentInvocationOptions{
 		IdempotencyKey:    "conformance",
-		OnBudgetExhausted: BudgetExhaustionPause,
+		OnBudgetExhausted: BudgetExhaustionHold,
 		Metadata:          map[string]string{"board": "brand-2026", "surface": "web"},
 		SessionOptions: &SessionOptions{
 			Retention: &SessionRetention{TTLSeconds: 86400},
@@ -697,7 +697,7 @@ func TestConformance(t *testing.T) {
 		DefaultTenant:  &defaultTenant,
 		IdempotencyKey: "go-credit-conformance",
 	})
-	if err != nil || credits.Account.PausedInvocations != 2 || credits.Account.Available.Amount != "20.250000" {
+	if err != nil || credits.Account.BudgetHoldInvocations != 2 || credits.Account.Available.Amount != "20.250000" {
 		t.Fatalf("allocate Credits: %#v err=%v", credits, err)
 	}
 	accounts, err := client.ListCreditAccounts(context.Background(), &ListCreditAccountsParams{DefaultTenant: &defaultTenant})
@@ -1435,9 +1435,9 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 				Events []string `json:"events"`
 			} `json:"webhook"`
 		} `json:"example_request"`
-		EndedPayload   map[string]map[string]any `json:"example_ended_payload"`
-		WaitingPayload map[string]map[string]any `json:"example_waiting_payload"`
-		PausedPayload  map[string]map[string]any `json:"example_paused_payload"`
+		EndedPayload      map[string]map[string]any `json:"example_ended_payload"`
+		WaitingPayload    map[string]map[string]any `json:"example_waiting_payload"`
+		BudgetHoldPayload map[string]map[string]any `json:"example_budget_hold_payload"`
 	}
 	decodeFile(t, "../conformance/fixtures/invocation-webhooks-v1.json", &fixture)
 
@@ -1516,9 +1516,9 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 	// The payload stays a pointer: nothing the fixture lists as absent may appear
 	// in either documented example.
 	for name, payload := range map[string]map[string]map[string]any{
-		"ended":   fixture.EndedPayload,
-		"waiting": fixture.WaitingPayload,
-		"paused":  fixture.PausedPayload,
+		"ended":       fixture.EndedPayload,
+		"waiting":     fixture.WaitingPayload,
+		"budget_hold": fixture.BudgetHoldPayload,
 	} {
 		for key := range payload["nvoken"] {
 			if !slices.Contains(fixture.PayloadFields.Nvoken, key) {
@@ -1621,19 +1621,19 @@ func TestSharedInvocationWebhookReceivingFixture(t *testing.T) {
 			Retryable []int `json:"retryable_statuses"`
 			Permanent []int `json:"permanent_statuses"`
 		} `json:"delivery"`
-		EndedStatuses  []string       `json:"ended_statuses"`
-		EndedPayload   map[string]any `json:"example_ended_payload"`
-		WaitingPayload map[string]any `json:"example_waiting_payload"`
-		PausedPayload  map[string]any `json:"example_paused_payload"`
+		EndedStatuses     []string       `json:"ended_statuses"`
+		EndedPayload      map[string]any `json:"example_ended_payload"`
+		WaitingPayload    map[string]any `json:"example_waiting_payload"`
+		BudgetHoldPayload map[string]any `json:"example_budget_hold_payload"`
 	}
 	decodeFile(t, "../conformance/fixtures/invocation-webhooks-v1.json", &fixture)
 
 	key := []byte("0123456789abcdef0123456789abcdef")
 	now := time.Unix(1784635200, 0)
 	for name, payload := range map[string]map[string]any{
-		"ended":   fixture.EndedPayload,
-		"waiting": fixture.WaitingPayload,
-		"paused":  fixture.PausedPayload,
+		"ended":       fixture.EndedPayload,
+		"waiting":     fixture.WaitingPayload,
+		"budget_hold": fixture.BudgetHoldPayload,
 	} {
 		t.Run(name, func(t *testing.T) {
 			body, err := json.Marshal(payload)
@@ -1666,7 +1666,7 @@ func TestSharedInvocationWebhookReceivingFixture(t *testing.T) {
 				t.Fatalf("%s status = %q, want %q", name, verified.Envelope.Invocation.Status, subject["status"])
 			}
 			// A stop reason the enum does not carry decodes to a value no
-			// receiver can branch on, which is how the paused example went
+			// receiver can branch on, which is how the budget-held example went
 			// stale unnoticed.
 			if reason := verified.Envelope.Invocation.StopReason; reason != nil && !reason.Valid() {
 				t.Fatalf("%s stop reason %q is outside the enum", name, *reason)

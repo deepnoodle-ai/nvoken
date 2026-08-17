@@ -8,6 +8,11 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: resumable budget exhaustion is now a budget hold.** Invocation
+  status `paused` is `budget_hold`, `on_budget_exhausted: pause` is `hold`, the
+  webhook is `invocation.budget_hold`, and companion public names follow the
+  same rename across the CLI, fixtures, and all four SDKs.
+
 - **`nvoken app init` turns App provisioning into one command.** It registers
   the App, issues an App-bound Runtime credential, preserves both one-time
   delivery signing keys, and prints a ready `.env` block. `--browser` also

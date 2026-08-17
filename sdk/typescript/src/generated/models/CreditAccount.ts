@@ -65,7 +65,7 @@ export interface CreditAccount {
      * @type {number}
      * @memberof CreditAccount
      */
-    pausedInvocations: number;
+    budgetHoldInvocations: number;
     /**
      *
      * @type {Date}
@@ -89,7 +89,7 @@ export function instanceOfCreditAccount(value: object): value is CreditAccount {
     if (!('used' in value) || value['used'] === undefined) return false;
     if (!('held' in value) || value['held'] === undefined) return false;
     if (!('available' in value) || value['available'] === undefined) return false;
-    if (!('pausedInvocations' in value) || value['pausedInvocations'] === undefined) return false;
+    if (!('budgetHoldInvocations' in value) || value['budgetHoldInvocations'] === undefined) return false;
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     if (!('updatedAt' in value) || value['updatedAt'] === undefined) return false;
     return true;
@@ -110,7 +110,7 @@ export function CreditAccountFromJSONTyped(json: any, ignoreDiscriminator: boole
         'used': MoneyFromJSON(json['used']),
         'held': MoneyFromJSON(json['held']),
         'available': MoneyFromJSON(json['available']),
-        'pausedInvocations': json['paused_invocations'],
+        'budgetHoldInvocations': json['budget_hold_invocations'],
         'createdAt': (new Date(json['created_at'])),
         'updatedAt': (new Date(json['updated_at'])),
     };
@@ -132,7 +132,7 @@ export function CreditAccountToJSONTyped(value?: CreditAccount | null, ignoreDis
         'used': MoneyToJSON(value['used']),
         'held': MoneyToJSON(value['held']),
         'available': MoneyToJSON(value['available']),
-        'paused_invocations': value['pausedInvocations'],
+        'budget_hold_invocations': value['budgetHoldInvocations'],
         'created_at': value['createdAt'].toISOString(),
         'updated_at': value['updatedAt'].toISOString(),
     };

@@ -194,7 +194,7 @@ from .schema_preflight import (
 )
 
 IfActivePolicy = Literal["reject", "supersede", "interrupt"]
-BudgetExhaustionBehavior = Literal["stop", "pause"]
+BudgetExhaustionBehavior = Literal["stop", "hold"]
 
 # Sequence order for a message page. A cursor belongs to the direction that
 # issued it and is refused by the other, so page one direction to its end
@@ -512,7 +512,7 @@ class ContextItem:
     content: str
 
 
-WebhookEvent = Literal["invocation.waiting", "invocation.paused", "invocation.ended"]
+WebhookEvent = Literal["invocation.waiting", "invocation.budget_hold", "invocation.ended"]
 
 
 @dataclass(frozen=True)
@@ -1340,10 +1340,10 @@ class Client:
                 "validation",
                 "if_active must be reject, supersede, or interrupt",
             )
-        if request.on_budget_exhausted not in (None, "stop", "pause"):
+        if request.on_budget_exhausted not in (None, "stop", "hold"):
             raise NvokenError(
                 "validation",
-                "on_budget_exhausted must be stop or pause",
+                "on_budget_exhausted must be stop or hold",
             )
         idempotency_key = request.idempotency_key or f"nvoken-{uuid.uuid4()}"
         return CreateInvocationRequest(

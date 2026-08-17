@@ -88,7 +88,7 @@ detail, as `P1` through `T3` across six categories.
 
 - [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml) again, for
   `InvocationStatus` and `InvocationStopReason`. Both carry long prose
-  explaining why `incomplete` and `paused` exist as distinct states, which is
+  explaining why `incomplete` and `budget_hold` exist as distinct states, which is
   what makes their absence from A2A a real cost rather than a cosmetic one. See
   [005-a2a](005-a2a.md).
 - [`sdk/conformance/fixtures/`](../../sdk/conformance/fixtures/) has several

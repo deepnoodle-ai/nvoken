@@ -136,7 +136,7 @@ const (
 	InvocationQueued                                  = generated.InvocationStatusQueued
 	InvocationRunning                                 = generated.InvocationStatusRunning
 	InvocationWaiting                                 = generated.InvocationStatusWaiting
-	InvocationPaused                                  = generated.InvocationStatusPaused
+	InvocationBudgetHold                              = generated.InvocationStatusBudgetHold
 	InvocationCompleted                               = generated.InvocationStatusCompleted
 	InvocationIncomplete                              = generated.InvocationStatusIncomplete
 	InvocationFailed                                  = generated.InvocationStatusFailed
@@ -932,13 +932,13 @@ type WebhookTarget struct {
 type WebhookEvent string
 
 const (
-	WebhookEventWaiting WebhookEvent = "invocation.waiting"
-	WebhookEventPaused  WebhookEvent = "invocation.paused"
-	WebhookEventEnded   WebhookEvent = "invocation.ended"
+	WebhookEventBudgetHold WebhookEvent = "invocation.budget_hold"
+	WebhookEventEnded      WebhookEvent = "invocation.ended"
+	WebhookEventWaiting    WebhookEvent = "invocation.waiting"
 )
 
 func (e WebhookEvent) valid() bool {
-	return e == WebhookEventWaiting || e == WebhookEventPaused || e == WebhookEventEnded
+	return e == WebhookEventWaiting || e == WebhookEventBudgetHold || e == WebhookEventEnded
 }
 
 type IfActivePolicy string
@@ -952,8 +952,8 @@ const (
 type BudgetExhaustionBehavior string
 
 const (
-	BudgetExhaustionStop  BudgetExhaustionBehavior = "stop"
-	BudgetExhaustionPause BudgetExhaustionBehavior = "pause"
+	BudgetExhaustionHold BudgetExhaustionBehavior = "hold"
+	BudgetExhaustionStop BudgetExhaustionBehavior = "stop"
 )
 
 type ProviderKeySelection struct {
@@ -1175,6 +1175,10 @@ type RegisterAppOptions struct {
 	// DefaultRateLimits sets the shared App admission ceilings. Omit for
 	// unlimited machine admission, which browser access does not allow.
 	DefaultRateLimits *AppDefaultRateLimits
+	// MachineConcurrencyLimits sets per-tenant and per-user fairness ceilings
+	// for Invocations admitted through machine credentials. Omit for no
+	// machine-specific concurrency ceilings.
+	MachineConcurrencyLimits *MachineConcurrencyLimits
 	// CreditPolicy defaults to CreditPolicyOff. Anonymous browser access
 	// requires CreditPolicyRequired.
 	CreditPolicy *CreditPolicy
@@ -1223,6 +1227,13 @@ type AppDefaultRateLimits struct {
 	MaxConcurrentInvocations int64
 }
 
+// MachineConcurrencyLimits are the per-tenant and per-user fairness ceilings
+// for Invocations admitted through machine credentials.
+type MachineConcurrencyLimits struct {
+	MaxConcurrentInvocationsPerTenant int64
+	MaxConcurrentInvocationsPerUser   int64
+}
+
 func (l *AppDefaultRateLimits) generated() *generated.AppDefaultRateLimits {
 	if l == nil {
 		return nil
@@ -1230,6 +1241,16 @@ func (l *AppDefaultRateLimits) generated() *generated.AppDefaultRateLimits {
 	return &generated.AppDefaultRateLimits{
 		MaxAdmissionsPerMinute:   l.MaxAdmissionsPerMinute,
 		MaxConcurrentInvocations: l.MaxConcurrentInvocations,
+	}
+}
+
+func (l *MachineConcurrencyLimits) generated() *generated.MachineConcurrencyLimits {
+	if l == nil {
+		return nil
+	}
+	return &generated.MachineConcurrencyLimits{
+		MaxConcurrentInvocationsPerTenant: l.MaxConcurrentInvocationsPerTenant,
+		MaxConcurrentInvocationsPerUser:   l.MaxConcurrentInvocationsPerUser,
 	}
 }
 
@@ -1329,6 +1350,11 @@ func (o *UpdateAppOptions) encoded() ([]byte, error) {
 			value: o.DefaultRateLimits.generated(),
 			clear: o.ClearDefaultRateLimits,
 		},
+		{
+			name:  "machine_concurrency_limits",
+			value: o.MachineConcurrencyLimits.generated(),
+			clear: o.ClearMachineConcurrencyLimits,
+		},
 	} {
 		set := !isNilValue(member.value)
 		if set && member.clear {
@@ -1362,6 +1388,8 @@ func isNilValue(value any) bool {
 	case *generated.AnonymousAccess:
 		return typed == nil
 	case *generated.AppDefaultRateLimits:
+		return typed == nil
+	case *generated.MachineConcurrencyLimits:
 		return typed == nil
 	default:
 		return value == nil
@@ -1436,6 +1464,10 @@ type UpdateAppOptions struct {
 	// refused while browser access remains enabled.
 	DefaultRateLimits      *AppDefaultRateLimits
 	ClearDefaultRateLimits bool
+	// MachineConcurrencyLimits replaces both machine-credential fairness
+	// ceilings. Set ClearMachineConcurrencyLimits to disable them.
+	MachineConcurrencyLimits      *MachineConcurrencyLimits
+	ClearMachineConcurrencyLimits bool
 	// CreditPolicy changes enforcement for turns admitted from now on.
 	// Invocations already running keep the policy they were admitted under.
 	CreditPolicy *CreditPolicy
@@ -1825,10 +1857,10 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	}
 	switch r.OnBudgetExhausted {
 	case "":
-	case BudgetExhaustionStop, BudgetExhaustionPause:
+	case BudgetExhaustionStop, BudgetExhaustionHold:
 		wire["on_budget_exhausted"] = r.OnBudgetExhausted
 	default:
-		return nil, fmt.Errorf("on budget exhausted must be stop or pause")
+		return nil, fmt.Errorf("on budget exhausted must be stop or hold")
 	}
 	if r.Webhook != nil {
 		if r.Webhook.URL == "" {
@@ -1956,7 +1988,7 @@ var AllInvocationStatuses = []InvocationStatus{
 	InvocationQueued,
 	InvocationRunning,
 	InvocationWaiting,
-	InvocationPaused,
+	InvocationBudgetHold,
 	InvocationCompleted,
 	InvocationIncomplete,
 	InvocationFailed,
@@ -1987,7 +2019,7 @@ func activeInvocationStatuses() []InvocationStatus {
 //
 // There are eight statuses and four of them are terminal, so the interesting
 // mistake is writing the other four out. `queued`, `running`, `waiting`, and
-// `paused` differ only in what unblocks them — a paused turn stopped on
+// `budget_hold` differ only in what unblocks them — a budget-held turn stopped on
 // spending capacity with its deadlines on hold, and resumes on its own once its
 // account is funded — and a turn wrongly believed finished is one nobody
 // settles, reattaches to, or cancels before erasing its Session.

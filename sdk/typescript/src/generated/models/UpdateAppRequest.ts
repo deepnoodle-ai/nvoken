@@ -34,6 +34,13 @@ import {
     AnonymousAccessToJSON,
     AnonymousAccessToJSONTyped,
 } from './AnonymousAccess.js';
+import type { MachineConcurrencyLimits } from './MachineConcurrencyLimits.js';
+import {
+    MachineConcurrencyLimitsFromJSON,
+    MachineConcurrencyLimitsFromJSONTyped,
+    MachineConcurrencyLimitsToJSON,
+    MachineConcurrencyLimitsToJSONTyped,
+} from './MachineConcurrencyLimits.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -80,6 +87,14 @@ export interface UpdateAppRequest {
      * @memberof UpdateAppRequest
      */
     defaultRateLimits?: AppDefaultRateLimits | null;
+    /**
+     * Replace both machine concurrency ceilings, or send null to disable
+     * them. Omission preserves the stored value.
+     *
+     * @type {MachineConcurrencyLimits}
+     * @memberof UpdateAppRequest
+     */
+    machineConcurrencyLimits?: MachineConcurrencyLimits | null;
     /**
      * Replace the complete member, or send null to disable browser
      * access without deleting client keys. Omission preserves the
@@ -133,6 +148,7 @@ export function UpdateAppRequestFromJSONTyped(json: any, ignoreDiscriminator: bo
         'orgId': json['org_id'] == null ? undefined : json['org_id'],
         'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
         'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
+        'machineConcurrencyLimits': json['machine_concurrency_limits'] == null ? undefined : MachineConcurrencyLimitsFromJSON(json['machine_concurrency_limits']),
         'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
         'anonymousAccess': json['anonymous_access'] == null ? undefined : AnonymousAccessFromJSON(json['anonymous_access']),
         'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
@@ -154,6 +170,7 @@ export function UpdateAppRequestToJSONTyped(value?: UpdateAppRequest | null, ign
         'org_id': value['orgId'],
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
+        'machine_concurrency_limits': MachineConcurrencyLimitsToJSON(value['machineConcurrencyLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
         'anonymous_access': AnonymousAccessToJSON(value['anonymousAccess']),
         'credit_policy': CreditPolicyToJSON(value['creditPolicy']),

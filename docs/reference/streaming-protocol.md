@@ -171,7 +171,7 @@ A client can recover from the change stream alone.
 
 Read `terminal` rather than testing `status` against a set of your own. There
 are eight statuses and four are terminal, so the mistake worth designing out is
-encoding the other four — `paused`, a turn stopped on spending capacity with
+encoding the other four — `budget_hold`, a turn stopped on spending capacity with
 its deadlines on hold, is not an ending, and a turn wrongly believed finished
 is one nobody settles or reattaches to. Each SDK also exports the predicate:
 `isTurnOver` in TypeScript, `IsTurnOver` in Go, `is_turn_over` in Python and

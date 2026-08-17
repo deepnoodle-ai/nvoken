@@ -46,7 +46,7 @@ class ErrorCode(str, Enum):
     PROVIDER_KEY_CONFLICT = 'provider_key_conflict'
     SESSION_INVOCATION_ACTIVE = 'session_invocation_active'
     INVOCATION_NOT_WAITING = 'invocation_not_waiting'
-    INVOCATION_NOT_PAUSED = 'invocation_not_paused'
+    INVOCATION_NOT_BUDGET_HOLD = 'invocation_not_budget_hold'
     APP_ARCHIVED = 'app_archived'
     ORG_ARCHIVED = 'org_archived'
     AGENT_DEFINITION_ARCHIVED = 'agent_definition_archived'

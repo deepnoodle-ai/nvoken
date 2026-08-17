@@ -60,7 +60,7 @@ pub struct Invocation {
     pub deduplicated: Option<bool>,
     #[serde(rename = "status")]
     pub status: models::InvocationStatus,
-    /// Why the turn stopped or paused. Present on `completed`, `incomplete`, and `paused`; null on every other status — a failure keeps `error` as the authority. Treat an unrecognized value as an ordinary end.
+    /// Why the turn stopped or entered `budget_hold`. Present on `completed`, `incomplete`, and `budget_hold`; null on every other status — a failure keeps `error` as the authority. Treat an unrecognized value as an ordinary end.
     #[serde(rename = "stop_reason", deserialize_with = "Option::deserialize")]
     pub stop_reason: Option<models::InvocationStopReason>,
     /// Tenant credit account for an insufficient-credits stop, otherwise null.

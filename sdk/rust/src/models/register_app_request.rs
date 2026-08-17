@@ -40,6 +40,14 @@ pub struct RegisterAppRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
+    /// Optional machine-credential fairness ceilings. Null and omission both create the App without per-tenant or per-user machine limits.
+    #[serde(
+        rename = "machine_concurrency_limits",
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub machine_concurrency_limits: Option<Option<Box<models::MachineConcurrencyLimits>>>,
     /// Optional complete browser configuration. Null and omission both create the App with browser access disabled.
     #[serde(
         rename = "browser_access",
@@ -63,6 +71,7 @@ impl RegisterAppRequest {
             display_name: None,
             callback_timeout_seconds: None,
             default_rate_limits: None,
+            machine_concurrency_limits: None,
             browser_access: None,
             credit_policy: None,
         }

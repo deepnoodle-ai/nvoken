@@ -20,7 +20,7 @@ pub const ALL_INVOCATION_STATUSES: [models::InvocationStatus; 8] = [
     models::InvocationStatus::Queued,
     models::InvocationStatus::Running,
     models::InvocationStatus::Waiting,
-    models::InvocationStatus::Paused,
+    models::InvocationStatus::BudgetHold,
     models::InvocationStatus::Completed,
     models::InvocationStatus::Incomplete,
     models::InvocationStatus::Failed,
@@ -41,14 +41,14 @@ pub const ACTIVE_INVOCATION_STATUSES: [models::InvocationStatus; 4] = [
     models::InvocationStatus::Queued,
     models::InvocationStatus::Running,
     models::InvocationStatus::Waiting,
-    models::InvocationStatus::Paused,
+    models::InvocationStatus::BudgetHold,
 ];
 
 /// Whether a status means the turn is over.
 ///
 /// There are eight statuses and four of them are terminal, so the interesting
 /// mistake is writing the *other* four out. `Queued`, `Running`, `Waiting`, and
-/// `Paused` differ only in what unblocks them — a paused turn stopped on
+/// `BudgetHold` differ only in what unblocks them — a budget-held turn stopped on
 /// spending capacity with its deadlines on hold, and resumes on its own once
 /// its account is funded — and a turn wrongly believed finished is one nobody
 /// settles, reattaches to, or cancels before erasing its Session.
@@ -98,7 +98,7 @@ mod tests {
             (Queued, false),
             (Running, false),
             (Waiting, false),
-            (Paused, false),
+            (BudgetHold, false),
             (Completed, true),
             (Incomplete, true),
             (Failed, true),
@@ -128,12 +128,12 @@ mod tests {
         );
     }
 
-    /// A paused turn stopped on spending capacity with its deadlines on hold. It
+    /// A budget-held turn stopped on spending capacity with its deadlines on hold. It
     /// still owns the Session and resumes on its own once the account is funded,
     /// so reading it as over abandons a turn that is still going.
     #[test]
-    fn paused_is_not_terminal() {
-        assert!(!is_terminal_status(models::InvocationStatus::Paused));
+    fn budget_hold_is_not_terminal() {
+        assert!(!is_terminal_status(models::InvocationStatus::BudgetHold));
     }
 
     /// Both witnesses are present and agreeing in normal operation. The status

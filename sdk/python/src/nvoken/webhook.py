@@ -15,7 +15,7 @@ from .signed_delivery import (
 )
 
 #: The closed set of Invocation webhook events.
-WEBHOOK_EVENTS = ("invocation.waiting", "invocation.paused", "invocation.ended")
+WEBHOOK_EVENTS = ("invocation.budget_hold", "invocation.ended", "invocation.waiting")
 
 
 @dataclass(frozen=True)

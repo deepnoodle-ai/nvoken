@@ -99,7 +99,7 @@ pub struct Session {
         skip_serializing_if = "Option::is_none"
     )]
     pub authorization_context: Option<Option<std::collections::HashMap<String, String>>>,
-    /// The queued, running, waiting, or paused Invocation, if one exists.
+    /// The queued, running, waiting, or budget-held Invocation, if one exists.
     #[serde(
         rename = "active_invocation_id",
         deserialize_with = "Option::deserialize"
@@ -111,7 +111,7 @@ pub struct Session {
         deserialize_with = "Option::deserialize"
     )]
     pub active_invocation_status: Option<ActiveInvocationStatus>,
-    /// Tenant credit account blocking the active paused Invocation, otherwise null.
+    /// Tenant credit account blocking the active held Invocation, otherwise null.
     #[serde(
         rename = "credit_block",
         default,
@@ -187,8 +187,8 @@ pub enum ActiveInvocationStatus {
     Running,
     #[serde(rename = "waiting")]
     Waiting,
-    #[serde(rename = "paused")]
-    Paused,
+    #[serde(rename = "budget_hold")]
+    BudgetHold,
 }
 
 impl Default for ActiveInvocationStatus {

@@ -47,7 +47,7 @@ export const ACTIVE_INVOCATION_STATUSES: readonly InvocationStatus[] =
  *
  * There are eight statuses and four of them are terminal, so the interesting
  * mistake is writing the *other* four out. `queued`, `running`, `waiting`, and
- * `paused` differ only in what unblocks them — a `paused` turn stopped on
+ * `budget_hold` differ only in what unblocks them — a `budget_hold` turn stopped on
  * spending capacity with its deadlines on hold, and resumes on its own once
  * its account is funded — and a turn wrongly believed to be finished is one
  * nobody settles, reattaches to, or cancels before erasing its Session.

@@ -26,8 +26,8 @@ pub struct CreditAccount {
     /// max(0, allocated - used - held).
     #[serde(rename = "available")]
     pub available: Box<models::Money>,
-    #[serde(rename = "paused_invocations")]
-    pub paused_invocations: u64,
+    #[serde(rename = "budget_hold_invocations")]
+    pub budget_hold_invocations: u64,
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "updated_at")]
@@ -42,7 +42,7 @@ impl CreditAccount {
         used: models::Money,
         held: models::Money,
         available: models::Money,
-        paused_invocations: u64,
+        budget_hold_invocations: u64,
         created_at: chrono::DateTime<chrono::FixedOffset>,
         updated_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> CreditAccount {
@@ -52,7 +52,7 @@ impl CreditAccount {
             used: Box::new(used),
             held: Box::new(held),
             available: Box::new(available),
-            paused_invocations,
+            budget_hold_invocations,
             created_at,
             updated_at,
         }

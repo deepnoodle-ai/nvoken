@@ -2,14 +2,14 @@
   "version": 1,
   "note": "Invocation webhooks are opt-in per Invocation and are delivered as signed HTTPS POSTs. Every SDK must transmit the target verbatim, and the payload every SDK documents must stay a pointer to authoritative state rather than a copy of it.",
   "events": [
+    "invocation.budget_hold",
     "invocation.ended",
-    "invocation.waiting",
-    "invocation.paused"
+    "invocation.waiting"
   ],
   "default_events_when_omitted": [
+    "invocation.budget_hold",
     "invocation.ended",
-    "invocation.waiting",
-    "invocation.paused"
+    "invocation.waiting"
   ],
   "default_note": "Omitting events selects every event. The harmful default is the one that quietly drops invocation.waiting and leaves a parked host tool loop with nobody listening.",
   "rejected_events": [
@@ -77,7 +77,7 @@
   "delivery": {
     "guarantee": "at_least_once",
     "ordering": "per_invocation_by_sequence",
-    "ordering_note": "A webhook is claimable only when every lower-sequence webhook for the same Invocation is terminal, so invocation.ended never arrives before an invocation.waiting or invocation.paused event that preceded it. Head-of-line blocking is scoped to one Invocation.",
+    "ordering_note": "A webhook is claimable only when every lower-sequence webhook for the same Invocation is terminal, so invocation.ended never arrives before an invocation.waiting or invocation.budget_hold event that preceded it. Head-of-line blocking is scoped to one Invocation.",
     "success_statuses": "2xx",
     "retryable_statuses": [408, 425, 429, 500, 502, 503, 504],
     "permanent_statuses": [400, 401, 403, 404, 409, 410, 422],
@@ -90,7 +90,7 @@
     "idempotency_key": "req-1",
     "webhook": {
       "url": "https://host.example.com/nvoken/webhooks",
-      "events": ["invocation.ended", "invocation.waiting", "invocation.paused"]
+      "events": ["invocation.budget_hold", "invocation.ended", "invocation.waiting"]
     },
     "model": {
       "provider": "anthropic",
@@ -130,11 +130,11 @@
       "waiting_tool_call_ids": ["call_019b0a12-0000-7000-8000-000000000001"]
     }
   },
-  "example_paused_payload": {
+  "example_budget_hold_payload": {
     "nvoken": {
       "schema_version": 1,
       "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000003",
-      "event": "invocation.paused",
+      "event": "invocation.budget_hold",
       "sequence": 2,
       "invocation_id": "inv_019b0a12-0000-7000-8000-000000000001",
       "session_id": "sess_019b0a12-0000-7000-8000-000000000001",
@@ -142,7 +142,7 @@
       "tenant_key": "acme"
     },
     "invocation": {
-      "status": "paused",
+      "status": "budget_hold",
       "stop_reason": "max_estimated_cost"
     }
   }

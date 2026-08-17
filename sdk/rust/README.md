@@ -518,7 +518,7 @@ A turn that ends tells you so, without you holding a connection open to hear
 it. Set `InvokeRequest::webhook` to a `WebhookTarget` when you start the turn.
 Omitting `events` selects all three: `invocation.ended` fires once when the turn
 reaches a terminal status, `invocation.waiting` when it needs a host tool run,
-`invocation.paused` when a spending limit stopped it.
+`invocation.budget_hold` when a spending limit stopped it.
 
 Receiving one is the same verification you already wrote for callbacks — the
 signature scheme is identical, and `verify_webhook` is the same code path with a
@@ -566,8 +566,8 @@ discipline — for the endpoint that has more than one event:
 
 ```rust
 let receiver = WebhookReceiver::builder(vec![DeliverySigningKey::new(&key_id, 1, secret)])
-    .event(WebhookEvent::InvocationEnded, settle_in_one_transaction)
-    .event(WebhookEvent::InvocationPaused, alert_on_funding_hold)
+    .event(WebhookEvent::Ended, settle_in_one_transaction)
+    .event(WebhookEvent::BudgetHold, alert_on_budget_hold)
     .build()?;
 ```
 

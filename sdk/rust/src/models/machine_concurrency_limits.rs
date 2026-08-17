@@ -11,135 +11,26 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum ErrorCode {
-    #[serde(rename = "invalid_request")]
-    InvalidRequest,
-    #[serde(rename = "agent_not_found")]
-    AgentNotFound,
-    #[serde(rename = "agent_archived")]
-    AgentArchived,
-    #[serde(rename = "agent_key_conflict")]
-    AgentKeyConflict,
-    #[serde(rename = "agent_pin_invalid")]
-    AgentPinInvalid,
-    #[serde(rename = "agent_definition_not_found")]
-    AgentDefinitionNotFound,
-    #[serde(rename = "agent_definition_key_conflict")]
-    AgentDefinitionKeyConflict,
-    #[serde(rename = "agent_definition_revision_conflict")]
-    AgentDefinitionRevisionConflict,
-    #[serde(rename = "precondition_required")]
-    PreconditionRequired,
-    #[serde(rename = "media_fetch_failed")]
-    MediaFetchFailed,
-    #[serde(rename = "model_retired")]
-    ModelRetired,
-    #[serde(rename = "unauthenticated")]
-    Unauthenticated,
-    #[serde(rename = "forbidden")]
-    Forbidden,
-    #[serde(rename = "not_found")]
-    NotFound,
-    #[serde(rename = "idempotency_conflict")]
-    IdempotencyConflict,
-    #[serde(rename = "session_options_conflict")]
-    SessionOptionsConflict,
-    #[serde(rename = "session_user_key_conflict")]
-    SessionUserKeyConflict,
-    #[serde(rename = "provider_key_conflict")]
-    ProviderKeyConflict,
-    #[serde(rename = "session_invocation_active")]
-    SessionInvocationActive,
-    #[serde(rename = "invocation_not_waiting")]
-    InvocationNotWaiting,
-    #[serde(rename = "invocation_not_budget_hold")]
-    InvocationNotBudgetHold,
-    #[serde(rename = "app_archived")]
-    AppArchived,
-    #[serde(rename = "org_archived")]
-    OrgArchived,
-    #[serde(rename = "agent_definition_archived")]
-    AgentDefinitionArchived,
-    #[serde(rename = "org_has_active_apps")]
-    OrgHasActiveApps,
-    #[serde(rename = "tenant_in_use")]
-    TenantInUse,
-    #[serde(rename = "budget_exceeded")]
-    BudgetExceeded,
-    #[serde(rename = "insufficient_credits")]
-    InsufficientCredits,
-    #[serde(rename = "cost_estimate_unavailable")]
-    CostEstimateUnavailable,
-    #[serde(rename = "tool_result_conflict")]
-    ToolResultConflict,
-    #[serde(rename = "tool_result_expired")]
-    ToolResultExpired,
-    #[serde(rename = "mcp_discovery_failed")]
-    McpDiscoveryFailed,
-    #[serde(rename = "memory_semantic_search_unavailable")]
-    MemorySemanticSearchUnavailable,
-    #[serde(rename = "memory_context_overflow")]
-    MemoryContextOverflow,
-    #[serde(rename = "rate_limited")]
-    RateLimited,
-    #[serde(rename = "internal")]
-    Internal,
-    #[serde(rename = "unavailable")]
-    Unavailable,
+/// MachineConcurrencyLimits : Optional machine-credential fairness limits enforced transactionally at Invocation admission. The counts include nonterminal Invocations admitted through any credential class in the same tenant or user.
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MachineConcurrencyLimits {
+    /// Maximum nonterminal Invocations in the resolved tenant.
+    #[serde(rename = "max_concurrent_invocations_per_tenant")]
+    pub max_concurrent_invocations_per_tenant: u64,
+    /// Maximum nonterminal Invocations for one user_key in the resolved tenant. Machine admissions without user_key are governed only by the tenant and App-wide ceilings.
+    #[serde(rename = "max_concurrent_invocations_per_user")]
+    pub max_concurrent_invocations_per_user: u64,
 }
 
-impl std::fmt::Display for ErrorCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::InvalidRequest => write!(f, "invalid_request"),
-            Self::AgentNotFound => write!(f, "agent_not_found"),
-            Self::AgentArchived => write!(f, "agent_archived"),
-            Self::AgentKeyConflict => write!(f, "agent_key_conflict"),
-            Self::AgentPinInvalid => write!(f, "agent_pin_invalid"),
-            Self::AgentDefinitionNotFound => write!(f, "agent_definition_not_found"),
-            Self::AgentDefinitionKeyConflict => write!(f, "agent_definition_key_conflict"),
-            Self::AgentDefinitionRevisionConflict => {
-                write!(f, "agent_definition_revision_conflict")
-            }
-            Self::PreconditionRequired => write!(f, "precondition_required"),
-            Self::MediaFetchFailed => write!(f, "media_fetch_failed"),
-            Self::ModelRetired => write!(f, "model_retired"),
-            Self::Unauthenticated => write!(f, "unauthenticated"),
-            Self::Forbidden => write!(f, "forbidden"),
-            Self::NotFound => write!(f, "not_found"),
-            Self::IdempotencyConflict => write!(f, "idempotency_conflict"),
-            Self::SessionOptionsConflict => write!(f, "session_options_conflict"),
-            Self::SessionUserKeyConflict => write!(f, "session_user_key_conflict"),
-            Self::ProviderKeyConflict => write!(f, "provider_key_conflict"),
-            Self::SessionInvocationActive => write!(f, "session_invocation_active"),
-            Self::InvocationNotWaiting => write!(f, "invocation_not_waiting"),
-            Self::InvocationNotBudgetHold => write!(f, "invocation_not_budget_hold"),
-            Self::AppArchived => write!(f, "app_archived"),
-            Self::OrgArchived => write!(f, "org_archived"),
-            Self::AgentDefinitionArchived => write!(f, "agent_definition_archived"),
-            Self::OrgHasActiveApps => write!(f, "org_has_active_apps"),
-            Self::TenantInUse => write!(f, "tenant_in_use"),
-            Self::BudgetExceeded => write!(f, "budget_exceeded"),
-            Self::InsufficientCredits => write!(f, "insufficient_credits"),
-            Self::CostEstimateUnavailable => write!(f, "cost_estimate_unavailable"),
-            Self::ToolResultConflict => write!(f, "tool_result_conflict"),
-            Self::ToolResultExpired => write!(f, "tool_result_expired"),
-            Self::McpDiscoveryFailed => write!(f, "mcp_discovery_failed"),
-            Self::MemorySemanticSearchUnavailable => {
-                write!(f, "memory_semantic_search_unavailable")
-            }
-            Self::MemoryContextOverflow => write!(f, "memory_context_overflow"),
-            Self::RateLimited => write!(f, "rate_limited"),
-            Self::Internal => write!(f, "internal"),
-            Self::Unavailable => write!(f, "unavailable"),
+impl MachineConcurrencyLimits {
+    /// Optional machine-credential fairness limits enforced transactionally at Invocation admission. The counts include nonterminal Invocations admitted through any credential class in the same tenant or user.
+    pub fn new(
+        max_concurrent_invocations_per_tenant: u64,
+        max_concurrent_invocations_per_user: u64,
+    ) -> MachineConcurrencyLimits {
+        MachineConcurrencyLimits {
+            max_concurrent_invocations_per_tenant,
+            max_concurrent_invocations_per_user,
         }
-    }
-}
-
-impl Default for ErrorCode {
-    fn default() -> ErrorCode {
-        Self::InvalidRequest
     }
 }

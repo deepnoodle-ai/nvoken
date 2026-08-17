@@ -163,14 +163,14 @@ func money(amount string) map[string]any {
 
 func creditAccount() map[string]any {
 	return map[string]any{
-		"tenant_key":         nil,
-		"allocated":          money("25.000000"),
-		"used":               money("3.250000"),
-		"held":               money("1.500000"),
-		"available":          money("20.250000"),
-		"paused_invocations": 2,
-		"created_at":         "2026-08-01T00:00:00Z",
-		"updated_at":         "2026-08-08T12:00:00Z",
+		"tenant_key":              nil,
+		"allocated":               money("25.000000"),
+		"used":                    money("3.250000"),
+		"held":                    money("1.500000"),
+		"available":               money("20.250000"),
+		"budget_hold_invocations": 2,
+		"created_at":              "2026-08-01T00:00:00Z",
+		"updated_at":              "2026-08-08T12:00:00Z",
 	}
 }
 

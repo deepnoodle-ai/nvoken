@@ -170,7 +170,7 @@ fn shared_agent_request_fixture_is_expressible() {
     // short retention window matters most.
     let options = AgentInvocationOptions {
         idempotency_key: Some("conformance".to_owned()),
-        on_budget_exhausted: Some(BudgetExhaustionBehavior::Pause),
+        on_budget_exhausted: Some(BudgetExhaustionBehavior::Hold),
         metadata: Some(
             [
                 ("board".to_owned(), "brand-2026".to_owned()),
@@ -1082,7 +1082,7 @@ fn shared_settlement_legibility_fixture_pins_the_stop_reasons() {
         vec![
             nvoken::models::InvocationStatus::Completed,
             nvoken::models::InvocationStatus::Incomplete,
-            nvoken::models::InvocationStatus::Paused,
+            nvoken::models::InvocationStatus::BudgetHold,
         ]
     );
     // The wait helpers stop at exactly these statuses; a terminal the SDK does
@@ -1653,7 +1653,7 @@ fn shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() {
     let target = WebhookTarget::new(url)
         .event(WebhookEvent::Ended)
         .event(WebhookEvent::Waiting)
-        .event(WebhookEvent::Paused);
+        .event(WebhookEvent::BudgetHold);
     assert_eq!(target.url, url);
     assert_eq!(target.events.len(), 3);
 
@@ -1661,7 +1661,7 @@ fn shared_invocation_webhook_fixture_is_expressible_and_stays_a_pointer() {
     generated.events = Some(vec![
         models::WebhookEvent::WebhookEventEnded,
         models::WebhookEvent::WebhookEventWaiting,
-        models::WebhookEvent::WebhookEventPaused,
+        models::WebhookEvent::WebhookEventBudgetHold,
     ]);
     let encoded = serde_json::to_value(&generated).unwrap();
     assert_eq!(encoded["url"], Value::String(url.to_string()));

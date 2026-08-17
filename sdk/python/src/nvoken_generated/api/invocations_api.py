@@ -4472,9 +4472,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> Invocation:
-        """Raise a paused Invocation's limit and continue it
+        """Raise a held Invocation's limit and continue it
 
-        Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never pause a turn, so they never bring you here.
+        Continues a turn on `budget_hold` because one of its own consumption limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn is held because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never put a turn on budget hold, so they never bring you here.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -4551,9 +4551,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[Invocation]:
-        """Raise a paused Invocation's limit and continue it
+        """Raise a held Invocation's limit and continue it
 
-        Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never pause a turn, so they never bring you here.
+        Continues a turn on `budget_hold` because one of its own consumption limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn is held because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never put a turn on budget hold, so they never bring you here.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -4630,9 +4630,9 @@ class InvocationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Raise a paused Invocation's limit and continue it
+        """Raise a held Invocation's limit and continue it
 
-        Continues a turn that paused because one of its own spending limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn paused because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never pause a turn, so they never bring you here.
+        Continues a turn on `budget_hold` because one of its own consumption limits ran out. Send `limits` containing only the limit that ran out, raised above both its old value and what the turn has already used, and still within what your installation allows.  If the turn is held because the tenant ran out of credits rather than on a limit of its own, allocate credits to that account instead — this endpoint refuses it, and funding the account continues the turn on its own. Deadlines never put a turn on budget hold, so they never bring you here.
 
         :param invocation_id: (required)
         :type invocation_id: str

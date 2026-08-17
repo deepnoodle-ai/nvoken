@@ -23,6 +23,7 @@ from typing_extensions import Annotated
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
 from nvoken_generated.models.browser_access import BrowserAccess
 from nvoken_generated.models.credit_policy import CreditPolicy
+from nvoken_generated.models.machine_concurrency_limits import MachineConcurrencyLimits
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -37,9 +38,10 @@ class RegisterAppRequest(BaseModel):
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional human-facing label.")
     callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=10, description="Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(default=None, description="Optional shared App admission ceilings. Browser access requires a non-null value. ")
+    machine_concurrency_limits: Optional[MachineConcurrencyLimits] = Field(default=None, description="Optional machine-credential fairness ceilings. Null and omission both create the App without per-tenant or per-user machine limits. ")
     browser_access: Optional[BrowserAccess] = Field(default=None, description="Optional complete browser configuration. Null and omission both create the App with browser access disabled. ")
     credit_policy: Optional[CreditPolicy] = Field(default=None, description="Defaults to `off`. See the schema for what each value enforces.")
-    __properties: ClassVar[List[str]] = ["name", "org_id", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "browser_access", "credit_policy"]
+    __properties: ClassVar[List[str]] = ["name", "org_id", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "machine_concurrency_limits", "browser_access", "credit_policy"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -83,6 +85,9 @@ class RegisterAppRequest(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of default_rate_limits
         if self.default_rate_limits:
             _dict['default_rate_limits'] = self.default_rate_limits.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of machine_concurrency_limits
+        if self.machine_concurrency_limits:
+            _dict['machine_concurrency_limits'] = self.machine_concurrency_limits.to_dict()
         # override the default output from pydantic by calling `to_dict()` of browser_access
         if self.browser_access:
             _dict['browser_access'] = self.browser_access.to_dict()
@@ -90,6 +95,11 @@ class RegisterAppRequest(BaseModel):
         # and model_fields_set contains the field
         if self.default_rate_limits is None and "default_rate_limits" in self.model_fields_set:
             _dict['default_rate_limits'] = None
+
+        # set to None if machine_concurrency_limits (nullable) is None
+        # and model_fields_set contains the field
+        if self.machine_concurrency_limits is None and "machine_concurrency_limits" in self.model_fields_set:
+            _dict['machine_concurrency_limits'] = None
 
         # set to None if browser_access (nullable) is None
         # and model_fields_set contains the field
@@ -114,6 +124,7 @@ class RegisterAppRequest(BaseModel):
             "display_name": obj.get("display_name"),
             "callback_timeout_seconds": obj.get("callback_timeout_seconds") if obj.get("callback_timeout_seconds") is not None else 10,
             "default_rate_limits": AppDefaultRateLimits.from_dict(obj["default_rate_limits"]) if obj.get("default_rate_limits") is not None else None,
+            "machine_concurrency_limits": MachineConcurrencyLimits.from_dict(obj["machine_concurrency_limits"]) if obj.get("machine_concurrency_limits") is not None else None,
             "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None,
             "credit_policy": obj.get("credit_policy")
         })

@@ -27,6 +27,13 @@ import {
     CreditPolicyToJSON,
     CreditPolicyToJSONTyped,
 } from './CreditPolicy.js';
+import type { MachineConcurrencyLimits } from './MachineConcurrencyLimits.js';
+import {
+    MachineConcurrencyLimitsFromJSON,
+    MachineConcurrencyLimitsFromJSONTyped,
+    MachineConcurrencyLimitsToJSON,
+    MachineConcurrencyLimitsToJSONTyped,
+} from './MachineConcurrencyLimits.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -94,6 +101,14 @@ export interface RegisterAppRequest {
      */
     defaultRateLimits?: AppDefaultRateLimits | null;
     /**
+     * Optional machine-credential fairness ceilings. Null and omission
+     * both create the App without per-tenant or per-user machine limits.
+     *
+     * @type {MachineConcurrencyLimits}
+     * @memberof RegisterAppRequest
+     */
+    machineConcurrencyLimits?: MachineConcurrencyLimits | null;
+    /**
      * Optional complete browser configuration. Null and omission both
      * create the App with browser access disabled.
      *
@@ -135,6 +150,7 @@ export function RegisterAppRequestFromJSONTyped(json: any, ignoreDiscriminator: 
         'displayName': json['display_name'] == null ? undefined : json['display_name'],
         'callbackTimeoutSeconds': json['callback_timeout_seconds'] == null ? undefined : json['callback_timeout_seconds'],
         'defaultRateLimits': json['default_rate_limits'] == null ? undefined : AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
+        'machineConcurrencyLimits': json['machine_concurrency_limits'] == null ? undefined : MachineConcurrencyLimitsFromJSON(json['machine_concurrency_limits']),
         'browserAccess': json['browser_access'] == null ? undefined : BrowserAccessFromJSON(json['browser_access']),
         'creditPolicy': json['credit_policy'] == null ? undefined : CreditPolicyFromJSON(json['credit_policy']),
     };
@@ -157,6 +173,7 @@ export function RegisterAppRequestToJSONTyped(value?: RegisterAppRequest | null,
         'display_name': value['displayName'],
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
+        'machine_concurrency_limits': MachineConcurrencyLimitsToJSON(value['machineConcurrencyLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
         'credit_policy': CreditPolicyToJSON(value['creditPolicy']),
     };

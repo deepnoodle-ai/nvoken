@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// ResumeInvocationRequest : Replacement for the one turn-level consumption ceiling named by the paused Invocation's stop_reason. Exactly that field must be present and must be raised above both the previous ceiling and usage so far.
+/// ResumeInvocationRequest : Replacement for the one turn-level consumption ceiling named by the held Invocation's `stop_reason`. Exactly that field must be present and must be raised above both the previous ceiling and usage so far.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ResumeInvocationRequest {
     #[serde(rename = "limits")]
@@ -19,7 +19,7 @@ pub struct ResumeInvocationRequest {
 }
 
 impl ResumeInvocationRequest {
-    /// Replacement for the one turn-level consumption ceiling named by the paused Invocation's stop_reason. Exactly that field must be present and must be raised above both the previous ceiling and usage so far.
+    /// Replacement for the one turn-level consumption ceiling named by the held Invocation's `stop_reason`. Exactly that field must be present and must be raised above both the previous ceiling and usage so far.
     pub fn new(limits: models::Limits) -> ResumeInvocationRequest {
         ResumeInvocationRequest {
             limits: Box::new(limits),

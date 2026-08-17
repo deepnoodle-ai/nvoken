@@ -35,10 +35,10 @@ class CreditAccount(BaseModel):
     used: Money
     held: Money
     available: Money = Field(description="max(0, allocated - used - held).")
-    paused_invocations: Annotated[int, Field(strict=True, ge=0)]
+    budget_hold_invocations: Annotated[int, Field(strict=True, ge=0)]
     created_at: datetime
     updated_at: datetime
-    __properties: ClassVar[List[str]] = ["tenant_key", "allocated", "used", "held", "available", "paused_invocations", "created_at", "updated_at"]
+    __properties: ClassVar[List[str]] = ["tenant_key", "allocated", "used", "held", "available", "budget_hold_invocations", "created_at", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -113,7 +113,7 @@ class CreditAccount(BaseModel):
             "used": Money.from_dict(obj["used"]) if obj.get("used") is not None else None,
             "held": Money.from_dict(obj["held"]) if obj.get("held") is not None else None,
             "available": Money.from_dict(obj["available"]) if obj.get("available") is not None else None,
-            "paused_invocations": obj.get("paused_invocations"),
+            "budget_hold_invocations": obj.get("budget_hold_invocations"),
             "created_at": obj.get("created_at"),
             "updated_at": obj.get("updated_at")
         })
