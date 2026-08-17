@@ -333,6 +333,16 @@ class SessionRetention:
     ttl_seconds: int
 
 
+# What a request asserts about a Session that already exists. ``refuse``, the
+# default, compares every option sent. ``join`` reaches whatever Session is
+# there without asserting how it is configured, so compaction and retention stop
+# conflicting. Join never relaxes the authorization context, the revision pin,
+# or the Session's end user: those catch a caller acting on the wrong
+# conversation, and a flag that suppressed them would be a way around the check
+# rather than a way to express intent.
+SessionOptionsConflict = Literal["refuse", "join"]
+
+
 @dataclass(frozen=True)
 class SessionOptions:
     """Durable Session options.
@@ -347,8 +357,18 @@ class SessionOptions:
     # but create_session still cannot set it.
     compaction: ContextCompaction | None = None
     retention: SessionRetention | None = None
-    metadata: dict[str, str] | None = None
+    # Binds the Session to the host's own authorization facts. It is written
+    # only by the request that creates the Session, never interpreted by
+    # nvoken, never visible to the model, and carried inside the signed
+    # callback envelope so a receiver authorizes a delivery without reading the
+    # Invocation back. What nvoken guarantees is integrity, not authentication:
+    # what creation recorded is what a signed delivery carries.
+    authorization_context: dict[str, str] | None = None
+    # Fixes the Agent Definition revision for the lifetime of a newly created
+    # Session. Omit it to follow the Agent's resolution policy.
     pinned_revision: int | None = None
+    # What this request asserts about a Session that already exists.
+    on_conflict: SessionOptionsConflict | None = None
 
 
 @dataclass(frozen=True)
@@ -623,8 +643,7 @@ class InvokeRequest:
     # Opaque host correlation data recorded on this Invocation. It is part of
     # the admitted input, so it is immutable and material to idempotency: a
     # replay carrying different metadata conflicts rather than updating it.
-    # Session metadata is separate and mutable — see SessionOptions.metadata
-    # and Client.update_session.
+    # Session metadata is separate and mutable — see Client.update_session.
     metadata: dict[str, str] | None = None
 
 
@@ -640,6 +659,21 @@ class RetryPolicy:
     max_attempts: int = 4
     min_delay: float = 0.1
     max_delay: float = 2.0
+
+
+@dataclass(frozen=True)
+class Scope:
+    """Narrows every request a Client makes to one tenant, one end user, or both.
+
+    Anything outside it is reported as not found, so an id that arrives from
+    the wrong place cannot be acted on — which is what lets one app-wide
+    credential serve a whole application without an ownership check written at
+    every call site. A scope may only narrow: naming a tenant the credential is
+    not bound to is refused rather than silently returning nothing.
+    """
+
+    tenant_key: str | None = None
+    user_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -669,17 +703,22 @@ class Client:
         *,
         retry: RetryPolicy = RetryPolicy(),
         transport: httpx.AsyncBaseTransport | None = None,
+        scope: Scope | None = None,
     ) -> None:
         if not base_url or not api_key:
             raise NvokenError("validation", "base_url and api_key are required")
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.retry = retry
+        self.transport = transport
+        self.scope = _narrowing_scope(scope)
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._background_tasks: set[asyncio.Task[Any]] = set()
         configuration = Configuration(host=self.base_url, access_token=api_key)
         configuration.discard_unknown_keys = False
         self.api_client = ApiClient(configuration)
+        for name, value in _scope_headers(self.scope).items():
+            self.api_client.set_default_header(name, value)
         self.agents = AgentsApi(self.api_client)
         self.credits = CreditsApi(self.api_client)
         self.invocations = InvocationsApi(self.api_client)
@@ -704,6 +743,7 @@ class Client:
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "User-Agent": f"nvoken-python/{SDK_VERSION}",
+                **_scope_headers(self.scope),
             },
             transport=transport,
             timeout=None,
@@ -711,10 +751,34 @@ class Client:
         stream_configuration = Configuration(host=self.base_url, access_token=api_key)
         stream_configuration.discard_unknown_keys = False
         self.stream_api_client = ApiClient(stream_configuration)
+        for name, value in _scope_headers(self.scope).items():
+            self.stream_api_client.set_default_header(name, value)
         self.stream_api_client.rest_client.pool_manager = _StreamingPoolManager(
             self.stream_client
         )
         self.stream_sessions = SessionsApi(self.stream_api_client)
+
+    def scoped(self, scope: Scope) -> Client:
+        """Return a Client that stamps this scope on every request it makes.
+
+        The receiver is unchanged, so a scoped client can be handed to the part
+        of an application that handles one tenant's or one end user's work
+        while the unscoped one keeps doing administrative reads. Closing one
+        does not close the other: each holds its own connections.
+        """
+        if _narrowing_scope(scope) is None:
+            raise NvokenError(
+                "validation", "a scope requires a tenant_key, a user_key, or both"
+            )
+        narrowed = Client(
+            self.base_url,
+            self.api_key,
+            retry=self.retry,
+            transport=self.transport,
+            scope=scope,
+        )
+        narrowed._session_locks = self._session_locks
+        return narrowed
 
     async def __aenter__(self) -> Client:
         return self
@@ -2172,6 +2236,28 @@ def _generated_mcp_server(server: MCPServer) -> GeneratedMCPServer:
     )
 
 
+def _narrowing_scope(scope: Scope | None) -> Scope | None:
+    """Drop a scope that names nobody, so an empty one is not a silent no-op."""
+    if scope is None:
+        return None
+    tenant_key = (scope.tenant_key or "").strip()
+    user_key = (scope.user_key or "").strip()
+    if not tenant_key and not user_key:
+        return None
+    return Scope(tenant_key=tenant_key or None, user_key=user_key or None)
+
+
+def _scope_headers(scope: Scope | None) -> dict[str, str]:
+    if scope is None:
+        return {}
+    headers: dict[str, str] = {}
+    if scope.tenant_key:
+        headers["X-Nvoken-Tenant-Key"] = scope.tenant_key
+    if scope.user_key:
+        headers["X-Nvoken-User-Key"] = scope.user_key
+    return headers
+
+
 def _generated_session_options(
     options: SessionOptions | None,
 ) -> GeneratedSessionOptions | None:
@@ -2180,10 +2266,15 @@ def _generated_session_options(
     if (
         options.compaction is None
         and options.retention is None
-        and not options.metadata
+        and not options.authorization_context
         and options.pinned_revision is None
+        and options.on_conflict is None
     ):
         raise NvokenError("validation", "session_options requires at least one member")
+    if options.on_conflict is not None and options.on_conflict not in ("refuse", "join"):
+        raise NvokenError(
+            "validation", "session_options on_conflict must be refuse or join"
+        )
     compaction = options.compaction
     return GeneratedSessionOptions(
         compaction=CompactionPolicy(
@@ -2196,8 +2287,11 @@ def _generated_session_options(
         retention=GeneratedRetentionPolicy(ttl_seconds=options.retention.ttl_seconds)
         if options.retention is not None
         else None,
-        metadata=dict(options.metadata) if options.metadata else None,
+        authorization_context=dict(options.authorization_context)
+        if options.authorization_context
+        else None,
         pinned_revision=options.pinned_revision,
+        on_conflict=options.on_conflict,
     )
 
 

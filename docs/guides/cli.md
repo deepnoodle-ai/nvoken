@@ -34,6 +34,12 @@ The CLI stores named endpoint and API-key profiles in
 Environment and flag credentials override a saved profile without rewriting the
 credentials file.
 
+`--scope-tenant-key` and `--scope-user-key` (or `NVOKEN_SCOPE_TENANT_KEY` and
+`NVOKEN_SCOPE_USER_KEY`) narrow every request of that invocation. An id outside
+the scope is reported as not found, which is what an operator wants when the id
+came from a ticket, a log line, or somebody else's paste. They may only narrow:
+a credential already bound to one tenant refuses a scope naming another.
+
 ## Discovering and scripting commands
 
 `nvoken --help` prints the complete command tree. Every command has its own

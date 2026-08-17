@@ -466,10 +466,54 @@ type SessionOptions struct {
 	// yet, but CreateSession still cannot set it.
 	Compaction *ContextCompaction `json:"compaction,omitempty"`
 	Retention  *SessionRetention  `json:"retention,omitempty"`
-	Metadata   map[string]string  `json:"metadata,omitempty"`
+	// AuthorizationContext binds the Session to the host's own authorization
+	// facts. It is written only by the request that creates the Session, never
+	// interpreted by nvoken, never visible to the model, and carried inside the
+	// signed callback envelope so a receiver authorizes a delivery without
+	// reading the Invocation back. What nvoken guarantees is integrity, not
+	// authentication: what creation recorded is what a signed delivery carries.
+	AuthorizationContext map[string]string `json:"authorization_context,omitempty"`
 	// PinnedRevision fixes the Agent Definition revision for the lifetime of a
 	// newly created Session. Omit it to follow the Agent's resolution policy.
 	PinnedRevision *int64 `json:"pinned_revision,omitempty"`
+	// OnConflict says what you are asserting about a Session that already
+	// exists. Empty and SessionOptionsRefuse compare every member you sent;
+	// SessionOptionsJoin reaches whatever Session is there without asserting
+	// how it is configured. Join never relaxes AuthorizationContext,
+	// PinnedRevision, or the Session's user key.
+	OnConflict SessionOptionsConflict `json:"on_conflict,omitempty"`
+}
+
+// SessionOptionsConflict says what a request asserts about a Session that
+// already exists.
+type SessionOptionsConflict string
+
+const (
+	// SessionOptionsRefuse, the default, compares every option sent.
+	SessionOptionsRefuse SessionOptionsConflict = "refuse"
+	// SessionOptionsJoin reaches whatever Session is there without asserting
+	// how it is configured, so compaction and retention stop conflicting. It
+	// never relaxes the authorization context, the revision pin, or the
+	// Session's end user: those catch a caller acting on the wrong
+	// conversation, and a flag that suppressed them would be a way around the
+	// check rather than a way to express intent.
+	SessionOptionsJoin SessionOptionsConflict = "join"
+)
+
+func (o *SessionOptions) empty() bool {
+	return o.Retention == nil && len(o.AuthorizationContext) == 0 && o.PinnedRevision == nil
+}
+
+func (o *SessionOptions) conflictPolicy() (*generated.SessionOptionsOnConflict, error) {
+	switch o.OnConflict {
+	case "":
+		return nil, nil
+	case SessionOptionsRefuse, SessionOptionsJoin:
+		policy := generated.SessionOptionsOnConflict(o.OnConflict)
+		return &policy, nil
+	default:
+		return nil, fmt.Errorf("session options on conflict must be refuse or join")
+	}
 }
 
 // generated converts creation-only options for POST /v1/sessions. Compaction is
@@ -483,35 +527,46 @@ func (o *SessionOptions) generated() (*generated.SessionOptions, error) {
 			"compaction requires an Invocation to validate its model against: " +
 				"set it on an Invocation admission for the Session")
 	}
-	if o.Retention == nil && len(o.Metadata) == 0 && o.PinnedRevision == nil {
+	if o.empty() && o.OnConflict == "" {
 		return nil, fmt.Errorf("session options require at least one member")
 	}
 	options := &generated.SessionOptions{}
 	if o.Retention != nil {
 		options.Retention = &generated.RetentionPolicy{TTLSeconds: o.Retention.TTLSeconds}
 	}
-	if len(o.Metadata) > 0 {
-		metadata := generated.Metadata(o.Metadata)
-		options.Metadata = &metadata
+	if len(o.AuthorizationContext) > 0 {
+		context := generated.AuthorizationContext(o.AuthorizationContext)
+		options.AuthorizationContext = &context
 	}
 	options.PinnedRevision = o.PinnedRevision
+	policy, err := o.conflictPolicy()
+	if err != nil {
+		return nil, err
+	}
+	options.OnConflict = policy
 	return options, nil
 }
 
+// generatedFork converts the child's creation-only options. on_conflict has no
+// meaning here: a fork always creates, so there is no existing Session to
+// assert anything about.
 func (o *SessionOptions) generatedFork() (*generated.ForkSessionOptions, error) {
 	if o.Compaction != nil {
 		return nil, fmt.Errorf("forked Sessions start uncompacted; set compaction on the child Session's first invocation")
 	}
-	if o.Retention == nil && len(o.Metadata) == 0 && o.PinnedRevision == nil {
+	if o.OnConflict != "" {
+		return nil, fmt.Errorf("on conflict does not apply to a fork, which always creates")
+	}
+	if o.empty() {
 		return nil, fmt.Errorf("session options require at least one member")
 	}
 	options := &generated.ForkSessionOptions{}
 	if o.Retention != nil {
 		options.Retention = &generated.RetentionPolicy{TTLSeconds: o.Retention.TTLSeconds}
 	}
-	if len(o.Metadata) > 0 {
-		metadata := generated.Metadata(o.Metadata)
-		options.Metadata = &metadata
+	if len(o.AuthorizationContext) > 0 {
+		context := generated.AuthorizationContext(o.AuthorizationContext)
+		options.AuthorizationContext = &context
 	}
 	options.PinnedRevision = o.PinnedRevision
 	return options, nil
@@ -813,7 +868,7 @@ type InvokeRequest struct {
 	// is part of the admitted input, so it is immutable and material to
 	// idempotency: a replay carrying different metadata conflicts rather than
 	// updating it. Session metadata is separate and mutable — see
-	// SessionOptions.Metadata and Client.UpdateSession.
+	// Client.UpdateSession.
 	Metadata map[string]string
 	// Webhook is the optional endpoint nvoken posts a signed webhook to
 	// when this Invocation parks awaiting host tool results or settles. The
@@ -1006,9 +1061,10 @@ type ForkSessionOptions struct {
 	FromMessageID *string
 	FromSequence  *int64
 	SessionKey    *string
-	UserKey       *string
-	// SessionOptions applies retention and metadata to the new child. Nothing is
-	// inherited from the source, and compaction is set on the child's first turn.
+	// SessionOptions applies retention, a revision pin, and an authorization
+	// context to the new child. Nothing is inherited from the source except the
+	// end user it was opened for, and compaction is set on the child's first
+	// turn.
 	SessionOptions *SessionOptions
 }
 
@@ -1454,9 +1510,12 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 		wire["session_key"] = *r.SessionKey
 	}
 	if r.SessionOptions != nil {
-		if r.SessionOptions.Compaction == nil && r.SessionOptions.Retention == nil &&
-			len(r.SessionOptions.Metadata) == 0 && r.SessionOptions.PinnedRevision == nil {
+		if r.SessionOptions.Compaction == nil && r.SessionOptions.empty() &&
+			r.SessionOptions.OnConflict == "" {
 			return nil, fmt.Errorf("session options require at least one member")
+		}
+		if _, err := r.SessionOptions.conflictPolicy(); err != nil {
+			return nil, err
 		}
 		wire["session_options"] = r.SessionOptions
 	}

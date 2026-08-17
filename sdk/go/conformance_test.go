@@ -151,12 +151,14 @@ func TestSharedAskUserToolFixture(t *testing.T) {
 // independently written request builders. This pins each of them to the same
 // fixture, so a field one binding spells differently fails here rather than
 // being silently dropped on the way to the Runtime.
+var fixturePinnedRevision int64 = 4
+
 func TestSharedSessionLifecycleFixture(t *testing.T) {
 	var fixture struct {
 		SessionOptions struct {
-			RetentionOnly json.RawMessage `json:"retention_only"`
-			MetadataOnly  json.RawMessage `json:"metadata_only"`
-			EveryMember   json.RawMessage `json:"every_member"`
+			RetentionOnly            json.RawMessage `json:"retention_only"`
+			AuthorizationContextOnly json.RawMessage `json:"authorization_context_only"`
+			EveryMember              json.RawMessage `json:"every_member"`
 		} `json:"session_options"`
 		InvocationMetadata map[string]string `json:"invocation_metadata"`
 		ProviderTools      struct {
@@ -174,18 +176,20 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 			Actual: SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
 			Want:   fixture.SessionOptions.RetentionOnly,
 		},
-		"metadata only": {
-			Actual: SessionOptions{Metadata: map[string]string{
+		"authorization context only": {
+			Actual: SessionOptions{AuthorizationContext: map[string]string{
 				"board":    "brand-2026",
 				"trace_id": "018f-4a",
 			}},
-			Want: fixture.SessionOptions.MetadataOnly,
+			Want: fixture.SessionOptions.AuthorizationContextOnly,
 		},
 		"every member": {
 			Actual: SessionOptions{
-				Compaction: &ContextCompaction{TriggerTokens: ContextCompactionAt(32768)},
-				Retention:  &SessionRetention{TTLSeconds: 3600},
-				Metadata:   map[string]string{"surface": "web"},
+				Compaction:           &ContextCompaction{TriggerTokens: ContextCompactionAt(32768)},
+				Retention:            &SessionRetention{TTLSeconds: 3600},
+				AuthorizationContext: map[string]string{"surface": "web"},
+				PinnedRevision:       &fixturePinnedRevision,
+				OnConflict:           SessionOptionsJoin,
 			},
 			Want: fixture.SessionOptions.EveryMember,
 		},

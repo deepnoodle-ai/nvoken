@@ -79,6 +79,7 @@ from nvoken import (
     RetryPolicy,
     Reasoning,
     Sampling,
+    Scope,
     SessionOptions,
     Reducer,
     StreamEvent,
@@ -183,7 +184,9 @@ def test_shared_session_lifecycle_fixture() -> None:
         session_options=SessionOptions(
             compaction=ContextCompaction(trigger_tokens=32768),
             retention=SessionRetention(ttl_seconds=3600),
-            metadata={"surface": "web"},
+            authorization_context={"surface": "web"},
+            pinned_revision=4,
+            on_conflict="join",
         ),
     ))
     assert every["session_options"] == fixture["session_options"]["every_member"]
@@ -1580,3 +1583,39 @@ def test_tool_choice_names_a_tool_only_in_named_mode() -> None:
         render(ToolChoice(mode="named"))
     with pytest.raises(NvokenError):
         render(ToolChoice(mode="auto", name="lookup_invoice"))
+
+
+# A scope is worth nothing if it is only remembered locally, so this asserts the
+# headers that actually leave the process — on the pooled client and on the
+# streaming one, which is a separate connection with its own header set.
+def test_a_scoped_client_stamps_every_request_and_leaves_its_parent_alone() -> None:
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    assert "X-Nvoken-Tenant-Key" not in client.api_client.default_headers
+    assert "X-Nvoken-User-Key" not in client.api_client.default_headers
+
+    scoped = client.scoped(Scope(tenant_key="acme", user_key="user-7c1f"))
+    assert scoped.api_client.default_headers["X-Nvoken-Tenant-Key"] == "acme"
+    assert scoped.api_client.default_headers["X-Nvoken-User-Key"] == "user-7c1f"
+    assert scoped.stream_api_client.default_headers["X-Nvoken-Tenant-Key"] == "acme"
+    assert scoped.stream_client.headers["X-Nvoken-User-Key"] == "user-7c1f"
+    assert scoped.scope == Scope(tenant_key="acme", user_key="user-7c1f")
+
+    # The receiver keeps its own scope, so handing a scoped client to one part
+    # of an application cannot narrow the administrative one it came from.
+    assert client.scope is None
+    assert "X-Nvoken-Tenant-Key" not in client.api_client.default_headers
+
+    tenant_only = Client(
+        base_url="https://runtime.example.test",
+        api_key="key",
+        scope=Scope(tenant_key="acme"),
+    )
+    assert tenant_only.api_client.default_headers["X-Nvoken-Tenant-Key"] == "acme"
+    assert "X-Nvoken-User-Key" not in tenant_only.api_client.default_headers
+
+    # An empty scope would stamp nothing while reading as a narrowing, which is
+    # the one failure mode a scope cannot have.
+    with pytest.raises(NvokenError):
+        client.scoped(Scope())
+    with pytest.raises(NvokenError):
+        client.scoped(Scope(tenant_key="   "))

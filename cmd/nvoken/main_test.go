@@ -825,7 +825,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 			name: "invocation",
 			args: []string{"invoke", "--request-file", writeRequest("invocation.json", `{
 				"agent_key":"support","input":"hello","idempotency_key":"raw-invoke",
-				"session_options":{"metadata":{"case":"42"},"retention":{"ttl_seconds":3600}},
+				"session_options":{"authorization_context":{"case":"42"},"retention":{"ttl_seconds":3600}},
 				"on_budget_exhausted":"pause"
 			}`)},
 		},
@@ -845,13 +845,13 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 		{
 			name: "session create",
 			args: []string{"session", "create", "--request-file", writeRequest("session.json", `{
-				"agent_id":"agent_test","session_options":{"metadata":{"branch":"root"},"retention":{"ttl_seconds":3600}}
+				"agent_id":"agent_test","session_options":{"authorization_context":{"branch":"root"},"retention":{"ttl_seconds":3600}}
 			}`)},
 		},
 		{
 			name: "session fork",
 			args: []string{"session", "fork", "sesn_source", "--request-file", writeRequest("fork.json", `{
-				"from_message":7,"session_options":{"metadata":{"branch":"alternate"}}
+				"from_message":7,"session_options":{"authorization_context":{"branch":"alternate"}}
 			}`)},
 		},
 		{
@@ -873,7 +873,8 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 
 	invocation := captured["POST /v1/invocations"]
 	options, ok := invocation["session_options"].(map[string]any)
-	if !ok || options["metadata"].(map[string]any)["case"] != "42" || invocation["on_budget_exhausted"] != "pause" {
+	if !ok || options["authorization_context"].(map[string]any)["case"] != "42" ||
+		invocation["on_budget_exhausted"] != "pause" {
 		t.Fatalf("complete Invocation request was not preserved: %#v", invocation)
 	}
 	registered := captured["POST /v1/apps"]
@@ -1351,4 +1352,43 @@ func readServerState(t *testing.T, baseURL string) conformanceQueryState {
 		t.Fatal(err)
 	}
 	return state
+}
+
+// The scope flags exist so an operator addressing an id from a stale link
+// cannot act outside the tenant or end user they meant. That is only true if
+// the assertion actually leaves the process, so this asserts the headers.
+func TestScopeFlagsNarrowEveryRequest(t *testing.T) {
+	t.Setenv("NVOKEN_API_KEY", "test-key")
+	var observed http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(
+		response http.ResponseWriter,
+		request *http.Request,
+	) {
+		observed = request.Header.Clone()
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(response, `{"items":[],"has_more":false,"next_cursor":null}`)
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := executeCLI(t, server.URL, true, "session", "list"); err != nil {
+		t.Fatalf("unscoped session list: %v", err)
+	}
+	if got := observed.Get("X-Nvoken-Tenant-Key"); got != "" {
+		t.Errorf("unscoped tenant header = %q, want none", got)
+	}
+
+	if _, err := executeCLI(
+		t, server.URL, true,
+		"--scope-tenant-key", "acme",
+		"--scope-user-key", "user-7c1f",
+		"session", "list",
+	); err != nil {
+		t.Fatalf("scoped session list: %v", err)
+	}
+	if got := observed.Get("X-Nvoken-Tenant-Key"); got != "acme" {
+		t.Errorf("tenant header = %q", got)
+	}
+	if got := observed.Get("X-Nvoken-User-Key"); got != "user-7c1f" {
+		t.Errorf("user header = %q", got)
+	}
 }

@@ -405,3 +405,33 @@ Check `selected.Controls.Reasoning` before admission. A manual
 preserves provider defaults; unsupported values and combinations are rejected
 without aliasing. OpenAI reasoning is intentionally unavailable until its
 complete continuation representation is durable.
+
+## Acting for one tenant or one end user
+
+An app-wide credential can reach every tenant in its App, so an id that arrives
+from the wrong place — a stale link, a mixed-up webhook, a tampered form field
+— is an id it can act on. Say the scope once instead of re-reading the resource
+before every call:
+
+```go
+tenant, err := client.Scoped(nvoken.Scope{
+	TenantKey: "acme",
+	UserKey:   "user-7c1f",
+})
+if err != nil {
+	return err
+}
+session, err := tenant.GetSession(ctx, sessionIDFromTheRequest)
+```
+
+Anything outside the scope is reported as `not_found`, so a Session or
+Invocation belonging to somebody else cannot be read, cancelled, interrupted,
+forked, answered, or erased — and you learn nothing about whether the id
+exists. Writes take the same scope: an omitted tenant or user key in the body
+inherits it, and one naming somebody else is refused.
+
+A scope may only narrow. A credential already bound to one tenant refuses a
+scope naming another with `forbidden` rather than silently returning nothing.
+The client it was derived from is unchanged, so the unscoped one keeps doing
+administrative reads. Browser tokens already carry their tenant and end user
+and neither need this nor may send it.

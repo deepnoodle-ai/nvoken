@@ -8,6 +8,27 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **A client can act for one tenant or one end user.** `client.scoped({...})`
+  in all four SDKs, and `--scope-tenant-key` / `--scope-user-key` on the CLI,
+  stamp `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` on every request. An id
+  outside the scope is reported as `not_found`, so an app-wide credential no
+  longer needs an ownership check written at every call site. A scope may only
+  narrow; the client it was derived from is unchanged.
+
+- **Breaking: `session_options.metadata` is now
+  `session_options.authorization_context`, and forks no longer take
+  `user_key`.** The
+  authorization context is written at Session creation, never model-visible,
+  and carried in the signed callback envelope as a sibling of `nvoken`, so a
+  receiver authorizes a delivery without reading the Invocation back. Mutable
+  Session metadata is unaffected and still lives on `updateSession`. A fork
+  inherits the source Session's `user_key` rather than accepting one.
+
+- **`session_options.on_conflict: "join"` reaches an existing Session without
+  asserting how it is configured**, so compaction and retention stop
+  conflicting. It never relaxes `authorization_context`, `pinned_revision`, or
+  `user_key`.
+
 - **Breaking: the `stream.end` frame is now `connection.closing`.** It never
   said anything about a turn, but its name said the stream was over, and enough
   readers believed the name that the contract carried a correction in four

@@ -473,9 +473,8 @@ func registerRuntimeCommands(app *cli.App) {
 		Flags(
 			cli.String("request-file", "f").Help("Complete ForkSessionRequest JSON; - reads stdin and replaces request flags"),
 			cli.String("session-key").Help("Caller key for the child; makes the fork an upsert"),
-			cli.String("user").Help("End-user label recorded as the child Session opener"),
 			cli.Int("retention-seconds").Help("Idle retention window for the child"),
-			cli.String("metadata").Help(`JSON string map recorded on the child, such as {"branch":"alternative"}`),
+			cli.String("authorization-context").Help(`JSON string map binding the child, such as {"board":"b_42"}`),
 		).
 		Run(runSessionFork)
 	sessions.Command("get").
@@ -2052,7 +2051,7 @@ func runSessionFork(command *cli.Context) error {
 		if command.Arg(1) != "" {
 			return errors.New("from-message and --request-file are mutually exclusive")
 		}
-		for _, flag := range []string{"session-key", "user", "retention-seconds", "metadata"} {
+		for _, flag := range []string{"session-key", "retention-seconds", "authorization-context"} {
 			if command.IsSet(flag) {
 				return fmt.Errorf("--request-file cannot be combined with --%s", flag)
 			}
@@ -2081,7 +2080,6 @@ func runSessionFork(command *cli.Context) error {
 	}
 	options := nvoken.ForkSessionOptions{
 		SessionKey: optionalString(command.String("session-key")),
-		UserKey:    optionalString(command.String("user")),
 	}
 	if sequence, parseErr := strconv.ParseInt(point, 10, 64); parseErr == nil {
 		if sequence < 1 {
@@ -2092,17 +2090,17 @@ func runSessionFork(command *cli.Context) error {
 		options.FromMessageID = &point
 	}
 	retentionSeconds := command.Int("retention-seconds")
-	metadata := map[string]string(nil)
-	if encoded := command.String("metadata"); encoded != "" {
-		if err := json.Unmarshal([]byte(encoded), &metadata); err != nil {
-			return fmt.Errorf("metadata must be a JSON string map: %w", err)
+	authorizationContext := map[string]string(nil)
+	if encoded := command.String("authorization-context"); encoded != "" {
+		if err := json.Unmarshal([]byte(encoded), &authorizationContext); err != nil {
+			return fmt.Errorf("authorization context must be a JSON string map: %w", err)
 		}
-		if len(metadata) == 0 {
-			return fmt.Errorf("metadata must contain at least one entry")
+		if len(authorizationContext) == 0 {
+			return fmt.Errorf("authorization context must contain at least one entry")
 		}
 	}
-	if retentionSeconds != 0 || len(metadata) != 0 {
-		options.SessionOptions = &nvoken.SessionOptions{Metadata: metadata}
+	if retentionSeconds != 0 || len(authorizationContext) != 0 {
+		options.SessionOptions = &nvoken.SessionOptions{AuthorizationContext: authorizationContext}
 		if retentionSeconds != 0 {
 			options.SessionOptions.Retention = &nvoken.SessionRetention{TTLSeconds: retentionSeconds}
 		}
@@ -2390,7 +2388,14 @@ func runtimeClient(command *cli.Context) (*nvoken.Client, error) {
 		}
 		return nil, errors.New("not authenticated; run `nvoken auth login`, pass --api-key, or set NVOKEN_API_KEY")
 	}
-	return nvoken.NewClient(auth.BaseURL, auth.APIKey)
+	scope := nvoken.Scope{
+		TenantKey: strings.TrimSpace(command.String("scope-tenant-key")),
+		UserKey:   strings.TrimSpace(command.String("scope-user-key")),
+	}
+	if scope == (nvoken.Scope{}) {
+		return nvoken.NewClient(auth.BaseURL, auth.APIKey)
+	}
+	return nvoken.NewClient(auth.BaseURL, auth.APIKey, nvoken.WithScope(scope))
 }
 
 func resolveBaseURL(explicit string, configPath string) (string, error) {

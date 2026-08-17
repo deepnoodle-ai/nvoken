@@ -15,9 +15,9 @@ use nvoken::{
     IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
     ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
     NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
-    Reducer, RetryPolicy, SessionOptions, StreamEvent, StreamPreview, ToolCallListOptions,
-    ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
-    WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
+    Reducer, RetryPolicy, SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview,
+    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions,
+    WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -90,15 +90,18 @@ fn shared_session_lifecycle_fixture_is_expressible() {
         serde_json::to_value(SessionOptions::default().retention(86400)).unwrap(),
         fixture["session_options"]["retention_only"]
     );
-    let metadata: HashMap<String, String> = [
+    let authorization_context: HashMap<String, String> = [
         ("board".to_owned(), "brand-2026".to_owned()),
         ("trace_id".to_owned(), "018f-4a".to_owned()),
     ]
     .into_iter()
     .collect();
     assert_eq!(
-        serde_json::to_value(SessionOptions::default().metadata(metadata)).unwrap(),
-        fixture["session_options"]["metadata_only"]
+        serde_json::to_value(
+            SessionOptions::default().authorization_context(authorization_context)
+        )
+        .unwrap(),
+        fixture["session_options"]["authorization_context_only"]
     );
     let every = SessionOptions::default()
         .compaction(ContextCompaction {
@@ -106,11 +109,13 @@ fn shared_session_lifecycle_fixture_is_expressible() {
             model: None,
         })
         .retention(3600)
-        .metadata(
+        .authorization_context(
             [("surface".to_owned(), "web".to_owned())]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .pinned_revision(4)
+        .on_conflict(SessionOptionsConflict::Join);
     assert_eq!(
         serde_json::to_value(every).unwrap(),
         fixture["session_options"]["every_member"]

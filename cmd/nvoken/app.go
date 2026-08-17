@@ -59,6 +59,8 @@ func newApp() *cli.App {
 		cli.String("config", "").Env("NVOKEN_CONFIG").Help("Path to the legacy JSON endpoint config file"),
 		cli.String("profile", "").Env("NVOKEN_PROFILE").Help("Local credential profile; defaults to the selected profile"),
 		cli.String("credentials-file", "").Env("NVOKEN_CREDENTIALS_FILE").Help("Path to the local credential-profile file"),
+		cli.String("scope-tenant-key", "").Env("NVOKEN_SCOPE_TENANT_KEY").Help("Narrow every request to this tenant; an id outside it is reported as not found"),
+		cli.String("scope-user-key", "").Env("NVOKEN_SCOPE_USER_KEY").Help("Narrow every request to this end user; an id outside it is reported as not found"),
 		cli.String("output", "o").Env("NVOKEN_OUTPUT").Default("text").Enum("text", "json").Help("Output format"),
 		cli.Bool("json").Help("Emit stable JSON output; alias for --output json"),
 	)

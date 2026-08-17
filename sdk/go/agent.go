@@ -490,13 +490,16 @@ func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
 		}
 		key = "key:" + tenant + ":" + binding.SessionKey
 	}
-	a.client.sessionMu.Lock()
-	lock := a.client.sessionLocks[key]
+	// The table is shared with any scoped client derived from this one, so two
+	// views of the same Session serialize against each other rather than each
+	// keeping its own idea of the lock.
+	a.client.locks.mu.Lock()
+	lock := a.client.locks.locks[key]
 	if lock == nil {
 		lock = &sync.Mutex{}
-		a.client.sessionLocks[key] = lock
+		a.client.locks.locks[key] = lock
 	}
-	a.client.sessionMu.Unlock()
+	a.client.locks.mu.Unlock()
 	return &AgentSession{
 		agent:      a,
 		lock:       lock,

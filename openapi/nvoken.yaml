@@ -73,6 +73,40 @@ info:
 
     Tenant, Session, operation, and expiry constraints only narrow these grants.
 
+    ## Acting for one tenant or one end user
+
+    An app-wide credential can reach every tenant in its App, which means an id
+    that arrives from the wrong place — a stale link, a mixed-up webhook, a
+    tampered form field — is an id it can act on. The usual answer is for the
+    host to re-read the resource and compare its `tenant_key` and `user_key`
+    before every call. Say it once instead:
+
+    ```
+    X-Nvoken-Tenant-Key: acme
+    X-Nvoken-User-Key: user-7c1f
+    ```
+
+    Both headers are accepted on every request and narrow that one request to
+    the scope they name. Anything outside it is reported as `not_found`, so a
+    Session or Invocation belonging to another tenant or another end user
+    cannot be read, cancelled, interrupted, forked, answered, or erased — and
+    you learn nothing about whether the id exists. Writes take the same scope:
+    an omitted `tenant_key` or `user_key` in the body inherits it, and one
+    naming somebody else is refused.
+
+    Two rules keep them honest. They may only narrow, so a credential already
+    bound to one tenant refuses a header naming another with `forbidden` rather
+    than silently returning nothing. And a record with no `user_key` at all is
+    outside every `X-Nvoken-User-Key` assertion rather than inside all of them,
+    because a Session nobody claimed is not one you can claim by asserting.
+
+    Each header takes 1 to 255 characters and may appear once. A blank,
+    oversized, or repeated header is `invalid_request` rather than ignored: an
+    assertion nobody notices dropping is worse than no assertion at all.
+
+    A browser token already carries its tenant and its end user, so it neither
+    needs these headers nor is allowed to send them.
+
     ## Familiar names
 
     Where a name already means something in other agent APIs, nvoken uses it
@@ -93,8 +127,11 @@ info:
     that resource or hands back the one your name already refers to, so the
     same request twice gives you the same resource rather than two.
     `user_key` is a label rather than a name: it records who a Session was
-    opened for so you can filter on it later, and it is not a permission
-    boundary. `idempotency_key` names one attempt, not a resource.
+    opened for, so you can filter on it later — and on an Agent whose
+    Definition sets `memory.scope: user`, it also selects which memories that
+    Agent can recall. It is fixed by the request that opens a Session and a
+    later turn cannot change it. `idempotency_key` names one attempt, not a
+    resource.
 
     An `id` is an identifier nvoken mints. It carries a typed prefix, `sess_`
     for a Session and `inv_` for an Invocation, and everything after that
@@ -1607,13 +1644,18 @@ paths:
         finished. Keys are scoped to the tenant and Agent.
 
         A repeat counts as the same request only if the Session selector, the
-        Agent, explicit revision, per-turn overrides, and input all match. The
-        original admitted revision is returned even if its Definition has
-        advanced. Values are compared as sent, so omitting an override is not
-        the same as supplying one that happens to equal the Definition. Key
-        order inside JSON objects does not matter; array order does. Change
-        anything material and you get `idempotency_conflict` rather than a
-        surprise second turn.
+        Agent, explicit revision, per-turn overrides, `metadata`, `context`,
+        `webhook`, `on_budget_exhausted`, and input all match. The original
+        admitted revision is returned even if its Definition has advanced.
+        Values are compared as sent, so omitting an override is not the same as
+        supplying one that happens to equal the Definition. Key order inside
+        JSON objects does not matter; array order does. Change anything
+        material and you get `idempotency_conflict` rather than a surprise
+        second turn.
+
+        `user_key` is the one exception, because it is the Session's rather
+        than the turn's: omitting it asserts nothing and inherits what the
+        Session already holds, while sending a different one conflicts.
 
         ## When the Session is already busy
 
@@ -3807,9 +3849,12 @@ paths:
         phase are preserved.
 
         Usage and compaction summaries are not copied. Child usage starts at
-        zero and the child starts uncompacted. Retention and metadata come only
-        from `session_options` on this request; no Session option is inherited.
-        A `session_key` has the same tenant/Agent-scoped upsert behavior as
+        zero and the child starts uncompacted. Retention, the revision pin, and
+        the authorization context come only from `session_options` on this
+        request; no Session option is inherited, because a child's policy is
+        the forker's choice. `user_key` is the exception and is inherited from
+        the source, because who the conversation is about is not a policy. A
+        `session_key` has the same tenant/Agent-scoped upsert behavior as
         Session creation.
       requestBody:
         required: true
@@ -5746,10 +5791,16 @@ components:
           minLength: 1
           maxLength: 255
           description: |
-            Optional host-owned end-user label recorded on this Invocation and
-            its input message. The Session retains the label from the request
-            that opened it, while later turns may identify different end users.
-            Filtering only; not an isolation boundary.
+            Who this turn is for. The first request that opens a Session fixes
+            its `user_key`, including fixing it to absent; every later turn
+            either sends the same one or leaves it out and inherits it. A turn
+            naming a different end user is refused with
+            `session_user_key_conflict`.
+
+            It is a filter, and on an Agent whose Definition sets
+            `memory.scope: user` it is also the memory partition — it decides
+            whose durable memories the model can recall — so it is required on
+            the turn that opens a Session for such an Agent.
         session_id:
           $ref: "#/components/schemas/SessionID"
           description: Existing Session to continue. Mutually exclusive with session_key.
@@ -5765,21 +5816,20 @@ components:
           description: |
             Settings stored on the Session itself, rather than on this turn.
 
-            On a new Session these are saved. On a Session that already exists,
-            `compaction` and `retention` are checked rather than applied:
-            matching values are fine, and a different value returns
-            `session_options_conflict` telling you which paths disagreed. This
-            keeps two callers from silently reconfiguring each other's
-            conversation.
-
-            `metadata` merges instead, exactly as
-            `PATCH /v1/sessions/{session_id}` does: a present key replaces and
-            an absent key survives. It never conflicts, so a label that drifted
-            since the last turn cannot fail this one.
+            On a new Session these are saved. On a Session that already exists
+            they are checked rather than applied: matching values are fine, and
+            a different value returns `session_options_conflict` telling you
+            which paths disagreed. This keeps two callers from silently
+            reconfiguring each other's conversation. Send
+            `on_conflict: "join"` when you mean "reach whatever Session is
+            there" rather than "it should be configured like this".
 
             If no compaction policy is stored yet, this turn can install one,
             because the policy needs a model to validate against and only a turn
             supplies that.
+
+            A Session's title and other descriptive labels are not here. They
+            are `metadata`, written with `PATCH /v1/sessions/{session_id}`.
         metadata:
           $ref: "#/components/schemas/Metadata"
           description: |
@@ -5794,7 +5844,7 @@ components:
             same original request carries the same values anyway.
 
             Session metadata is a separate thing and can be changed — see
-            `session_options.metadata` and `PATCH /v1/sessions/{session_id}`.
+            `PATCH /v1/sessions/{session_id}`.
         idempotency_key:
           type: string
           minLength: 1
@@ -5956,13 +6006,13 @@ components:
           minLength: 1
           maxLength: 255
           description: Optional tenant/Agent-scoped keyed identity for the child.
-        user_key:
-          type: string
-          minLength: 1
-          maxLength: 255
-          description: Optional opened-by label for the child Session.
         session_options:
           $ref: "#/components/schemas/ForkSessionOptions"
+      description: |
+        There is no `user_key` here. A fork copies the transcript, including
+        anything a `memory.scope: user` Agent recalled into it, so the child
+        keeps the source Session's end user. Opening a copy of one person's
+        conversation for another is not a fork.
     ForkSessionOptions:
       type: object
       additionalProperties: false
@@ -5974,11 +6024,13 @@ components:
           minimum: 1
         retention:
           $ref: "#/components/schemas/RetentionPolicy"
-        metadata:
-          $ref: "#/components/schemas/Metadata"
+        authorization_context:
+          $ref: "#/components/schemas/AuthorizationContext"
       description: |
         Creation-only options for a forked child. The child never inherits the
-        source Session's compaction policy, retention, or metadata.
+        source Session's compaction policy, retention, metadata, or
+        authorization context — a fork is a creation moment, so supply what the
+        child is bound to rather than letting it carry over.
     CreateSessionRequest:
       type: object
       additionalProperties: false
@@ -6008,8 +6060,10 @@ components:
           minLength: 1
           maxLength: 255
           description: |
-            Optional host-owned end-user label recorded on the Session.
-            Filtering only; not an isolation boundary.
+            Optional host-owned end-user label recorded on the Session. It is
+            fixed here: every turn in this Session either sends the same one or
+            leaves it out. Required if the Agent's Definition sets
+            `memory.scope: user`, since that makes it the memory partition.
         session_key:
           type: string
           minLength: 1
@@ -7249,23 +7303,38 @@ components:
           format: int64
           minimum: 1
           description: Immutable Session-level Agent Definition revision pin.
-        metadata:
-          $ref: "#/components/schemas/Metadata"
+        authorization_context:
+          $ref: "#/components/schemas/AuthorizationContext"
+        on_conflict:
+          type: string
+          enum: [refuse, join]
+          default: refuse
+          description: |
+            What you are asserting about a Session that already exists.
+            `refuse`, the default, compares every option you sent. `join` says
+            you want to reach whatever Session is there without asserting how
+            it is configured, so `compaction` and `retention` stop conflicting.
+
+            `join` never relaxes `authorization_context`, `pinned_revision`, or
+            `user_key`. Those exist to catch a caller acting on the wrong
+            conversation, and a flag that suppressed them would be a way around
+            the check rather than a way to express intent.
       description: |
         Settings stored on the Session. Every field is optional, but send at
-        least one.
+        least one. All of them are assertions rather than descriptions: a
+        Session's title and other descriptive data live in `metadata`, which is
+        written only by `PATCH /v1/sessions/{session_id}`.
 
         On a new Session these are saved. When you reach an existing Session,
-        by ID or by key, `compaction` and `retention` are checked rather than
-        applied: matching values are accepted, and a different value returns
-        `session_options_conflict` with `details.conflicting_paths` naming
-        exactly what disagreed. Compaction needs a turn to install it, because
-        the policy is validated against that turn's model.
-
-        `metadata` is merged rather than checked, on the same terms as
-        `PATCH /v1/sessions/{session_id}`: a present key replaces, an absent key
-        survives, and it never conflicts. Deleting a key stays a PATCH, since a
-        null value is not accepted here.
+        by ID or by key, they are checked rather than applied: matching values
+        are accepted, and a different value returns `session_options_conflict`
+        with `details.conflicting_paths` naming exactly what disagreed. That
+        includes `pinned_revision`, which is immutable, and
+        `authorization_context`, which is never installed on a Session created
+        without one. Compaction is the single exception, and only in one
+        direction: a Session with no policy adopts the one you send, because
+        the policy is validated against a turn's model and so needs a turn to
+        install it.
     AgentDefinitionOverrides:
       type: object
       additionalProperties: false
@@ -7325,6 +7394,57 @@ components:
         There is no `title` field on a Session by design. A title is one of
         these entries (`{"title": "Refund policy"}`), which keeps nvoken from
         forming opinions about a string only the host renders.
+
+        Metadata is correlation data, not an authorization anchor. If a value
+        decides what a callback receiver is allowed to touch, put it in
+        `session_options.authorization_context` instead.
+    AuthorizationContext:
+      type: object
+      additionalProperties:
+        type: string
+        maxLength: 512
+      minProperties: 1
+      maxProperties: 16
+      propertyNames:
+        pattern: "^[A-Za-z0-9_.:-]+$"
+        maxLength: 64
+      description: |
+        What this Session is bound to, in your own terms. If your authorization
+        boundary is finer than a tenant — a board, a workspace, a document —
+        this is where you say so, and nvoken carries it to your callback
+        receiver inside the signed body so authorizing a delivery costs no
+        round trip.
+
+        Four properties, all guaranteed rather than incidental:
+
+        - **Written at creation only.** Set by the request that brings the
+          Session into existence, whether that is `POST /v1/sessions`, a fork,
+          or the admission that creates it. There is no patch path and there
+          will not be one. A later turn that sends a different value is refused
+          with `session_options_conflict`; one that sends a value on a Session
+          created without one is refused rather than installing it.
+        - **Never interpreted.** nvoken does not read it, route on it, or index
+          it.
+        - **Never model-visible.** It is not rendered into context and no tool
+          can read it. This is a rule the runtime is held to, not a description
+          of how it happens to work today.
+        - **Carried in the signed callback envelope**, as a sibling of the
+          `nvoken` object rather than a member of it.
+
+        **What nvoken guarantees is integrity, not authentication.** What
+        creation recorded is what a signed delivery carries, unchanged. nvoken
+        does not verify that the values are true, or that the caller was
+        entitled to assert them. That is yours.
+
+        The rule every callback receiver needs, in one sentence: a value
+        repeated in tool input may only agree with the authorization context,
+        never establish it. The model writes tool input; it does not write
+        this.
+
+        Same bounds as `metadata`: at most 16 entries, keys of 1–64 bytes from
+        letters, digits, `_`, `.`, `:`, and `-`, values at most 512 bytes of
+        UTF-8. Unlike `metadata`, a `null` value is not accepted — there is no
+        merge here to delete a key from.
     RetentionPolicy:
       type: object
       additionalProperties: false
@@ -8487,6 +8607,19 @@ components:
       properties:
         nvoken:
           $ref: "#/components/schemas/ToolCallbackContext"
+        authorization_context:
+          $ref: "#/components/schemas/AuthorizationContext"
+          description: |
+            The Session's `authorization_context`, absent when the Session was
+            created without one.
+
+            It sits beside `nvoken` rather than inside it on purpose.
+            Everything in `nvoken` is a fact nvoken minted or resolved; this is
+            a value you asserted at creation and nvoken carried unchanged.
+            Signing proves it reached you as recorded, not that it is true.
+
+            A value repeated in tool input may only agree with this, never
+            establish it.
         input: {}
     ToolCallbackResponse:
       type: object
@@ -8689,8 +8822,8 @@ components:
         required. Omission is the whole mechanism, so one schema decodes every
         response and nothing has to be guessed from the payload. The omitted
         set here is `agent_id`, `tenant_key`, `session_key`, `user_key`, `forked_from`,
-        `compaction`, `retention`, `expires_at`, `metadata`, `credit_block`,
-        `context`, and `usage`.
+        `compaction`, `retention`, `expires_at`, `metadata`,
+        `authorization_context`, `credit_block`, `context`, and `usage`.
       required: [id, pinned_revision, active_invocation_id, active_invocation_status, created_at, updated_at]
       properties:
         id:
@@ -8716,8 +8849,12 @@ components:
             - type: string
             - type: "null"
           description: |
-            Host-owned end-user label recorded when this Session was opened.
-            Filtering only; not an isolation boundary.
+            Host-owned end-user label, fixed by the request that opened this
+            Session. Every turn carries the same one: send it again and it must
+            match, leave it out and it is inherited. On an Agent whose
+            Definition sets `memory.scope: user` it also selects the memory
+            partition, which is why a turn naming a different end user is
+            refused with `session_user_key_conflict` rather than admitted.
         forked_from:
           oneOf:
             - $ref: "#/components/schemas/SessionForkLineage"
@@ -8763,9 +8900,15 @@ components:
             - $ref: "#/components/schemas/Metadata"
             - type: "null"
           description: |
-            Host correlation data, returned verbatim. Set at creation through
-            `session_options.metadata` and changed with
+            Host correlation data, returned verbatim. Written only by
             `PATCH /v1/sessions/{session_id}`.
+        authorization_context:
+          oneOf:
+            - $ref: "#/components/schemas/AuthorizationContext"
+            - type: "null"
+          description: |
+            What this Session was bound to at creation, echoed so an operator
+            holding a `sess_` id can see it. Machine audience only.
         active_invocation_id:
           oneOf:
             - $ref: "#/components/schemas/InvocationID"
@@ -9901,6 +10044,7 @@ components:
         - not_found
         - idempotency_conflict
         - session_options_conflict
+        - session_user_key_conflict
         - provider_key_conflict
         - session_invocation_active
         - invocation_not_waiting

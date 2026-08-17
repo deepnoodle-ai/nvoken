@@ -43,6 +43,7 @@ import {
   hostToolCalls,
   verifyCallback,
   type HostTool,
+  type ClientOptions,
   type ContextItem,
   type ContextTier,
   type Credential,
@@ -1011,7 +1012,9 @@ test("session options, metadata and provider tools match the shared fixture", as
     sessionOptions: {
       compaction: { triggerTokens: 32768 },
       retention: { ttlSeconds: 3600 },
-      metadata: { surface: "web" },
+      authorizationContext: { surface: "web" },
+      pinnedRevision: 4,
+      onConflict: "join",
     },
     input: "hello",
   });
@@ -3109,4 +3112,41 @@ test("deleteSession forwards force and updateSession deletes a metadata key", as
 
   await client.updateSession("ses_1", { metadata: { title: "Refund", stale: null } });
   assert.deepEqual(patch, { metadata: { title: "Refund", stale: null } });
+});
+
+// A scope is worth nothing if it is only remembered locally, so this asserts
+// what actually leaves the process, and that the client it was derived from
+// keeps making unscoped requests.
+test("a scoped client stamps every request and leaves its parent alone", async () => {
+  const headers: Array<Record<string, string>> = [];
+  const observe = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    headers.push(
+      Object.fromEntries(new Headers(init?.headers).entries()),
+    );
+    return Response.json({ items: [], has_more: false, next_cursor: null });
+  };
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: observe as ClientOptions["fetch"],
+  });
+
+  await client.listSessions();
+  const scoped = client.scoped({ tenantKey: "acme", userKey: "user-7c1f" });
+  await scoped.listSessions();
+  await client.listSessions();
+
+  assert.equal(headers[0]?.["x-nvoken-tenant-key"], undefined);
+  assert.equal(headers[0]?.["x-nvoken-user-key"], undefined);
+  assert.equal(headers[1]?.["x-nvoken-tenant-key"], "acme");
+  assert.equal(headers[1]?.["x-nvoken-user-key"], "user-7c1f");
+  assert.equal(headers[2]?.["x-nvoken-tenant-key"], undefined);
+  assert.deepEqual(client.scope, undefined);
+  assert.deepEqual(scoped.scope, { tenantKey: "acme", userKey: "user-7c1f" });
+
+  // An empty scope would stamp nothing while reading as a narrowing, which is
+  // the one failure mode a scope cannot have.
+  assert.throws(() => client.scoped({}), NvokenError);
+  assert.throws(() => client.scoped({ tenantKey: "   " }), NvokenError);
 });
