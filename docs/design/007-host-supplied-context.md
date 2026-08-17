@@ -287,7 +287,7 @@ that its descriptive member is gone and its remaining members are assertions.
 that turned off an authorization tripwire would be a bypass with a friendly
 name.
 
-### 6. `paused` becomes `funding_hold`
+### 6. `paused` becomes `budget_hold`
 
 `paused` reads as an action someone took. It means a spending limit or
 exhausted credits stopped the turn, and that it can continue once the limit is
@@ -303,6 +303,29 @@ including a CTE named `paused`. With no installed base, rename all of them in
 one migration, and rename the option value `pause` to `hold` in the same pass
 so the option and the status agree. It ships on its own so the migration is
 reviewable by itself.
+
+*Amended 2026-08-17. This section originally chose `funding_hold`, and the
+paragraph above still carries the premise that produced it: that the status
+"means a spending limit or exhausted credits stopped the turn". That premise is
+incomplete.* A turn is held when it opted into `on_budget_exhausted` and hit a
+ceiling it could be resumed past, which is four stop reasons, not two:
+`max_estimated_cost` and `insufficient_credits`, but also `max_iterations` and
+`max_output_tokens`. A turn held after its sixth loop iteration has nothing to
+do with funding, and nothing releases it but raising that ceiling.
+
+So `funding_hold` passed this section's own voice test and failed its truth
+test, on half the states it covers — it replaced a name that asserts nothing
+with one that asserts something false, which is the defect this section cites
+design 004 to condemn. The name is corrected to **`budget_hold`**, which agrees
+with the option that produces it: after `pause` → `hold`, `on_budget_exhausted:
+hold` settles a turn as `budget_hold`. "Budget" is already the word this
+contract uses for the whole set of ceilings; "funding" is a word for two of
+them.
+
+The status is deliberately *not* split into funding and limit variants.
+`stop_reason` is present on a held Invocation and already distinguishes all
+four causes, so a second status would duplicate a distinction the payload
+carries.
 
 ### 7. A per-turn output schema cannot be typed
 
@@ -394,7 +417,7 @@ Three changes, in this order.
    never reaches a generation request, mirroring the existing actor-absence
    assertion.
 3. **The remaining review items.** `on_conflict: "join"` and the output-schema
-   typing fix together; `funding_hold` on its own for the migration.
+   typing fix together; `budget_hold` (§6, amended) on its own for the migration.
 
 ## Open questions
 
