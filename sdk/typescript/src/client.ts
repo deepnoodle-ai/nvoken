@@ -934,7 +934,7 @@ export interface ContextItem {
 
 export type InvokeInput = string | readonly InputBlock[];
 export type IfActivePolicy = "reject" | "supersede" | "interrupt";
-export type BudgetExhaustionBehavior = "stop" | "pause";
+export type BudgetExhaustionBehavior = "stop" | "hold";
 
 /**
  * Endpoint nvoken posts a signed webhook to when this Invocation parks
@@ -2177,10 +2177,10 @@ export class Client {
     }
     if (request.onBudgetExhausted !== undefined
       && request.onBudgetExhausted !== "stop"
-      && request.onBudgetExhausted !== "pause") {
+      && request.onBudgetExhausted !== "hold") {
       throw new NvokenError(
         "validation",
-        "onBudgetExhausted must be stop or pause",
+        "onBudgetExhausted must be stop or hold",
       );
     }
     validateAgentDefinitionOverrides(request.overrides);

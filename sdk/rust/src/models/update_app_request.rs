@@ -33,6 +33,14 @@ pub struct UpdateAppRequest {
         skip_serializing_if = "Option::is_none"
     )]
     pub default_rate_limits: Option<Option<Box<models::AppDefaultRateLimits>>>,
+    /// Replace both machine concurrency ceilings, or send null to disable them. Omission preserves the stored value.
+    #[serde(
+        rename = "machine_concurrency_limits",
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub machine_concurrency_limits: Option<Option<Box<models::MachineConcurrencyLimits>>>,
     /// Replace the complete member, or send null to disable browser access without deleting client keys. Omission preserves the stored value.
     #[serde(
         rename = "browser_access",
@@ -61,6 +69,7 @@ impl UpdateAppRequest {
             org_id: None,
             callback_timeout_seconds: None,
             default_rate_limits: None,
+            machine_concurrency_limits: None,
             browser_access: None,
             anonymous_access: None,
             credit_policy: None,

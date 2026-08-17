@@ -722,7 +722,7 @@ const invocation = await client.createInvocation({
 
 Omitting `events` selects all three. `invocation.ended` fires once when the
 turn reaches a terminal status; `invocation.waiting` fires when it needs a host
-tool run; `invocation.paused` fires when a spending limit stopped it.
+tool run; `invocation.budget_hold` fires when a spending limit stopped it.
 
 Receiving one is the same verification you already wrote for callbacks — the
 signature scheme is identical, and `verifyWebhook` is the same code path with a
@@ -777,7 +777,7 @@ const receiver = createWebhookReceiver({
   keys: [{ keyId: env.WEBHOOK_KEY_ID, version: 1, secret: env.WEBHOOK_SECRET }],
   events: {
     "invocation.ended": (delivery) => settleInOneTransaction(delivery),
-    "invocation.paused": (delivery) => alertOnFundingHold(delivery),
+    "invocation.budget_hold": (delivery) => alertOnBudgetHold(delivery),
   },
 });
 ```

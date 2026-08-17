@@ -19,8 +19,8 @@
  * because nvoken delivers those to your endpoint itself and there is
  * nothing for you to do.
  *
- * `invocation.paused` fires when a spending limit you opted into stopped
- * the turn, and carries the `stop_reason` naming the limit.
+ * `invocation.budget_hold` fires when a consumption limit you opted into
+ * stopped the turn, and carries the `stop_reason` naming the limit.
  *
  * `invocation.ended` fires exactly once, when the turn reaches
  * `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
@@ -30,7 +30,7 @@
  */
 export const WebhookEvent = {
     WebhookEventWaiting: 'invocation.waiting',
-    WebhookEventPaused: 'invocation.paused',
+    WebhookEventBudgetHold: 'invocation.budget_hold',
     WebhookEventEnded: 'invocation.ended'
 } as const;
 export type WebhookEvent = typeof WebhookEvent[keyof typeof WebhookEvent];

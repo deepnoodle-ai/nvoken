@@ -20,14 +20,14 @@ from typing_extensions import Self
 
 class WebhookEvent(str, Enum):
     """
-    `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.paused` fires when a spending limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
+    `invocation.waiting` fires when a turn stops and needs you to run at least one tool. A turn waiting only on callback tools sends nothing, because nvoken delivers those to your endpoint itself and there is nothing for you to do.  `invocation.budget_hold` fires when a consumption limit you opted into stopped the turn, and carries the `stop_reason` naming the limit.  `invocation.ended` fires exactly once, when the turn reaches `completed`, `incomplete`, `failed`, or `cancelled`. Completed and incomplete payloads carry `stop_reason` alongside `failure_code`.
     """
 
     """
     allowed enum values
     """
     WebhookEventWaiting = 'invocation.waiting'
-    WebhookEventPaused = 'invocation.paused'
+    WebhookEventBudgetHold = 'invocation.budget_hold'
     WebhookEventEnded = 'invocation.ended'
 
     @classmethod

@@ -177,7 +177,7 @@ export interface Session {
      */
     authorizationContext?: { [key: string]: string; } | null;
     /**
-     * The queued, running, waiting, or paused Invocation, if one exists.
+     * The queued, running, waiting, or budget-held Invocation, if one exists.
      * @type {string}
      * @memberof Session
      */
@@ -189,7 +189,7 @@ export interface Session {
      */
     activeInvocationStatus: SessionActiveInvocationStatusEnum | null;
     /**
-     * Tenant credit account blocking the active paused Invocation, otherwise null.
+     * Tenant credit account blocking the active held Invocation, otherwise null.
      * @type {CreditBlock}
      * @memberof Session
      */
@@ -244,7 +244,7 @@ export const SessionActiveInvocationStatusEnum = {
     Queued: 'queued',
     Running: 'running',
     Waiting: 'waiting',
-    Paused: 'paused'
+    BudgetHold: 'budget_hold'
 } as const;
 export type SessionActiveInvocationStatusEnum = typeof SessionActiveInvocationStatusEnum[keyof typeof SessionActiveInvocationStatusEnum];
 

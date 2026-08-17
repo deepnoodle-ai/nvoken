@@ -1282,7 +1282,7 @@ impl WebhookTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WebhookEvent {
     Waiting,
-    Paused,
+    BudgetHold,
     Ended,
 }
 
@@ -1296,7 +1296,7 @@ pub enum IfActivePolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BudgetExhaustionBehavior {
     Stop,
-    Pause,
+    Hold,
 }
 
 #[derive(Debug, Clone)]
@@ -2428,8 +2428,8 @@ impl Client {
             BudgetExhaustionBehavior::Stop => {
                 models::create_invocation_request::OnBudgetExhausted::Stop
             }
-            BudgetExhaustionBehavior::Pause => {
-                models::create_invocation_request::OnBudgetExhausted::Pause
+            BudgetExhaustionBehavior::Hold => {
+                models::create_invocation_request::OnBudgetExhausted::Hold
             }
         });
         if request.provider_keys.len() > 1 {
@@ -2468,7 +2468,9 @@ impl Client {
                             .into_iter()
                             .map(|event| match event {
                                 WebhookEvent::Waiting => models::WebhookEvent::WebhookEventWaiting,
-                                WebhookEvent::Paused => models::WebhookEvent::WebhookEventPaused,
+                                WebhookEvent::BudgetHold => {
+                                    models::WebhookEvent::WebhookEventBudgetHold
+                                }
                                 WebhookEvent::Ended => models::WebhookEvent::WebhookEventEnded,
                             })
                             .collect(),

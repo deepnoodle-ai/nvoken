@@ -369,7 +369,7 @@ class ModelsApi:
     ) -> ModelList:
         """List nvoken's curated model catalog
 
-        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
 
         :param provider: Limit results to one installed canonical provider.
         :type provider: str
@@ -450,7 +450,7 @@ class ModelsApi:
     ) -> ApiResponse[ModelList]:
         """List nvoken's curated model catalog
 
-        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
 
         :param provider: Limit results to one installed canonical provider.
         :type provider: str
@@ -531,7 +531,7 @@ class ModelsApi:
     ) -> RESTResponseType:
         """List nvoken's curated model catalog
 
-        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+        Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
 
         :param provider: Limit results to one installed canonical provider.
         :type provider: str

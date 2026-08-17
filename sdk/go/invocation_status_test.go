@@ -10,7 +10,7 @@ var classification = map[InvocationStatus]bool{
 	InvocationQueued:     false,
 	InvocationRunning:    false,
 	InvocationWaiting:    false,
-	InvocationPaused:     false,
+	InvocationBudgetHold: false,
 	InvocationCompleted:  true,
 	InvocationIncomplete: true,
 	InvocationFailed:     true,
@@ -28,12 +28,12 @@ func TestIsTerminalStatus(t *testing.T) {
 	}
 }
 
-// A paused turn stopped on spending capacity with its deadlines on hold. It
+// A budget-held turn stopped on spending capacity with its deadlines on hold. It
 // still owns the Session and resumes on its own once the account is funded, so
 // a caller that reads it as over abandons a turn that is still going.
-func TestPausedIsNotTerminal(t *testing.T) {
-	if IsTerminalStatus(InvocationPaused) {
-		t.Fatal("paused reported as terminal")
+func TestBudgetHoldIsNotTerminal(t *testing.T) {
+	if IsTerminalStatus(InvocationBudgetHold) {
+		t.Fatal("budget-held reported as terminal")
 	}
 }
 

@@ -150,7 +150,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("session-key").Help("Caller Session key; one turn may be active at a time"),
 			cli.String("if-active").Default("reject").Enum("reject", "supersede", "interrupt").Help("Reject active work, atomically replace it, or stop it gracefully and keep what it produced"),
 			cli.String("webhook-url").Help("HTTPS endpoint for signed Invocation webhooks"),
-			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting, invocation.paused, or invocation.ended; repeatable, default all"),
+			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting, invocation.budget_hold, or invocation.ended; repeatable, default all"),
 			cli.Strings("context").Help(`Record an application state snapshot as name=content, such as customer="plan: pro"; repeatable`),
 			cli.Strings("context-operator").Help("Record a snapshot as higher-authority application state; same name=content form, repeatable"),
 			cli.Strings("image").Help("Attach a local image file; repeatable"),
@@ -383,8 +383,8 @@ func registerRuntimeCommands(app *cli.App) {
 		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Run(runInvocationInterrupt)
 	invocations.Command("resume").
-		Description("Raise the exhausted turn ceiling and continue a paused Invocation").
-		AddArg(requiredArg("invocation-id", "Opaque paused Invocation ID")).
+		Description("Raise the exhausted turn ceiling and continue a budget-held Invocation").
+		AddArg(requiredArg("invocation-id", "Opaque budget-held Invocation ID")).
 		Flags(
 			cli.Int("max-iterations").Help("Replacement model-call ceiling"),
 			cli.Int("max-output-tokens").Help("Replacement output-token ceiling"),

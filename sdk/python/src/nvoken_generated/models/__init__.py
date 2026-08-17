@@ -118,6 +118,7 @@ from nvoken_generated.models.mcp_server_headers import MCPServerHeaders
 from nvoken_generated.models.mcp_timeouts import MCPTimeouts
 from nvoken_generated.models.mcp_tool_annotations import MCPToolAnnotations
 from nvoken_generated.models.mcp_tool_exclusion import MCPToolExclusion
+from nvoken_generated.models.machine_concurrency_limits import MachineConcurrencyLimits
 from nvoken_generated.models.memory import Memory
 from nvoken_generated.models.memory_config import MemoryConfig
 from nvoken_generated.models.memory_context_config import MemoryContextConfig

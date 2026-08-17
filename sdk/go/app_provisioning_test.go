@@ -40,6 +40,10 @@ func TestAppProvisioningReachesBrowserAndAnonymousAccess(t *testing.T) {
 			MaxAdmissionsPerMinute:   120,
 			MaxConcurrentInvocations: 20,
 		},
+		MachineConcurrencyLimits: &MachineConcurrencyLimits{
+			MaxConcurrentInvocationsPerTenant: 12,
+			MaxConcurrentInvocationsPerUser:   3,
+		},
 		CreditPolicy: &policy,
 		BrowserAccess: &BrowserAccess{
 			AllowedOrigins: []string{"https://app.example.com"},
@@ -71,12 +75,21 @@ func TestAppProvisioningReachesBrowserAndAnonymousAccess(t *testing.T) {
 	if limits["max_admissions_per_minute"] != float64(120) {
 		t.Errorf("default rate limits = %#v", registered["default_rate_limits"])
 	}
+	machineLimits, _ := registered["machine_concurrency_limits"].(map[string]any)
+	if machineLimits["max_concurrent_invocations_per_tenant"] != float64(12) ||
+		machineLimits["max_concurrent_invocations_per_user"] != float64(3) {
+		t.Errorf("machine concurrency limits = %#v", registered["machine_concurrency_limits"])
+	}
 
 	if _, err := client.UpdateApp(context.Background(), "app_test", UpdateAppOptions{
 		AnonymousAccess: &AnonymousAccess{
 			AgentID:                "agent_test",
 			MaxAdmissionsPerMinute: 30,
 			VisitorAllowance:       Money{Amount: "1.000000", Currency: "USD"},
+		},
+		MachineConcurrencyLimits: &MachineConcurrencyLimits{
+			MaxConcurrentInvocationsPerTenant: 20,
+			MaxConcurrentInvocationsPerUser:   4,
 		},
 	}); err != nil {
 		t.Fatalf("UpdateApp: %v", err)
@@ -85,18 +98,28 @@ func TestAppProvisioningReachesBrowserAndAnonymousAccess(t *testing.T) {
 	if !ok || anonymous["agent_id"] != "agent_test" {
 		t.Fatalf("updated = %#v", updated)
 	}
+	machineLimits, _ = updated["machine_concurrency_limits"].(map[string]any)
+	if machineLimits["max_concurrent_invocations_per_tenant"] != float64(20) ||
+		machineLimits["max_concurrent_invocations_per_user"] != float64(4) {
+		t.Errorf("updated machine concurrency limits = %#v", updated["machine_concurrency_limits"])
+	}
 
 	// Clearing has to travel as an explicit null: an omitted member preserves
 	// what is stored, so a facade that could only omit could never turn
 	// browser access off.
 	if _, err := client.UpdateApp(context.Background(), "app_test", UpdateAppOptions{
-		ClearBrowserAccess: true,
+		ClearBrowserAccess:            true,
+		ClearMachineConcurrencyLimits: true,
 	}); err != nil {
 		t.Fatalf("UpdateApp clearing browser access: %v", err)
 	}
 	value, present := updated["browser_access"]
 	if !present || value != nil {
 		t.Errorf("cleared browser access = %#v (present=%v)", value, present)
+	}
+	value, present = updated["machine_concurrency_limits"]
+	if !present || value != nil {
+		t.Errorf("cleared machine concurrency limits = %#v (present=%v)", value, present)
 	}
 }
 

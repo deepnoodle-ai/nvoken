@@ -826,7 +826,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 			args: []string{"invoke", "--request-file", writeRequest("invocation.json", `{
 				"agent_key":"support","input":"hello","idempotency_key":"raw-invoke",
 				"session_options":{"authorization_context":{"case":"42"},"retention":{"ttl_seconds":3600}},
-				"on_budget_exhausted":"pause"
+				"on_budget_exhausted":"hold"
 			}`)},
 		},
 		{
@@ -874,7 +874,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 	invocation := captured["POST /v1/invocations"]
 	options, ok := invocation["session_options"].(map[string]any)
 	if !ok || options["authorization_context"].(map[string]any)["case"] != "42" ||
-		invocation["on_budget_exhausted"] != "pause" {
+		invocation["on_budget_exhausted"] != "hold" {
 		t.Fatalf("complete Invocation request was not preserved: %#v", invocation)
 	}
 	registered := captured["POST /v1/apps"]

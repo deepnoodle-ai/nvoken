@@ -148,6 +148,7 @@ __all__ = [
     "MCPTimeouts",
     "MCPToolAnnotations",
     "MCPToolExclusion",
+    "MachineConcurrencyLimits",
     "Memory",
     "MemoryConfig",
     "MemoryContextConfig",
@@ -418,6 +419,7 @@ from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as MCPSe
 from nvoken_generated.models.mcp_timeouts import MCPTimeouts as MCPTimeouts
 from nvoken_generated.models.mcp_tool_annotations import MCPToolAnnotations as MCPToolAnnotations
 from nvoken_generated.models.mcp_tool_exclusion import MCPToolExclusion as MCPToolExclusion
+from nvoken_generated.models.machine_concurrency_limits import MachineConcurrencyLimits as MachineConcurrencyLimits
 from nvoken_generated.models.memory import Memory as Memory
 from nvoken_generated.models.memory_config import MemoryConfig as MemoryConfig
 from nvoken_generated.models.memory_context_config import MemoryContextConfig as MemoryContextConfig

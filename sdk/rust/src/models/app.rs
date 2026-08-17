@@ -37,6 +37,12 @@ pub struct App {
         deserialize_with = "Option::deserialize"
     )]
     pub default_rate_limits: Option<Box<models::AppDefaultRateLimits>>,
+    /// Optional per-tenant and per-user concurrency ceilings for machine credentials. Null leaves machine traffic subject only to the App-wide default_rate_limits.
+    #[serde(
+        rename = "machine_concurrency_limits",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub machine_concurrency_limits: Option<Box<models::MachineConcurrencyLimits>>,
     /// Complete browser-direct configuration. Null means browser access is disabled and client JWTs receive no browser CORS permission.
     #[serde(rename = "browser_access", deserialize_with = "Option::deserialize")]
     pub browser_access: Option<Box<models::BrowserAccess>>,
@@ -61,6 +67,7 @@ impl App {
         display_name: Option<String>,
         callback_timeout_seconds: u64,
         default_rate_limits: Option<models::AppDefaultRateLimits>,
+        machine_concurrency_limits: Option<models::MachineConcurrencyLimits>,
         browser_access: Option<models::BrowserAccess>,
         anonymous_access: Option<models::AnonymousAccess>,
         credit_policy: models::CreditPolicy,
@@ -75,6 +82,11 @@ impl App {
             display_name,
             callback_timeout_seconds,
             default_rate_limits: if let Some(x) = default_rate_limits {
+                Some(Box::new(x))
+            } else {
+                None
+            },
+            machine_concurrency_limits: if let Some(x) = machine_concurrency_limits {
                 Some(Box::new(x))
             } else {
                 None

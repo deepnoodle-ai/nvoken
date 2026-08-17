@@ -21,9 +21,9 @@
  * or `interrupted` (you asked it to stop, and it stopped at the next
  * clean point). An `incomplete` turn carries whichever limit ran out:
  * `max_iterations`, `deadline`, `max_output_tokens`, or
- * `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
- * `insufficient_credits`, never `deadline`, because a paused turn's
- * deadlines are on hold.
+ * `max_estimated_cost`. A `budget_hold` turn carries `max_iterations`,
+ * `max_output_tokens`, `max_estimated_cost`, or `insufficient_credits`,
+ * never `deadline`, because a held turn's deadlines are on hold.
  *
  * An interrupt is deliberately `completed` rather than `incomplete`: you
  * asked the turn to end there, so ending there is the result you wanted,

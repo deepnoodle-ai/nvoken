@@ -38,7 +38,7 @@ export const ErrorCode = {
     ProviderKeyConflict: 'provider_key_conflict',
     SessionInvocationActive: 'session_invocation_active',
     InvocationNotWaiting: 'invocation_not_waiting',
-    InvocationNotPaused: 'invocation_not_paused',
+    InvocationNotBudgetHold: 'invocation_not_budget_hold',
     AppArchived: 'app_archived',
     OrgArchived: 'org_archived',
     AgentDefinitionArchived: 'agent_definition_archived',

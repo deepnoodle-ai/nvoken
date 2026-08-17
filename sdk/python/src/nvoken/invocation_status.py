@@ -14,7 +14,7 @@ ALL_INVOCATION_STATUSES: tuple[str, ...] = (
     "queued",
     "running",
     "waiting",
-    "paused",
+    "budget_hold",
     "completed",
     "incomplete",
     "failed",
@@ -46,7 +46,7 @@ def is_terminal_status(status: Any) -> bool:
 
     There are eight statuses and four of them are terminal, so the interesting
     mistake is writing the *other* four out. ``queued``, ``running``,
-    ``waiting``, and ``paused`` differ only in what unblocks them — a paused
+    ``waiting``, and ``budget_hold`` differ only in what unblocks them — a budget-held
     turn stopped on spending capacity with its deadlines on hold, and resumes
     on its own once its account is funded — and a turn wrongly believed
     finished is one nobody settles, reattaches to, or cancels before erasing

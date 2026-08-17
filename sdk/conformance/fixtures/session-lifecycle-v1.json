@@ -54,7 +54,7 @@
     "web_search_metadata_unbound": {
       "agent_key": "support",
       "idempotency_key": "conformance",
-      "on_budget_exhausted": "pause",
+      "on_budget_exhausted": "hold",
       "input": "hello",
       "metadata": {
         "board": "brand-2026",

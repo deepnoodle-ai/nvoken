@@ -17,7 +17,7 @@ CLASSIFICATION = {
     "queued": False,
     "running": False,
     "waiting": False,
-    "paused": False,
+    "budget_hold": False,
     "completed": True,
     "incomplete": True,
     "failed": True,
@@ -35,12 +35,12 @@ def test_classifies_every_status_the_contract_declares() -> None:
     }
 
 
-def test_paused_is_not_terminal() -> None:
+def test_budget_hold_is_not_terminal() -> None:
     # It stopped on spending capacity with its deadlines on hold. It still owns
     # the Session and resumes on its own once the account is funded, so reading
     # it as over abandons a turn that is still going.
-    assert is_terminal_status("paused") is False
-    assert is_terminal_status(InvocationStatus.PAUSED) is False
+    assert is_terminal_status("budget_hold") is False
+    assert is_terminal_status(InvocationStatus.BUDGET_HOLD) is False
 
 
 def test_unrecognized_status_is_not_terminal() -> None:

@@ -294,14 +294,14 @@ func (e CreateInvocationRequestIfActive) Valid() bool {
 
 // Defines values for CreateInvocationRequestOnBudgetExhausted.
 const (
-	Pause CreateInvocationRequestOnBudgetExhausted = "pause"
-	Stop  CreateInvocationRequestOnBudgetExhausted = "stop"
+	Hold CreateInvocationRequestOnBudgetExhausted = "hold"
+	Stop CreateInvocationRequestOnBudgetExhausted = "stop"
 )
 
 // Valid indicates whether the value is a known member of the CreateInvocationRequestOnBudgetExhausted enum.
 func (e CreateInvocationRequestOnBudgetExhausted) Valid() bool {
 	switch e {
-	case Pause:
+	case Hold:
 		return true
 	case Stop:
 		return true
@@ -361,21 +361,6 @@ func (e CreditPolicy) Valid() bool {
 	case CreditPolicyOff:
 		return true
 	case CreditPolicyRequired:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CurrentIdentityAuthenticationAssurance.
-const (
-	Bearer CurrentIdentityAuthenticationAssurance = "bearer"
-)
-
-// Valid indicates whether the value is a known member of the CurrentIdentityAuthenticationAssurance enum.
-func (e CurrentIdentityAuthenticationAssurance) Valid() bool {
-	switch e {
-	case Bearer:
 		return true
 	default:
 		return false
@@ -484,7 +469,7 @@ const (
 	ErrorCodeInsufficientCredits             ErrorCode = "insufficient_credits"
 	ErrorCodeInternal                        ErrorCode = "internal"
 	ErrorCodeInvalidRequest                  ErrorCode = "invalid_request"
-	ErrorCodeInvocationNotPaused             ErrorCode = "invocation_not_paused"
+	ErrorCodeInvocationNotBudgetHold         ErrorCode = "invocation_not_budget_hold"
 	ErrorCodeInvocationNotWaiting            ErrorCode = "invocation_not_waiting"
 	ErrorCodeMcpDiscoveryFailed              ErrorCode = "mcp_discovery_failed"
 	ErrorCodeMediaFetchFailed                ErrorCode = "media_fetch_failed"
@@ -542,7 +527,7 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeInvalidRequest:
 		return true
-	case ErrorCodeInvocationNotPaused:
+	case ErrorCodeInvocationNotBudgetHold:
 		return true
 	case ErrorCodeInvocationNotWaiting:
 		return true
@@ -762,11 +747,11 @@ func (e InvocationFailureCode) Valid() bool {
 
 // Defines values for InvocationStatus.
 const (
+	InvocationStatusBudgetHold InvocationStatus = "budget_hold"
 	InvocationStatusCancelled  InvocationStatus = "cancelled"
 	InvocationStatusCompleted  InvocationStatus = "completed"
 	InvocationStatusFailed     InvocationStatus = "failed"
 	InvocationStatusIncomplete InvocationStatus = "incomplete"
-	InvocationStatusPaused     InvocationStatus = "paused"
 	InvocationStatusQueued     InvocationStatus = "queued"
 	InvocationStatusRunning    InvocationStatus = "running"
 	InvocationStatusWaiting    InvocationStatus = "waiting"
@@ -775,6 +760,8 @@ const (
 // Valid indicates whether the value is a known member of the InvocationStatus enum.
 func (e InvocationStatus) Valid() bool {
 	switch e {
+	case InvocationStatusBudgetHold:
+		return true
 	case InvocationStatusCancelled:
 		return true
 	case InvocationStatusCompleted:
@@ -782,8 +769,6 @@ func (e InvocationStatus) Valid() bool {
 	case InvocationStatusFailed:
 		return true
 	case InvocationStatusIncomplete:
-		return true
-	case InvocationStatusPaused:
 		return true
 	case InvocationStatusQueued:
 		return true
@@ -1716,16 +1701,16 @@ func (e ServerToolUseBlockType) Valid() bool {
 
 // Defines values for SessionActiveInvocationStatus.
 const (
-	SessionActiveInvocationStatusPaused  SessionActiveInvocationStatus = "paused"
-	SessionActiveInvocationStatusQueued  SessionActiveInvocationStatus = "queued"
-	SessionActiveInvocationStatusRunning SessionActiveInvocationStatus = "running"
-	SessionActiveInvocationStatusWaiting SessionActiveInvocationStatus = "waiting"
+	SessionActiveInvocationStatusBudgetHold SessionActiveInvocationStatus = "budget_hold"
+	SessionActiveInvocationStatusQueued     SessionActiveInvocationStatus = "queued"
+	SessionActiveInvocationStatusRunning    SessionActiveInvocationStatus = "running"
+	SessionActiveInvocationStatusWaiting    SessionActiveInvocationStatus = "waiting"
 )
 
 // Valid indicates whether the value is a known member of the SessionActiveInvocationStatus enum.
 func (e SessionActiveInvocationStatus) Valid() bool {
 	switch e {
-	case SessionActiveInvocationStatusPaused:
+	case SessionActiveInvocationStatusBudgetHold:
 		return true
 	case SessionActiveInvocationStatusQueued:
 		return true
@@ -2169,17 +2154,17 @@ func (e WebSearchResultLocationCitationType) Valid() bool {
 
 // Defines values for WebhookEvent.
 const (
-	WebhookEventEnded   WebhookEvent = "invocation.ended"
-	WebhookEventPaused  WebhookEvent = "invocation.paused"
-	WebhookEventWaiting WebhookEvent = "invocation.waiting"
+	WebhookEventBudgetHold WebhookEvent = "invocation.budget_hold"
+	WebhookEventEnded      WebhookEvent = "invocation.ended"
+	WebhookEventWaiting    WebhookEvent = "invocation.waiting"
 )
 
 // Valid indicates whether the value is a known member of the WebhookEvent enum.
 func (e WebhookEvent) Valid() bool {
 	switch e {
-	case WebhookEventEnded:
+	case WebhookEventBudgetHold:
 		return true
-	case WebhookEventPaused:
+	case WebhookEventEnded:
 		return true
 	case WebhookEventWaiting:
 		return true
@@ -3024,6 +3009,11 @@ type App struct {
 	// ID The generated nvoken app identifier.
 	ID AppID `json:"id"`
 
+	// MachineConcurrencyLimits Optional per-tenant and per-user concurrency ceilings for machine
+	// credentials. Null leaves machine traffic subject only to the
+	// App-wide default_rate_limits.
+	MachineConcurrencyLimits *MachineConcurrencyLimits `json:"machine_concurrency_limits"`
+
 	// Name The unique host-chosen name for this app.
 	Name string `json:"name"`
 
@@ -3537,9 +3527,9 @@ type CreateInvocationRequest struct {
 	// `PATCH /v1/sessions/{session_id}`.
 	Metadata *Metadata `json:"metadata,omitempty"`
 
-	// OnBudgetExhausted What to do when the turn runs out of one of its spending limits.
-	// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
-	// you can raise the limit and continue it.
+	// OnBudgetExhausted What to do when the turn runs out of one of its consumption
+	// limits. `stop` ends it as `incomplete`. `hold` leaves it as
+	// `budget_hold` so you can raise the limit and continue it.
 	//
 	// Covers the iteration, output-token, and per-turn estimated-cost
 	// limits, and exhausted tenant credits. Deadlines are not covered —
@@ -3642,9 +3632,9 @@ type CreateInvocationRequest struct {
 // idempotency purposes.
 type CreateInvocationRequestIfActive string
 
-// CreateInvocationRequestOnBudgetExhausted What to do when the turn runs out of one of its spending limits.
-// `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
-// you can raise the limit and continue it.
+// CreateInvocationRequestOnBudgetExhausted What to do when the turn runs out of one of its consumption
+// limits. `stop` ends it as `incomplete`. `hold` leaves it as
+// `budget_hold` so you can raise the limit and continue it.
 //
 // Covers the iteration, output-token, and per-turn estimated-cost
 // limits, and exhausted tenant credits. Deadlines are not covered —
@@ -3796,10 +3786,10 @@ type CreditAccount struct {
 	Allocated Money `json:"allocated"`
 
 	// Available max(0, allocated - used - held).
-	Available         Money     `json:"available"`
-	CreatedAt         time.Time `json:"created_at"`
-	Held              Money     `json:"held"`
-	PausedInvocations int64     `json:"paused_invocations"`
+	Available             Money     `json:"available"`
+	BudgetHoldInvocations int64     `json:"budget_hold_invocations"`
+	CreatedAt             time.Time `json:"created_at"`
+	Held                  Money     `json:"held"`
 
 	// TenantKey Null identifies the App's default tenant.
 	TenantKey *string   `json:"tenant_key"`
@@ -3873,10 +3863,10 @@ type CurrentIdentity struct {
 		// AgentKey Browser grants only. The Agent this grant is pinned to.
 		AgentKey *string `json:"agent_key,omitempty"`
 
-		// AppID Null only for an Org-scoped machine credential. A browser grant
-		// is always App-scoped, so this is never null for one.
-		AppID     *AppID                                 `json:"app_id"`
-		Assurance CurrentIdentityAuthenticationAssurance `json:"assurance"`
+		// AppID Null for installation- and Org-scoped machine credentials. A
+		// browser grant is always App-scoped, so this is never null for
+		// one.
+		AppID *AppID `json:"app_id"`
 
 		// CredentialID Machine credentials only.
 		CredentialID *CredentialID `json:"credential_id,omitempty"`
@@ -3903,9 +3893,6 @@ type CurrentIdentity struct {
 		TenantKey *string `json:"tenant_key,omitempty"`
 	} `json:"authentication"`
 }
-
-// CurrentIdentityAuthenticationAssurance defines model for CurrentIdentity.Authentication.Assurance.
-type CurrentIdentityAuthenticationAssurance string
 
 // CurrentIdentityAuthenticationMethod How this caller authenticated. New values may be added; handle
 // a value you do not recognize as an unknown caller rather than
@@ -4289,17 +4276,18 @@ type Invocation struct {
 	// restart it after an interruption; `attempt` tells the two apart, and
 	// the `revision` on each stream update tells you their order.
 	//
-	// `paused` means a spending limit stopped the turn but left it
+	// `budget_hold` means a consumption limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit or add
 	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
+	// accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+	// iteration, output-token, estimated-cost, and credit ceilings.
 	Status InvocationStatus `json:"status"`
 
-	// StopReason Why the turn stopped or paused. Present on `completed`,
-	// `incomplete`, and `paused`; null on every other status — a failure
-	// keeps `error` as the authority. Treat an unrecognized value as an
-	// ordinary end.
+	// StopReason Why the turn stopped or entered `budget_hold`. Present on
+	// `completed`, `incomplete`, and `budget_hold`; null on every other
+	// status — a failure keeps `error` as the authority. Treat an
+	// unrecognized value as an ordinary end.
 	StopReason *InvocationStopReason `json:"stop_reason"`
 
 	// StructuredOutput The object the model produced, already checked against the schema
@@ -4335,12 +4323,12 @@ type Invocation struct {
 //
 // A change carries what a turn's own projection carries about where it
 // stands: `terminal` for whether this change is the end, `stop_reason`
-// for a turn that ended, `credit_block` for one paused on spend, and
+// for a turn that ended, `credit_block` for one held on credits, and
 // `tool_calls` for what its tools are doing, with `arguments` on the ones
 // waiting for you to run them. You never need a second request to find
 // out why a turn is not moving.
 type InvocationChange struct {
-	// CreditBlock Present while the turn is paused on spending capacity.
+	// CreditBlock Present while the turn is on budget hold for spending capacity.
 	CreditBlock *CreditBlock       `json:"credit_block,omitempty"`
 	Error       *InvocationFailure `json:"error"`
 
@@ -4377,11 +4365,12 @@ type InvocationChange struct {
 	// restart it after an interruption; `attempt` tells the two apart, and
 	// the `revision` on each stream update tells you their order.
 	//
-	// `paused` means a spending limit stopped the turn but left it
+	// `budget_hold` means a consumption limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit or add
 	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
+	// accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+	// iteration, output-token, estimated-cost, and credit ceilings.
 	Status InvocationStatus `json:"status"`
 
 	// StopReason Why the turn stopped. Present once it has stopped, so an
@@ -4604,11 +4593,12 @@ type InvocationResult struct {
 // restart it after an interruption; `attempt` tells the two apart, and
 // the `revision` on each stream update tells you their order.
 //
-// `paused` means a spending limit stopped the turn but left it
+// `budget_hold` means a consumption limit stopped the turn but left it
 // resumable. Nothing is executing, and its deadlines are on hold, so a
 // turn cannot expire while you decide. Raise the turn's limit or add
 // credits to the blocked tenant account and it continues. It still
-// accepts interrupt, cancel, and nudge.
+// accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+// iteration, output-token, estimated-cost, and credit ceilings.
 type InvocationStatus string
 
 // InvocationStopReason Why a turn stopped. Set on turns that did not fail, and which values
@@ -4618,9 +4608,9 @@ type InvocationStatus string
 // or `interrupted` (you asked it to stop, and it stopped at the next
 // clean point). An `incomplete` turn carries whichever limit ran out:
 // `max_iterations`, `deadline`, `max_output_tokens`, or
-// `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
-// `insufficient_credits`, never `deadline`, because a paused turn's
-// deadlines are on hold.
+// `max_estimated_cost`. A `budget_hold` turn carries `max_iterations`,
+// `max_output_tokens`, `max_estimated_cost`, or `insufficient_credits`,
+// never `deadline`, because a held turn's deadlines are on hold.
 //
 // An interrupt is deliberately `completed` rather than `incomplete`: you
 // asked the turn to end there, so ending there is the result you wanted,
@@ -4699,8 +4689,8 @@ type InvocationWebhookContext struct {
 	// because nvoken delivers those to your endpoint itself and there is
 	// nothing for you to do.
 	//
-	// `invocation.paused` fires when a spending limit you opted into stopped
-	// the turn, and carries the `stop_reason` naming the limit.
+	// `invocation.budget_hold` fires when a consumption limit you opted into
+	// stopped the turn, and carries the `stop_reason` naming the limit.
 	//
 	// `invocation.ended` fires exactly once, when the turn reaches
 	// `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
@@ -4782,11 +4772,12 @@ type InvocationWebhookSubject struct {
 	// restart it after an interruption; `attempt` tells the two apart, and
 	// the `revision` on each stream update tells you their order.
 	//
-	// `paused` means a spending limit stopped the turn but left it
+	// `budget_hold` means a consumption limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit or add
 	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
+	// accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+	// iteration, output-token, estimated-cost, and credit ceilings.
 	Status InvocationStatus `json:"status"`
 
 	// StopReason Why a turn stopped. Set on turns that did not fail, and which values
@@ -4796,9 +4787,9 @@ type InvocationWebhookSubject struct {
 	// or `interrupted` (you asked it to stop, and it stopped at the next
 	// clean point). An `incomplete` turn carries whichever limit ran out:
 	// `max_iterations`, `deadline`, `max_output_tokens`, or
-	// `max_estimated_cost`. A `paused` turn carries `max_estimated_cost` or
-	// `insufficient_credits`, never `deadline`, because a paused turn's
-	// deadlines are on hold.
+	// `max_estimated_cost`. A `budget_hold` turn carries `max_iterations`,
+	// `max_output_tokens`, `max_estimated_cost`, or `insufficient_credits`,
+	// never `deadline`, because a held turn's deadlines are on hold.
 	//
 	// An interrupt is deliberately `completed` rather than `incomplete`: you
 	// asked the turn to end there, so ending there is the result you wanted,
@@ -4935,6 +4926,19 @@ type MCPToolExclusion struct {
 
 // MCPToolExclusionReason defines model for MCPToolExclusion.Reason.
 type MCPToolExclusionReason string
+
+// MachineConcurrencyLimits Optional machine-credential fairness limits enforced transactionally
+// at Invocation admission. The counts include nonterminal Invocations
+// admitted through any credential class in the same tenant or user.
+type MachineConcurrencyLimits struct {
+	// MaxConcurrentInvocationsPerTenant Maximum nonterminal Invocations in the resolved tenant.
+	MaxConcurrentInvocationsPerTenant int64 `json:"max_concurrent_invocations_per_tenant"`
+
+	// MaxConcurrentInvocationsPerUser Maximum nonterminal Invocations for one user_key in the resolved
+	// tenant. Machine admissions without user_key are governed only by
+	// the tenant and App-wide ceilings.
+	MaxConcurrentInvocationsPerUser int64 `json:"max_concurrent_invocations_per_user"`
+}
 
 // Memory defines model for Memory.
 type Memory struct {
@@ -5795,6 +5799,10 @@ type RegisterAppRequest struct {
 	// ExternalRef Optional opaque owner reference.
 	ExternalRef *string `json:"external_ref,omitempty"`
 
+	// MachineConcurrencyLimits Optional machine-credential fairness ceilings. Null and omission
+	// both create the App without per-tenant or per-user machine limits.
+	MachineConcurrencyLimits *MachineConcurrencyLimits `json:"machine_concurrency_limits,omitempty"`
+
 	// Name The unique name identifying this app. Registering a name that
 	// already exists is rejected.
 	Name string `json:"name"`
@@ -5849,7 +5857,7 @@ type ResolvedLimits struct {
 }
 
 // ResumeInvocationRequest Replacement for the one turn-level consumption ceiling named by the
-// paused Invocation's stop_reason. Exactly that field must be present
+// held Invocation's `stop_reason`. Exactly that field must be present
 // and must be raised above both the previous ceiling and usage so far.
 type ResumeInvocationRequest struct {
 	// Limits Optional requested limits. Total time bounds the entire turn, active
@@ -5948,7 +5956,7 @@ type ServerToolUseBlockType string
 // `compaction`, `retention`, `expires_at`, `metadata`,
 // `authorization_context`, `credit_block`, `context`, and `usage`.
 type Session struct {
-	// ActiveInvocationID The queued, running, waiting, or paused Invocation, if one exists.
+	// ActiveInvocationID The queued, running, waiting, or budget-held Invocation, if one exists.
 	ActiveInvocationID *InvocationID `json:"active_invocation_id"`
 
 	// ActiveInvocationStatus Status of active_invocation_id; null exactly when that ID is null.
@@ -5977,7 +5985,7 @@ type Session struct {
 	Context   *SessionContext `json:"context,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 
-	// CreditBlock Tenant credit account blocking the active paused Invocation, otherwise null.
+	// CreditBlock Tenant credit account blocking the active held Invocation, otherwise null.
 	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
 
 	// ExpiresAt When nvoken may automatically delete this Session, or null if it
@@ -6416,11 +6424,12 @@ type SubmitHostToolResultsResponse struct {
 	// restart it after an interruption; `attempt` tells the two apart, and
 	// the `revision` on each stream update tells you their order.
 	//
-	// `paused` means a spending limit stopped the turn but left it
+	// `budget_hold` means a consumption limit stopped the turn but left it
 	// resumable. Nothing is executing, and its deadlines are on hold, so a
 	// turn cannot expire while you decide. Raise the turn's limit or add
 	// credits to the blocked tenant account and it continues. It still
-	// accepts interrupt, cancel, and nudge.
+	// accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
+	// iteration, output-token, estimated-cost, and credit ceilings.
 	Status InvocationStatus `json:"status"`
 
 	// ToolCalls Every tool call this turn has made, with its current status. The
@@ -6920,6 +6929,10 @@ type UpdateAppRequest struct {
 	// DisplayName New human-facing label for the app.
 	DisplayName *string `json:"display_name,omitempty"`
 
+	// MachineConcurrencyLimits Replace both machine concurrency ceilings, or send null to disable
+	// them. Omission preserves the stored value.
+	MachineConcurrencyLimits *MachineConcurrencyLimits `json:"machine_concurrency_limits,omitempty"`
+
 	// OrgID New owning Org. Supplying this field transfers ownership and is
 	// restricted to installation administrators.
 	OrgID *OrgID `json:"org_id,omitempty"`
@@ -7042,8 +7055,8 @@ type WebSearchTool struct {
 // because nvoken delivers those to your endpoint itself and there is
 // nothing for you to do.
 //
-// `invocation.paused` fires when a spending limit you opted into stopped
-// the turn, and carries the `stop_reason` naming the limit.
+// `invocation.budget_hold` fires when a consumption limit you opted into
+// stopped the turn, and carries the `stop_reason` naming the limit.
 //
 // `invocation.ended` fires exactly once, when the turn reaches
 // `completed`, `incomplete`, `failed`, or `cancelled`. Completed and
@@ -10306,34 +10319,36 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResult(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocationWithBody Raise a paused Invocation's limit and continue it
+	// ResumeInvocationWithBody Raise a held Invocation's limit and continue it
 	//
-	// Continues a turn that paused because one of its own spending limits
-	// ran out. Send `limits` containing only the limit that ran out, raised
-	// above both its old value and what the turn has already used, and still
-	// within what your installation allows.
+	// Continues a turn on `budget_hold` because one of its own consumption
+	// limits ran out. Send `limits` containing only the limit that ran out,
+	// raised above both its old value and what the turn has already used,
+	// and still within what your installation allows.
 	//
-	// If the turn paused because the tenant ran out of credits rather than
+	// If the turn is held because the tenant ran out of credits rather than
 	// on a limit of its own, allocate credits to that account instead — this
 	// endpoint refuses it, and funding the account continues the turn on its
-	// own. Deadlines never pause a turn, so they never bring you here.
+	// own. Deadlines never put a turn on budget hold, so they never bring you
+	// here.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBody(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ResumeInvocation Raise a paused Invocation's limit and continue it
+	// ResumeInvocation Raise a held Invocation's limit and continue it
 	//
-	// Continues a turn that paused because one of its own spending limits
-	// ran out. Send `limits` containing only the limit that ran out, raised
-	// above both its old value and what the turn has already used, and still
-	// within what your installation allows.
+	// Continues a turn on `budget_hold` because one of its own consumption
+	// limits ran out. Send `limits` containing only the limit that ran out,
+	// raised above both its old value and what the turn has already used,
+	// and still within what your installation allows.
 	//
-	// If the turn paused because the tenant ran out of credits rather than
+	// If the turn is held because the tenant ran out of credits rather than
 	// on a limit of its own, allocate credits to that account instead — this
 	// endpoint refuses it, and funding the account continues the turn on its
-	// own. Deadlines never pause a turn, so they never bring you here.
+	// own. Deadlines never put a turn on budget hold, so they never bring you
+	// here.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10488,6 +10503,10 @@ type ClientInterface interface {
 	// metadata for the exact provider/model selection. It does not prove that
 	// the caller's provider account, region, or selected provider key can access
 	// the model. Ordering is deterministic but has no semantic meaning.
+	//
+	// Authentication is required, but no scoped operation is: this is
+	// installation-wide capability metadata and contains no App or tenant
+	// data. Browser grants cannot reach the model catalog.
 	//
 	// Corresponds with GET /v1/models (the `ListModels` operationId).
 	ListModels(ctx context.Context, params *ListModelsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12852,17 +12871,18 @@ func (c *Client) GetInvocationResult(ctx context.Context, invocationID Invocatio
 	return c.Client.Do(req)
 }
 
-// ResumeInvocationWithBody Raise a paused Invocation's limit and continue it
+// ResumeInvocationWithBody Raise a held Invocation's limit and continue it
 //
-// Continues a turn that paused because one of its own spending limits
-// ran out. Send `limits` containing only the limit that ran out, raised
-// above both its old value and what the turn has already used, and still
-// within what your installation allows.
+// Continues a turn on `budget_hold` because one of its own consumption
+// limits ran out. Send `limits` containing only the limit that ran out,
+// raised above both its old value and what the turn has already used,
+// and still within what your installation allows.
 //
-// If the turn paused because the tenant ran out of credits rather than
+// If the turn is held because the tenant ran out of credits rather than
 // on a limit of its own, allocate credits to that account instead — this
 // endpoint refuses it, and funding the account continues the turn on its
-// own. Deadlines never pause a turn, so they never bring you here.
+// own. Deadlines never put a turn on budget hold, so they never bring you
+// here.
 //
 // Takes any type of body and a specified content type.
 //
@@ -12879,17 +12899,18 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 	return c.Client.Do(req)
 }
 
-// ResumeInvocation Raise a paused Invocation's limit and continue it
+// ResumeInvocation Raise a held Invocation's limit and continue it
 //
-// Continues a turn that paused because one of its own spending limits
-// ran out. Send `limits` containing only the limit that ran out, raised
-// above both its old value and what the turn has already used, and still
-// within what your installation allows.
+// Continues a turn on `budget_hold` because one of its own consumption
+// limits ran out. Send `limits` containing only the limit that ran out,
+// raised above both its old value and what the turn has already used,
+// and still within what your installation allows.
 //
-// If the turn paused because the tenant ran out of credits rather than
+// If the turn is held because the tenant ran out of credits rather than
 // on a limit of its own, allocate credits to that account instead — this
 // endpoint refuses it, and funding the account continues the turn on its
-// own. Deadlines never pause a turn, so they never bring you here.
+// own. Deadlines never put a turn on budget hold, so they never bring you
+// here.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13154,6 +13175,10 @@ func (c *Client) GetMemory(ctx context.Context, memoryID MemoryID, reqEditors ..
 // metadata for the exact provider/model selection. It does not prove that
 // the caller's provider account, region, or selected provider key can access
 // the model. Ordering is deterministic but has no semantic meaning.
+//
+// Authentication is required, but no scoped operation is: this is
+// installation-wide capability metadata and contains no App or tenant
+// data. Browser grants cannot reach the model catalog.
 //
 // Corresponds with GET /v1/models (the `ListModels` operationId).
 func (c *Client) ListModels(ctx context.Context, params *ListModelsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -20881,34 +20906,36 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/invocations/{invocation_id}/result (the `GetInvocationResult` operationId).
 	GetInvocationResultWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*GetInvocationResultHTTPResponse, error)
 
-	// ResumeInvocationWithBodyWithResponse Raise a paused Invocation's limit and continue it
+	// ResumeInvocationWithBodyWithResponse Raise a held Invocation's limit and continue it
 	//
-	// Continues a turn that paused because one of its own spending limits
-	// ran out. Send `limits` containing only the limit that ran out, raised
-	// above both its old value and what the turn has already used, and still
-	// within what your installation allows.
+	// Continues a turn on `budget_hold` because one of its own consumption
+	// limits ran out. Send `limits` containing only the limit that ran out,
+	// raised above both its old value and what the turn has already used,
+	// and still within what your installation allows.
 	//
-	// If the turn paused because the tenant ran out of credits rather than
+	// If the turn is held because the tenant ran out of credits rather than
 	// on a limit of its own, allocate credits to that account instead — this
 	// endpoint refuses it, and funding the account continues the turn on its
-	// own. Deadlines never pause a turn, so they never bring you here.
+	// own. Deadlines never put a turn on budget hold, so they never bring you
+	// here.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithBodyWithResponse(ctx context.Context, invocationID InvocationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
 
-	// ResumeInvocationWithResponse Raise a paused Invocation's limit and continue it
+	// ResumeInvocationWithResponse Raise a held Invocation's limit and continue it
 	//
-	// Continues a turn that paused because one of its own spending limits
-	// ran out. Send `limits` containing only the limit that ran out, raised
-	// above both its old value and what the turn has already used, and still
-	// within what your installation allows.
+	// Continues a turn on `budget_hold` because one of its own consumption
+	// limits ran out. Send `limits` containing only the limit that ran out,
+	// raised above both its old value and what the turn has already used,
+	// and still within what your installation allows.
 	//
-	// If the turn paused because the tenant ran out of credits rather than
+	// If the turn is held because the tenant ran out of credits rather than
 	// on a limit of its own, allocate credits to that account instead — this
 	// endpoint refuses it, and funding the account continues the turn on its
-	// own. Deadlines never pause a turn, so they never bring you here.
+	// own. Deadlines never put a turn on budget hold, so they never bring you
+	// here.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21075,6 +21102,10 @@ type ClientWithResponsesInterface interface {
 	// metadata for the exact provider/model selection. It does not prove that
 	// the caller's provider account, region, or selected provider key can access
 	// the model. Ordering is deterministic but has no semantic meaning.
+	//
+	// Authentication is required, but no scoped operation is: this is
+	// installation-wide capability metadata and contains no App or tenant
+	// data. Browser grants cannot reach the model catalog.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -30856,17 +30887,18 @@ func (c *ClientWithResponses) GetInvocationResultWithResponse(ctx context.Contex
 	return ParseGetInvocationResultHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithBodyWithResponse Raise a paused Invocation's limit and continue it
+// ResumeInvocationWithBodyWithResponse Raise a held Invocation's limit and continue it
 //
-// Continues a turn that paused because one of its own spending limits
-// ran out. Send `limits` containing only the limit that ran out, raised
-// above both its old value and what the turn has already used, and still
-// within what your installation allows.
+// Continues a turn on `budget_hold` because one of its own consumption
+// limits ran out. Send `limits` containing only the limit that ran out,
+// raised above both its old value and what the turn has already used,
+// and still within what your installation allows.
 //
-// If the turn paused because the tenant ran out of credits rather than
+// If the turn is held because the tenant ran out of credits rather than
 // on a limit of its own, allocate credits to that account instead — this
 // endpoint refuses it, and funding the account continues the turn on its
-// own. Deadlines never pause a turn, so they never bring you here.
+// own. Deadlines never put a turn on budget hold, so they never bring you
+// here.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30879,17 +30911,18 @@ func (c *ClientWithResponses) ResumeInvocationWithBodyWithResponse(ctx context.C
 	return ParseResumeInvocationHTTPResponse(rsp)
 }
 
-// ResumeInvocationWithResponse Raise a paused Invocation's limit and continue it
+// ResumeInvocationWithResponse Raise a held Invocation's limit and continue it
 //
-// Continues a turn that paused because one of its own spending limits
-// ran out. Send `limits` containing only the limit that ran out, raised
-// above both its old value and what the turn has already used, and still
-// within what your installation allows.
+// Continues a turn on `budget_hold` because one of its own consumption
+// limits ran out. Send `limits` containing only the limit that ran out,
+// raised above both its old value and what the turn has already used,
+// and still within what your installation allows.
 //
-// If the turn paused because the tenant ran out of credits rather than
+// If the turn is held because the tenant ran out of credits rather than
 // on a limit of its own, allocate credits to that account instead — this
 // endpoint refuses it, and funding the account continues the turn on its
-// own. Deadlines never pause a turn, so they never bring you here.
+// own. Deadlines never put a turn on budget hold, so they never bring you
+// here.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31122,6 +31155,10 @@ func (c *ClientWithResponses) GetMemoryWithResponse(ctx context.Context, memoryI
 // metadata for the exact provider/model selection. It does not prove that
 // the caller's provider account, region, or selected provider key can access
 // the model. Ordering is deterministic but has no semantic meaning.
+//
+// Authentication is required, but no scoped operation is: this is
+// installation-wide capability metadata and contains no App or tenant
+// data. Browser grants cannot reach the model catalog.
 //
 // Returns a wrapper object for the known response body format(s).
 //

@@ -433,7 +433,7 @@ A turn that ends tells you so, without you holding a connection open to hear
 it. Set `InvokeRequest.Webhook` when you start the turn; omitting `Events`
 selects all three. `invocation.ended` fires once when the turn reaches a
 terminal status, `invocation.waiting` when it needs a host tool run, and
-`invocation.paused` when a spending limit stopped it.
+`invocation.budget_hold` when a spending limit stopped it.
 
 nvoken signs Invocation webhooks and tool callbacks identically, so
 `VerifyWebhook` and `VerifyCallback` are one verification path with different

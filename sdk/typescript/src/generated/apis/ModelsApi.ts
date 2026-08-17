@@ -153,7 +153,7 @@ export class ModelsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller\'s provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+     * Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller\'s provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
      * List nvoken\'s curated model catalog
      */
     async listModelsRaw(requestParameters: ListModelsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ModelList>> {
@@ -164,7 +164,7 @@ export class ModelsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller\'s provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+     * Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller\'s provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
      * List nvoken\'s curated model catalog
      */
     async listModels(requestParameters: ListModelsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ModelList> {

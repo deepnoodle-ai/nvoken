@@ -533,7 +533,7 @@ invocation = await client.create_invocation(
 
 Omitting `events` selects all three. `invocation.ended` fires once when the
 turn reaches a terminal status; `invocation.waiting` fires when it needs a host
-tool run; `invocation.paused` fires when a spending limit stopped it.
+tool run; `invocation.budget_hold` fires when a spending limit stopped it.
 
 Receiving one is the same verification you already wrote for callbacks — the
 signature scheme is identical, and `verify_webhook` is the same code path with
@@ -584,7 +584,7 @@ receiver = WebhookReceiver(
     keys=[DeliverySigningKey(key_id=WEBHOOK_KEY_ID, version=1, secret=WEBHOOK_SECRET)],
     events={
         "invocation.ended": settle_in_one_transaction,
-        "invocation.paused": alert_on_funding_hold,
+        "invocation.budget_hold": alert_on_budget_hold,
     },
 )
 ```

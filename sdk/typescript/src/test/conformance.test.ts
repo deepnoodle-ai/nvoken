@@ -144,7 +144,7 @@ test("shared settlement-legibility fixture pins the stop reasons and phases", as
     [
       raw.InvocationStatus.Completed,
       raw.InvocationStatus.Incomplete,
-      raw.InvocationStatus.Paused,
+      raw.InvocationStatus.BudgetHold,
     ].sort(),
   );
   // The wait helpers stop at exactly these statuses; a terminal the SDK does
@@ -1089,7 +1089,7 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
 	agentKey: "support",
   }).invoke("hello", {
     idempotencyKey: "conformance",
-    onBudgetExhausted: "pause",
+    onBudgetExhausted: "hold",
     metadata: { board: "brand-2026", surface: "web" },
     // Durable options apply on a new anonymous Session too, which is where a
     // short retention window matters most.
@@ -2760,7 +2760,7 @@ test("shared invocation webhook fixture stays expressible and stays a pointer", 
     example_request: { webhook: { url: string; events: string[] } };
     example_ended_payload: Record<string, Record<string, unknown>>;
     example_waiting_payload: Record<string, Record<string, unknown>>;
-    example_paused_payload: Record<string, Record<string, unknown>>;
+    example_budget_hold_payload: Record<string, Record<string, unknown>>;
   };
 
   // Every declared event must survive the generated encoder. The event set is
@@ -2794,7 +2794,7 @@ test("shared invocation webhook fixture stays expressible and stays a pointer", 
   for (const payload of [
     fixture.example_ended_payload,
     fixture.example_waiting_payload,
-    fixture.example_paused_payload,
+    fixture.example_budget_hold_payload,
   ]) {
     assert.deepEqual(Object.keys(payload).sort(), ["invocation", "nvoken"]);
     for (const key of Object.keys(payload.nvoken)) {

@@ -48,9 +48,9 @@ class Session(BaseModel):
     expires_at: Optional[datetime] = Field(default=None, description="When nvoken may automatically delete this Session, or null if it has no retention window. The date moves forward every time a turn starts and every time one finishes, so a Session in active use never reaches it. ")
     metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(default=None, description="Host correlation data, returned verbatim. Written only by `PATCH /v1/sessions/{session_id}`. ")
     authorization_context: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=512)]]] = Field(default=None, description="What this Session was bound to at creation, echoed so an operator holding a `sess_` id can see it. Machine audience only. ")
-    active_invocation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="The queued, running, waiting, or paused Invocation, if one exists.")
+    active_invocation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="The queued, running, waiting, or budget-held Invocation, if one exists.")
     active_invocation_status: Optional[StrictStr] = Field(description="Status of active_invocation_id; null exactly when that ID is null.")
-    credit_block: Optional[CreditBlock] = Field(default=None, description="Tenant credit account blocking the active paused Invocation, otherwise null.")
+    credit_block: Optional[CreditBlock] = Field(default=None, description="Tenant credit account blocking the active held Invocation, otherwise null.")
     context: Optional[SessionContext] = Field(default=None, description="Read-time retained-context estimate and the model window it is measured against. Null until the Session has either a compaction model or an Invocation primary model. The object remains present for an uncataloged model, with `context_window_tokens: null`. ")
     usage: Optional[ModelUsage] = Field(default=None, description="Read-time sum of this Session's non-null Invocation usage and committed private compaction usage. Null until either exists. This normalized estimate is not a billing ledger. ")
     created_at: datetime
@@ -64,8 +64,8 @@ class Session(BaseModel):
         if value is None:
             return value
 
-        if value not in set(['queued', 'running', 'waiting', 'paused']):
-            raise ValueError("must be one of enum values ('queued', 'running', 'waiting', 'paused')")
+        if value not in set(['queued', 'running', 'waiting', 'budget_hold']):
+            raise ValueError("must be one of enum values ('queued', 'running', 'waiting', 'budget_hold')")
         return value
 
     model_config = ConfigDict(

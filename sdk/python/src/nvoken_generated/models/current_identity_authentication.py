@@ -31,7 +31,7 @@ class CurrentIdentityAuthentication(BaseModel):
     CurrentIdentityAuthentication
     """ # noqa: E501
     credential_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Machine credentials only.")
-    app_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Null only for an Org-scoped machine credential. A browser grant is always App-scoped, so this is never null for one. ")
+    app_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Null for installation- and Org-scoped machine credentials. A browser grant is always App-scoped, so this is never null for one. ")
     org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Machine credentials only.")
     effective_profile: Optional[CredentialProfile] = Field(default=None, description="Machine credentials only.")
     agent_key: Optional[StrictStr] = Field(default=None, description="Browser grants only. The Agent this grant is pinned to.")
@@ -41,22 +41,14 @@ class CurrentIdentityAuthentication(BaseModel):
     session_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     operations: List[Operation]
     method: StrictStr = Field(description="How this caller authenticated. New values may be added; handle a value you do not recognize as an unknown caller rather than refusing the response. ")
-    assurance: StrictStr
     additional_properties: Dict[str, Any] = {}
-    __properties: ClassVar[List[str]] = ["credential_id", "app_id", "org_id", "effective_profile", "agent_key", "agent_id", "definition_revision", "tenant_key", "session_id", "operations", "method", "assurance"]
+    __properties: ClassVar[List[str]] = ["credential_id", "app_id", "org_id", "effective_profile", "agent_key", "agent_id", "definition_revision", "tenant_key", "session_id", "operations", "method"]
 
     @field_validator('method')
     def method_validate_enum(cls, value):
         """Validates the enum"""
         if value not in set(['api_key', 'issuer_token', 'client_token', 'anonymous_token']):
             raise ValueError("must be one of enum values ('api_key', 'issuer_token', 'client_token', 'anonymous_token')")
-        return value
-
-    @field_validator('assurance')
-    def assurance_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['bearer']):
-            raise ValueError("must be one of enum values ('bearer')")
         return value
 
     model_config = ConfigDict(
@@ -147,8 +139,7 @@ class CurrentIdentityAuthentication(BaseModel):
             "tenant_key": obj.get("tenant_key"),
             "session_id": obj.get("session_id"),
             "operations": obj.get("operations"),
-            "method": obj.get("method"),
-            "assurance": obj.get("assurance")
+            "method": obj.get("method")
         })
         # store additional fields in additional_properties
         for _key in obj.keys():

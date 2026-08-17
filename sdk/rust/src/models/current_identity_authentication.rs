@@ -16,7 +16,7 @@ pub struct CurrentIdentityAuthentication {
     /// Machine credentials only.
     #[serde(rename = "credential_id", skip_serializing_if = "Option::is_none")]
     pub credential_id: Option<String>,
-    /// Null only for an Org-scoped machine credential. A browser grant is always App-scoped, so this is never null for one.
+    /// Null for installation- and Org-scoped machine credentials. A browser grant is always App-scoped, so this is never null for one.
     #[serde(rename = "app_id", deserialize_with = "Option::deserialize")]
     pub app_id: Option<String>,
     /// Machine credentials only.
@@ -63,8 +63,6 @@ pub struct CurrentIdentityAuthentication {
     /// How this caller authenticated. New values may be added; handle a value you do not recognize as an unknown caller rather than refusing the response.
     #[serde(rename = "method")]
     pub method: Method,
-    #[serde(rename = "assurance")]
-    pub assurance: Assurance,
 }
 
 impl CurrentIdentityAuthentication {
@@ -72,7 +70,6 @@ impl CurrentIdentityAuthentication {
         app_id: Option<String>,
         operations: Vec<models::Operation>,
         method: Method,
-        assurance: Assurance,
     ) -> CurrentIdentityAuthentication {
         CurrentIdentityAuthentication {
             credential_id: None,
@@ -86,7 +83,6 @@ impl CurrentIdentityAuthentication {
             session_id: None,
             operations,
             method,
-            assurance,
         }
     }
 }
@@ -106,17 +102,5 @@ pub enum Method {
 impl Default for Method {
     fn default() -> Method {
         Self::ApiKey
-    }
-}
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum Assurance {
-    #[serde(rename = "bearer")]
-    Bearer,
-}
-
-impl Default for Assurance {
-    fn default() -> Assurance {
-        Self::Bearer
     }
 }

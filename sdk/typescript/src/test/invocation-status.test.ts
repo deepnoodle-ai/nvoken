@@ -15,7 +15,7 @@ const CLASSIFICATION: Record<string, boolean> = {
   queued: false,
   running: false,
   waiting: false,
-  paused: false,
+  budget_hold: false,
   completed: true,
   incomplete: true,
   failed: true,
@@ -36,12 +36,12 @@ test("classifies every status the contract declares", () => {
   );
 });
 
-test("treats a paused turn as unfinished", () => {
+test("treats a budget-held turn as unfinished", () => {
   // It stopped on spending capacity with its deadlines on hold. It still owns
   // the Session and resumes on its own once the account is funded, so a caller
   // that reads it as over abandons a turn that is still going.
-  assert.equal(isTerminalStatus("paused"), false);
-  assert.equal(isTurnOver({ status: "paused", terminal: false }), false);
+  assert.equal(isTerminalStatus("budget_hold"), false);
+  assert.equal(isTurnOver({ status: "budget_hold", terminal: false }), false);
 });
 
 test("reads an unrecognized status as unfinished", () => {

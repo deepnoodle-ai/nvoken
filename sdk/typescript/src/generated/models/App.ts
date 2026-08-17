@@ -34,6 +34,13 @@ import {
     AnonymousAccessToJSON,
     AnonymousAccessToJSONTyped,
 } from './AnonymousAccess.js';
+import type { MachineConcurrencyLimits } from './MachineConcurrencyLimits.js';
+import {
+    MachineConcurrencyLimitsFromJSON,
+    MachineConcurrencyLimitsFromJSONTyped,
+    MachineConcurrencyLimitsToJSON,
+    MachineConcurrencyLimitsToJSONTyped,
+} from './MachineConcurrencyLimits.js';
 import type { BrowserAccess } from './BrowserAccess.js';
 import {
     BrowserAccessFromJSON,
@@ -108,6 +115,15 @@ export interface App {
      */
     defaultRateLimits: AppDefaultRateLimits | null;
     /**
+     * Optional per-tenant and per-user concurrency ceilings for machine
+     * credentials. Null leaves machine traffic subject only to the
+     * App-wide default_rate_limits.
+     *
+     * @type {MachineConcurrencyLimits}
+     * @memberof App
+     */
+    machineConcurrencyLimits: MachineConcurrencyLimits | null;
+    /**
      * Complete browser-direct configuration. Null means browser access
      * is disabled and client JWTs receive no browser CORS permission.
      *
@@ -160,6 +176,7 @@ export function instanceOfApp(value: object): value is App {
     if (!('displayName' in value) || value['displayName'] === undefined) return false;
     if (!('callbackTimeoutSeconds' in value) || value['callbackTimeoutSeconds'] === undefined) return false;
     if (!('defaultRateLimits' in value) || value['defaultRateLimits'] === undefined) return false;
+    if (!('machineConcurrencyLimits' in value) || value['machineConcurrencyLimits'] === undefined) return false;
     if (!('browserAccess' in value) || value['browserAccess'] === undefined) return false;
     if (!('anonymousAccess' in value) || value['anonymousAccess'] === undefined) return false;
     if (!('creditPolicy' in value) || value['creditPolicy'] === undefined) return false;
@@ -185,6 +202,7 @@ export function AppFromJSONTyped(json: any, ignoreDiscriminator: boolean): App {
         'displayName': json['display_name'],
         'callbackTimeoutSeconds': json['callback_timeout_seconds'],
         'defaultRateLimits': AppDefaultRateLimitsFromJSON(json['default_rate_limits']),
+        'machineConcurrencyLimits': MachineConcurrencyLimitsFromJSON(json['machine_concurrency_limits']),
         'browserAccess': BrowserAccessFromJSON(json['browser_access']),
         'anonymousAccess': AnonymousAccessFromJSON(json['anonymous_access']),
         'creditPolicy': CreditPolicyFromJSON(json['credit_policy']),
@@ -211,6 +229,7 @@ export function AppToJSONTyped(value?: App | null, ignoreDiscriminator: boolean 
         'display_name': value['displayName'],
         'callback_timeout_seconds': value['callbackTimeoutSeconds'],
         'default_rate_limits': AppDefaultRateLimitsToJSON(value['defaultRateLimits']),
+        'machine_concurrency_limits': MachineConcurrencyLimitsToJSON(value['machineConcurrencyLimits']),
         'browser_access': BrowserAccessToJSON(value['browserAccess']),
         'anonymous_access': AnonymousAccessToJSON(value['anonymousAccess']),
         'credit_policy': CreditPolicyToJSON(value['creditPolicy']),

@@ -192,6 +192,8 @@ pub mod invocation_webhook_subject;
 pub use self::invocation_webhook_subject::InvocationWebhookSubject;
 pub mod limits;
 pub use self::limits::Limits;
+pub mod machine_concurrency_limits;
+pub use self::machine_concurrency_limits::MachineConcurrencyLimits;
 pub mod mcp_list_tools_request;
 pub use self::mcp_list_tools_request::McpListToolsRequest;
 pub mod mcp_list_tools_response;

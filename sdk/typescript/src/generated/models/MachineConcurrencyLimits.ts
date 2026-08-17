@@ -12,80 +12,69 @@
  * Do not edit the class manually.
  */
 
-
+import { mapValues } from '../runtime.js';
 /**
- * `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
- * turn reaches one of them it never changes again. Do not encode that
- * set: an InvocationChange carries `terminal`, an Invocation carries
- * `ended_at`, and both say the same thing without a list of yours to
- * keep in step as this enum grows.
- *
- * `completed` means the turn ended the way it was asked to: the model
- * finished on its own, or you interrupted it.
- *
- * `incomplete` means a limit you set stopped the turn cleanly, between
- * steps rather than mid-request. `stop_reason` names the limit that ran
- * out. The reply so far is valid and carries into the next turn just
- * like a completed turn's does, so this is a stopping point rather than
- * an error.
- *
- * `failed` means the turn could not stop cleanly — a deadline landing in
- * the middle of a model request, for example — or that a turn you asked
- * for structured output from never produced a valid object. Read `error`
- * for the reason; the reply, if any, is not carried forward.
- *
- * `waiting` — `requires_action` in some other APIs — means the turn has
- * stopped for tool calls you need to run. Nothing is executing. Send the
- * results and the turn returns to `queued` and picks up where it left
- * off. A turn can also return to `queued` on its own if nvoken had to
- * restart it after an interruption; `attempt` tells the two apart, and
- * the `revision` on each stream update tells you their order.
- *
- * `budget_hold` means a consumption limit stopped the turn but left it
- * resumable. Nothing is executing, and its deadlines are on hold, so a
- * turn cannot expire while you decide. Raise the turn's limit or add
- * credits to the blocked tenant account and it continues. It still
- * accepts interrupt, cancel, and nudge. `stop_reason` distinguishes the
- * iteration, output-token, estimated-cost, and credit ceilings.
+ * Optional machine-credential fairness limits enforced transactionally
+ * at Invocation admission. The counts include nonterminal Invocations
+ * admitted through any credential class in the same tenant or user.
  *
  * @export
+ * @interface MachineConcurrencyLimits
  */
-export const InvocationStatus = {
-    Queued: 'queued',
-    Running: 'running',
-    Waiting: 'waiting',
-    BudgetHold: 'budget_hold',
-    Completed: 'completed',
-    Incomplete: 'incomplete',
-    Failed: 'failed',
-    Cancelled: 'cancelled'
-} as const;
-export type InvocationStatus = typeof InvocationStatus[keyof typeof InvocationStatus];
+export interface MachineConcurrencyLimits {
+    /**
+     * Maximum nonterminal Invocations in the resolved tenant.
+     * @type {number}
+     * @memberof MachineConcurrencyLimits
+     */
+    maxConcurrentInvocationsPerTenant: number;
+    /**
+     * Maximum nonterminal Invocations for one user_key in the resolved
+     * tenant. Machine admissions without user_key are governed only by
+     * the tenant and App-wide ceilings.
+     *
+     * @type {number}
+     * @memberof MachineConcurrencyLimits
+     */
+    maxConcurrentInvocationsPerUser: number;
+}
 
+/**
+ * Check if a given object implements the MachineConcurrencyLimits interface.
+ */
+export function instanceOfMachineConcurrencyLimits(value: object): value is MachineConcurrencyLimits {
+    if (!('maxConcurrentInvocationsPerTenant' in value) || value['maxConcurrentInvocationsPerTenant'] === undefined) return false;
+    if (!('maxConcurrentInvocationsPerUser' in value) || value['maxConcurrentInvocationsPerUser'] === undefined) return false;
+    return true;
+}
 
-export function instanceOfInvocationStatus(value: any): boolean {
-    for (const key in InvocationStatus) {
-        if (Object.prototype.hasOwnProperty.call(InvocationStatus, key)) {
-            if (InvocationStatus[key as keyof typeof InvocationStatus] === value) {
-                return true;
-            }
-        }
+export function MachineConcurrencyLimitsFromJSON(json: any): MachineConcurrencyLimits {
+    return MachineConcurrencyLimitsFromJSONTyped(json, false);
+}
+
+export function MachineConcurrencyLimitsFromJSONTyped(json: any, ignoreDiscriminator: boolean): MachineConcurrencyLimits {
+    if (json == null) {
+        return json;
     }
-    return false;
+    return {
+
+        'maxConcurrentInvocationsPerTenant': json['max_concurrent_invocations_per_tenant'],
+        'maxConcurrentInvocationsPerUser': json['max_concurrent_invocations_per_user'],
+    };
 }
 
-export function InvocationStatusFromJSON(json: any): InvocationStatus {
-    return InvocationStatusFromJSONTyped(json, false);
+export function MachineConcurrencyLimitsToJSON(json: any): MachineConcurrencyLimits {
+    return MachineConcurrencyLimitsToJSONTyped(json, false);
 }
 
-export function InvocationStatusFromJSONTyped(json: any, ignoreDiscriminator: boolean): InvocationStatus {
-    return json as InvocationStatus;
-}
+export function MachineConcurrencyLimitsToJSONTyped(value?: MachineConcurrencyLimits | null, ignoreDiscriminator: boolean = false): any {
+    if (value == null) {
+        return value;
+    }
 
-export function InvocationStatusToJSON(value?: InvocationStatus | null): any {
-    return value as any;
-}
+    return {
 
-export function InvocationStatusToJSONTyped(value: any, ignoreDiscriminator: boolean): InvocationStatus {
-    return value as InvocationStatus;
+        'max_concurrent_invocations_per_tenant': value['maxConcurrentInvocationsPerTenant'],
+        'max_concurrent_invocations_per_user': value['maxConcurrentInvocationsPerUser'],
+    };
 }

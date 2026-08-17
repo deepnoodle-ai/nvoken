@@ -199,9 +199,9 @@ export interface CreateInvocationRequest {
      */
     ifActive?: CreateInvocationRequestIfActiveEnum;
     /**
-     * What to do when the turn runs out of one of its spending limits.
-     * `stop` ends it as `incomplete`. `pause` leaves it as `paused` so
-     * you can raise the limit and continue it.
+     * What to do when the turn runs out of one of its consumption
+     * limits. `stop` ends it as `incomplete`. `hold` leaves it as
+     * `budget_hold` so you can raise the limit and continue it.
      *
      * Covers the iteration, output-token, and per-turn estimated-cost
      * limits, and exhausted tenant credits. Deadlines are not covered —
@@ -295,7 +295,7 @@ export type CreateInvocationRequestIfActiveEnum = typeof CreateInvocationRequest
  */
 export const CreateInvocationRequestOnBudgetExhaustedEnum = {
     Stop: 'stop',
-    Pause: 'pause'
+    Hold: 'hold'
 } as const;
 export type CreateInvocationRequestOnBudgetExhaustedEnum = typeof CreateInvocationRequestOnBudgetExhaustedEnum[keyof typeof CreateInvocationRequestOnBudgetExhaustedEnum];
 

@@ -17,19 +17,20 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, ClassVar, Dict
-from nvoken_generated.models.limits import Limits
+from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class ResumeInvocationRequest(BaseModel):
+class MachineConcurrencyLimits(BaseModel):
     """
-    Replacement for the one turn-level consumption ceiling named by the held Invocation's `stop_reason`. Exactly that field must be present and must be raised above both the previous ceiling and usage so far.
+    Optional machine-credential fairness limits enforced transactionally at Invocation admission. The counts include nonterminal Invocations admitted through any credential class in the same tenant or user.
     """ # noqa: E501
-    limits: Limits
-    __properties: ClassVar[List[str]] = ["limits"]
+    max_concurrent_invocations_per_tenant: Annotated[int, Field(strict=True, ge=1)] = Field(description="Maximum nonterminal Invocations in the resolved tenant.")
+    max_concurrent_invocations_per_user: Annotated[int, Field(strict=True, ge=1)] = Field(description="Maximum nonterminal Invocations for one user_key in the resolved tenant. Machine admissions without user_key are governed only by the tenant and App-wide ceilings. ")
+    __properties: ClassVar[List[str]] = ["max_concurrent_invocations_per_tenant", "max_concurrent_invocations_per_user"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -49,7 +50,7 @@ class ResumeInvocationRequest(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of ResumeInvocationRequest from a JSON string"""
+        """Create an instance of MachineConcurrencyLimits from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -70,14 +71,11 @@ class ResumeInvocationRequest(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of limits
-        if self.limits:
-            _dict['limits'] = self.limits.to_dict()
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of ResumeInvocationRequest from a dict"""
+        """Create an instance of MachineConcurrencyLimits from a dict"""
         if obj is None:
             return None
 
@@ -85,6 +83,7 @@ class ResumeInvocationRequest(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "limits": Limits.from_dict(obj["limits"]) if obj.get("limits") is not None else None
+            "max_concurrent_invocations_per_tenant": obj.get("max_concurrent_invocations_per_tenant"),
+            "max_concurrent_invocations_per_user": obj.get("max_concurrent_invocations_per_user")
         })
         return _obj

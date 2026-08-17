@@ -83,7 +83,7 @@ import {
  *
  * A change carries what a turn's own projection carries about where it
  * stands: `terminal` for whether this change is the end, `stop_reason`
- * for a turn that ended, `credit_block` for one paused on spend, and
+ * for a turn that ended, `credit_block` for one held on credits, and
  * `tool_calls` for what its tools are doing, with `arguments` on the ones
  * waiting for you to run them. You never need a second request to find
  * out why a turn is not moving.
@@ -136,7 +136,7 @@ export interface InvocationChange {
      */
     stopReason?: InvocationStopReason | null;
     /**
-     * Present while the turn is paused on spending capacity.
+     * Present while the turn is on budget hold for spending capacity.
      * @type {CreditBlock}
      * @memberof InvocationChange
      */

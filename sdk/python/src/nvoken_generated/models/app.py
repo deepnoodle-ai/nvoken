@@ -25,6 +25,7 @@ from nvoken_generated.models.anonymous_access import AnonymousAccess
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
 from nvoken_generated.models.browser_access import BrowserAccess
 from nvoken_generated.models.credit_policy import CreditPolicy
+from nvoken_generated.models.machine_concurrency_limits import MachineConcurrencyLimits
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -40,12 +41,13 @@ class App(BaseModel):
     display_name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(description="Human-facing label; `name` stays the unique handle.")
     callback_timeout_seconds: Annotated[int, Field(le=60, strict=True, ge=1)] = Field(description="Resolved deadline for each callback HTTP request whose tool does not name one of its own. Defaults to 10. Webhook delivery is unaffected.  This ceiling is 60 while a single tool may declare up to 300 in `callback.timeout_seconds`. The asymmetry is the point: this value governs every callback the App makes, so raising it to cover one slow tool would make a hung delivery of a fast one invisible for just as long. Slow is named per tool. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(description="App-wide admission ceilings shared by machine, client-token, and anonymous-token callers. Null means unlimited machine admission; browser access requires finite values. ")
+    machine_concurrency_limits: Optional[MachineConcurrencyLimits] = Field(description="Optional per-tenant and per-user concurrency ceilings for machine credentials. Null leaves machine traffic subject only to the App-wide default_rate_limits. ")
     browser_access: Optional[BrowserAccess] = Field(description="Complete browser-direct configuration. Null means browser access is disabled and client JWTs receive no browser CORS permission. ")
     anonymous_access: Optional[AnonymousAccess] = Field(description="Managed public-browser mode. Null means nvoken will not mint anonymous tokens for this App. ")
     credit_policy: CreditPolicy
     created_at: datetime
     archived_at: Optional[datetime] = Field(description="When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating. ")
-    __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "browser_access", "anonymous_access", "credit_policy", "created_at", "archived_at"]
+    __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "machine_concurrency_limits", "browser_access", "anonymous_access", "credit_policy", "created_at", "archived_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -89,6 +91,9 @@ class App(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of default_rate_limits
         if self.default_rate_limits:
             _dict['default_rate_limits'] = self.default_rate_limits.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of machine_concurrency_limits
+        if self.machine_concurrency_limits:
+            _dict['machine_concurrency_limits'] = self.machine_concurrency_limits.to_dict()
         # override the default output from pydantic by calling `to_dict()` of browser_access
         if self.browser_access:
             _dict['browser_access'] = self.browser_access.to_dict()
@@ -114,6 +119,11 @@ class App(BaseModel):
         # and model_fields_set contains the field
         if self.default_rate_limits is None and "default_rate_limits" in self.model_fields_set:
             _dict['default_rate_limits'] = None
+
+        # set to None if machine_concurrency_limits (nullable) is None
+        # and model_fields_set contains the field
+        if self.machine_concurrency_limits is None and "machine_concurrency_limits" in self.model_fields_set:
+            _dict['machine_concurrency_limits'] = None
 
         # set to None if browser_access (nullable) is None
         # and model_fields_set contains the field
@@ -149,6 +159,7 @@ class App(BaseModel):
             "display_name": obj.get("display_name"),
             "callback_timeout_seconds": obj.get("callback_timeout_seconds"),
             "default_rate_limits": AppDefaultRateLimits.from_dict(obj["default_rate_limits"]) if obj.get("default_rate_limits") is not None else None,
+            "machine_concurrency_limits": MachineConcurrencyLimits.from_dict(obj["machine_concurrency_limits"]) if obj.get("machine_concurrency_limits") is not None else None,
             "browser_access": BrowserAccess.from_dict(obj["browser_access"]) if obj.get("browser_access") is not None else None,
             "anonymous_access": AnonymousAccess.from_dict(obj["anonymous_access"]) if obj.get("anonymous_access") is not None else None,
             "credit_policy": obj.get("credit_policy") if obj.get("credit_policy") is not None else CreditPolicy.FALSE,

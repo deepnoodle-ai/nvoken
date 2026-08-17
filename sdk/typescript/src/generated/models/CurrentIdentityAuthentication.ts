@@ -41,8 +41,9 @@ export interface CurrentIdentityAuthentication {
      */
     credentialId?: string;
     /**
-     * Null only for an Org-scoped machine credential. A browser grant
-     * is always App-scoped, so this is never null for one.
+     * Null for installation- and Org-scoped machine credentials. A
+     * browser grant is always App-scoped, so this is never null for
+     * one.
      *
      * @type {string}
      * @memberof CurrentIdentityAuthentication
@@ -108,12 +109,6 @@ export interface CurrentIdentityAuthentication {
      * @memberof CurrentIdentityAuthentication
      */
     method: CurrentIdentityAuthenticationMethodEnum;
-    /**
-     *
-     * @type {CurrentIdentityAuthenticationAssuranceEnum}
-     * @memberof CurrentIdentityAuthentication
-     */
-    assurance: CurrentIdentityAuthenticationAssuranceEnum;
 }
 
 
@@ -128,14 +123,6 @@ export const CurrentIdentityAuthenticationMethodEnum = {
 } as const;
 export type CurrentIdentityAuthenticationMethodEnum = typeof CurrentIdentityAuthenticationMethodEnum[keyof typeof CurrentIdentityAuthenticationMethodEnum];
 
-/**
- * @export
- */
-export const CurrentIdentityAuthenticationAssuranceEnum = {
-    Bearer: 'bearer'
-} as const;
-export type CurrentIdentityAuthenticationAssuranceEnum = typeof CurrentIdentityAuthenticationAssuranceEnum[keyof typeof CurrentIdentityAuthenticationAssuranceEnum];
-
 
 /**
  * Check if a given object implements the CurrentIdentityAuthentication interface.
@@ -144,7 +131,6 @@ export function instanceOfCurrentIdentityAuthentication(value: object): value is
     if (!('appId' in value) || value['appId'] === undefined) return false;
     if (!('operations' in value) || value['operations'] === undefined) return false;
     if (!('method' in value) || value['method'] === undefined) return false;
-    if (!('assurance' in value) || value['assurance'] === undefined) return false;
     return true;
 }
 
@@ -169,7 +155,6 @@ export function CurrentIdentityAuthenticationFromJSONTyped(json: any, ignoreDisc
         'sessionId': json['session_id'] == null ? undefined : json['session_id'],
         'operations': ((json['operations'] as Array<any>).map(OperationFromJSON)),
         'method': json['method'],
-        'assurance': json['assurance'],
     };
 }
 
@@ -195,6 +180,5 @@ export function CurrentIdentityAuthenticationToJSONTyped(value?: CurrentIdentity
         'session_id': value['sessionId'],
         'operations': ((value['operations'] as Array<any>).map(OperationToJSON)),
         'method': value['method'],
-        'assurance': value['assurance'],
     };
 }

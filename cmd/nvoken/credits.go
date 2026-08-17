@@ -129,13 +129,13 @@ func writeCreditAccountText(writer io.Writer, account *nvoken.CreditAccount) err
 	}
 	_, err := fmt.Fprintf(
 		writer,
-		"%s\tavailable=%s\tallocated=%s\tused=%s\theld=%s\tpaused=%d\t%s\n",
+		"%s\tavailable=%s\tallocated=%s\tused=%s\theld=%s\tbudget_hold=%d\t%s\n",
 		tenant,
 		account.Available.Amount,
 		account.Allocated.Amount,
 		account.Used.Amount,
 		account.Held.Amount,
-		account.PausedInvocations,
+		account.BudgetHoldInvocations,
 		account.Available.Currency,
 	)
 	return err

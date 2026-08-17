@@ -96,7 +96,7 @@ pub async fn get_model(
     }
 }
 
-/// Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.
+/// Returns the complete bounded set of text-generation models nvoken intentionally advertises. Catalog membership means nvoken maintains metadata for the exact provider/model selection. It does not prove that the caller's provider account, region, or selected provider key can access the model. Ordering is deterministic but has no semantic meaning.  Authentication is required, but no scoped operation is: this is installation-wide capability metadata and contains no App or tenant data. Browser grants cannot reach the model catalog.
 pub async fn list_models(
     configuration: &configuration::Configuration,
     provider: Option<&str>,

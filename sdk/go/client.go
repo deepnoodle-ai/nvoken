@@ -830,7 +830,7 @@ func (c *Client) InterruptInvocation(ctx context.Context, invocationID string) (
 	})
 }
 
-// ResumeInvocation raises the one exhausted turn-level ceiling on a paused
+// ResumeInvocation raises the one exhausted turn-level ceiling on a budget-held
 // Invocation. The service validates that exactly the exhausted limit changed
 // and that its replacement is above both the previous limit and usage so far.
 func (c *Client) ResumeInvocation(
@@ -1537,12 +1537,13 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 // It requires an Org-scoped or installation Operator credential.
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
 	body := generated.RegisterAppJSONRequestBody{
-		Name:                   name,
-		ExternalRef:            options.ExternalRef,
-		DisplayName:            options.DisplayName,
-		OrgID:                  options.OrgID,
-		CallbackTimeoutSeconds: options.CallbackTimeoutSeconds,
-		DefaultRateLimits:      options.DefaultRateLimits.generated(),
+		Name:                     name,
+		ExternalRef:              options.ExternalRef,
+		DisplayName:              options.DisplayName,
+		OrgID:                    options.OrgID,
+		CallbackTimeoutSeconds:   options.CallbackTimeoutSeconds,
+		DefaultRateLimits:        options.DefaultRateLimits.generated(),
+		MachineConcurrencyLimits: options.MachineConcurrencyLimits.generated(),
 	}
 	browser, err := options.BrowserAccess.generated()
 	if err != nil {
