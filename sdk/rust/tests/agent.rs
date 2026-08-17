@@ -801,10 +801,7 @@ async fn declared_agent_creates_its_record_on_first_use() {
     assert_eq!(agent.id().await.as_deref(), Some(AGENT_ID));
     let state = runtime.state.lock().unwrap();
     assert_eq!(state.agent_creates.len(), 1, "one create for two turns");
-    assert_eq!(
-        state.agent_creates[0]["agent_definition_key"],
-        json!("support")
-    );
+    assert_eq!(state.agent_creates[0]["definition_key"], json!("support"));
     assert_eq!(state.agent_creates[0]["tenant_key"], json!("customer-482"));
     assert!(state.agent_creates[0].get("agent_definition_id").is_none());
     for (agent_id, agent_key) in &state.admitted_identities {

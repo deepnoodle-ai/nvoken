@@ -725,7 +725,7 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 	if len(creates) != 1 {
 		t.Fatalf("creates = %d, want one for two turns", len(creates))
 	}
-	if creates[0]["agent_definition_key"] != "support" ||
+	if creates[0]["definition_key"] != "support" ||
 		creates[0]["tenant_key"] != "customer-482" ||
 		creates[0]["agent_definition_id"] != nil {
 		t.Fatalf("create body = %#v", creates[0])

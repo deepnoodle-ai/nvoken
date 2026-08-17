@@ -2666,7 +2666,7 @@ export class Agent<TOutput extends object = JsonObject> {
         agentKey: this.options.agentKey!,
         name: this.options.name,
         agentDefinitionId: this.options.agentDefinitionId,
-        agentDefinitionKey: this.options.definitionKey,
+        definitionKey: this.options.definitionKey,
         pinnedRevision: this.options.pinnedRevision,
       }, signal);
       this.verifyDeclaration(record);

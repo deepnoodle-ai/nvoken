@@ -234,7 +234,7 @@ class Agent(Generic[StructuredT]):
                 record = await self.client.create_agent(
                     agent_key=self.options.agent_key or "",
                     agent_definition_id=self.options.agent_definition_id,
-                    agent_definition_key=self.options.definition_key,
+                    definition_key=self.options.definition_key,
                     name=self.options.name,
                     tenant_key=self.options.tenant_key,
                     pinned_revision=self.options.pinned_revision,

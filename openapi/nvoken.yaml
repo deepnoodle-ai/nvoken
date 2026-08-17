@@ -999,9 +999,10 @@ paths:
         Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 
         Name the Definition with either `agent_definition_id` or
-        `agent_definition_key` — exactly one. The key spelling lets a caller
-        declare an Agent entirely from keys it already owns, with no lookup
-        first.
+        `definition_key` — exactly one. The key spelling lets a caller declare
+        an Agent entirely from keys it already owns, with no lookup first; it
+        is spelled the way the Agent Definition spells its own key, because it
+        is that value.
       requestBody:
         required: true
         content:
@@ -4650,7 +4651,7 @@ components:
           maxLength: 255
         agent_definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
-        agent_definition_key:
+        definition_key:
           type: string
           minLength: 1
           maxLength: 255

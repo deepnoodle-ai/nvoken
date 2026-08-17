@@ -1798,20 +1798,20 @@ func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*Agen
 	if input.AgentKey == "" {
 		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
 	}
-	if (input.AgentDefinitionID == "") == (input.AgentDefinitionKey == "") {
+	if (input.AgentDefinitionID == "") == (input.DefinitionKey == "") {
 		return nil, &Error{
 			Category: ErrorValidation,
-			Message:  "Supply exactly one of Agent Definition ID and Agent Definition key",
+			Message:  "Supply exactly one of Agent Definition ID and Definition key",
 		}
 	}
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
 		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
-			TenantKey:          input.TenantKey,
-			AgentKey:           input.AgentKey,
-			Name:               optionalString(input.Name),
-			AgentDefinitionID:  optionalString(input.AgentDefinitionID),
-			AgentDefinitionKey: optionalString(input.AgentDefinitionKey),
-			PinnedRevision:     input.PinnedRevision,
+			TenantKey:         input.TenantKey,
+			AgentKey:          input.AgentKey,
+			Name:              optionalString(input.Name),
+			AgentDefinitionID: optionalString(input.AgentDefinitionID),
+			DefinitionKey:     optionalString(input.DefinitionKey),
+			PinnedRevision:    input.PinnedRevision,
 		})
 		if err != nil {
 			return callResult[generated.Agent]{}, err

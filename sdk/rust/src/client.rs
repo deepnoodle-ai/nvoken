@@ -1045,7 +1045,7 @@ pub struct CreateAgentInput {
     /// The Agent Definition this Agent follows, by opaque ID or by
     /// `definition_key`. Supply exactly one.
     pub agent_definition_id: Option<String>,
-    pub agent_definition_key: Option<String>,
+    pub definition_key: Option<String>,
     pub pinned_revision: Option<u32>,
 }
 
@@ -1935,16 +1935,16 @@ impl Client {
         &self,
         input: CreateAgentInput,
     ) -> Result<models::Agent, NvokenError> {
-        if input.agent_definition_id.is_some() == input.agent_definition_key.is_some() {
+        if input.agent_definition_id.is_some() == input.definition_key.is_some() {
             return Err(NvokenError::validation(
-                "supply exactly one of agent_definition_id and agent_definition_key",
+                "supply exactly one of agent_definition_id and definition_key",
             ));
         }
         let mut body = models::CreateAgentRequest::new(input.agent_key);
         body.name = optional_name(&input.name);
         body.tenant_key = input.tenant_key;
         body.agent_definition_id = input.agent_definition_id;
-        body.agent_definition_key = input.agent_definition_key;
+        body.definition_key = input.definition_key;
         body.pinned_revision = input.pinned_revision.map(u64::from);
         apis::agents_api::create_agent(&self.configuration, body)
             .await

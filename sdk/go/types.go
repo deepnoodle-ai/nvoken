@@ -939,12 +939,13 @@ type CreateAgentInput struct {
 	TenantKey *string
 	AgentKey  string
 	Name      string
-	// AgentDefinitionID and AgentDefinitionKey are two spellings of one
-	// pointer: supply exactly one. The key spelling lets a caller declare an
-	// Agent from the keys it already owns, with no lookup first.
-	AgentDefinitionID  string
-	AgentDefinitionKey string
-	PinnedRevision     *int64
+	// AgentDefinitionID and DefinitionKey are two spellings of one pointer:
+	// supply exactly one. The key spelling lets a caller declare an Agent from
+	// the keys it already owns, with no lookup first, and carries the
+	// Definition's own field name because it carries the Definition's value.
+	AgentDefinitionID string
+	DefinitionKey     string
+	PinnedRevision    *int64
 }
 
 // UpdateAgentInput changes the Agent's display name and/or revision pin.

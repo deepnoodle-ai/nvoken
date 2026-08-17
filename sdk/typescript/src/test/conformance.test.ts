@@ -2721,7 +2721,7 @@ test("a declared Agent creates its record on first use", async () => {
   assert.deepEqual(creates[0], {
     tenant_key: "customer-482",
     agent_key: "support",
-    agent_definition_key: "support",
+    definition_key: "support",
   });
   // Ensured, so the record answers for the Agent from here on.
   assert.equal(support.id, agentId);

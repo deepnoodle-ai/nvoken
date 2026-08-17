@@ -54,7 +54,7 @@ export interface CreateAgentRequest {
      * @type {string}
      * @memberof CreateAgentRequest
      */
-    agentDefinitionKey?: string;
+    definitionKey?: string;
     /**
      *
      * @type {number}
@@ -85,7 +85,7 @@ export function CreateAgentRequestFromJSONTyped(json: any, ignoreDiscriminator: 
         'agentKey': json['agent_key'],
         'name': json['name'] == null ? undefined : json['name'],
         'agentDefinitionId': json['agent_definition_id'] == null ? undefined : json['agent_definition_id'],
-        'agentDefinitionKey': json['agent_definition_key'] == null ? undefined : json['agent_definition_key'],
+        'definitionKey': json['definition_key'] == null ? undefined : json['definition_key'],
         'pinnedRevision': json['pinned_revision'] == null ? undefined : json['pinned_revision'],
     };
 }
@@ -105,7 +105,7 @@ export function CreateAgentRequestToJSONTyped(value?: CreateAgentRequest | null,
         'agent_key': value['agentKey'],
         'name': value['name'],
         'agent_definition_id': value['agentDefinitionId'],
-        'agent_definition_key': value['agentDefinitionKey'],
+        'definition_key': value['definitionKey'],
         'pinned_revision': value['pinnedRevision'],
     };
 }

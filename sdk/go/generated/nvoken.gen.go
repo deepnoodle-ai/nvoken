@@ -3280,18 +3280,18 @@ type CostMetricsCostCoverage string
 type CreateAgentRequest struct {
 	// AgentDefinitionID Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
 	AgentDefinitionID *AgentDefinitionID `json:"agent_definition_id,omitempty"`
+	AgentKey          string             `json:"agent_key"`
 
-	// AgentDefinitionKey The `definition_key` of the Agent Definition this Agent follows,
+	// DefinitionKey The `definition_key` of the Agent Definition this Agent follows,
 	// as an alternative spelling of `agent_definition_id`. Supply
 	// exactly one; supplying both or neither is `400`. The key is
 	// resolved in the same transaction that resolves the Agent, so a
 	// create and a restatement compare the same Definition however it
 	// was named.
-	AgentDefinitionKey *string `json:"agent_definition_key,omitempty"`
-	AgentKey           string  `json:"agent_key"`
-	Name               *string `json:"name,omitempty"`
-	PinnedRevision     *int64  `json:"pinned_revision,omitempty"`
-	TenantKey          *string `json:"tenant_key,omitempty"`
+	DefinitionKey  *string `json:"definition_key,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	PinnedRevision *int64  `json:"pinned_revision,omitempty"`
+	TenantKey      *string `json:"tenant_key,omitempty"`
 }
 
 // CreateClientKeyRequest defines model for CreateClientKeyRequest.
@@ -8944,9 +8944,10 @@ type ClientInterface interface {
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Name the Definition with either `agent_definition_id` or
-	// `agent_definition_key` — exactly one. The key spelling lets a caller
-	// declare an Agent entirely from keys it already owns, with no lookup
-	// first.
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -8969,9 +8970,10 @@ type ClientInterface interface {
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Name the Definition with either `agent_definition_id` or
-	// `agent_definition_key` — exactly one. The key spelling lets a caller
-	// declare an Agent entirely from keys it already owns, with no lookup
-	// first.
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10851,9 +10853,10 @@ func (c *Client) ListAgents(ctx context.Context, params *ListAgentsParams, reqEd
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Name the Definition with either `agent_definition_id` or
-// `agent_definition_key` — exactly one. The key spelling lets a caller
-// declare an Agent entirely from keys it already owns, with no lookup
-// first.
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes any type of body and a specified content type.
 //
@@ -10886,9 +10889,10 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Name the Definition with either `agent_definition_id` or
-// `agent_definition_key` — exactly one. The key spelling lets a caller
-// declare an Agent entirely from keys it already owns, with no lookup
-// first.
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -19127,9 +19131,10 @@ type ClientWithResponsesInterface interface {
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Name the Definition with either `agent_definition_id` or
-	// `agent_definition_key` — exactly one. The key spelling lets a caller
-	// declare an Agent entirely from keys it already owns, with no lookup
-	// first.
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19152,9 +19157,10 @@ type ClientWithResponsesInterface interface {
 	// Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 	//
 	// Name the Definition with either `agent_definition_id` or
-	// `agent_definition_key` — exactly one. The key spelling lets a caller
-	// declare an Agent entirely from keys it already owns, with no lookup
-	// first.
+	// `definition_key` — exactly one. The key spelling lets a caller declare
+	// an Agent entirely from keys it already owns, with no lookup first; it
+	// is spelled the way the Agent Definition spells its own key, because it
+	// is that value.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -28557,9 +28563,10 @@ func (c *ClientWithResponses) ListAgentsWithResponse(ctx context.Context, params
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Name the Definition with either `agent_definition_id` or
-// `agent_definition_key` — exactly one. The key spelling lets a caller
-// declare an Agent entirely from keys it already owns, with no lookup
-// first.
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -28588,9 +28595,10 @@ func (c *ClientWithResponses) CreateAgentWithBodyWithResponse(ctx context.Contex
 // Agent; use `PATCH /v1/agents/{agent_id}` to change either.
 //
 // Name the Definition with either `agent_definition_id` or
-// `agent_definition_key` — exactly one. The key spelling lets a caller
-// declare an Agent entirely from keys it already owns, with no lookup
-// first.
+// `definition_key` — exactly one. The key spelling lets a caller declare
+// an Agent entirely from keys it already owns, with no lookup first; it
+// is spelled the way the Agent Definition spells its own key, because it
+// is that value.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

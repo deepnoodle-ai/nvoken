@@ -353,7 +353,7 @@ impl Agent {
                     agent_key: options.agent_key.clone().unwrap_or_default(),
                     name: options.name.clone().unwrap_or_default(),
                     agent_definition_id: options.agent_definition_id.clone(),
-                    agent_definition_key: options.definition_key.clone(),
+                    definition_key: options.definition_key.clone(),
                     pinned_revision: options.pinned_revision,
                 })
                 .await?;

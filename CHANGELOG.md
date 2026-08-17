@@ -20,10 +20,10 @@ without republishing every artifact.
   (`AgentOptions::declared`, `ensure`, `resource`).
 
 - **An Agent names its Definition by key.** `POST /v1/agents` accepts
-  `agent_definition_key` in place of `agent_definition_id`, so declaring an
-  Agent needs no lookup first. `nvoken agent create` takes
-  `--agent-definition-key`, and `--name` is optional now that it defaults to
-  the Agent key.
+  `definition_key` in place of `agent_definition_id` — the same spelling the
+  Agent Definition uses for its own key — so declaring an Agent needs no
+  lookup first. `nvoken agent create` takes `--definition-key`, and `--name`
+  is optional now that it defaults to the Agent key.
 
 - **Fixed: the default `fetch` is bound, so streaming works on workerd.** It
   was stored unbound and invoked as a method, which throws `Illegal

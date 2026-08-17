@@ -345,7 +345,7 @@ async def test_declared_agent_creates_its_record_on_first_use() -> None:
     await agent.invoke("second")
 
     assert len(client.creates) == 1
-    assert client.creates[0]["agent_definition_key"] == "support"
+    assert client.creates[0]["definition_key"] == "support"
     assert client.creates[0]["agent_definition_id"] is None
     assert agent.id == "agent_declared"
     # Admission uses the record's ID once it is known.

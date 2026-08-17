@@ -26,11 +26,8 @@ pub struct CreateAgentRequest {
     )]
     pub agent_definition_id: Option<String>,
     /// The `definition_key` of the Agent Definition this Agent follows, as an alternative spelling of `agent_definition_id`. Supply exactly one; supplying both or neither is `400`. The key is resolved in the same transaction that resolves the Agent, so a create and a restatement compare the same Definition however it was named.
-    #[serde(
-        rename = "agent_definition_key",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub agent_definition_key: Option<String>,
+    #[serde(rename = "definition_key", skip_serializing_if = "Option::is_none")]
+    pub definition_key: Option<String>,
     #[serde(rename = "pinned_revision", skip_serializing_if = "Option::is_none")]
     pub pinned_revision: Option<u64>,
 }
@@ -42,7 +39,7 @@ impl CreateAgentRequest {
             agent_key,
             name: None,
             agent_definition_id: None,
-            agent_definition_key: None,
+            definition_key: None,
             pinned_revision: None,
         }
     }

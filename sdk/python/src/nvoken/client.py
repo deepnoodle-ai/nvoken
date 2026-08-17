@@ -651,7 +651,7 @@ class Client:
         *,
         agent_key: str,
         agent_definition_id: str | None = None,
-        agent_definition_key: str | None = None,
+        definition_key: str | None = None,
         name: str | None = None,
         tenant_key: str | None = None,
         pinned_revision: int | None = None,
@@ -659,13 +659,13 @@ class Client:
         """Create or resolve one tenant's Agent record.
 
         Name the Definition with ``agent_definition_id`` or
-        ``agent_definition_key`` — exactly one. ``name`` defaults to the Agent
+        ``definition_key`` — exactly one. ``name`` defaults to the Agent
         key.
         """
-        if bool(agent_definition_id) == bool(agent_definition_key):
+        if bool(agent_definition_id) == bool(definition_key):
             raise NvokenError(
                 "validation",
-                "supply exactly one of agent_definition_id and agent_definition_key",
+                "supply exactly one of agent_definition_id and definition_key",
             )
         return await self._replay_safe(lambda: self.agents.create_agent(
             CreateAgentRequest(
@@ -673,7 +673,7 @@ class Client:
                 agent_key=agent_key,
                 name=name,
                 agent_definition_id=agent_definition_id,
-                agent_definition_key=agent_definition_key,
+                definition_key=definition_key,
                 pinned_revision=pinned_revision,
             )
         ))

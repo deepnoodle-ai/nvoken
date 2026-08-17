@@ -186,18 +186,18 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 	case "/v1/agents":
 		if request.Method == http.MethodPost {
 			var body struct {
-				TenantKey          *string `json:"tenant_key"`
-				AgentKey           string  `json:"agent_key"`
-				Name               string  `json:"name"`
-				AgentDefinitionID  string  `json:"agent_definition_id"`
-				AgentDefinitionKey string  `json:"agent_definition_key"`
-				PinnedRevision     *int    `json:"pinned_revision"`
+				TenantKey         *string `json:"tenant_key"`
+				AgentKey          string  `json:"agent_key"`
+				Name              string  `json:"name"`
+				AgentDefinitionID string  `json:"agent_definition_id"`
+				DefinitionKey     string  `json:"definition_key"`
+				PinnedRevision    *int    `json:"pinned_revision"`
 			}
 			// The Definition arrives under exactly one of its two spellings,
 			// and both name the single Definition this server knows.
 			err := json.NewDecoder(request.Body).Decode(&body)
 			namedByID := body.AgentDefinitionID == definitionID
-			namedByKey := body.AgentDefinitionKey == definitionKey
+			namedByKey := body.DefinitionKey == definitionKey
 			if err != nil || body.AgentKey != "support" || namedByID == namedByKey {
 				writeError(response, http.StatusBadRequest, "invalid_request", "Agent did not round-trip")
 				return true

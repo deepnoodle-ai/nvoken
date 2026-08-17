@@ -218,12 +218,12 @@ func (a *Agent) Ensure(ctx context.Context) (*AgentResource, error) {
 	}
 	if a.options.DefinitionKey != "" || a.options.AgentDefinitionID != "" {
 		record, err := a.client.CreateAgent(ctx, CreateAgentInput{
-			TenantKey:          a.options.TenantKey,
-			AgentKey:           a.options.AgentKey,
-			Name:               a.options.Name,
-			AgentDefinitionID:  a.options.AgentDefinitionID,
-			AgentDefinitionKey: a.options.DefinitionKey,
-			PinnedRevision:     a.options.PinnedRevision,
+			TenantKey:         a.options.TenantKey,
+			AgentKey:          a.options.AgentKey,
+			Name:              a.options.Name,
+			AgentDefinitionID: a.options.AgentDefinitionID,
+			DefinitionKey:     a.options.DefinitionKey,
+			PinnedRevision:    a.options.PinnedRevision,
 		})
 		if err != nil {
 			return nil, err
