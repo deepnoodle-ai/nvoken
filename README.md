@@ -46,7 +46,7 @@ await client.createAgentDefinition({
   name: "Support",
   definition: {
     instructions: "Be concise and helpful.",
-    model: { provider: "openai", id: "<model-id>" },
+    model: "anthropic/claude-sonnet-5",
   },
 });
 // Declared from its keys; the Agent creates its record on first use.
@@ -54,6 +54,12 @@ const agent = client.agent({ agentKey: "support", definitionKey: "support" });
 
 console.log(await agent.text("Summarize the latest customer request."));
 ```
+
+An Agent is one type in every SDK: the server record and the object that runs
+its turns. Declaring it locally costs no round trip, `ensure()` creates or reads
+the record without mutating it, and `getAgent()` returns that same type already
+hydrated. Both creates are keyed and idempotent, so the snippet is safe to run
+twice.
 
 See the [nvoken quickstart](https://nvoken.com/docs/quickstart) and the
 language-specific guides in [`sdk/`](sdk/).
@@ -72,9 +78,10 @@ uses `NVOKEN_BASE_URL` and `NVOKEN_API_KEY`, or named credential profiles:
 nvoken auth login --profile work --default
 nvoken model list
 nvoken agent-definition create --definition-key support --name Support \
-  --instructions "Be concise and helpful." --provider openai --model <model-id> \
+  --instructions "Be concise and helpful." \
+  --provider anthropic --model claude-sonnet-5 \
   --idempotency-key support-definition-v1
-nvoken agent create --agent-key support --name Support --agent-definition-id <definition-id>
+nvoken agent create --agent-key support --definition-key support
 nvoken invoke --agent-key support "Hello"
 ```
 
@@ -92,6 +99,8 @@ sdk/rust/             Rust crate
 sdk/conformance/      Cross-language fixtures and local test server
 openapi/              The nvoken API contract, published here by the service
 examples/             Executable SDK examples
+docs/                 Design records, guides, protocol reference, research
+scripts/              Version, contract, and CLI release tooling
 ```
 
 The architecture and ownership boundaries are recorded in
