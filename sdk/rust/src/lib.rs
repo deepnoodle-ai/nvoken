@@ -27,8 +27,9 @@ pub use ask_user::{
     AskUserOption, AskUserOutput, ASK_USER_DESCRIPTION, ASK_USER_TOOL_NAME,
 };
 pub use callback::{
-    acknowledge_callback, callback_result, deduplicate_callback_result, verify_callback,
-    CallbackContext, CallbackEnvelope, CallbackReply, CallbackResultStore, VerifiedCallback,
+    acknowledge_callback, callback_result, verify_callback, CallbackContext, CallbackDelivery,
+    CallbackEnvelope, CallbackOutcome, CallbackReceiver, CallbackReceiverBuilder, CallbackReply,
+    CallbackResultStore, CallbackTool, VerifiedCallback,
 };
 pub use client::{
     fetch_tool, AgentDefinition, AgentDefinitionOverrides, BudgetExhaustionBehavior, Client,
@@ -55,10 +56,12 @@ pub use media_preflight::{
 };
 pub use schema_preflight::{preflight_output_schema, SchemaIssue};
 pub use signed_delivery::{
-    verify_signed_delivery, DeliveryError, SignedDelivery, SIGNATURE_TIMESTAMP_WINDOW,
+    verify_signed_delivery, DeliveryError, DeliveryKeyError, DeliveryKeyTableError,
+    DeliverySigningKey, SignedDelivery, SIGNATURE_TIMESTAMP_WINDOW,
 };
 pub use stream::{ReducedSnapshot, Reducer, StreamEvent, StreamPreview};
 pub use webhook::{
     accept_webhook, retry_webhook, verify_webhook, webhook_status_is_retried, VerifiedWebhook,
-    WebhookContext, WebhookEnvelope, WebhookReply, WebhookSubject,
+    WebhookContext, WebhookDelivery, WebhookEnvelope, WebhookHandler, WebhookOutcome,
+    WebhookReceiver, WebhookReceiverBuilder, WebhookReply, WebhookSubject,
 };

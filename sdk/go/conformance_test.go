@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -930,9 +931,10 @@ type deliverySigningVector struct {
 	Now     int64  `json:"now"`
 	Vectors struct {
 		Callback struct {
-			ToolName string            `json:"tool_name"`
-			Headers  map[string]string `json:"headers"`
-			Body     string            `json:"body"`
+			ToolName             string            `json:"tool_name"`
+			AuthorizationContext map[string]string `json:"authorization_context"`
+			Headers              map[string]string `json:"headers"`
+			Body                 string            `json:"body"`
 		} `json:"callback"`
 		Webhook struct {
 			Event    string            `json:"event"`
@@ -986,6 +988,24 @@ func TestSharedCallbackVector(t *testing.T) {
 	if verified.ToolName != vector.ToolName || verified.Envelope.Nvoken.ToolName != vector.ToolName {
 		t.Fatalf("verified tool name = %q/%q, want %q", verified.ToolName, verified.Envelope.Nvoken.ToolName, vector.ToolName)
 	}
+	// The authorization context is a sibling of `nvoken`, not a member, and the
+	// vector is what holds four SDKs to that placement. The input repeats one of
+	// its keys on purpose: a receiver may check that the two agree, and may never
+	// read the board out of the input alone, because the model wrote the input.
+	if len(vector.AuthorizationContext) == 0 {
+		t.Fatal("callback vector publishes no authorization_context")
+	}
+	if !maps.Equal(verified.AuthorizationContext, vector.AuthorizationContext) ||
+		!maps.Equal(verified.Envelope.AuthorizationContext, vector.AuthorizationContext) {
+		t.Fatalf("verified authorization context = %v, want %v", verified.AuthorizationContext, vector.AuthorizationContext)
+	}
+	var input map[string]string
+	if err := json.Unmarshal(verified.Envelope.Input, &input); err != nil {
+		t.Fatal(err)
+	}
+	if input["board"] != verified.AuthorizationContext["board"] {
+		t.Fatalf("vector input board = %q, want the signed context's %q", input["board"], verified.AuthorizationContext["board"])
+	}
 	for name, mutate := range tamperings {
 		t.Run(name, func(t *testing.T) {
 			changedHeader, changedBody := mutate(header.Clone(), []byte(vector.Body))
@@ -994,15 +1014,218 @@ func TestSharedCallbackVector(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCallbackReceiverReplyDiscipline drives every row of the discipline the
+// receiver owns.
+//
+// The receiver's whole job is the answer it gives nvoken, since that answer
+// decides whether a ToolCall settles, retries, or fails for good. Driving it
+// against the published vector rather than a body written for the test is what
+// keeps the two from being separately right.
+func TestCallbackReceiverReplyDiscipline(t *testing.T) {
+	var document deliverySigningVector
+	decodeFile(t, "../../docs/design/delivery-signing-v1.json", &document)
+	vector := document.Vectors.Callback
+	body := []byte(vector.Body)
+	now := func() time.Time { return time.Unix(document.Now, 0) }
+	keys := []DeliverySigningKey{{
+		KeyID:   vector.Headers["X-Nvoken-Signing-Key-ID"],
+		Version: 1,
+		Secret:  []byte(document.Key),
+	}}
+	header := func() http.Header { return vectorHeader(vector.Headers) }
+
+	ran := 0
 	store := &memoryResultStore{}
-	first, duplicate, err := DeduplicateCallbackResult(context.Background(), store, conformanceToolCallID, json.RawMessage(`{"ok":true}`))
-	if err != nil || duplicate {
-		t.Fatalf("first result: %s duplicate=%v err=%v", first, duplicate, err)
+	receiver, err := NewCallbackReceiver(CallbackReceiverOptions{
+		Keys:  keys,
+		Store: store,
+		Now:   now,
+		Tools: map[string]CallbackToolHandler{
+			vector.ToolName: func(_ context.Context, delivery VerifiedCallback) (CallbackReply, error) {
+				ran++
+				// Authorization comes off the signed sibling, never off the input.
+				if delivery.AuthorizationContext["board"] != "brd_9f21" {
+					t.Fatalf("handler saw authorization context %v", delivery.AuthorizationContext)
+				}
+				return CallbackResult(map[string]string{"ticket": "T-1042"}, false)
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	stored, duplicate, err := DeduplicateCallbackResult(context.Background(), store, conformanceToolCallID, json.RawMessage(`{"ok":false}`))
-	if err != nil || !duplicate || string(stored) != `{"ok":true}` {
-		t.Fatalf("duplicate result: %s duplicate=%v err=%v", stored, duplicate, err)
+
+	settled := receiver.Handle(context.Background(), header(), body)
+	if settled.Outcome != CallbackSettled || settled.Reply.Status != http.StatusOK ||
+		settled.Delivery.ToolCallID != conformanceToolCallID {
+		t.Fatalf("settled delivery = %#v", settled)
 	}
+	// A redelivery answers from the store. The tool must not run twice: it would
+	// repeat every effect it had, which is the whole reason the store exists.
+	replayed := receiver.Handle(context.Background(), header(), body)
+	if replayed.Outcome != CallbackReplayed || string(replayed.Reply.Body) != string(settled.Reply.Body) || ran != 1 {
+		t.Fatalf("replayed delivery = %#v ran=%d", replayed, ran)
+	}
+
+	// An identity this receiver does not hold is refused permanently, and an
+	// unconfigured one is not: only one of the two is the sender's fault, and
+	// they are indistinguishable to nvoken unless the status separates them.
+	rotated := mustCallbackReceiver(t, CallbackReceiverOptions{
+		Keys: []DeliverySigningKey{{KeyID: keys[0].KeyID, Version: 2, Secret: keys[0].Secret}},
+		Now:  now,
+	})
+	if answered := rotated.Handle(context.Background(), header(), body); answered.Reply.Status != http.StatusUnauthorized ||
+		answered.Reason != "unknown_key" {
+		t.Fatalf("unknown key = %#v", answered)
+	}
+	unconfigured := mustCallbackReceiver(t, CallbackReceiverOptions{Now: now})
+	if answered := unconfigured.Handle(context.Background(), header(), body); answered.Reply.Status != http.StatusServiceUnavailable ||
+		answered.Reason != "not_configured" {
+		t.Fatalf("unconfigured = %#v", answered)
+	}
+	noTool := mustCallbackReceiver(t, CallbackReceiverOptions{Keys: keys, Now: now})
+	if answered := noTool.Handle(context.Background(), header(), body); answered.Reply.Status != http.StatusBadRequest ||
+		answered.Reason != "unknown_tool" {
+		t.Fatalf("unknown tool = %#v", answered)
+	}
+
+	// An error from the handler is the receiver failing, not the tool. The tool
+	// failing settles the call with is_error, which the model can read and
+	// correct itself against.
+	broken := mustCallbackReceiver(t, CallbackReceiverOptions{
+		Keys: keys,
+		Now:  now,
+		Tools: map[string]CallbackToolHandler{
+			vector.ToolName: func(context.Context, VerifiedCallback) (CallbackReply, error) {
+				return CallbackReply{}, errors.New("database unreachable")
+			},
+		},
+	})
+	if answered := broken.Handle(context.Background(), header(), body); answered.Reply.Status != http.StatusServiceUnavailable ||
+		answered.Reason != "handler_failed" || !answered.Verified {
+		t.Fatalf("handler failure = %#v", answered)
+	}
+	toolError := mustCallbackReceiver(t, CallbackReceiverOptions{
+		Keys: keys,
+		Now:  now,
+		Tools: map[string]CallbackToolHandler{
+			vector.ToolName: func(context.Context, VerifiedCallback) (CallbackReply, error) {
+				return CallbackResult(map[string]string{"error": "no such ticket"}, true)
+			},
+		},
+	})
+	answered := toolError.Handle(context.Background(), header(), body)
+	if answered.Outcome != CallbackSettled || !bytes.Contains(answered.Reply.Body, []byte(`"is_error":true`)) {
+		t.Fatalf("tool error = %#v", answered)
+	}
+
+	// A version that cannot be read as a positive integer fails the build rather
+	// than a live delivery, where the refusal would be permanent.
+	for name, broken := range map[string][]DeliverySigningKey{
+		"non-positive version": {{KeyID: keys[0].KeyID, Secret: keys[0].Secret}},
+		"duplicate slot":       {keys[0], keys[0]},
+		"short secret":         {{KeyID: keys[0].KeyID, Version: 1, Secret: []byte("too short")}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewCallbackReceiver(CallbackReceiverOptions{Keys: broken}); err == nil {
+				t.Fatal("receiver was built from an unusable key table")
+			}
+		})
+	}
+}
+
+func mustCallbackReceiver(t *testing.T, options CallbackReceiverOptions) *CallbackReceiver {
+	t.Helper()
+	receiver, err := NewCallbackReceiver(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receiver
+}
+
+// TestWebhookReceiverReplyDiscipline covers where the webhook receiver differs
+// from its callback twin: nvoken ignores the body, an unhandled event is not a
+// failure, and ordering stays the host's.
+func TestWebhookReceiverReplyDiscipline(t *testing.T) {
+	var document deliverySigningVector
+	decodeFile(t, "../../docs/design/delivery-signing-v1.json", &document)
+	vector := document.Vectors.Webhook
+	body := []byte(vector.Body)
+	now := func() time.Time { return time.Unix(document.Now, 0) }
+	keys := []DeliverySigningKey{{
+		KeyID:   vector.Headers["X-Nvoken-Signing-Key-ID"],
+		Version: 1,
+		Secret:  []byte(document.Key),
+	}}
+	header := func() http.Header { return vectorHeader(vector.Headers) }
+
+	applied := int64(0)
+	handled := mustWebhookReceiver(t, WebhookReceiverOptions{
+		Keys: keys,
+		Now:  now,
+		Events: map[WebhookEvent]WebhookEventHandler{
+			WebhookEvent(vector.Event): func(_ context.Context, delivery VerifiedWebhook) error {
+				// The fold the host owns: only a delivery that advances the
+				// Invocation is applied, and the comparison belongs in its own
+				// transaction.
+				if delivery.Supersedes(applied) {
+					applied = delivery.Sequence
+				}
+				return nil
+			},
+		},
+	}).Handle(context.Background(), header(), body)
+	if handled.Outcome != WebhookHandled || handled.Reply.Status != http.StatusOK || applied != vector.Sequence {
+		t.Fatalf("handled = %#v applied=%d", handled, applied)
+	}
+
+	// An event with no handler is still a delivery. Retrying it would spend
+	// nvoken's bounded attempts reaching the same absent handler.
+	ignored := mustWebhookReceiver(t, WebhookReceiverOptions{Keys: keys, Now: now}).
+		Handle(context.Background(), header(), body)
+	if ignored.Outcome != WebhookIgnored || ignored.Reason != "unhandled_event" ||
+		WebhookStatusIsRetried(ignored.Reply.Status) {
+		t.Fatalf("ignored = %#v", ignored)
+	}
+
+	failed := mustWebhookReceiver(t, WebhookReceiverOptions{
+		Keys: keys,
+		Now:  now,
+		Events: map[WebhookEvent]WebhookEventHandler{
+			WebhookEvent(vector.Event): func(context.Context, VerifiedWebhook) error {
+				return errors.New("store unreachable")
+			},
+		},
+	}).Handle(context.Background(), header(), body)
+	if failed.Outcome != WebhookFailed || failed.Reason != "handler_failed" ||
+		!WebhookStatusIsRetried(failed.Reply.Status) {
+		t.Fatalf("failed = %#v", failed)
+	}
+
+	// The callback key must not verify a webhook and the reverse, which is what
+	// the two purposes are for.
+	crossed := mustWebhookReceiver(t, WebhookReceiverOptions{
+		Keys: []DeliverySigningKey{{
+			KeyID:   document.Vectors.Callback.Headers["X-Nvoken-Signing-Key-ID"],
+			Version: 1,
+			Secret:  []byte(document.Key),
+		}},
+		Now: now,
+	}).Handle(context.Background(), header(), body)
+	if crossed.Reply.Status != http.StatusUnauthorized || crossed.Reason != "unknown_key" {
+		t.Fatalf("crossed key = %#v", crossed)
+	}
+}
+
+func mustWebhookReceiver(t *testing.T, options WebhookReceiverOptions) *WebhookReceiver {
+	t.Helper()
+	receiver, err := NewWebhookReceiver(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return receiver
 }
 
 // TestSharedWebhookVector is the callback vector's twin, and the point of
@@ -1128,15 +1351,23 @@ func TestSharedReducerVector(t *testing.T) {
 }
 
 type memoryResultStore struct {
-	value json.RawMessage
+	replies map[string]CallbackReply
 }
 
-func (s *memoryResultStore) PutIfAbsent(_ context.Context, _ string, result json.RawMessage) (json.RawMessage, bool, error) {
-	if s.value != nil {
-		return s.value, false, nil
+func (s *memoryResultStore) Find(_ context.Context, toolCallID string) (CallbackReply, bool, error) {
+	reply, found := s.replies[toolCallID]
+	return reply, found, nil
+}
+
+func (s *memoryResultStore) PutIfAbsent(_ context.Context, toolCallID string, reply CallbackReply) (CallbackReply, bool, error) {
+	if existing, found := s.replies[toolCallID]; found {
+		return existing, false, nil
 	}
-	s.value = append(json.RawMessage(nil), result...)
-	return s.value, true, nil
+	if s.replies == nil {
+		s.replies = map[string]CallbackReply{}
+	}
+	s.replies[toolCallID] = reply
+	return reply, true, nil
 }
 
 func assertGoError(t *testing.T, client *Client, invocationID string, category ErrorCategory, status int) {
@@ -1350,6 +1581,18 @@ func TestSharedCallbackWireFixture(t *testing.T) {
 	}
 	if verified.ToolName != context["tool_name"] || verified.ToolCallID != toolCallID {
 		t.Fatalf("verified tool = %q call = %q", verified.ToolName, verified.ToolCallID)
+	}
+	// The documented envelope has to show the sibling placement too, since this
+	// is the example an integrator copies. Reading it back through the verifier
+	// is what keeps the example and the decoder one thing.
+	documented, ok := fixture.CallbackWire.Request["authorization_context"].(map[string]any)
+	if !ok || len(documented) == 0 {
+		t.Fatal("documented callback envelope has no authorization_context sibling")
+	}
+	for name, value := range documented {
+		if verified.AuthorizationContext[name] != value {
+			t.Fatalf("verified authorization context %q = %q, want %v", name, verified.AuthorizationContext[name], value)
+		}
 	}
 }
 

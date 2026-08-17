@@ -402,6 +402,96 @@ waiting Invocation's pending calls the same way a host call does, so
 must run yourself — answerable and `mode` `Host` — and an `Agent` dispatches
 exactly that, whatever its own definition declares.
 
+## A callback endpoint, whole
+
+`verify_callback` is the signature. Around it every receiver writes the same key
+table, the same deduplication, and the same reply discipline —
+`CallbackReceiver` is that, so you write the tools:
+
+```rust
+use nvoken::{callback_result, CallbackReceiver, DeliverySigningKey, VerifiedCallback};
+
+let receiver = CallbackReceiver::builder(vec![
+    // Two entries span a rotation: nvoken mints the next version while still
+    // signing with the current one.
+    DeliverySigningKey::new(&key_id, 2, secret),
+    DeliverySigningKey::new(&key_id, 1, previous_secret),
+])
+.tool("open_ticket", |delivery: &VerifiedCallback| {
+    let board = delivery.authorization_context.get("board").cloned();
+    let input = delivery.envelope.input.clone();
+    async move {
+        match open_ticket(board, input).await {
+            Ok(ticket) => callback_result(ticket, false).map_err(|e| e.to_string()),
+            // The tool failed, not the receiver: settle it so the model can
+            // read the error and correct itself.
+            Err(error) => callback_result(json!({"error": error}), true).map_err(|e| e.to_string()),
+        }
+    }
+})
+.store(ticket_replies)
+.build()?;
+
+let answered = receiver.handle(request.headers(), &body, SystemTime::now()).await;
+tracing::info!(outcome = ?answered.outcome, reason = answered.reason, "nvoken callback");
+```
+
+`handle` never returns `Err`. Everything that can go wrong is a status nvoken
+understands, and `outcome` — `Settled`, `Acknowledged`, `Replayed`, `Refused`,
+`Failed` — is what the status alone cannot tell you, with a stable `reason`
+token for the log line.
+
+The statuses are decisions about whether nvoken tries again:
+
+| situation | status |
+| --- | --- |
+| no keys configured | 503 — an operator error, still fixable in the window |
+| signing identity not held | 401 — redelivery reproduces it |
+| signature or envelope invalid | 401 — the same bytes fail the same way |
+| no handler for the signed tool name | 400 — nothing here can ever run it |
+| a tool answered, or failed | 200 — settle it, carrying `is_error` if it failed |
+| your handler returned `Err` | 503 — you failed, not the tool |
+
+`store` is a `find`-then-`put_if_absent` pair, in that order. `find` runs before
+your tool does, because delivery is at least once and re-running the tool
+repeats every effect it had; `put_if_absent` runs after, because two deliveries
+of one ToolCall can be in flight at once and only one reply may win. Leave the
+store unset only when every tool on the endpoint is safe to run twice.
+
+`build()` validates the key table: a zero version, a secret under 32 bytes, or
+the same `(key_id, version)` twice fails at startup rather than refusing a live
+delivery, where the refusal would be permanent.
+
+### Authorizing a delivery
+
+Verification proves the delivery came from nvoken. It does not say what the work
+belongs to, and the tool input cannot either — the model wrote it.
+`SessionOptions::authorization_context` is what you asserted when the Session
+was created, and it arrives inside the signed body as a **sibling** of `nvoken`:
+
+```json
+{
+  "nvoken": { "tool_name": "open_ticket", "tenant_key": "acme" },
+  "authorization_context": { "board": "brd_9f21" },
+  "input": { "board": "brd_9f21", "ticket": "A-42" }
+}
+```
+
+Everything inside `nvoken` is a fact nvoken minted; this is a value you asserted
+and nvoken carried unchanged. Signing proves it reached you as recorded, not
+that it is true. Which gives the rule:
+
+> **A value repeated in tool input may only agree with the authorization
+> context, never establish it.**
+
+Checking that the two agree is reasonable. Reading the board out of `input` when
+the context is absent is not. Authorizing from the signed sibling is also what
+removes the per-delivery `get_invocation` a receiver otherwise needs to recover
+which of your objects the work is for.
+
+[Receiving signed deliveries](../../docs/reference/callback-receivers.md) is the
+long form, language-neutral.
+
 ## Invocation webhooks
 
 A turn that ends tells you so, without you holding a connection open to hear
@@ -450,6 +540,27 @@ merely busy is a settlement you silently lost.
 Retries are bounded, so webhooks alone are not a settlement guarantee.
 `Client::list_ended_invocations` is the backstop: it walks turns in the order
 they ended, so a delivery that never landed is one you still find.
+
+`WebhookReceiver` is `CallbackReceiver`'s twin — same key table, same reply
+discipline — for the endpoint that has more than one event:
+
+```rust
+let receiver = WebhookReceiver::builder(vec![DeliverySigningKey::new(&key_id, 1, secret)])
+    .event(WebhookEvent::InvocationEnded, settle_in_one_transaction)
+    .event(WebhookEvent::InvocationPaused, alert_on_funding_hold)
+    .build()?;
+```
+
+A handler returning `Ok` answers 200; one returning `Err` answers 503 and nvoken
+delivers again. An event you subscribed to but registered no handler for answers
+200 with outcome `Ignored` — retrying it would only spend nvoken's bounded
+attempts reaching the same absent handler.
+
+The sequence fold stays yours, deliberately: the compare and the write have to
+happen in the same transaction as the state they guard, and the receiver cannot
+open it. Call `delivery.supersedes(applied)` inside yours, and record nothing
+when it says no — a superseded delivery is still a delivery, and still answers
+200.
 
 ## Browser-direct access
 

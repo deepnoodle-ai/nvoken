@@ -1,4 +1,10 @@
-import { verifySignedDelivery } from "./signed-delivery.js";
+import {
+  DeliveryKeyError,
+  deliverySigningKeys,
+  selectDeliveryKey,
+  verifySignedDelivery,
+  type DeliverySigningKey,
+} from "./signed-delivery.js";
 import { WebhookEvent } from "./generated/models/WebhookEvent.js";
 import type { CreditBlock } from "./generated/models/CreditBlock.js";
 import type { InvocationStatus } from "./generated/models/InvocationStatus.js";
@@ -177,4 +183,98 @@ export function retryWebhook(): WebhookReply {
  */
 export function webhookStatusIsRetried(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+/**
+ * Records one transition. Throwing asks nvoken to deliver it again, so throw
+ * when the receiver could not record it and return when it did.
+ */
+export type WebhookEventHandler = (delivery: VerifiedWebhook) => Promise<void> | void;
+
+/** What a receiver did with one webhook delivery, and the reply the host writes. */
+export interface WebhookDeliveryOutcome {
+  reply: WebhookReply;
+  outcome: "handled" | "ignored" | "refused" | "failed";
+  /** A stable token for a log line. Never echoed to nvoken, which ignores bodies. */
+  reason: string;
+  delivery?: VerifiedWebhook;
+  cause?: unknown;
+}
+
+export interface WebhookReceiverOptions {
+  /** Every secret this endpoint accepts. Two entries span a key rotation. */
+  keys: readonly DeliverySigningKey[];
+  /** Handlers by the event nvoken signs into the body. */
+  events: Readonly<Partial<Record<WebhookEvent, WebhookEventHandler>>>;
+  now?: () => Date;
+}
+
+export interface WebhookReceiver {
+  /**
+   * Answers one delivery. It never throws: everything that can go wrong is a
+   * status nvoken understands, and the outcome says which.
+   */
+  handle(headers: Headers, rawBody: Uint8Array): Promise<WebhookDeliveryOutcome>;
+}
+
+/**
+ * Builds the receiver for an Invocation-webhook endpoint. It is the callback
+ * receiver's twin — same key table, same reply discipline — because nvoken
+ * signs both deliveries the same way.
+ *
+ * It is a separate receiver rather than a mode of one, because the two
+ * endpoints hold different keys: callbacks are signed with the App's
+ * `callback`-purpose key and webhooks with its `webhook`-purpose key, and
+ * neither may be tried against the other's deliveries.
+ *
+ * | situation | status | why |
+ * | --- | --- | --- |
+ * | no keys configured | 503 | an operator error, still fixable inside the retry window |
+ * | signing identity not held | 401 | a real identity failure; redelivery reproduces it |
+ * | signature, timestamp, or envelope invalid | 401 | the same bytes fail the same way |
+ * | no handler for the signed event | 200 | it was delivered; redelivering it finds the same absent handler |
+ * | handler returned | 200 | the transition is recorded |
+ * | handler threw | 503 | the receiver could not record it, so ask for it again |
+ *
+ * **Ordering stays yours.** Delivery is at least once and out of order, so the
+ * highest applied `sequence` per Invocation has to be read and written in the
+ * same transaction as the state it guards — which is the host's transaction,
+ * not one this kit can open. Call `webhookSupersedes` inside it. A superseded
+ * delivery is still a delivery: record nothing and return, so it answers 200.
+ */
+export function createWebhookReceiver(options: WebhookReceiverOptions): WebhookReceiver {
+  const table = deliverySigningKeys(options.keys);
+  const events = { ...options.events };
+  const now = options.now ?? (() => new Date());
+
+  return {
+    async handle(headers, rawBody) {
+      let delivery: VerifiedWebhook;
+      try {
+        const secret = selectDeliveryKey(table, headers);
+        delivery = await verifyWebhook(secret, headers, rawBody, now());
+      } catch (error) {
+        const retryable = error instanceof DeliveryKeyError && error.retryable;
+        return {
+          reply: { status: retryable ? 503 : 401 },
+          outcome: retryable ? "failed" : "refused",
+          reason: error instanceof DeliveryKeyError ? error.reason : "invalid_signature",
+          cause: error,
+        };
+      }
+
+      const handler = events[delivery.event];
+      // A subscribed event with no handler is a gap in this receiver, not a
+      // failure of the delivery. Answering 503 would only spend nvoken's
+      // bounded retries reaching the same absent handler, and lose it anyway.
+      if (!handler) return { reply: acceptWebhook(), outcome: "ignored", reason: "unhandled_event", delivery };
+
+      try {
+        await handler(delivery);
+        return { reply: acceptWebhook(), outcome: "handled", reason: "recorded", delivery };
+      } catch (error) {
+        return { reply: retryWebhook(), outcome: "failed", reason: "handler_failed", delivery, cause: error };
+      }
+    },
+  };
 }

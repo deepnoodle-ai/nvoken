@@ -35,7 +35,9 @@ import {
   NvokenError,
   Reducer,
   raw,
-  deduplicateCallbackResult,
+  callbackResult,
+  createCallbackReceiver,
+  createWebhookReceiver,
   defineHostTool,
   defineJsonSchema,
   formatInvocationFailure,
@@ -67,6 +69,7 @@ import {
   type InvocationResult,
   type ModelDescriptor,
   type SessionOptions,
+  type CallbackReply,
   type ToolCallSummary,
   type ProviderKey,
   type ProviderKeyList,
@@ -2272,7 +2275,12 @@ interface DeliverySigningVectors {
   key: string;
   now: number;
   vectors: {
-    callback: { tool_name: string; headers: Record<string, string>; body: string };
+    callback: {
+      tool_name: string;
+      authorization_context: Record<string, string>;
+      headers: Record<string, string>;
+      body: string;
+    };
     webhook: { event: string; sequence: number; headers: Record<string, string>; body: string };
   };
 }
@@ -2303,7 +2311,7 @@ const tamperings: Array<(headers: Headers, candidate: Uint8Array) => Uint8Array>
   },
 ];
 
-test("shared callback signing and deduplication vector", async () => {
+test("shared callback signing vector", async () => {
   const document = await deliverySigningVectors();
   const vector = document.vectors.callback;
   const key = new TextEncoder().encode(document.key);
@@ -2320,24 +2328,207 @@ test("shared callback signing and deduplication vector", async () => {
   assert.equal(verified.toolName, vector.tool_name);
   assert.equal(verified.envelope.nvoken.tool_name, vector.tool_name);
 
+  // The authorization context is a sibling of `nvoken`, not a member, and the
+  // vector is what holds four SDKs to that placement. The input repeats one of
+  // its keys on purpose: a receiver may check that the two agree, and may never
+  // read the board out of the input alone, because the model wrote the input.
+  assert.deepEqual(verified.authorizationContext, vector.authorization_context);
+  assert.deepEqual(verified.envelope.authorization_context, vector.authorization_context);
+  const input = verified.envelope.input as Record<string, string>;
+  assert.equal(input.board, verified.authorizationContext?.board);
+
   for (const mutate of tamperings) {
     const headers = new Headers(vector.headers);
     const candidate = mutate(headers, body);
     await assert.rejects(verifyCallback(key, headers, candidate, new Date(document.now * 1_000)));
   }
+});
 
-  let stored: { ok: boolean } | undefined;
+// The receiver's whole job is the answer it gives nvoken, since that answer
+// decides whether a ToolCall settles, retries, or fails for good. Every row of
+// the discipline is driven here against the published vector rather than
+// against a body written for the test.
+test("callback receiver reply discipline", async () => {
+  const document = await deliverySigningVectors();
+  const vector = document.vectors.callback;
+  const body = new TextEncoder().encode(vector.body);
+  const now = () => new Date(document.now * 1_000);
+  const headers = () => new Headers(vector.headers);
+  const keys = [
+    {
+      keyId: vector.headers["X-Nvoken-Signing-Key-ID"],
+      version: Number(vector.headers["X-Nvoken-Signing-Key-Version"]),
+      secret: document.key,
+    },
+  ];
+
+  const recorded = new Map<string, CallbackReply>();
   const store = {
-    async putIfAbsent(_identity: string, value: { ok: boolean }) {
-      if (stored) return { value: stored, inserted: false };
-      stored = value;
+    async find(id: string) {
+      return recorded.get(id);
+    },
+    async putIfAbsent(id: string, value: CallbackReply) {
+      const existing = recorded.get(id);
+      if (existing) return { value: existing, inserted: false };
+      recorded.set(id, value);
       return { value, inserted: true };
     },
   };
-  assert.equal((await deduplicateCallbackResult(store, toolCallId, { ok: true })).replayed, false);
-  const duplicate = await deduplicateCallbackResult(store, toolCallId, { ok: false });
-  assert.equal(duplicate.replayed, true);
-  assert.deepEqual(duplicate.value, { ok: true });
+
+  let ran = 0;
+  const receiver = createCallbackReceiver({
+    keys,
+    store,
+    now,
+    tools: {
+      open_ticket: (delivery) => {
+        ran += 1;
+        // Authorization comes off the signed sibling, never off the input.
+        assert.equal(delivery.authorizationContext?.board, "brd_9f21");
+        return callbackResult({ ticket: "T-1042" });
+      },
+    },
+  });
+
+  const settled = await receiver.handle(headers(), body);
+  assert.equal(settled.outcome, "settled");
+  assert.equal(settled.reply.status, 200);
+  assert.equal(settled.delivery?.toolCallId, toolCallId);
+
+  // A redelivery answers from the store. The tool must not run twice: it would
+  // repeat every effect it had, which is the whole reason the store exists.
+  const replayed = await receiver.handle(headers(), body);
+  assert.equal(replayed.outcome, "replayed");
+  assert.deepEqual(replayed.reply, settled.reply);
+  assert.equal(ran, 1);
+
+  // An identity this receiver does not hold is refused permanently, and an
+  // unconfigured one is not: only one of the two is the sender's fault, and
+  // they are indistinguishable to nvoken unless the status separates them.
+  const rotated = createCallbackReceiver({
+    keys: [{ ...keys[0], version: keys[0].version + 1 }],
+    now,
+    tools: {},
+  });
+  const unknownKey = await rotated.handle(headers(), body);
+  assert.equal(unknownKey.reply.status, 401);
+  assert.equal(unknownKey.reason, "unknown_key");
+
+  const unconfigured = createCallbackReceiver({ keys: [], now, tools: {} });
+  const notConfigured = await unconfigured.handle(headers(), body);
+  assert.equal(notConfigured.reply.status, 503);
+  assert.equal(notConfigured.reason, "not_configured");
+
+  const noTool = createCallbackReceiver({ keys, now, tools: {} });
+  const refused = await noTool.handle(headers(), body);
+  assert.equal(refused.reply.status, 400);
+  assert.equal(refused.reason, "unknown_tool");
+
+  // A throw is the receiver failing, not the tool. The tool failing settles the
+  // call with is_error, which the model can read and correct itself against.
+  const broken = createCallbackReceiver({
+    keys,
+    now,
+    tools: {
+      open_ticket: () => {
+        throw new Error("database unreachable");
+      },
+    },
+  });
+  const failed = await broken.handle(headers(), body);
+  assert.equal(failed.reply.status, 503);
+  assert.equal(failed.reason, "handler_failed");
+  assert.equal(failed.delivery?.toolName, "open_ticket");
+
+  const toolError = createCallbackReceiver({
+    keys,
+    now,
+    tools: { open_ticket: () => callbackResult({ error: "no such ticket" }, true) },
+  });
+  const settledError = await toolError.handle(headers(), body);
+  assert.equal(settledError.reply.status, 200);
+  assert.equal(settledError.outcome, "settled");
+  assert.match(settledError.reply.body ?? "", /"is_error":true/);
+
+  // A version that cannot be read as a positive integer fails the build rather
+  // than a live delivery, where the refusal would be permanent.
+  assert.throws(() => createCallbackReceiver({ keys: [{ ...keys[0], version: 0 }], tools: {} }));
+  assert.throws(() => createCallbackReceiver({ keys: [keys[0], keys[0]], tools: {} }));
+  assert.throws(() =>
+    createCallbackReceiver({ keys: [{ ...keys[0], secret: "too short" }], tools: {} }),
+  );
+});
+
+// The webhook receiver is the callback receiver's twin, so what is asserted
+// here is where the two differ: nvoken ignores the body, an unhandled event is
+// not a failure, and ordering stays the host's.
+test("webhook receiver reply discipline", async () => {
+  const document = await deliverySigningVectors();
+  const vector = document.vectors.webhook;
+  const body = new TextEncoder().encode(vector.body);
+  const now = () => new Date(document.now * 1_000);
+  const headers = () => new Headers(vector.headers);
+  const keys = [
+    {
+      keyId: vector.headers["X-Nvoken-Signing-Key-ID"],
+      version: Number(vector.headers["X-Nvoken-Signing-Key-Version"]),
+      secret: document.key,
+    },
+  ];
+
+  let applied = 0;
+  const handled = await createWebhookReceiver({
+    keys,
+    now,
+    events: {
+      "invocation.ended": (delivery) => {
+        // The fold the host owns: only a delivery that advances the Invocation
+        // is applied, and the comparison belongs in its own transaction.
+        if (webhookSupersedes(delivery, applied)) applied = delivery.sequence;
+      },
+    },
+  }).handle(headers(), body);
+  assert.equal(handled.outcome, "handled");
+  assert.equal(handled.reply.status, 200);
+  assert.equal(applied, vector.sequence);
+
+  // An event with no handler is still a delivery. Retrying it would spend
+  // nvoken's bounded attempts reaching the same absent handler.
+  const ignored = await createWebhookReceiver({ keys, now, events: {} }).handle(headers(), body);
+  assert.equal(ignored.outcome, "ignored");
+  assert.equal(ignored.reply.status, 200);
+  assert.equal(ignored.reason, "unhandled_event");
+  assert.equal(webhookStatusIsRetried(ignored.reply.status), false);
+
+  const failed = await createWebhookReceiver({
+    keys,
+    now,
+    events: {
+      "invocation.ended": () => {
+        throw new Error("store unreachable");
+      },
+    },
+  }).handle(headers(), body);
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.reason, "handler_failed");
+  assert.equal(webhookStatusIsRetried(failed.reply.status), true);
+
+  // The callback key must not verify a webhook and the reverse, which is what
+  // the two purposes are for.
+  const callbackKey = document.vectors.callback.headers;
+  const crossed = await createWebhookReceiver({
+    keys: [
+      {
+        keyId: callbackKey["X-Nvoken-Signing-Key-ID"],
+        version: Number(callbackKey["X-Nvoken-Signing-Key-Version"]),
+        secret: document.key,
+      },
+    ],
+    now,
+    events: {},
+  }).handle(headers(), body);
+  assert.equal(crossed.reply.status, 401);
+  assert.equal(crossed.reason, "unknown_key");
 });
 
 // The callback vector's twin, and the point of having both: the same key, the

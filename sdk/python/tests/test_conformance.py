@@ -101,7 +101,13 @@ from nvoken import (
     WebSearchLocation,
     WebSearchTool,
     web_search_tool,
-    deduplicate_callback_result,
+    CallbackReceiver,
+    CallbackReply,
+    DeliverySigningKey,
+    VerifiedCallback,
+    VerifiedWebhook,
+    WebhookReceiver,
+    callback_result,
     preflight_output_schema,
     verify_callback,
     verify_webhook,
@@ -834,8 +840,7 @@ def tamperings(headers: dict[str, str], body: bytes) -> list[tuple[dict[str, str
     ]
 
 
-@pytest.mark.asyncio
-async def test_shared_callback_signing_and_deduplication_vector() -> None:
+def test_shared_callback_signing_vector() -> None:
     document = delivery_signing_vectors()
     vector = document["vectors"]["callback"]
     key = document["key"].encode()
@@ -848,29 +853,198 @@ async def test_shared_callback_signing_and_deduplication_vector() -> None:
     assert verified.tool_name == vector["tool_name"]
     assert verified.envelope["nvoken"]["tool_name"] == vector["tool_name"]
 
+    # The authorization context is a sibling of `nvoken`, not a member, and the
+    # vector is what holds four SDKs to that placement. The input repeats one of
+    # its keys on purpose: a receiver may check that the two agree, and may
+    # never read the board out of the input alone, because the model wrote it.
+    assert verified.authorization_context == vector["authorization_context"]
+    assert verified.envelope["authorization_context"] == vector["authorization_context"]
+    assert verified.envelope["input"]["board"] == verified.authorization_context["board"]
+
     for headers, candidate in tamperings(vector["headers"], body):
         with pytest.raises(ValueError):
             verify_callback(key, headers, candidate, now=now)
 
-    class Store:
-        value: dict[str, bool] | None = None
 
-        async def put_if_absent(
-            self,
-            _identity: str,
-            result: dict[str, bool],
-        ) -> tuple[dict[str, bool], bool]:
-            if self.value is not None:
-                return self.value, False
-            self.value = result
-            return result, True
+class _ReplyStore:
+    def __init__(self) -> None:
+        self.replies: dict[str, CallbackReply] = {}
 
-    store = Store()
-    _, replayed = await deduplicate_callback_result(store, TOOL_CALL_ID, {"ok": True})
-    assert replayed is False
-    stored, replayed = await deduplicate_callback_result(store, TOOL_CALL_ID, {"ok": False})
-    assert replayed is True
-    assert stored == {"ok": True}
+    async def find(self, tool_call_id: str) -> CallbackReply | None:
+        return self.replies.get(tool_call_id)
+
+    async def put_if_absent(
+        self, tool_call_id: str, reply: CallbackReply
+    ) -> tuple[CallbackReply, bool]:
+        existing = self.replies.get(tool_call_id)
+        if existing is not None:
+            return existing, False
+        self.replies[tool_call_id] = reply
+        return reply, True
+
+
+@pytest.mark.asyncio
+async def test_callback_receiver_reply_discipline() -> None:
+    """Every row of the discipline the receiver owns.
+
+    The receiver's whole job is the answer it gives nvoken, since that answer
+    decides whether a ToolCall settles, retries, or fails for good. Driving it
+    against the published vector rather than a body written for the test is what
+    keeps the two from being separately right.
+    """
+    document = delivery_signing_vectors()
+    vector = document["vectors"]["callback"]
+    body = vector["body"].encode()
+    headers = vector["headers"]
+    now = lambda: datetime.fromtimestamp(document["now"], timezone.utc)  # noqa: E731
+    keys = [
+        DeliverySigningKey(
+            key_id=headers["X-Nvoken-Signing-Key-ID"],
+            version=int(headers["X-Nvoken-Signing-Key-Version"]),
+            secret=document["key"],
+        )
+    ]
+
+    ran = 0
+
+    async def open_ticket(delivery: VerifiedCallback) -> CallbackReply:
+        nonlocal ran
+        ran += 1
+        # Authorization comes off the signed sibling, never off the input.
+        assert delivery.authorization_context["board"] == "brd_9f21"
+        return callback_result({"ticket": "T-1042"})
+
+    store = _ReplyStore()
+    receiver = CallbackReceiver(
+        keys=keys, tools={vector["tool_name"]: open_ticket}, store=store, now=now
+    )
+
+    settled = await receiver.handle(headers, body)
+    assert settled.outcome == "settled"
+    assert settled.reply.status == 200
+    assert settled.delivery is not None and settled.delivery.tool_call_id == TOOL_CALL_ID
+
+    # A redelivery answers from the store. The tool must not run twice: it would
+    # repeat every effect it had, which is the whole reason the store exists.
+    replayed = await receiver.handle(headers, body)
+    assert replayed.outcome == "replayed"
+    assert replayed.reply == settled.reply
+    assert ran == 1
+
+    # An identity this receiver does not hold is refused permanently, and an
+    # unconfigured one is not: only one of the two is the sender's fault, and
+    # they are indistinguishable to nvoken unless the status separates them.
+    rotated = CallbackReceiver(
+        keys=[DeliverySigningKey(keys[0].key_id, keys[0].version + 1, keys[0].secret)],
+        tools={},
+        now=now,
+    )
+    unknown_key = await rotated.handle(headers, body)
+    assert (unknown_key.reply.status, unknown_key.reason) == (401, "unknown_key")
+
+    unconfigured = await CallbackReceiver(keys=[], tools={}, now=now).handle(headers, body)
+    assert (unconfigured.reply.status, unconfigured.reason) == (503, "not_configured")
+
+    no_tool = await CallbackReceiver(keys=keys, tools={}, now=now).handle(headers, body)
+    assert (no_tool.reply.status, no_tool.reason) == (400, "unknown_tool")
+
+    # A raise is the receiver failing, not the tool. The tool failing settles the
+    # call with is_error, which the model can read and correct itself against.
+    async def broken(_delivery: VerifiedCallback) -> CallbackReply:
+        raise RuntimeError("database unreachable")
+
+    failed = await CallbackReceiver(
+        keys=keys, tools={vector["tool_name"]: broken}, now=now
+    ).handle(headers, body)
+    assert (failed.reply.status, failed.reason) == (503, "handler_failed")
+    assert failed.delivery is not None
+
+    async def tool_error(_delivery: VerifiedCallback) -> CallbackReply:
+        return callback_result({"error": "no such ticket"}, True)
+
+    settled_error = await CallbackReceiver(
+        keys=keys, tools={vector["tool_name"]: tool_error}, now=now
+    ).handle(headers, body)
+    assert settled_error.outcome == "settled"
+    assert '"is_error": true' in (settled_error.reply.body or "")
+
+    # A version that cannot be read as a positive integer fails the build rather
+    # than a live delivery, where the refusal would be permanent.
+    for broken_keys in (
+        [DeliverySigningKey(keys[0].key_id, 0, keys[0].secret)],
+        [keys[0], keys[0]],
+        [DeliverySigningKey(keys[0].key_id, 1, "too short")],
+    ):
+        with pytest.raises(ValueError):
+            CallbackReceiver(keys=broken_keys, tools={})
+
+
+@pytest.mark.asyncio
+async def test_webhook_receiver_reply_discipline() -> None:
+    """Where the webhook receiver differs from its callback twin.
+
+    nvoken ignores the body, an unhandled event is not a failure, and ordering
+    stays the host's.
+    """
+    document = delivery_signing_vectors()
+    vector = document["vectors"]["webhook"]
+    body = vector["body"].encode()
+    headers = vector["headers"]
+    now = lambda: datetime.fromtimestamp(document["now"], timezone.utc)  # noqa: E731
+    keys = [
+        DeliverySigningKey(
+            key_id=headers["X-Nvoken-Signing-Key-ID"],
+            version=int(headers["X-Nvoken-Signing-Key-Version"]),
+            secret=document["key"],
+        )
+    ]
+
+    applied = 0
+
+    async def record(delivery: VerifiedWebhook) -> None:
+        # The fold the host owns: only a delivery that advances the Invocation is
+        # applied, and the comparison belongs in its own transaction.
+        nonlocal applied
+        if delivery.supersedes(applied):
+            applied = delivery.sequence
+
+    handled = await WebhookReceiver(
+        keys=keys, events={vector["event"]: record}, now=now
+    ).handle(headers, body)
+    assert handled.outcome == "handled"
+    assert handled.reply.status == 200
+    assert applied == vector["sequence"]
+
+    # An event with no handler is still a delivery. Retrying it would spend
+    # nvoken's bounded attempts reaching the same absent handler.
+    ignored = await WebhookReceiver(keys=keys, events={}, now=now).handle(headers, body)
+    assert (ignored.outcome, ignored.reason) == ("ignored", "unhandled_event")
+    assert webhook_status_is_retried(ignored.reply.status) is False
+
+    async def unreachable(_delivery: VerifiedWebhook) -> None:
+        raise RuntimeError("store unreachable")
+
+    failed = await WebhookReceiver(
+        keys=keys, events={vector["event"]: unreachable}, now=now
+    ).handle(headers, body)
+    assert (failed.outcome, failed.reason) == ("failed", "handler_failed")
+    assert webhook_status_is_retried(failed.reply.status) is True
+
+    # The callback key must not verify a webhook and the reverse, which is what
+    # the two purposes are for.
+    callback_headers = document["vectors"]["callback"]["headers"]
+    crossed = await WebhookReceiver(
+        keys=[
+            DeliverySigningKey(
+                key_id=callback_headers["X-Nvoken-Signing-Key-ID"],
+                version=int(callback_headers["X-Nvoken-Signing-Key-Version"]),
+                secret=document["key"],
+            )
+        ],
+        events={},
+        now=now,
+    ).handle(headers, body)
+    assert (crossed.reply.status, crossed.reason) == (401, "unknown_key")
 
 
 def test_shared_webhook_signing_vector() -> None:

@@ -1,10 +1,16 @@
+use std::collections::HashMap;
+use std::future::Future;
 use std::time::SystemTime;
 
+use async_trait::async_trait;
 use http::HeaderMap;
 use serde::{Deserialize, Serialize};
 
 use crate::models;
-use crate::signed_delivery::{verify_signed_delivery, DeliveryError};
+use crate::signed_delivery::{
+    delivery_signing_keys, select_delivery_key, verify_signed_delivery, DeliveryError,
+    DeliveryKeyTable, DeliveryKeyTableError, DeliverySigningKey,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebhookContext {
@@ -173,4 +179,179 @@ pub fn retry_webhook() -> WebhookReply {
 /// indistinguishable to nvoken and only one of them is the sender's fault.
 pub fn webhook_status_is_retried(status: u16) -> bool {
     matches!(status, 408 | 425 | 429) || status >= 500
+}
+
+/// Records one transition. Returning `Err` asks nvoken to deliver it again, so
+/// return one when the receiver could not record it and `Ok` when it did.
+#[async_trait]
+pub trait WebhookHandler: Send + Sync {
+    async fn handle(&self, delivery: &VerifiedWebhook) -> Result<(), String>;
+}
+
+#[async_trait]
+impl<F, Fut> WebhookHandler for F
+where
+    F: Fn(&VerifiedWebhook) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<(), String>> + Send,
+{
+    async fn handle(&self, delivery: &VerifiedWebhook) -> Result<(), String> {
+        self(delivery).await
+    }
+}
+
+/// What a receiver did with one webhook delivery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WebhookOutcome {
+    Handled,
+    Ignored,
+    Refused,
+    Failed,
+}
+
+/// One answered delivery: the reply the host writes, and enough about what
+/// happened to log it.
+#[derive(Debug, Clone)]
+pub struct WebhookDelivery {
+    pub reply: WebhookReply,
+    pub outcome: WebhookOutcome,
+    /// A stable token for a log line. Never echoed to nvoken, which ignores
+    /// webhook bodies.
+    pub reason: &'static str,
+    pub delivery: Option<VerifiedWebhook>,
+    pub cause: Option<String>,
+}
+
+/// Answers an Invocation-webhook endpoint. It is [`crate::CallbackReceiver`]'s
+/// twin — same key table, same reply discipline — because nvoken signs both
+/// deliveries the same way.
+///
+/// It is a separate receiver rather than a mode of one, because the two
+/// endpoints hold different keys: callbacks are signed with the App's
+/// `callback`-purpose key and webhooks with its `webhook`-purpose key, and
+/// neither may be tried against the other's deliveries.
+///
+/// | situation | status | why |
+/// | --- | --- | --- |
+/// | no keys configured | 503 | an operator error, still fixable inside the retry window |
+/// | signing identity not held | 401 | a real identity failure; redelivery reproduces it |
+/// | signature, timestamp, or envelope invalid | 401 | the same bytes fail the same way |
+/// | no handler for the signed event | 200 | it was delivered; redelivering finds the same absent handler |
+/// | handler returned `Ok` | 200 | the transition is recorded |
+/// | handler returned `Err` | 503 | the receiver could not record it, so ask for it again |
+///
+/// **Ordering stays yours.** Delivery is at least once and out of order, so the
+/// highest applied `sequence` per Invocation has to be read and written in the
+/// same transaction as the state it guards — which is the host's transaction,
+/// not one this kit can open. Call [`VerifiedWebhook::supersedes`] inside it. A
+/// superseded delivery is still a delivery: record nothing and return `Ok`, so
+/// it answers 200.
+pub struct WebhookReceiver {
+    keys: DeliveryKeyTable,
+    events: HashMap<models::WebhookEvent, Box<dyn WebhookHandler>>,
+}
+
+impl WebhookReceiver {
+    /// Starts a receiver with the secrets this endpoint accepts. Two entries
+    /// span a key rotation.
+    pub fn builder(keys: Vec<DeliverySigningKey>) -> WebhookReceiverBuilder {
+        WebhookReceiverBuilder {
+            keys,
+            events: HashMap::new(),
+        }
+    }
+
+    /// Answers one delivery. It never returns `Err`: everything that can go
+    /// wrong is a status nvoken understands, and the outcome says which.
+    pub async fn handle(
+        &self,
+        headers: &HeaderMap,
+        raw_body: &[u8],
+        now: SystemTime,
+    ) -> WebhookDelivery {
+        let secret = match select_delivery_key(&self.keys, headers) {
+            Ok(secret) => secret,
+            Err(error) => {
+                return WebhookDelivery {
+                    reply: WebhookReply {
+                        status: if error.retryable() { 503 } else { 401 },
+                    },
+                    outcome: if error.retryable() {
+                        WebhookOutcome::Failed
+                    } else {
+                        WebhookOutcome::Refused
+                    },
+                    reason: error.reason(),
+                    delivery: None,
+                    cause: Some(error.to_string()),
+                }
+            }
+        };
+        let delivery = match verify_webhook(secret, headers, raw_body, now) {
+            Ok(delivery) => delivery,
+            Err(error) => {
+                return WebhookDelivery {
+                    reply: WebhookReply { status: 401 },
+                    outcome: WebhookOutcome::Refused,
+                    reason: "invalid_signature",
+                    delivery: None,
+                    cause: Some(error.to_string()),
+                }
+            }
+        };
+
+        // A subscribed event with no handler is a gap in this receiver, not a
+        // failure of the delivery. Answering 503 would only spend nvoken's
+        // bounded retries reaching the same absent handler, and lose it anyway.
+        let Some(handler) = self.events.get(&delivery.event) else {
+            return WebhookDelivery {
+                reply: accept_webhook(),
+                outcome: WebhookOutcome::Ignored,
+                reason: "unhandled_event",
+                delivery: Some(delivery),
+                cause: None,
+            };
+        };
+        match handler.handle(&delivery).await {
+            Ok(()) => WebhookDelivery {
+                reply: accept_webhook(),
+                outcome: WebhookOutcome::Handled,
+                reason: "recorded",
+                delivery: Some(delivery),
+                cause: None,
+            },
+            Err(error) => WebhookDelivery {
+                reply: retry_webhook(),
+                outcome: WebhookOutcome::Failed,
+                reason: "handler_failed",
+                delivery: Some(delivery),
+                cause: Some(error),
+            },
+        }
+    }
+}
+
+pub struct WebhookReceiverBuilder {
+    keys: Vec<DeliverySigningKey>,
+    events: HashMap<models::WebhookEvent, Box<dyn WebhookHandler>>,
+}
+
+impl WebhookReceiverBuilder {
+    /// Registers a handler for the event nvoken signs into the body.
+    pub fn event(
+        mut self,
+        event: models::WebhookEvent,
+        handler: impl WebhookHandler + 'static,
+    ) -> Self {
+        self.events.insert(event, Box::new(handler));
+        self
+    }
+
+    /// Builds the receiver, refusing a key table that could only fail later at
+    /// delivery time.
+    pub fn build(self) -> Result<WebhookReceiver, DeliveryKeyTableError> {
+        Ok(WebhookReceiver {
+            keys: delivery_signing_keys(self.keys)?,
+            events: self.events,
+        })
+    }
 }

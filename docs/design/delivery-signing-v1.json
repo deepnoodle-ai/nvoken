@@ -17,6 +17,10 @@
   "vectors": {
     "callback": {
       "tool_name": "open_ticket",
+      "authorization_context": {
+        "board": "brd_9f21"
+      },
+      "authorization_context_note": "A sibling of `nvoken`, not a member: everything under `nvoken` is a fact nvoken minted or resolved, and this is a value the host asserted at Session creation which nvoken carried unchanged. This vector's input repeats `board` on purpose — a value in tool input may only agree with the authorization context, never establish it, and a receiver that reads the board from `input` alone is reading something the model wrote.",
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
         "X-Nvoken-Delivery-ID": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
@@ -24,9 +28,9 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-        "X-Nvoken-Signature": "sha256=5feb2acabe41d28dcd75c92ba523c2835511e7fa62ace3d3a2f80c5ba38b0771"
+        "X-Nvoken-Signature": "sha256=7c62ca330d2e74f9a99ded9756353ce4a0a8a718e779fac7ba38034f8cab8a26"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"input\":{\"ticket\":\"A-42\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-42\"}}"
     },
     "webhook": {
       "event": "invocation.ended",

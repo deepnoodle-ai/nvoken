@@ -8,6 +8,29 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **A receiver, not just a verifier.** `createCallbackReceiver` and
+  `createWebhookReceiver` (`NewCallbackReceiver` / `CallbackReceiver` per
+  language) own the `(key_id, version)` key table with two-version rotation,
+  dispatch on the signed name or event, deduplication, and the reply discipline
+  every host was deriving alone — including the one every host got wrong, where
+  an unconfigured receiver is transient (503) and an unheld signing identity is
+  permanent (401).
+
+- **`authorization_context` reaches the receiver.** It is on the verified
+  callback in all four SDKs, as a sibling of `nvoken` rather than a member: what
+  nvoken guarantees is the value's integrity, not its truth. A value repeated in
+  tool input may only agree with it, never establish it — the rule is in every
+  README and in
+  [Receiving signed deliveries](docs/reference/callback-receivers.md). Reading
+  the binding off the signed body removes the per-delivery Invocation read a
+  receiver otherwise needs.
+
+- **Breaking: `deduplicateCallbackResult` is gone,** and
+  `CallbackResultStore` gained a required `find`. The old helper took an
+  already-computed result, which meant the tool had already run — it could
+  discard a duplicate answer but never prevent the duplicate work. Find first,
+  then run, then put if absent.
+
 - **A browser can talk to nvoken directly.** `mintClientToken` signs a grant in
   all four SDKs, `nvoken client-key generate` produces and registers the
   keypair the CLI previously demanded but would not create, and

@@ -85,10 +85,14 @@
         "agent_key": "support",
         "tenant_key": "acme"
       },
+      "authorization_context": {
+        "workspace": "wks_3d80"
+      },
       "input": {
         "title": "Customer needs a refund"
       }
     },
+    "authorization_context_note": "A sibling of `nvoken`, not a member. Everything under `nvoken` is a fact nvoken minted or resolved; this is what the host asserted when the Session was created, carried unchanged. Authorize the delivery from it, and treat a value that also appears in `input` as agreement to check rather than as a second source — the model writes the input.",
     "reply": {
       "content": {
         "ticket_id": "T-1042"
