@@ -30,9 +30,7 @@ hand-written sources rather than a signature parse. Four languages give a
 parameter four shapes and a facade may take it as a field, an argument, or a
 builder call; what none of those can do is never mention it at all.
 
-The contract is read with the standard library, for the reason
-`scripts/check_go_frame_keys.py` gives: these checks run on a bare Python and
-install nothing.
+The contract is read with PyYAML, declared in `requirements-dev.txt`.
 """
 
 from __future__ import annotations
@@ -40,6 +38,8 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+
+import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "openapi" / "nvoken.yaml"
@@ -80,176 +80,30 @@ COVERAGE_BASELINE = {
 }
 
 
-# Line shapes in the one document this repository owns and lints. This is a
-# reader for those shapes, not a YAML parser: it refuses anything it does not
-# recognize rather than reporting an operation as having no parameters, because
-# "no query parameters" and "I could not tell" must not look the same here. A
-# facade check that silently sees nothing to check is worse than no check.
-SHARED_ENTRY = re.compile(r"^    ([A-Za-z][A-Za-z0-9]*):$")
-SHARED_NAME = re.compile(r"^      name:\s*([A-Za-z0-9_-]+)\s*$")
-SHARED_IN = re.compile(r"^      in:\s*([a-z]+)\s*$")
-PATH_ITEM = re.compile(r"^  (/\S*):$")
-METHOD = re.compile(r"^    (get|post|put|patch|delete):$")
-OPERATION_ID = re.compile(r"^      operationId:\s*([A-Za-z][A-Za-z0-9]*)\s*$")
-PARAMETER_REF = re.compile(
-    r'^\s*-\s*\{?\s*\$ref:\s*"#/components/parameters/([A-Za-z0-9]+)"\s*\}?\s*$'
-)
-PARAMETER_NAME = re.compile(r"^\s*-\s*name:\s*([A-Za-z0-9_-]+)\s*$")
-FIELD_IN = re.compile(r"^in:\s*([a-z]+)\s*$")
-
-
-def shared_parameters(lines: list[str]) -> dict[str, tuple[str, str]]:
-    """`components.parameters` by key, as (name, location)."""
-    shared: dict[str, list[str | None]] = {}
-    inside = False
-    key: str | None = None
-    for line in lines:
-        if re.match(r"^  \S", line):
-            inside = line.startswith("  parameters:")
-            key = None
-            continue
-        if not inside:
-            continue
-        entry = SHARED_ENTRY.match(line)
-        if entry is not None:
-            key = entry.group(1)
-            shared[key] = [None, None]
-            continue
-        if key is None:
-            continue
-        name = SHARED_NAME.match(line)
-        if name is not None:
-            shared[key][0] = name.group(1)
-            continue
-        location = SHARED_IN.match(line)
-        if location is not None:
-            shared[key][1] = location.group(1)
-    if not shared:
-        raise SystemExit(f"{CONTRACT.name}: no shared parameters found")
-    resolved: dict[str, tuple[str, str]] = {}
-    for key, (name, location) in shared.items():
-        if name is None or location is None:
-            raise SystemExit(f"{CONTRACT.name}: shared parameter {key} has no name or `in`")
-        resolved[key] = (name, location)
-    return resolved
-
-
-def block_end(lines: list[str], start: int, indent: int) -> int:
-    """The line after the block opened at `start`, by indentation."""
-    index = start + 1
-    while index < len(lines):
-        line = lines[index]
-        if line.strip() and len(line) - len(line.lstrip()) <= indent:
-            break
-        index += 1
-    return index
-
-
-def query_parameters(
-    lines: list[str],
-    start: int,
-    indent: int,
-    shared: dict[str, tuple[str, str]],
-    where: str,
-) -> list[str]:
-    """The query parameter names in the list opened by `parameters:` at `start`."""
-    item_indent = indent + 2
-    items: list[list[str]] = []
-    for index in range(start + 1, block_end(lines, start, indent)):
-        line = lines[index]
-        if not line.strip():
-            continue
-        here = len(line) - len(line.lstrip())
-        if here == item_indent and line.lstrip().startswith("- "):
-            items.append([line])
-        elif not items:
-            raise SystemExit(f"{where}: parameter list opens with {line.strip()!r}")
-        else:
-            items[-1].append(line)
-    if not items:
-        raise SystemExit(f"{where}: empty parameters list")
-
-    names: list[str] = []
-    for item in items:
-        head = item[0]
-        reference = PARAMETER_REF.match(head)
-        if reference is not None:
-            key = reference.group(1)
-            if key not in shared:
-                raise SystemExit(f"{where}: $ref to unknown shared parameter {key}")
-            name, location = shared[key]
-            if location == "query":
-                names.append(name)
-            continue
-        inline = PARAMETER_NAME.match(head)
-        if inline is None:
-            raise SystemExit(
-                f"{where}: parameter item this reader cannot read: {head.strip()!r}"
-            )
-        # `in` is required by OpenAPI, and it sits at the item's own field
-        # indent. Matching the indent exactly keeps a nested `schema:` from
-        # answering for the parameter.
-        field_indent = len(head) - len(head.lstrip()) + 2
-        location = None
-        for line in item[1:]:
-            if len(line) - len(line.lstrip()) != field_indent:
-                continue
-            field = FIELD_IN.match(line.strip())
-            if field is not None:
-                location = field.group(1)
-                break
-        if location is None:
-            raise SystemExit(f"{where}: parameter {inline.group(1)} has no `in`")
-        if location == "query":
-            names.append(inline.group(1))
-    return names
-
-
-def load_operations(text: str) -> dict[str, list[str]]:
+def load_operations() -> dict[str, list[str]]:
     """Operation ID to its query parameter names, path-level ones included."""
-    lines = text.splitlines()
-    shared = shared_parameters(lines)
+    spec = yaml.safe_load(CONTRACT.read_text())
+    shared = spec.get("components", {}).get("parameters", {})
+
+    def resolve(parameter: dict) -> dict:
+        if "$ref" in parameter:
+            return shared[parameter["$ref"].rsplit("/", 1)[-1]]
+        return parameter
 
     operations: dict[str, list[str]] = {}
-    inside = False
-    path: str | None = None
-    inherited: list[str] = []
-    for index, line in enumerate(lines):
-        if re.match(r"^\S", line):
-            inside = line.startswith("paths:")
-            path = None
-            continue
-        if not inside:
-            continue
-        item = PATH_ITEM.match(line)
-        if item is not None:
-            path = item.group(1)
-            inherited = []
-            continue
-        if path is None:
-            continue
-        if line == "    parameters:":
-            inherited = query_parameters(lines, index, 4, shared, path)
-            continue
-        if METHOD.match(line) is None:
-            continue
-        end = block_end(lines, index, 4)
-        operation_id: str | None = None
-        own_at: int | None = None
-        for cursor in range(index + 1, end):
-            matched = OPERATION_ID.match(lines[cursor])
-            if matched is not None:
-                operation_id = matched.group(1)
-            elif lines[cursor] == "      parameters:":
-                own_at = cursor
-        if operation_id is None:
-            continue
-        own: list[str] = []
-        if own_at is not None:
-            own = query_parameters(lines, own_at, 6, shared, operation_id)
-        operations[operation_id] = sorted(set(inherited) | set(own))
-    if not operations:
-        raise SystemExit(f"{CONTRACT.name}: no operations found")
+    for item in spec["paths"].values():
+        inherited = [resolve(parameter) for parameter in item.get("parameters", [])]
+        for method in ("get", "post", "put", "patch", "delete"):
+            operation = item.get(method)
+            if not operation or "operationId" not in operation:
+                continue
+            own = [resolve(parameter) for parameter in operation.get("parameters", [])]
+            names = {
+                parameter["name"]
+                for parameter in inherited + own
+                if parameter.get("in") == "query"
+            }
+            operations[operation["operationId"]] = sorted(names)
     return operations
 
 
@@ -299,7 +153,7 @@ def spelling(language: str, parameter: str) -> str:
 
 
 def main() -> int:
-    operations = load_operations(CONTRACT.read_text())
+    operations = load_operations()
     sources = load_sources()
 
     parameter_gaps: list[str] = []

@@ -56,14 +56,13 @@ without republishing every artifact.
   of it. Comments are stripped before the check, since the facade in question
   documented the parameter it never forwarded.
 
-- **`make scripts-check` holds the Python tooling to the standard library.**
-  These checks run on whatever Python is already on the machine, and nothing
-  installs packages, so a third-party import does not fail as a missing
-  dependency: it fails as the check, and the thing being guarded goes
-  unchecked. `check_facade_parity.py` shipped importing PyYAML and did exactly
-  that. It now reads the contract with `re`, the way `check_go_frame_keys.py`
-  already did, and `check_script_imports.py` makes the rule enforceable rather
-  than remembered.
+- **`requirements-dev.txt` declares what the tooling needs.** `make check`
+  already requires Go, Node, Java, and a Rust toolchain, all declared somewhere
+  a machine can read, so a missing one fails as a missing toolchain. Python's
+  were declared nowhere, so a missing one failed as whichever check happened to
+  import it. `make scripts-check` now runs `check_python_deps.py`, which fails
+  on an import the file does not declare and on a declaration the environment
+  does not have, the second with the command to fix it.
 
 - **Breaking: Agent Definition writes are flat, in every SDK.** The first
   argument is the definition itself, matching `AgentDefinitionWrite` on the

@@ -1,0 +1,10 @@
+# Python packages this repository's own tooling needs. Nothing published to a
+# registry depends on these: the Python SDK's own dependencies are in
+# sdk/python/pyproject.toml.
+#
+# Install with: python3 -m pip install -r requirements-dev.txt
+#
+# scripts/check_python_deps.py holds this file and the imports against each
+# other, so an undeclared dependency fails as a dependency problem rather than
+# as whichever check happened to import it.
+PyYAML==6.0.3
