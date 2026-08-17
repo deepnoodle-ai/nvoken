@@ -12,12 +12,22 @@ import (
 
 func registerClientKeyCommands(app *cli.App) {
 	keys := app.Group("client-key").Description("Manage App browser-client verification keys")
-	keys.Command("list").Args("app-id").Run(runClientKeyList)
-	keys.Command("create").Args("app-id").Flags(
-		cli.String("name").Required().Help("Operator-facing key name"),
-		cli.String("public-key").Required().Help("Base64-encoded 32-byte Ed25519 public key"),
-	).Run(runClientKeyCreate)
-	keys.Command("revoke").Args("app-id", "key-id").Run(runClientKeyRevoke)
+	keys.Command("list").
+		Description("List an App's browser-client verification keys").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Run(runClientKeyList)
+	keys.Command("create").
+		Description("Register one Ed25519 browser-client verification key").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Flags(
+			cli.String("name").Required().Help("Operator-facing key name"),
+			cli.String("public-key").Required().Help("Base64-encoded 32-byte Ed25519 public key"),
+		).Run(runClientKeyCreate)
+	keys.Command("revoke").
+		Description("Revoke one browser-client verification key").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		AddArg(requiredArg("key-id", "Browser-client key ID")).
+		Run(runClientKeyRevoke)
 }
 
 func runClientKeyList(command *cli.Context) error {

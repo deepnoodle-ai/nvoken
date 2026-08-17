@@ -11,13 +11,29 @@ import (
 
 func registerSigningKeyCommands(app *cli.App) {
 	keys := app.Group("signing-key").Description("Rotate an App's callback and webhook signing keys")
-	keys.Command("list").Args("app-id").Run(runSigningKeyList)
-	keys.Command("mint").Args("app-id").Flags(
-		cli.String("purpose").Required().Enum("callback", "webhook").Help("Delivery class this version signs"),
-		cli.Bool("activate").Help("Sign with the new version immediately; only for recovering a lost secret"),
-	).Run(runSigningKeyMint)
-	keys.Command("activate").Args("app-id", "purpose", "version").Run(runSigningKeyActivate)
-	keys.Command("retire").Args("app-id", "purpose", "version").Run(runSigningKeyRetire)
+	keys.Command("list").
+		Description("List receiver-facing signing key versions without their secrets").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Run(runSigningKeyList)
+	keys.Command("mint").
+		Description("Mint the next signing key version and print its one-time secret").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		Flags(
+			cli.String("purpose").Required().Enum("callback", "webhook").Help("Delivery class this version signs"),
+			cli.Bool("activate").Help("Sign with the new version immediately; only for recovering a lost secret"),
+		).Run(runSigningKeyMint)
+	keys.Command("activate").
+		Description("Move signing to a receiver-ready key version").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		AddArg(requiredArg("purpose", "Signing purpose: callback or webhook")).
+		AddArg(requiredArg("version", "Positive signing key version")).
+		Run(runSigningKeyActivate)
+	keys.Command("retire").
+		Description("Delete a superseded signing key version").
+		AddArg(requiredArg("app-id", "Opaque App ID")).
+		AddArg(requiredArg("purpose", "Signing purpose: callback or webhook")).
+		AddArg(requiredArg("version", "Positive signing key version")).
+		Run(runSigningKeyRetire)
 }
 
 func runSigningKeyList(command *cli.Context) error {

@@ -17,14 +17,14 @@ import (
 func registerAuthCommands(app *cli.App) {
 	group := app.Group("auth").Description("CLI authentication and local profiles")
 	group.Command("login").Description("Authorize through the nvoken console and save a local profile").Flags(
-		cli.Bool("default", "").Default(false).Help("make this profile the default"),
+		cli.Bool("default", "").Default(false).Help("Make this profile the default"),
 		cli.String("console-url", "").Env("NVOKEN_CONSOLE_URL").Default(defaultConsoleURL).Help("nvoken console base URL"),
-		cli.String("label", "").Help("device name shown on the approval page (defaults to hostname)"),
-		cli.Bool("no-browser", "").Default(false).Help("print the approval URL without opening a browser"),
+		cli.String("label", "").Help("Device name shown on the approval page; defaults to the hostname"),
+		cli.Bool("no-browser", "").Default(false).Help("Print the approval URL without opening a browser"),
 	).Run(runAuthLogin)
 	group.Command("status").Description("Verify and show active authentication").Use(requireAuth()).Run(runAuthStatus)
 	group.Command("list").Description("List local profiles").Run(runAuthList)
-	group.Command("use").Description("Select the default profile").AddArg(&cli.Arg{Name: "name", Required: true}).Run(runAuthUse)
+	group.Command("use").Description("Select the default profile").AddArg(requiredArg("name", "Local profile name")).Run(runAuthUse)
 	group.Command("logout").Description("Remove the selected local profile without remote revocation").Run(runAuthLogout)
 	group.Command("revoke").Description("Revoke the selected credential and remove its local profile").Use(requireAuth()).Run(runAuthRevoke)
 }
@@ -64,6 +64,15 @@ func runAPIKeyAuthLogin(ctx *cli.Context, auth *resolvedAuth) error {
 		return fmt.Errorf("save credential: %w", err)
 	}
 	path, _ := authstore.Path()
+	if jsonOutput(ctx) {
+		return renderJSON(ctx, map[string]any{
+			"action":           "saved",
+			"profile":          name,
+			"endpoint":         profile.Endpoint,
+			"credential_id":    profile.CredentialID,
+			"credentials_file": path,
+		})
+	}
 	ctx.Success("Verified API key. Profile %q saved to %s", name, path)
 	return nil
 }
@@ -139,6 +148,9 @@ func runAuthUse(ctx *cli.Context) error {
 	if err := authstore.SetDefault(name); err != nil {
 		return err
 	}
+	if jsonOutput(ctx) {
+		return renderJSON(ctx, map[string]string{"action": "selected", "profile": name})
+	}
 	ctx.Success("Profile %q is now the default", name)
 	return nil
 }
@@ -151,6 +163,9 @@ func runAuthLogout(ctx *cli.Context) error {
 	}
 	if err := authstore.DeleteProfile(name); err != nil {
 		return err
+	}
+	if jsonOutput(ctx) {
+		return renderJSON(ctx, map[string]any{"action": "removed", "profile": name, "credential_revoked": false})
 	}
 	ctx.Success("Removed local profile %q; the server credential was not revoked", name)
 	return nil
@@ -174,6 +189,13 @@ func runAuthRevoke(ctx *cli.Context) error {
 	}
 	if err := authstore.DeleteProfile(auth.Profile.Name); err != nil {
 		return fmt.Errorf("credential revoked, but remove local profile: %w", err)
+	}
+	if jsonOutput(ctx) {
+		return renderJSON(ctx, map[string]string{
+			"action":        "revoked",
+			"credential_id": auth.Profile.CredentialID,
+			"profile":       auth.Profile.Name,
+		})
 	}
 	ctx.Success("Revoked credential %s and removed profile %q", auth.Profile.CredentialID, auth.Profile.Name)
 	return nil

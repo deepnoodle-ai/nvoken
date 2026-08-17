@@ -14,8 +14,9 @@ import (
 func registerProviderKeyCommands(app *cli.App) {
 	providerKeys := app.Group("provider-key").Description("Manage reusable model provider keys")
 	providerKeys.Command("list").
+		Description("List reusable provider-key metadata without secret material").
 		Flags(
-			cli.String("provider").Enum("anthropic", "openai", "xai", "google").Help("Filter by model provider"),
+			cli.String("provider").Help("Filter by installed canonical model provider"),
 			cli.String("scope").Enum("app", "tenant").Help("Filter by provider-key scope"),
 			cli.String("status").Enum("active", "revoked").Help("Filter by root status"),
 			cli.String("tenant").Help("Filter by tenant partition"),
@@ -24,8 +25,9 @@ func registerProviderKeyCommands(app *cli.App) {
 		).
 		Run(runProviderKeyList)
 	providerKeys.Command("create").
+		Description("Store one encrypted reusable provider key").
 		Flags(
-			cli.String("provider").Required().Enum("anthropic", "openai", "xai", "google").Help("Model provider"),
+			cli.String("provider").Required().Help("Installed canonical model provider"),
 			cli.String("scope").Required().Enum("app", "tenant").Help("Provider-key scope"),
 			cli.String("tenant").Help("Tenant partition for tenant scope"),
 			cli.String("idempotency-key").Required().Help("Stable lifecycle request identity"),
@@ -33,10 +35,17 @@ func registerProviderKeyCommands(app *cli.App) {
 			cli.String("api-key-env").Default("NVOKEN_PROVIDER_API_KEY").Help("Environment variable containing the provider API key; reads stdin when unset"),
 		).
 		Run(runProviderKeyCreate)
-	providerKeys.Command("get").Args("provider-key-id").Run(runProviderKeyGet)
-	providerKeys.Command("usage").Args("provider-key-id").Run(runProviderKeyUsage)
+	providerKeys.Command("get").
+		Description("Read reusable provider-key metadata without its secret").
+		AddArg(requiredArg("provider-key-id", "Opaque provider-key ID")).
+		Run(runProviderKeyGet)
+	providerKeys.Command("usage").
+		Description("Read retained token and cost usage attributed to one provider key").
+		AddArg(requiredArg("provider-key-id", "Opaque provider-key ID")).
+		Run(runProviderKeyUsage)
 	providerKeys.Command("rotate").
-		Args("provider-key-id").
+		Description("Replace a provider key with optional bounded overlap").
+		AddArg(requiredArg("provider-key-id", "Opaque provider-key ID")).
 		Flags(
 			cli.String("idempotency-key").Required().Help("Stable lifecycle request identity"),
 			cli.String("expires-at").Help("Optional RFC3339 expiry"),
@@ -44,7 +53,10 @@ func registerProviderKeyCommands(app *cli.App) {
 			cli.String("api-key-env").Default("NVOKEN_PROVIDER_API_KEY").Help("Environment variable containing the provider API key; reads stdin when unset"),
 		).
 		Run(runProviderKeyRotate)
-	providerKeys.Command("revoke").Args("provider-key-id").Run(runProviderKeyRevoke)
+	providerKeys.Command("revoke").
+		Description("Revoke a provider key and destroy its live encrypted versions").
+		AddArg(requiredArg("provider-key-id", "Opaque provider-key ID")).
+		Run(runProviderKeyRevoke)
 }
 
 func runProviderKeyList(command *cli.Context) error {
@@ -69,7 +81,7 @@ func runProviderKeyList(command *cli.Context) error {
 				return err
 			}
 		}
-		return nil
+		return writeNextCursor(writer, page.NextCursor)
 	})
 }
 

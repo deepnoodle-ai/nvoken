@@ -24,10 +24,13 @@ func registerMemoryCommands(app *cli.App) {
 			cli.Int("limit").Help("Maximum page size"),
 		).
 		Run(runMemoryList)
-	memories.Command("get").Args("memory-id").Run(runMemoryGet)
+	memories.Command("get").
+		Description("Read one durable Agent memory").
+		AddArg(requiredArg("memory-id", "Opaque durable-memory ID")).
+		Run(runMemoryGet)
 	memories.Command("delete").
 		Description("Erase one durable memory and its search projection").
-		Args("memory-id").
+		AddArg(requiredArg("memory-id", "Opaque durable-memory ID")).
 		Run(runMemoryDelete)
 }
 
@@ -120,7 +123,11 @@ func runMemoryDelete(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return client.DeleteMemory(command.Context(), command.Arg(0))
+	memoryID := command.Arg(0)
+	if err := client.DeleteMemory(command.Context(), memoryID); err != nil {
+		return err
+	}
+	return writeMutationReceipt(command, "deleted", "memory_id", memoryID)
 }
 
 func runAppAnonymousToken(command *cli.Context) error {

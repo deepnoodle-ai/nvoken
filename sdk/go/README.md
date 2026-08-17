@@ -122,9 +122,21 @@ page, err := client.ListInvocations(ctx, nvoken.ListInvocationsOptions{
 	},
 })
 deltas := false
-err = handle.StreamWithOptions(ctx, nvoken.StreamOptions{Deltas: &deltas}, consume)
+cursor := "cursor-from-a-previous-process"
+err = handle.StreamWithOptions(ctx, nvoken.StreamOptions{
+	Deltas: &deltas,
+	Cursor: &cursor,
+}, consume)
+
+invocationID := handle.InvocationID
+err = client.StreamSessionWithOptions(ctx, handle.SessionID, nvoken.StreamOptions{
+	Deltas:       &deltas,
+	Cursor:       &cursor,
+	InvocationID: &invocationID,
+}, consumeSession)
 ```
 
+An Invocation-filtered Session stream exits after that Invocation settles.
 Equivalent status sets share cursor identity regardless of input order.
 Session get/list values expose typed nullable `Usage`, computed from durable
 Invocation usage; it is an estimate, not a billing ledger.

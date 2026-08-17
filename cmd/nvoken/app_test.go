@@ -162,7 +162,7 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "credentials")
 	resetActiveAuth()
 	result := newApp().Test(t,
-		cli.TestArgs("--credentials-file", path, "--base-url", server.URL, "--api-key", "nvk_machine.secret", "--profile", "work", "auth", "login", "--default"),
+		cli.TestArgs("--json", "--credentials-file", path, "--base-url", server.URL, "--api-key", "nvk_machine.secret", "--profile", "work", "auth", "login", "--default"),
 	)
 	if !result.Success() {
 		t.Fatalf("auth login: %v\nstdout: %s\nstderr: %s", result.Err, result.Stdout, result.Stderr)
@@ -172,6 +172,9 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 	authstore.SetPathOverride("")
 	if err != nil || profile.Token != "nvk_machine.secret" || profile.Endpoint != server.URL || !profile.Default || profile.CredentialID != "cred_machine" {
 		t.Fatalf("saved profile = %#v, %v", profile, err)
+	}
+	if !json.Valid([]byte(result.Stdout)) || !strings.Contains(result.Stdout, `"profile": "work"`) || strings.Contains(result.Stdout, "nvk_machine.secret") {
+		t.Fatalf("JSON login receipt = %s", result.Stdout)
 	}
 }
 

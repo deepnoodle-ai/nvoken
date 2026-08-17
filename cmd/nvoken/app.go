@@ -44,17 +44,23 @@ var (
 func newApp() *cli.App {
 	app := cli.New("nvoken").
 		Description("Client for the nvoken durable agent runtime").
+		Long("Authenticate with `nvoken auth login`, then discover commands with `nvoken --help`. Use --json for stable machine-readable output; streaming commands emit one JSON object per line.").
 		Version(version).
 		ExpandGroups(true).
+		Examples(
+			cli.NewExample("Authenticate through the nvoken console", "nvoken auth login"),
+			cli.NewExample("Start a turn and stream its answer", `nvoken invoke --agent-key support "Help with order 42"`),
+			cli.NewExample("Inspect an Invocation as JSON", "nvoken --json invocation get inv_..."),
+		).
 		AddCompletionCommand()
 	app.GlobalFlags(
-		cli.String("base-url", "").Env("NVOKEN_BASE_URL").Help("nvoken API base URL"),
-		cli.String("api-key", "").Env("NVOKEN_API_KEY").Help("machine API credential"),
-		cli.String("config", "").Env("NVOKEN_CONFIG").Help("path to JSON config file"),
-		cli.String("profile", "").Env("NVOKEN_PROFILE").Help("local credential profile"),
-		cli.String("credentials-file", "").Env("NVOKEN_CREDENTIALS_FILE").Help("credentials file path"),
-		cli.String("output", "o").Env("NVOKEN_OUTPUT").Default("text").Enum("text", "json").Help("output format"),
-		cli.Bool("json").Help("emit stable JSON output (alias for --output json)"),
+		cli.String("base-url", "").Env("NVOKEN_BASE_URL").Help("nvoken API base URL; overrides the selected profile"),
+		cli.String("api-key", "").Env("NVOKEN_API_KEY").Help("Machine API credential; overrides the selected profile"),
+		cli.String("config", "").Env("NVOKEN_CONFIG").Help("Path to the legacy JSON endpoint config file"),
+		cli.String("profile", "").Env("NVOKEN_PROFILE").Help("Local credential profile; defaults to the selected profile"),
+		cli.String("credentials-file", "").Env("NVOKEN_CREDENTIALS_FILE").Help("Path to the local credential-profile file"),
+		cli.String("output", "o").Env("NVOKEN_OUTPUT").Default("text").Enum("text", "json").Help("Output format"),
+		cli.Bool("json").Help("Emit stable JSON output; alias for --output json"),
 	)
 	app.Use(authMiddleware())
 	registerRuntimeCommands(app)
@@ -71,6 +77,14 @@ func newApp() *cli.App {
 	registerTenantCommands(app)
 	registerMemoryCommands(app)
 	return app
+}
+
+func requiredArg(name, description string) *cli.Arg {
+	return &cli.Arg{Name: name, Description: description, Required: true}
+}
+
+func optionalArg(name, description string) *cli.Arg {
+	return &cli.Arg{Name: name, Description: description}
 }
 
 func authMiddleware() cli.Middleware {
