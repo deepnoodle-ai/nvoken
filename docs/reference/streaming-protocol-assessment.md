@@ -110,7 +110,7 @@ Once recommendation 1 lands, the highest-value improvements are all additive:
 
 Pure prose changes to the contract, no wire change, cheap, and most of the
 distance to "implementable by strangers": state P1 (result re-emission on
-reconnect to a settled turn) and with it bless `stream.end` terminal as an
+reconnect to a settled turn) and with it bless `connection.closing` terminal as an
 equally valid termination signal (P2); document P4 (`invocation.accepted` is
 inline-only and SDKs synthesize it); enumerate the Invocation stream's durable
 frames (S5); state the two unstated `invocation.update` behaviors (S6); state
@@ -132,7 +132,7 @@ trailing the transcript, since both are settlement-timing semantics.
 
 ### 5. Decide what the Session stream is
 
-Today it is a drain, not a subscription (I10): `stream.end` terminal means no
+Today it is a drain, not a subscription (I10): `connection.closing` terminal means no
 turn is running, and a turn started later by anyone else is invisible until
 the client polls. Related, a client's own `createInvocation` has no
 protocol-level representation until a frame confirms it (I12), so every UI
@@ -195,7 +195,7 @@ a decision rather than an omission.
 | ID | Action |
 | --- | --- |
 | C1 | Add `incomplete` to Go's terminal set. |
-| C2 | Terminate Python's Session stream on `stream.end` terminal. |
+| C2 | Terminate Python's Session stream on `connection.closing` terminal. |
 | C6 | Reconnect TypeScript's Session stream on transport errors. |
 | C10 | Guard the null `invocation_id` in Python's preview discard. |
 | T1 | Extend `reducer.json` to all seven frame types and all terminal statuses, `incomplete` included. |

@@ -62,8 +62,8 @@ def is_terminal_status(status: Any) -> bool:
 def is_turn_over(change: Any) -> bool:
     """Whether a change ends the turn.
 
-    **This is the terminal signal, and there is no other** — there is no result
-    frame, and ``stream.end`` speaks only about a connection.
+    **This is the terminal signal, and there is no other.** There is no result
+    frame, and no other frame ends a turn.
 
     It answers for the change, not for the turn: a replayed ``running`` change
     reports ``False`` even after the turn has ended, which is what lets you fold

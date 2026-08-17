@@ -2,7 +2,7 @@ import type { Client, InvocationHandle, JsonObject } from "./client.js";
 import { NvokenError, normalizeError, SessionBusyError } from "./client.js";
 import type {
   MessageDeltaEvent,
-  StreamEndEvent,
+  ConnectionClosingEvent,
   StreamResyncEvent,
   TranscriptUpdateEvent,
   InvocationChange,
@@ -13,11 +13,11 @@ import {
   instanceOfInvocationChange,
   instanceOfMessageDeltaEvent,
   instanceOfSessionMessage,
-  instanceOfStreamEndEvent,
+  instanceOfConnectionClosingEvent,
   instanceOfStreamResyncEvent,
   instanceOfTranscriptUpdateEvent,
   MessageDeltaEventFromJSON,
-  StreamEndEventFromJSON,
+  ConnectionClosingEventFromJSON,
   StreamResyncEventFromJSON,
   TranscriptUpdateEventFromJSON,
 } from "./generated/models/index.js";
@@ -87,7 +87,7 @@ export type SessionStreamEvent<TOutput extends object = JsonObject> = StreamMeta
   | TypedTranscriptUpdateEvent<TOutput>
   | MessageDeltaEvent
   | StreamResyncEvent
-  | StreamEndEvent
+  | ConnectionClosingEvent
 );
 
 export class Reducer {
@@ -272,8 +272,8 @@ export async function* streamInvocationByIDWithOptions<TOutput extends object>(
 
 /**
  * The one read loop. It reconnects from its last durable cursor on any
- * connection end, because stream.end never says a turn is over and a silent
- * drop says nothing at all.
+ * connection end. A `connection.closing` frame says only that, and a silent
+ * drop says nothing at all, so neither is a reason to stop.
  */
 async function* readStream(
   client: Client,
@@ -442,11 +442,11 @@ function decodeStreamEvent(raw: StreamEvent): object | undefined {
     return decodeMessageDelta(raw.data);
   case "stream.resync":
     return decodeStreamResync(raw.data);
-  case "stream.end":
+  case "connection.closing":
     return requireFrameField(
-      "stream.end",
-      StreamEndEventFromJSON(raw.data),
-      instanceOfStreamEndEvent,
+      "connection.closing",
+      ConnectionClosingEventFromJSON(raw.data),
+      instanceOfConnectionClosingEvent,
     );
   default:
     return undefined;

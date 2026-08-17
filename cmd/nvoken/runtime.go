@@ -2307,7 +2307,7 @@ func runSessionStream(command *cli.Context) error {
 }
 
 func idleClose(event nvoken.StreamEvent) bool {
-	if event.Type != "stream.end" {
+	if event.Type != "connection.closing" {
 		return false
 	}
 	var end struct {

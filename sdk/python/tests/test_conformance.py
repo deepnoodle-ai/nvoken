@@ -750,7 +750,7 @@ async def test_shared_fault_server_semantics() -> None:
         assert event_types == [
             "transcript.update",
             "transcript.update",
-            "stream.end",
+            "connection.closing",
             "transcript.update",
             "transcript.update",
         ]
@@ -924,8 +924,8 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
             # Nothing is running, so the server reclaims the connection. That
             # says nothing about any turn, and the subscription reconnects.
             frame += (
-                "event: stream.end\n"
-                f"data: {json.dumps({'type': 'stream.end', 'session_id': SESSION_ID, 'reason': 'idle'})}\n\n"
+                "event: connection.closing\n"
+                f"data: {json.dumps({'type': 'connection.closing', 'session_id': SESSION_ID, 'reason': 'idle'})}\n\n"
             )
         return frame
 

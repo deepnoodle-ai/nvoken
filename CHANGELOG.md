@@ -8,6 +8,23 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: the `stream.end` frame is now `connection.closing`.** It never
+  said anything about a turn, but its name said the stream was over, and enough
+  readers believed the name that the contract carried a correction in four
+  places and every SDK repeated it again in its own doc comments. A name that
+  needs a footnote everywhere it appears is the wrong name. The generated types
+  are `ConnectionClosingEvent` and `ConnectionClosingReason`; the reasons
+  `rotate`, `idle`, and `slow_consumer` are unchanged, and so is everything the
+  frame does. If you switch on the frame type, change the one case. Nothing
+  else in a read loop moves, because reconnecting was always the answer to any
+  connection ending.
+
+- **One word for a turn in the contract.** `Invocation` is the name in every
+  path, field, schema, and error, and the endpoint summaries say it too, so the
+  generated doc comments no longer alternate between the two. The introduction
+  now defines the pair, and states the rule that a `*_key` is a name you choose
+  while an `id` is one nvoken mints.
+
 - **`listEndedInvocations` walks every turn that ended, oldest first.** The
   reconciliation feed, in all four SDKs. `invocation.ended` webhooks are
   delivered at least once, so a delivery that never lands leaves a turn nobody

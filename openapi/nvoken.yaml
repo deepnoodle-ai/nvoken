@@ -12,6 +12,12 @@ info:
     background, keeps running it across restarts and failures, and lets you
     either watch it live or come back for the result later.
 
+    One turn is one Invocation. `Invocation` is the name in every path, field,
+    schema, and error, and it is the word to reach for when you need to be
+    exact. `turn` is the English for the same thing, and this document uses it
+    in explanatory prose. They are not two resources, so there is no
+    relationship between them for you to model.
+
     Your application stays in charge of what your agents are and when they
     run. nvoken owns the conversation: it stores the messages, tracks the
     state of every turn, and handles talking to the model providers.
@@ -78,6 +84,32 @@ info:
     are the same idea you have seen elsewhere. If you have integrated another
     agent API, these should need no translation.
 
+    ## Keys and IDs
+
+    Every identifier here is one of two things, and its name tells you which.
+
+    A `*_key` is a name you choose. `tenant_key`, `agent_key`, `session_key`,
+    and `definition_key` name a resource. Send one and nvoken either creates
+    that resource or hands back the one your name already refers to, so the
+    same request twice gives you the same resource rather than two.
+    `user_key` is a label rather than a name: it records who a Session was
+    opened for so you can filter on it later, and it is not a permission
+    boundary. `idempotency_key` names one attempt, not a resource.
+
+    An `id` is an identifier nvoken mints. It carries a typed prefix, `sess_`
+    for a Session and `inv_` for an Invocation, and everything after that
+    prefix is opaque. Match on the prefix if it helps you route. Never parse
+    past it, and never build one yourself.
+
+    A resource calls its own identifier `id`. A reference to a different
+    resource carries that resource's name, so `session_id` on an Invocation is
+    the Session it belongs to. There is no third pattern.
+
+    Paths only ever take IDs. Keys travel in request bodies and query filters.
+    Every keyed resource reports both its key and its `id`, so you can always
+    get from your name to nvoken's identifier by reading the resource, and you
+    never have to keep a mapping of your own.
+
     ## You can always read back what applied
 
     Anything nvoken decides on your behalf is readable on the resource that
@@ -94,9 +126,6 @@ info:
     setting only the server knows about.
 
     ## Streaming
-
-    A turn and an Invocation are the same thing. The endpoint summaries say
-    turn; the schemas say Invocation.
 
     There is one stream: `GET /v1/sessions/{session_id}/stream`. It carries
     every turn in the Session, which is what a conversation needs. Add
@@ -117,7 +146,7 @@ info:
     preview or a control signal, it is never stored, and it is never replayed.
 
     `transcript.update` is the one saved frame. `message.delta`,
-    `stream.resync`, and `stream.end` are live.
+    `stream.resync`, and `connection.closing` are live.
 
     ### Folding a transcript.update
 
@@ -147,16 +176,15 @@ info:
     your own, so a status added later cannot silently change what your code
     believes a turn's end is.
 
-    `stream.end` never speaks about turns. It says this connection is closing
-    and nothing more, so a client that has not seen its terminal change
-    reconnects and keeps reading.
+    `connection.closing` says exactly what it says and nothing more. A client
+    that has not seen its terminal change reconnects and keeps reading.
 
     ### The stream stays open
 
     An unfiltered stream is a subscription. It stays open while the Session is
     idle, keepalives and all, and a turn started later by anyone appears on
     it. You do not poll. A server may still reclaim an idle connection, and
-    when it does it says `stream.end` with reason `idle`, which means
+    when it does it says `connection.closing` with reason `idle`, which means
     reconnect when you next need to read rather than immediately.
 
     A filtered stream closes once it has delivered that turn's terminal
@@ -181,7 +209,7 @@ info:
     recognize rather than refusing the frame. New enum values may appear too.
     Treat an unknown `message.delta` kind as content you do not render. Treat
     an unknown `stream.resync` reason as `live_delivery_gap` and discard your
-    previews. Treat an unknown `stream.end` reason as `rotate` and reconnect
+    previews. Treat an unknown `connection.closing` reason as `rotate` and reconnect
     with your last saved `id`. Reconnecting is always safe.
 
     ### Transport
@@ -1550,7 +1578,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: createInvocation
-      summary: Start one background agent turn
+      summary: Start one Invocation in the background
       description: |
         Starts one agent turn and returns immediately. In a single database
         transaction nvoken resolves the deliberately created Agent, selects
@@ -2026,7 +2054,7 @@ paths:
     get:
       tags: [Invocations]
       operationId: getInvocationResult
-      summary: Read a turn together with its messages
+      summary: Read an Invocation together with its messages
       description: |
         Returns the turn and the messages it produced, at any status. This is
         the convenient read for "what did the agent say?" — `output_text`
@@ -2126,7 +2154,7 @@ paths:
     get:
       tags: [Invocations]
       operationId: getInvocationTimeline
-      summary: Read the durable execution waterfall for one turn
+      summary: Read the durable execution waterfall for one Invocation
       description: |
         Assembles lifecycle waits, model calls, tool calls, nudges, and
         compactions from one database snapshot. It contains timings and usage,
@@ -2150,7 +2178,7 @@ paths:
     get:
       tags: [Invocations]
       operationId: listInvocationTraces
-      summary: Page through hosted agent traces for one turn
+      summary: Page through hosted agent traces for one Invocation
       description: |
         Returns newest-first, content-free summaries exported from Dive through
         OpenTelemetry. A child-only trace is returned as `is_partial: true`
@@ -2179,7 +2207,7 @@ paths:
     get:
       tags: [Invocations]
       operationId: listInvocationLogs
-      summary: Page through hosted structured logs for one turn
+      summary: Page through hosted structured logs for one Invocation
       description: |
         Returns the content-free structured lifecycle logs associated by the
         Invocation ID. Arbitrary attributes and raw error values are omitted.
@@ -2295,7 +2323,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: cancelInvocation
-      summary: Stop a turn and discard its work
+      summary: Stop an Invocation and discard its work
       description: |
         Stops a turn and discards what it produced. The turn ends `cancelled`
         and its work does not carry into the next turn — use interrupt instead
@@ -2333,7 +2361,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: interruptInvocation
-      summary: Stop a turn but keep what it produced
+      summary: Stop an Invocation but keep what it produced
       description: |
         Asks a running turn to stop at its next clean stopping point. It ends
         `completed` with `stop_reason: interrupted`, and everything it
@@ -2384,7 +2412,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: resumeInvocation
-      summary: Raise a paused turn's limit and continue it
+      summary: Raise a paused Invocation's limit and continue it
       description: |
         Continues a turn that paused because one of its own spending limits
         ran out. Send `limits` containing only the limit that ran out, raised
@@ -2430,7 +2458,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: createNudge
-      summary: Send extra direction to a running turn
+      summary: Send extra direction to a running Invocation
       description: |
         Sends extra direction to a turn that is already running — "focus on
         the marine segment" — without stopping it and without losing the work
@@ -2559,7 +2587,7 @@ paths:
     post:
       tags: [Invocations]
       operationId: cancelNudge
-      summary: Withdraw a Nudge the turn has not taken
+      summary: Withdraw a Nudge the Invocation has not taken
       description: |
         Withdraws direction you sent with `/nudges`, as long as the turn has not
         picked it up yet. Cancelling something already cancelled returns it
@@ -2682,7 +2710,7 @@ paths:
     get:
       tags: [Admissions]
       operationId: listAdmissions
-      summary: List attempts to start a turn, admitted and refused
+      summary: List attempts to start an Invocation, admitted and refused
       description: |
         Every request to create an Invocation leaves one record here, whether
         or not an Invocation was created. Newest first.
@@ -3978,7 +4006,7 @@ paths:
         Every non-empty `transcript.update` frame carries `id: <cursor>`. That
         opaque ID is your resume position and the only value you need to store
         — reconnect with it and you continue exactly where you left off.
-        `message.delta`, `stream.resync`, and `stream.end` never carry an
+        `message.delta`, `stream.resync`, and `connection.closing` never carry an
         `id`, because they are live previews and control frames rather than
         saved records.
 
@@ -4006,7 +4034,7 @@ paths:
         saved, so it replays at any cursor. Read
         `GET /v1/invocations/{invocation_id}` for the composed result.
 
-        `stream.end` is about this connection and never about a turn. Reason
+        `connection.closing` is about this connection. Reason
         `rotate` means the server is cycling the connection, so reconnect now
         with your last `cursor`. Reason `idle` means it is reclaiming an idle
         connection, so reconnect when you next need to read; nothing is lost
@@ -4055,7 +4083,7 @@ paths:
         "200":
           description: |
             SSE frames named `transcript.update`, `message.delta`,
-            `stream.resync`, and `stream.end`. Only `transcript.update`
+            `stream.resync`, and `connection.closing`. Only `transcript.update`
             carries an `id`.
           content:
             text/event-stream:
@@ -9590,21 +9618,21 @@ components:
             identifier would be scope wearing an identifier's name.
         reason:
           $ref: "#/components/schemas/StreamResyncReason"
-    StreamEndEvent:
+    ConnectionClosingEvent:
       type: object
       required: [type, session_id, reason]
       properties:
         type:
           type: string
-          enum: [stream.end]
-          x-enum-varnames: [EventStreamEnd]
+          enum: [connection.closing]
+          x-enum-varnames: [EventConnectionClosing]
         session_id:
           $ref: "#/components/schemas/SessionID"
         reason:
-          $ref: "#/components/schemas/StreamEndReason"
+          $ref: "#/components/schemas/ConnectionClosingReason"
       description: |
-        This connection is closing. The stream continues, and the turn is
-        unaffected.
+        This connection is closing. The stream continues and the turn is
+        unaffected, so reconnect with your last `cursor`.
 
         There is no cursor here. You already track your last durable one,
         because you need it to survive a connection that drops without saying
@@ -9621,16 +9649,12 @@ components:
 
         Expect new values here over time. Treat a value you do not recognize
         the same way you treat `live_delivery_gap`.
-    StreamEndReason:
+    ConnectionClosingReason:
       type: string
       enum: [rotate, idle, slow_consumer]
       x-enum-varnames: [ReasonRotate, ReasonIdle, ReasonSlowConsumer]
       description: |
-        Why this connection is closing. No reason here speaks about a turn:
-        terminal state is a saved change, connection close is a connection
-        event, and the two never mean each other.
-
-        `rotate` means the server is cycling the connection, so reconnect now
+        Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
         with your last `cursor`. `idle` means no turn is running and the
         server is reclaiming the connection, so reconnect when you next need
         to read; nothing is lost while you are away. `slow_consumer` means
@@ -9666,14 +9690,14 @@ components:
         - $ref: "#/components/schemas/TranscriptUpdateEvent"
         - $ref: "#/components/schemas/MessageDeltaEvent"
         - $ref: "#/components/schemas/StreamResyncEvent"
-        - $ref: "#/components/schemas/StreamEndEvent"
+        - $ref: "#/components/schemas/ConnectionClosingEvent"
       discriminator:
         propertyName: type
         mapping:
           transcript.update: "#/components/schemas/TranscriptUpdateEvent"
           message.delta: "#/components/schemas/MessageDeltaEvent"
           stream.resync: "#/components/schemas/StreamResyncEvent"
-          stream.end: "#/components/schemas/StreamEndEvent"
+          connection.closing: "#/components/schemas/ConnectionClosingEvent"
     AdmissionOutcome:
       type: string
       enum: [admitted, refused]

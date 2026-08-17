@@ -284,8 +284,8 @@ func (c *Client) StreamSessionWithOptions(
 }
 
 // readStream is the one read loop. It reconnects from its last durable cursor
-// on any connection end, because stream.end never says a turn is over and a
-// silent drop says nothing at all.
+// on any connection end. A connection.closing frame says only that, and a
+// silent drop says nothing at all, so neither is a reason to stop.
 func (c *Client) readStream(
 	ctx context.Context,
 	sessionID string,

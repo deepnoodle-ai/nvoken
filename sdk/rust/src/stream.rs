@@ -226,9 +226,10 @@ pub fn stream_handle_with_options(
 }
 
 /// The one read loop. It reconnects from its last durable cursor on any
-/// connection end, because `stream.end` never says a turn is over and a silent
-/// drop says nothing at all. Unfiltered it never ends on its own: the stream
-/// stays open while the Session is idle and a turn started later appears on it.
+/// connection end. A `connection.closing` frame says only that, and a silent
+/// drop says nothing at all, so neither is a reason to stop. Unfiltered it
+/// never ends on its own: the stream stays open while the Session is idle and
+/// a turn started later appears on it.
 pub fn read_stream(
     handle: &InvocationHandle,
     session_id: String,

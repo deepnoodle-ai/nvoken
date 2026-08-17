@@ -817,8 +817,8 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	}
 	writeSSE(response, "cursor-1", "transcript.update", firstTranscriptUpdate())
 	if attempt == 2 {
-		writeSSE(response, "", "stream.end", map[string]any{
-			"type":       "stream.end",
+		writeSSE(response, "", "connection.closing", map[string]any{
+			"type":       "connection.closing",
 			"session_id": sessionID,
 			"reason":     "rotate",
 		})
@@ -832,8 +832,8 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	// Nothing is running now. An unfiltered reader is told the connection is
 	// being reclaimed, which means reconnect when you next need to read; a
 	// filtered one already left on the terminal change above.
-	writeSSE(response, "", "stream.end", map[string]any{
-		"type":       "stream.end",
+	writeSSE(response, "", "connection.closing", map[string]any{
+		"type":       "connection.closing",
 		"session_id": sessionID,
 		"reason":     "idle",
 	})

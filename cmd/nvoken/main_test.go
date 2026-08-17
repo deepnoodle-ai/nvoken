@@ -294,7 +294,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 
 	resetServer(t, baseURL)
 	output, err = executeCLI(t, baseURL, false, "session", "stream", testSessionID)
-	if err != nil || !strings.Contains(output, "transcript.update\tcursor-2") || !strings.Contains(output, "stream.end\tcursor-2") {
+	if err != nil || !strings.Contains(output, "transcript.update\tcursor-2") || !strings.Contains(output, "connection.closing\tcursor-2") {
 		t.Fatalf("stream output=%q err=%v", output, err)
 	}
 
@@ -328,7 +328,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		testSessionID,
 		"--deltas=false",
 	)
-	if err != nil || !strings.Contains(output, "stream.end\tcursor-2") {
+	if err != nil || !strings.Contains(output, "connection.closing\tcursor-2") {
 		t.Fatalf("durable-only Session stream output=%q err=%v", output, err)
 	}
 	queryState = readServerState(t, baseURL)

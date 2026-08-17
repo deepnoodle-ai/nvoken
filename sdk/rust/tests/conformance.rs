@@ -1002,7 +1002,7 @@ async fn shared_fault_server_semantics() {
         vec![
             "transcript.update",
             "transcript.update",
-            "stream.end",
+            "connection.closing",
             "transcript.update",
             "transcript.update",
         ]
