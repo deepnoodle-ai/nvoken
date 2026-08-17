@@ -452,7 +452,7 @@ async function main(): Promise<void> {
   assert.equal(structuredProvenance?.source, "tool_call");
   assert.ok(
     structuredProvenance?.source === "tool_call" &&
-      structuredProvenance.toolCallId?.startsWith("tcal_"),
+      structuredProvenance.toolCallId?.startsWith("call_"),
   );
   assert.ok(structuredProvenance?.schemaSha256);
   assert.ok((await structuredHandle.outputText()).length > 0);

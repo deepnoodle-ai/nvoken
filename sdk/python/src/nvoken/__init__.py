@@ -11,6 +11,20 @@ from .callback import (
     deduplicate_callback_result,
     verify_callback,
 )
+from .signed_delivery import (
+    SIGNATURE_TIMESTAMP_WINDOW,
+    SignedDelivery,
+    verify_signed_delivery,
+)
+from .webhook import (
+    WEBHOOK_EVENTS,
+    VerifiedWebhook,
+    WebhookReply,
+    accept_webhook,
+    retry_webhook,
+    verify_webhook,
+    webhook_status_is_retried,
+)
 from .agent import (
     Agent,
     AgentOptions,
@@ -188,12 +202,22 @@ __all__ = [
     "ToolChoice",
     "ToolResult",
     "TranscriptDrain",
+    "SIGNATURE_TIMESTAMP_WINDOW",
+    "SignedDelivery",
     "VerifiedCallback",
+    "VerifiedWebhook",
+    "WEBHOOK_EVENTS",
+    "WebhookReply",
+    "accept_webhook",
     "acknowledge_callback",
     "callback_result",
     "deduplicate_callback_result",
     "fetch_tool",
+    "retry_webhook",
     "verify_callback",
+    "verify_signed_delivery",
+    "verify_webhook",
+    "webhook_status_is_retried",
     "preflight_input",
     "preflight_output_schema",
     "stream_session",

@@ -46,6 +46,7 @@ type ModelDescriptor = generated.ModelDescriptor
 type ModelPricing = generated.ModelPricing
 type ProviderKey = generated.ProviderKey
 type ProviderKeyUsage = generated.ProviderKeyUsage
+type CreditBlock = generated.CreditBlock
 type CreditAccount = generated.CreditAccount
 type CreditAccountList = generated.CreditAccountList
 type CreditAllocation = generated.CreditAllocation

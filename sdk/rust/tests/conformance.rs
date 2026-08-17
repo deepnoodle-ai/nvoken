@@ -6,12 +6,13 @@ use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
-    answerable_tool_calls, ask_user_input_schema, ask_user_tool, ask_user_tool_with,
-    deduplicate_callback_result, fetch_tool, host_tool_calls, preflight_input_blocks,
-    preflight_output_schema, verify_callback, AgentDefinition, AgentInvocationOptions,
+    accept_webhook, answerable_tool_calls, ask_user_input_schema, ask_user_tool,
+    ask_user_tool_with, deduplicate_callback_result, fetch_tool, host_tool_calls,
+    preflight_input_blocks, preflight_output_schema, retry_webhook, verify_callback,
+    verify_webhook, webhook_status_is_retried, AgentDefinition, AgentInvocationOptions,
     AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
-    CallbackError, CallbackResultStore, Client, ClientInterface, CompactionListOptions,
-    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
+    CallbackResultStore, Client, ClientInterface, CompactionListOptions, ContextCompaction,
+    ContextCompactionTrigger, ContextItem, ContextTier, DeliveryError, ErrorCategory,
     IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
     ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
     NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
@@ -23,10 +24,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 const AGENT_ID: &str = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
-const INVOCATION_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
-const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
-const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
-const WAIT_ID: &str = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
+const INVOCATION_ID: &str = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
+const SESSION_ID: &str = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
+const TOOL_CALL_ID: &str = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
+const WAIT_ID: &str = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328";
 const EXACT_MODEL_ID: &str = "experimental/model?variant=雪%#1";
 
 // The ask_user shape is published in four SDKs plus a fixture the runtime's own
@@ -1209,42 +1210,25 @@ struct ServerState {
 
 #[tokio::test]
 async fn shared_callback_signing_and_deduplication_vector() {
-    let vector: CallbackVector = serde_json::from_str(
-        &std::fs::read_to_string("../../docs/design/callback-signing-v1.json").unwrap(),
-    )
-    .unwrap();
+    let document = delivery_signing_vectors();
+    let vector = &document.vectors.callback;
+    let key = document.key.as_bytes();
     let headers = header_map(&vector.headers);
-    let now = UNIX_EPOCH + Duration::from_secs(vector.now);
-    let verified =
-        verify_callback(vector.key.as_bytes(), &headers, vector.body.as_bytes(), now).unwrap();
+    let now = UNIX_EPOCH + Duration::from_secs(document.now);
+    let verified = verify_callback(key, &headers, vector.body.as_bytes(), now).unwrap();
     assert_eq!(verified.tool_call_id, TOOL_CALL_ID);
     // The name is inside the signed body, so a receiver dispatches on it
     // without an authoritative read and without trusting a URL suffix.
     assert_eq!(verified.tool_name, vector.tool_name);
     assert_eq!(verified.envelope.nvoken.tool_name, vector.tool_name);
 
-    let signature_error = verify_callback(
-        vector.key.as_bytes(),
-        &headers,
-        format!("{} ", vector.body).as_bytes(),
-        now,
-    )
-    .unwrap_err();
-    assert!(matches!(signature_error, CallbackError::SignatureMismatch));
-    for (name, value) in [
-        ("x-nvoken-timestamp", "1784635801"),
-        ("x-nvoken-delivery-id", "different"),
-        ("x-nvoken-signature", "sha256=00"),
-    ] {
+    let signature_error =
+        verify_callback(key, &headers, format!("{} ", vector.body).as_bytes(), now).unwrap_err();
+    assert!(matches!(signature_error, DeliveryError::SignatureMismatch));
+    for (name, value) in HEADER_TAMPERINGS {
         let mut tampered = headers.clone();
         tampered.insert(name, value.parse().unwrap());
-        assert!(verify_callback(
-            vector.key.as_bytes(),
-            &tampered,
-            vector.body.as_bytes(),
-            now,
-        )
-        .is_err());
+        assert!(verify_callback(key, &tampered, vector.body.as_bytes(), now).is_err());
     }
 
     let store = MemoryStore::default();
@@ -1260,14 +1244,101 @@ async fn shared_callback_signing_and_deduplication_vector() {
     assert_eq!(stored, json!({"ok": true}));
 }
 
+/// The callback vector's twin, and the point of having both: the same key, the
+/// same canonical string, the same tampering set, a different verifier. A
+/// scheme that drifted apart for one delivery kind would fail here rather than
+/// at an integrator who believed the promise that there is only one.
+#[tokio::test]
+async fn shared_webhook_signing_vector() {
+    let document = delivery_signing_vectors();
+    let vector = &document.vectors.webhook;
+    let key = document.key.as_bytes();
+    let headers = header_map(&vector.headers);
+    let now = UNIX_EPOCH + Duration::from_secs(document.now);
+    let verified = verify_webhook(key, &headers, vector.body.as_bytes(), now).unwrap();
+    assert_eq!(verified.event, vector.event);
+    assert_eq!(verified.sequence, vector.sequence);
+    assert_eq!(verified.invocation_id, INVOCATION_ID);
+    assert_eq!(verified.session_id, SESSION_ID);
+
+    let signature_error =
+        verify_webhook(key, &headers, format!("{} ", vector.body).as_bytes(), now).unwrap_err();
+    assert!(matches!(signature_error, DeliveryError::SignatureMismatch));
+    for (name, value) in HEADER_TAMPERINGS {
+        let mut tampered = headers.clone();
+        tampered.insert(name, value.parse().unwrap());
+        assert!(verify_webhook(key, &tampered, vector.body.as_bytes(), now).is_err());
+    }
+
+    // A webhook's key is the App's webhook-purpose key and a callback's is its
+    // callback key. Nothing in the wire format says which is which, so a
+    // receiver that crossed them would verify nothing; each vector must refuse
+    // the other's verifier.
+    let callback = &document.vectors.callback;
+    assert!(verify_webhook(
+        key,
+        &header_map(&callback.headers),
+        callback.body.as_bytes(),
+        now,
+    )
+    .is_err());
+    assert!(verify_callback(key, &headers, vector.body.as_bytes(), now).is_err());
+
+    // Delivery is at least once and a redelivery can land after a later
+    // transition, so folding is by sequence rather than by arrival.
+    assert!(verified.supersedes(vector.sequence - 1));
+    assert!(!verified.supersedes(vector.sequence));
+    assert!(!webhook_status_is_retried(accept_webhook().status));
+    assert!(webhook_status_is_retried(retry_webhook().status));
+}
+
+/// The cross-SDK agreement on how nvoken signs a delivery. One file holds both
+/// kinds because there is one scheme; a vector each is what makes that testable
+/// rather than merely stated.
 #[derive(Deserialize)]
-struct CallbackVector {
+struct DeliverySigningVectors {
     key: String,
     now: u64,
+    vectors: DeliveryVectors,
+}
+
+#[derive(Deserialize)]
+struct DeliveryVectors {
+    callback: CallbackVector,
+    webhook: WebhookVector,
+}
+
+#[derive(Deserialize)]
+struct CallbackVector {
     tool_name: String,
     headers: HashMap<String, String>,
     body: String,
 }
+
+#[derive(Deserialize)]
+struct WebhookVector {
+    event: models::WebhookEvent,
+    sequence: i64,
+    headers: HashMap<String, String>,
+    body: String,
+}
+
+fn delivery_signing_vectors() -> DeliverySigningVectors {
+    serde_json::from_str(
+        &std::fs::read_to_string("../../docs/design/delivery-signing-v1.json").unwrap(),
+    )
+    .unwrap()
+}
+
+/// The mutations the vector file names, minus the body one, which each test
+/// applies itself. Each must be refused by both verifiers, since neither the
+/// signature nor its binding to a delivery id and a timestamp is particular to
+/// a delivery kind.
+const HEADER_TAMPERINGS: [(&str, &str); 3] = [
+    ("x-nvoken-timestamp", "1784635801"),
+    ("x-nvoken-delivery-id", "different"),
+    ("x-nvoken-signature", "sha256=00"),
+];
 
 #[derive(Deserialize)]
 struct ToolCallModeFixture {

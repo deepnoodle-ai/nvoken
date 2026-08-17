@@ -25,9 +25,9 @@ use tokio::sync::watch;
 const TERMINAL_STATUS_NAMES: [&str; 4] = ["completed", "incomplete", "failed", "cancelled"];
 
 const AGENT_ID: &str = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
-const SESSION_ID: &str = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
+const SESSION_ID: &str = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321";
 const DEFINITION_ID: &str = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb330";
-const TOOL_CALL_ID: &str = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
+const TOOL_CALL_ID: &str = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325";
 
 #[derive(Clone, Default)]
 struct InvocationState {
@@ -301,7 +301,7 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
         let id = {
             let mut state = runtime.state.lock().unwrap();
             state.next_id += 1;
-            let id = format!("invk_019b0a12-8d51-7f34-aed2-{:012x}", state.next_id);
+            let id = format!("inv_019b0a12-8d51-7f34-aed2-{:012x}", state.next_id);
             state.invocations.insert(
                 id.clone(),
                 InvocationState {

@@ -18,29 +18,32 @@ import (
 func TestVerifyCallbackRequiresToolName(t *testing.T) {
 	const (
 		key        = "0123456789abcdef0123456789abcdef"
-		deliveryID = "cbdy_019b0a12-8d51-7f34-aed2-0e07c1bdb326"
-		toolCallID = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+		deliveryID = "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326"
+		toolCallID = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 	)
 	now := time.Unix(1784635200, 0)
 	body := `{"nvoken":{"schema_version":1,"delivery_id":"` + deliveryID +
 		`","tool_call_id":"` + toolCallID +
-		`","invocation_id":"invk_1","session_id":"sesn_1","agent_key":"support"},"input":{}}`
-	header := signedCallbackHeader(key, []byte(body), deliveryID, toolCallID, now)
+		`","invocation_id":"inv_1","session_id":"sess_1","agent_key":"support"},"input":{}}`
+	header := signedDeliveryHeader(key, []byte(body), deliveryID, toolCallID, now)
 	if _, err := VerifyCallback([]byte(key), header, []byte(body), now); err == nil {
 		t.Fatal("a correctly signed envelope with no tool_name was accepted")
 	}
 
 	named := `{"nvoken":{"schema_version":1,"delivery_id":"` + deliveryID +
 		`","tool_call_id":"` + toolCallID +
-		`","tool_name":"open_ticket","invocation_id":"invk_1","session_id":"sesn_1","agent_key":"support"},"input":{}}`
-	header = signedCallbackHeader(key, []byte(named), deliveryID, toolCallID, now)
+		`","tool_name":"open_ticket","invocation_id":"inv_1","session_id":"sess_1","agent_key":"support"},"input":{}}`
+	header = signedDeliveryHeader(key, []byte(named), deliveryID, toolCallID, now)
 	verified, err := VerifyCallback([]byte(key), header, []byte(named), now)
 	if err != nil || verified.ToolName != "open_ticket" {
 		t.Fatalf("verified tool name = %q err=%v", verified.ToolName, err)
 	}
 }
 
-func signedCallbackHeader(key string, body []byte, deliveryID, toolCallID string, now time.Time) http.Header {
+// signedDeliveryHeader signs a body the way nvoken does. It takes the
+// idempotency key rather than assuming one, because callbacks and Invocation
+// webhooks put different values there under one signing scheme.
+func signedDeliveryHeader(key string, body []byte, deliveryID, idempotencyKey string, now time.Time) http.Header {
 	mac := hmac.New(sha256.New, []byte(key))
 	_, _ = fmt.Fprintf(mac, "v1.%s.%d.", deliveryID, now.Unix())
 	_, _ = mac.Write(body)
@@ -51,6 +54,6 @@ func signedCallbackHeader(key string, body []byte, deliveryID, toolCallID string
 	header.Set("X-Nvoken-Delivery-Id", deliveryID)
 	header.Set("X-Nvoken-Signing-Key-Id", "key_1")
 	header.Set("X-Nvoken-Signing-Key-Version", "1")
-	header.Set("Idempotency-Key", toolCallID)
+	header.Set("Idempotency-Key", idempotencyKey)
 	return header
 }

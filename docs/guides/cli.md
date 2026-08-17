@@ -113,7 +113,7 @@ nvoken app update app_... --request-file app-update.json
 
 # Set nested Session options at creation or fork time.
 nvoken session create --request-file session.json
-nvoken session fork sesn_... --request-file fork.json
+nvoken session fork sess_... --request-file fork.json
 
 # Settle up to 32 host ToolCalls together.
 nvoken tool-result submit inv_... --file results.json

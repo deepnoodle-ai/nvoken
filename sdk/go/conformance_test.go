@@ -19,10 +19,10 @@ import (
 
 const (
 	conformanceAgentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	conformanceInvocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	conformanceSessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	conformanceToolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
-	conformanceWaitID       = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	conformanceInvocationID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	conformanceSessionID    = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	conformanceToolCallID   = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	conformanceWaitID       = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
 	conformanceExactModelID = "experimental/model?variant=雪%#1"
 )
 
@@ -922,20 +922,62 @@ func TestTransportErrorDistinguishesCancellationAndDeadline(t *testing.T) {
 	}
 }
 
-func TestSharedCallbackVector(t *testing.T) {
-	var vector struct {
-		Key      string            `json:"key"`
-		Now      int64             `json:"now"`
-		ToolName string            `json:"tool_name"`
-		Headers  map[string]string `json:"headers"`
-		Body     string            `json:"body"`
-	}
-	decodeFile(t, "../../docs/design/callback-signing-v1.json", &vector)
+// deliverySigningVector is the cross-SDK agreement on how nvoken signs a
+// delivery. One file holds both kinds because there is one scheme; a vector
+// each is what makes that testable rather than merely stated.
+type deliverySigningVector struct {
+	Key     string `json:"key"`
+	Now     int64  `json:"now"`
+	Vectors struct {
+		Callback struct {
+			ToolName string            `json:"tool_name"`
+			Headers  map[string]string `json:"headers"`
+			Body     string            `json:"body"`
+		} `json:"callback"`
+		Webhook struct {
+			Event    string            `json:"event"`
+			Sequence int64             `json:"sequence"`
+			Headers  map[string]string `json:"headers"`
+			Body     string            `json:"body"`
+		} `json:"webhook"`
+	} `json:"vectors"`
+}
+
+func vectorHeader(values map[string]string) http.Header {
 	header := make(http.Header)
-	for name, value := range vector.Headers {
+	for name, value := range values {
 		header.Set(name, value)
 	}
-	verified, err := VerifyCallback([]byte(vector.Key), header, []byte(vector.Body), time.Unix(vector.Now, 0))
+	return header
+}
+
+// tamperings are the mutations the vector file names. Each must be refused by
+// both verifiers, since neither the signature nor its binding to a delivery id
+// and a timestamp is particular to a delivery kind.
+var tamperings = map[string]func(http.Header, []byte) (http.Header, []byte){
+	"body": func(headers http.Header, body []byte) (http.Header, []byte) {
+		return headers, append(append([]byte(nil), body...), ' ')
+	},
+	"timestamp": func(headers http.Header, body []byte) (http.Header, []byte) {
+		headers.Set("X-Nvoken-Timestamp", "1784635801")
+		return headers, body
+	},
+	"delivery": func(headers http.Header, body []byte) (http.Header, []byte) {
+		headers.Set("X-Nvoken-Delivery-ID", "different")
+		return headers, body
+	},
+	"signature": func(headers http.Header, body []byte) (http.Header, []byte) {
+		headers.Set("X-Nvoken-Signature", "sha256=00")
+		return headers, body
+	},
+}
+
+func TestSharedCallbackVector(t *testing.T) {
+	var document deliverySigningVector
+	decodeFile(t, "../../docs/design/delivery-signing-v1.json", &document)
+	vector := document.Vectors.Callback
+	header := vectorHeader(vector.Headers)
+	verified, err := VerifyCallback([]byte(document.Key), header, []byte(vector.Body), time.Unix(document.Now, 0))
 	if err != nil || verified.ToolCallID != conformanceToolCallID {
 		t.Fatalf("verify shared callback vector: %#v err=%v", verified, err)
 	}
@@ -944,27 +986,10 @@ func TestSharedCallbackVector(t *testing.T) {
 	if verified.ToolName != vector.ToolName || verified.Envelope.Nvoken.ToolName != vector.ToolName {
 		t.Fatalf("verified tool name = %q/%q, want %q", verified.ToolName, verified.Envelope.Nvoken.ToolName, vector.ToolName)
 	}
-	for name, mutate := range map[string]func(http.Header, []byte) (http.Header, []byte){
-		"body": func(headers http.Header, body []byte) (http.Header, []byte) {
-			return headers, append(append([]byte(nil), body...), ' ')
-		},
-		"timestamp": func(headers http.Header, body []byte) (http.Header, []byte) {
-			headers.Set("X-Nvoken-Timestamp", "1784635801")
-			return headers, body
-		},
-		"delivery": func(headers http.Header, body []byte) (http.Header, []byte) {
-			headers.Set("X-Nvoken-Delivery-ID", "different")
-			return headers, body
-		},
-		"signature": func(headers http.Header, body []byte) (http.Header, []byte) {
-			headers.Set("X-Nvoken-Signature", "sha256=00")
-			return headers, body
-		},
-	} {
+	for name, mutate := range tamperings {
 		t.Run(name, func(t *testing.T) {
-			changedHeader := header.Clone()
-			changedHeader, changedBody := mutate(changedHeader, []byte(vector.Body))
-			if _, err := VerifyCallback([]byte(vector.Key), changedHeader, changedBody, time.Unix(vector.Now, 0)); err == nil {
+			changedHeader, changedBody := mutate(header.Clone(), []byte(vector.Body))
+			if _, err := VerifyCallback([]byte(document.Key), changedHeader, changedBody, time.Unix(document.Now, 0)); err == nil {
 				t.Fatal("tampered callback was accepted")
 			}
 		})
@@ -977,6 +1002,49 @@ func TestSharedCallbackVector(t *testing.T) {
 	stored, duplicate, err := DeduplicateCallbackResult(context.Background(), store, conformanceToolCallID, json.RawMessage(`{"ok":false}`))
 	if err != nil || !duplicate || string(stored) != `{"ok":true}` {
 		t.Fatalf("duplicate result: %s duplicate=%v err=%v", stored, duplicate, err)
+	}
+}
+
+// TestSharedWebhookVector is the callback vector's twin, and the point of
+// having both: the same key, the same canonical string, the same tampering set,
+// a different verifier. A scheme that drifted apart for one delivery kind would
+// fail here rather than at an integrator who believed the promise that there is
+// only one.
+func TestSharedWebhookVector(t *testing.T) {
+	var document deliverySigningVector
+	decodeFile(t, "../../docs/design/delivery-signing-v1.json", &document)
+	vector := document.Vectors.Webhook
+	header := vectorHeader(vector.Headers)
+	verified, err := VerifyWebhook([]byte(document.Key), header, []byte(vector.Body), time.Unix(document.Now, 0))
+	if err != nil {
+		t.Fatalf("verify shared webhook vector: %v", err)
+	}
+	if string(verified.Event) != vector.Event || verified.Sequence != vector.Sequence {
+		t.Fatalf("verified event = %q/%d, want %q/%d",
+			verified.Event, verified.Sequence, vector.Event, vector.Sequence)
+	}
+	if verified.InvocationID != conformanceInvocationID || verified.SessionID != conformanceSessionID {
+		t.Fatalf("verified invocation = %q session = %q", verified.InvocationID, verified.SessionID)
+	}
+	for name, mutate := range tamperings {
+		t.Run(name, func(t *testing.T) {
+			changedHeader, changedBody := mutate(header.Clone(), []byte(vector.Body))
+			if _, err := VerifyWebhook([]byte(document.Key), changedHeader, changedBody, time.Unix(document.Now, 0)); err == nil {
+				t.Fatal("tampered webhook was accepted")
+			}
+		})
+	}
+
+	// A webhook's key is the App's webhook-purpose key and a callback's is its
+	// callback key. Nothing in the wire format says which is which, so a
+	// receiver that crossed them would verify nothing; each vector must refuse
+	// the other's verifier.
+	callback := document.Vectors.Callback
+	if _, err := VerifyWebhook([]byte(document.Key), vectorHeader(callback.Headers), []byte(callback.Body), time.Unix(document.Now, 0)); err == nil {
+		t.Fatal("a callback body verified as a webhook")
+	}
+	if _, err := VerifyCallback([]byte(document.Key), header, []byte(vector.Body), time.Unix(document.Now, 0)); err == nil {
+		t.Fatal("a webhook body verified as a callback")
 	}
 }
 
@@ -1243,6 +1311,157 @@ func TestSharedInvocationWebhookFixture(t *testing.T) {
 	}
 	if len(fixture.RejectedURLs) == 0 {
 		t.Fatal("fixture must name rejected endpoint forms")
+	}
+}
+
+// TestSharedCallbackWireFixture verifies the documented callback envelope the
+// way a receiver does.
+//
+// The example was previously read by nobody, and it had gone stale: it was
+// missing the `tool_name` every SDK's verifier requires, so an integrator
+// copying it built a body this SDK refuses. Running it through the verifier is
+// what makes the example and the code one thing.
+func TestSharedCallbackWireFixture(t *testing.T) {
+	var fixture struct {
+		CallbackWire struct {
+			IdempotencyKey string         `json:"idempotency_key"`
+			Request        map[string]any `json:"request"`
+		} `json:"callback_wire"`
+	}
+	decodeFile(t, "../conformance/fixtures/tool-call-records-v1.json", &fixture)
+	if fixture.CallbackWire.IdempotencyKey != "tool_call_id" {
+		t.Fatalf("callback idempotency key = %q", fixture.CallbackWire.IdempotencyKey)
+	}
+	body, err := json.Marshal(fixture.CallbackWire.Request)
+	if err != nil {
+		t.Fatalf("marshal callback request: %v", err)
+	}
+	context, ok := fixture.CallbackWire.Request["nvoken"].(map[string]any)
+	if !ok {
+		t.Fatal("callback request has no nvoken context")
+	}
+	deliveryID, _ := context["delivery_id"].(string)
+	toolCallID, _ := context["tool_call_id"].(string)
+	key := []byte("0123456789abcdef0123456789abcdef")
+	now := time.Unix(1784635200, 0)
+	verified, err := VerifyCallback(key, signedDeliveryHeader(string(key), body, deliveryID, toolCallID, now), body, now)
+	if err != nil {
+		t.Fatalf("verify documented callback: %v", err)
+	}
+	if verified.ToolName != context["tool_name"] || verified.ToolCallID != toolCallID {
+		t.Fatalf("verified tool = %q call = %q", verified.ToolName, verified.ToolCallID)
+	}
+}
+
+// TestSharedInvocationWebhookReceivingFixture drives the receiving half against
+// the same fixture the sending half is pinned to.
+//
+// The fixture has always promised the webhook signature is "identical to the
+// tool-callback scheme so a host implements one verification path". Nothing
+// asserted it, and for a while no SDK could receive a webhook at all. Every
+// documented example payload now has to verify and decode here, so the promise
+// is a test rather than a sentence.
+func TestSharedInvocationWebhookReceivingFixture(t *testing.T) {
+	var fixture struct {
+		Signature struct {
+			Version             string `json:"version"`
+			SignaturePrefix     string `json:"signature_prefix"`
+			IdempotencyKeyIs    string `json:"idempotency_key_is"`
+			CanonicalString     string `json:"canonical_string"`
+			SignatureHeader     string `json:"signature_header"`
+			TimestampHeader     string `json:"timestamp_header"`
+			DeliveryIDHeader    string `json:"delivery_id_header"`
+			IdempotencyKeyHead  string `json:"idempotency_key_header"`
+			IdempotencyKeyNoted string `json:"note"`
+		} `json:"signature"`
+		Delivery struct {
+			Retryable []int `json:"retryable_statuses"`
+			Permanent []int `json:"permanent_statuses"`
+		} `json:"delivery"`
+		EndedStatuses  []string       `json:"ended_statuses"`
+		EndedPayload   map[string]any `json:"example_ended_payload"`
+		WaitingPayload map[string]any `json:"example_waiting_payload"`
+		PausedPayload  map[string]any `json:"example_paused_payload"`
+	}
+	decodeFile(t, "../conformance/fixtures/invocation-webhooks-v1.json", &fixture)
+
+	key := []byte("0123456789abcdef0123456789abcdef")
+	now := time.Unix(1784635200, 0)
+	for name, payload := range map[string]map[string]any{
+		"ended":   fixture.EndedPayload,
+		"waiting": fixture.WaitingPayload,
+		"paused":  fixture.PausedPayload,
+	} {
+		t.Run(name, func(t *testing.T) {
+			body, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("marshal %s payload: %v", name, err)
+			}
+			context, ok := payload["nvoken"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s payload has no nvoken context", name)
+			}
+			deliveryID, _ := context["delivery_id"].(string)
+			// The idempotency key is the delivery id on a webhook, which the
+			// fixture states and verification enforces.
+			if fixture.Signature.IdempotencyKeyIs == "" {
+				t.Fatal("fixture must say what the idempotency key carries")
+			}
+			header := signedDeliveryHeader(string(key), body, deliveryID, deliveryID, now)
+			verified, err := VerifyWebhook(key, header, body, now)
+			if err != nil {
+				t.Fatalf("verify %s payload: %v", name, err)
+			}
+			if string(verified.Event) != context["event"].(string) {
+				t.Fatalf("%s event = %q, want %q", name, verified.Event, context["event"])
+			}
+			if float64(verified.Sequence) != context["sequence"].(float64) {
+				t.Fatalf("%s sequence = %d, want %v", name, verified.Sequence, context["sequence"])
+			}
+			subject := payload["invocation"].(map[string]any)
+			if string(verified.Envelope.Invocation.Status) != subject["status"].(string) {
+				t.Fatalf("%s status = %q, want %q", name, verified.Envelope.Invocation.Status, subject["status"])
+			}
+			// A stop reason the enum does not carry decodes to a value no
+			// receiver can branch on, which is how the paused example went
+			// stale unnoticed.
+			if reason := verified.Envelope.Invocation.StopReason; reason != nil && !reason.Valid() {
+				t.Fatalf("%s stop reason %q is outside the enum", name, *reason)
+			}
+		})
+	}
+
+	// invocation.ended reports whichever terminal status the turn reached, so
+	// the fixture's set and the SDK's must be the same set.
+	terminal := make([]string, 0, len(TerminalInvocationStatuses))
+	for _, status := range TerminalInvocationStatuses {
+		terminal = append(terminal, string(status))
+	}
+	slices.Sort(terminal)
+	endedStatuses := append([]string(nil), fixture.EndedStatuses...)
+	slices.Sort(endedStatuses)
+	if !slices.Equal(terminal, endedStatuses) {
+		t.Fatalf("ended statuses = %v, want %v", endedStatuses, terminal)
+	}
+
+	// The reply discipline decides whether a transition is ever delivered
+	// again. A receiver reading it out of the SDK and a receiver reading it out
+	// of the fixture must reach the same answer.
+	if len(fixture.Delivery.Retryable) == 0 || len(fixture.Delivery.Permanent) == 0 {
+		t.Fatal("fixture must name both delivery status sets")
+	}
+	for _, status := range fixture.Delivery.Retryable {
+		if !WebhookStatusIsRetried(status) {
+			t.Fatalf("%d is retryable in the fixture but not in the SDK", status)
+		}
+	}
+	for _, status := range fixture.Delivery.Permanent {
+		if WebhookStatusIsRetried(status) {
+			t.Fatalf("%d is permanent in the fixture but retried by the SDK", status)
+		}
+	}
+	if WebhookStatusIsRetried(AcceptWebhook().Status) || !WebhookStatusIsRetried(RetryWebhook().Status) {
+		t.Fatal("the reply constructors disagree with the status sets")
 	}
 }
 

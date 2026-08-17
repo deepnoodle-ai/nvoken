@@ -8,6 +8,22 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Invocation webhooks can be received.** `verifyWebhook` returns a typed
+  envelope in all four SDKs, alongside sequence folding (`supersedes`), the
+  reply discipline (`acceptWebhook`, `retryWebhook`, `webhookStatusIsRetried`),
+  and `verifySignedDelivery`, which callbacks and webhooks now genuinely share.
+  Settlement no longer requires holding a stream.
+
+- **Breaking: `CallbackError` is `DeliveryError` in Rust, and Go's
+  `CallbackTimestampWindow` is `SignatureTimestampWindow`.** One signing scheme
+  covers both delivery kinds, so the names that governed both stopped naming
+  only one of them.
+
+- **Breaking: `docs/design/callback-signing-v1.json` is
+  `docs/design/delivery-signing-v1.json`,** and holds a vector per delivery
+  kind under `vectors`. `make check` recomputes both signatures from their own
+  bodies, so a vector can no longer be signed for a body it no longer has.
+
 - **The deployment probes are reachable.** `nvoken health` and `nvoken ready`,
   and `nvoken.NewProbe` in Go, read `/health` and `/ready` without a
   credential. A refused readiness check prints its report and exits non-zero.

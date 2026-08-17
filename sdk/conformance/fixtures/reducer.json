@@ -5,13 +5,13 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
             "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "user_key": null,
             "sequence": 1,
             "role": "user",
@@ -26,7 +26,7 @@
         ],
         "invocation_changes": [
           {
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 1,
             "status": "running",
             "terminal": false,
@@ -47,13 +47,13 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
             "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "user_key": null,
             "sequence": 1,
             "role": "user",
@@ -67,9 +67,9 @@
           },
           {
             "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "user_key": null,
             "sequence": 2,
             "role": "assistant",
@@ -84,7 +84,7 @@
         ],
         "invocation_changes": [
           {
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 1,
             "status": "running",
             "terminal": false,
@@ -97,7 +97,7 @@
             "occurred_at": "2026-07-21T12:00:01Z"
           },
           {
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 2,
             "status": "completed",
             "terminal": true,
@@ -111,7 +111,7 @@
             "stop_reason": "end_turn",
             "tool_calls": [
               {
-                "id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+                "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
                 "name": "lookup_order",
                 "mode": "host",
                 "status": "completed",
@@ -128,7 +128,7 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [],
         "invocation_changes": [],
         "cursor": "cursor-2"
@@ -139,8 +139,8 @@
       "event": "message.delta",
       "data": {
         "type": "message.delta",
-        "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-        "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
         "attempt": 1,
         "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "content_index": 0,
@@ -159,8 +159,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
@@ -174,8 +174,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
@@ -189,8 +189,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
@@ -202,7 +202,7 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
           "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 0,
@@ -210,7 +210,7 @@
           "delta": "plan"
         },
         {
-          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
           "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 1,
@@ -227,14 +227,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 2,
             "kind": "tool_arguments",
             "delta": "{\"order_id\"",
-            "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+            "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
             "name": "lookup_order",
             "emitted_at": "2026-07-21T12:00:01Z"
           }
@@ -244,14 +244,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 2,
             "kind": "tool_arguments",
             "delta": ":\"A-1\"}",
-            "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+            "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
             "name": "lookup_order",
             "emitted_at": "2026-07-21T12:00:02Z"
           }
@@ -259,13 +259,13 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
           "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 2,
           "kind": "tool_arguments",
           "delta": "{\"order_id\":\"A-1\"}",
-          "tool_call_id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+          "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
           "name": "lookup_order"
         }
       ]
@@ -278,8 +278,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
@@ -293,8 +293,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
@@ -308,8 +308,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 2,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
             "content_index": 0,
@@ -321,7 +321,7 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 2,
           "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
           "content_index": 0,
@@ -338,8 +338,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
@@ -353,8 +353,8 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "reason": "live_delivery_gap"
           }
         }
@@ -369,8 +369,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
@@ -384,7 +384,7 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "reason": "live_delivery_gap"
           }
         }
@@ -399,8 +399,8 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
             "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
@@ -414,13 +414,13 @@
           "event": "transcript.update",
           "data": {
             "type": "transcript.update",
-            "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "messages": [
               {
                 "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-                "session_id": "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+                "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
                 "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-                "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+                "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
                 "user_key": null,
                 "sequence": 2,
                 "role": "assistant",

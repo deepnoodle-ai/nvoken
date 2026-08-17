@@ -101,11 +101,11 @@
   "example_ended_payload": {
     "nvoken": {
       "schema_version": 1,
-      "delivery_id": "invn_019b0a12-0000-7000-8000-000000000001",
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000001",
       "event": "invocation.ended",
       "sequence": 2,
-      "invocation_id": "invk_019b0a12-0000-7000-8000-000000000001",
-      "session_id": "sesn_019b0a12-0000-7000-8000-000000000001",
+      "invocation_id": "inv_019b0a12-0000-7000-8000-000000000001",
+      "session_id": "sess_019b0a12-0000-7000-8000-000000000001",
       "agent_key": "support-bot",
       "tenant_key": "acme"
     },
@@ -117,33 +117,33 @@
   "example_waiting_payload": {
     "nvoken": {
       "schema_version": 1,
-      "delivery_id": "invn_019b0a12-0000-7000-8000-000000000002",
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000002",
       "event": "invocation.waiting",
       "sequence": 1,
-      "invocation_id": "invk_019b0a12-0000-7000-8000-000000000001",
-      "session_id": "sesn_019b0a12-0000-7000-8000-000000000001",
+      "invocation_id": "inv_019b0a12-0000-7000-8000-000000000001",
+      "session_id": "sess_019b0a12-0000-7000-8000-000000000001",
       "agent_key": "support-bot",
       "tenant_key": "acme"
     },
     "invocation": {
       "status": "waiting",
-      "waiting_tool_call_ids": ["tcal_019b0a12-0000-7000-8000-000000000001"]
+      "waiting_tool_call_ids": ["call_019b0a12-0000-7000-8000-000000000001"]
     }
   },
   "example_paused_payload": {
     "nvoken": {
       "schema_version": 1,
-      "delivery_id": "invn_019b0a12-0000-7000-8000-000000000003",
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000003",
       "event": "invocation.paused",
       "sequence": 2,
-      "invocation_id": "invk_019b0a12-0000-7000-8000-000000000001",
-      "session_id": "sesn_019b0a12-0000-7000-8000-000000000001",
+      "invocation_id": "inv_019b0a12-0000-7000-8000-000000000001",
+      "session_id": "sess_019b0a12-0000-7000-8000-000000000001",
       "agent_key": "support-bot",
       "tenant_key": "acme"
     },
     "invocation": {
       "status": "paused",
-      "stop_reason": "session_max_estimated_cost"
+      "stop_reason": "max_estimated_cost"
     }
   }
 }

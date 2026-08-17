@@ -34,6 +34,7 @@ scripts-check:
 	python3 scripts/check_python_deps.py
 	python3 scripts/check_versions.py
 	python3 scripts/check_go_frame_keys.py
+	python3 scripts/check_signing_vectors.py
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_*.py'
 
 sdk-generate:

@@ -14,10 +14,10 @@ import (
 
 const (
 	agentID       = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	sessionID     = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	invocationID  = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	waitID        = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
-	toolCallID    = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	sessionID     = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	invocationID  = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	waitID        = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	toolCallID    = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 	definitionID  = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
 	definitionKey = "support"
 	exactModelID  = "experimental/model?variant=雪%#1"
@@ -687,26 +687,26 @@ func toolCallRecords() map[string]any {
 	return map[string]any{
 		"items": []any{
 			map[string]any{
-				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
+				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 				"result_origin": "builtin",
 			},
 			map[string]any{
-				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
+				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 				"result_origin": nil,
 			},
 			map[string]any{
-				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
+				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
 				"result_origin": "callback",
 				"delivery":      map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
 			},
 			map[string]any{
-				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
+				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
 				"result_origin": "mcp",
@@ -715,7 +715,7 @@ func toolCallRecords() map[string]any {
 			// and the result arrived later through tool-results, so the origin
 			// is host even though the mode is callback.
 			map[string]any{
-				"id": "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
+				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
 				"name": "run_migration", "status": "completed", "iteration": 3,
 				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
 				"result_origin": "host",
@@ -932,7 +932,7 @@ func invocationResult() map[string]any {
 	composed["structured_output"] = map[string]any{"answer": "world"}
 	composed["structured_output_provenance"] = map[string]any{
 		"source":        "tool_call",
-		"tool_call_id":  "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb999",
+		"tool_call_id":  "call_019b0a12-8d51-7f34-aed2-0e07c1bdb999",
 		"schema_sha256": "abababababababababababababababababababababababababababababababab",
 	}
 	return map[string]any{
@@ -1050,7 +1050,7 @@ func firstResultAssistantMessage() map[string]any {
 		"role":          "assistant",
 		"content": []any{
 			map[string]any{"type": "text", "text": "The charge was"},
-			map[string]any{"type": "tool_use", "id": "tcal_fixture", "name": "lookup", "input": map[string]any{}},
+			map[string]any{"type": "tool_use", "id": "call_fixture", "name": "lookup", "input": map[string]any{}},
 			map[string]any{"type": "text", "text": " duplicated."},
 		},
 		"created_at": "2026-07-21T12:00:02Z",

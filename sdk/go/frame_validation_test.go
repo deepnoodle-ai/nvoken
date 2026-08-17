@@ -11,7 +11,7 @@ import (
 // genuinely was not.
 func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	change := map[string]any{
-		"invocation_id":            "invk_1",
+		"invocation_id":            "inv_1",
 		"revision":                 1,
 		"status":                   "completed",
 		"through_message_sequence": nil,
@@ -21,7 +21,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	}
 	data, err := json.Marshal(map[string]any{
 		"type":               "transcript.update",
-		"session_id":         "sesn_1",
+		"session_id":         "sess_1",
 		"messages":           []any{},
 		"invocation_changes": []any{change},
 		"cursor":             "cursor-1",
@@ -38,7 +38,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	change["terminal"] = true
 	data, err = json.Marshal(map[string]any{
 		"type":               "transcript.update",
-		"session_id":         "sesn_1",
+		"session_id":         "sess_1",
 		"messages":           []any{},
 		"invocation_changes": []any{change},
 		"cursor":             "cursor-1",
@@ -49,7 +49,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	if err := reducer.Apply(StreamEvent{Type: "transcript.update", Data: data}); err != nil {
 		t.Fatalf("reducer refused a complete change: %v", err)
 	}
-	if !reducer.Settled("invk_1") {
+	if !reducer.Settled("inv_1") {
 		t.Fatal("a complete terminal change did not settle the turn")
 	}
 }
@@ -59,7 +59,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 // check must be about the member existing, not about what it holds.
 func TestRequiredMemberHoldingNullIsPresent(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sesn_1","reason":null}`,
+		`{"type":"stream.resync","session_id":"sess_1","reason":null}`,
 	)); err != nil {
 		t.Fatalf("null-valued required member rejected: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestRequiredMemberHoldingNullIsPresent(t *testing.T) {
 // Frames gain fields over time and a reader must keep going.
 func TestUnknownMembersAreIgnored(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sesn_1","reason":"live_delivery_gap","added_later":1}`,
+		`{"type":"stream.resync","session_id":"sess_1","reason":"live_delivery_gap","added_later":1}`,
 	)); err != nil {
 		t.Fatalf("unknown member rejected: %v", err)
 	}

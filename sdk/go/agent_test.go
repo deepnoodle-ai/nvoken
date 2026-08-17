@@ -16,8 +16,8 @@ import (
 
 const (
 	agentTestAgentID   = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	agentTestSessionID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	agentTestToolID    = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	agentTestSessionID = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	agentTestToolID    = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 )
 
 func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
@@ -380,7 +380,7 @@ func (r *agentTestRuntime) create(
 	r.mu.Lock()
 	r.nextID++
 	id := fmt.Sprintf(
-		"invk_019b0a12-8d51-7f34-aed2-%012x",
+		"inv_019b0a12-8d51-7f34-aed2-%012x",
 		r.nextID,
 	)
 	r.invocations[id] = &agentTestInvocation{
@@ -686,7 +686,7 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 				})
 			case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 				admissions = append(admissions, body)
-				writeAgentTestJSON(response, http.StatusAccepted, agentTestInvocationPayload("invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322", "queued"))
+				writeAgentTestJSON(response, http.StatusAccepted, agentTestInvocationPayload("inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322", "queued"))
 			default:
 				t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
 				response.WriteHeader(http.StatusNotFound)

@@ -96,14 +96,18 @@ from nvoken import (
     deduplicate_callback_result,
     preflight_output_schema,
     verify_callback,
+    verify_webhook,
+    webhook_status_is_retried,
+    accept_webhook,
+    retry_webhook,
     fetch_tool,
 )
 
 AGENT_ID = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-INVOCATION_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-SESSION_ID = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-TOOL_CALL_ID = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
-WAIT_ID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+INVOCATION_ID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+SESSION_ID = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+TOOL_CALL_ID = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+WAIT_ID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
 EXACT_MODEL_ID = "experimental/model?variant=雪%#1"
 
 
@@ -792,13 +796,43 @@ def test_shared_tool_call_mode_partition() -> None:
     assert [call.id for call in host_tool_calls(invocation)] == fixture["host"]
 
 
+def delivery_signing_vectors() -> dict:
+    """The cross-SDK agreement on how nvoken signs a delivery.
+
+    One file holds both kinds because there is one scheme; a vector each is
+    what makes that testable rather than merely stated.
+    """
+    path = Path(__file__).parents[3] / "docs/design/delivery-signing-v1.json"
+    return json.loads(path.read_text())
+
+
+def tamperings(headers: dict[str, str], body: bytes) -> list[tuple[dict[str, str], bytes]]:
+    """The mutations the vector file names.
+
+    Each must be refused by both verifiers, since neither the signature nor its
+    binding to a delivery id and a timestamp is particular to a delivery kind.
+    """
+    timestamp = dict(headers)
+    timestamp["X-Nvoken-Timestamp"] = "1784635801"
+    delivery = dict(headers)
+    delivery["X-Nvoken-Delivery-ID"] = "different"
+    signature = dict(headers)
+    signature["X-Nvoken-Signature"] = "sha256=00"
+    return [
+        (dict(headers), body + b" "),
+        (timestamp, body),
+        (delivery, body),
+        (signature, body),
+    ]
+
+
 @pytest.mark.asyncio
 async def test_shared_callback_signing_and_deduplication_vector() -> None:
-    path = Path(__file__).parents[3] / "docs/design/callback-signing-v1.json"
-    vector = json.loads(path.read_text())
-    key = vector["key"].encode()
+    document = delivery_signing_vectors()
+    vector = document["vectors"]["callback"]
+    key = document["key"].encode()
     body = vector["body"].encode()
-    now = datetime.fromtimestamp(vector["now"], timezone.utc)
+    now = datetime.fromtimestamp(document["now"], timezone.utc)
     verified = verify_callback(key, vector["headers"], body, now=now)
     assert verified.tool_call_id == TOOL_CALL_ID
     # The name is inside the signed body, so a receiver dispatches on it without
@@ -806,18 +840,7 @@ async def test_shared_callback_signing_and_deduplication_vector() -> None:
     assert verified.tool_name == vector["tool_name"]
     assert verified.envelope["nvoken"]["tool_name"] == vector["tool_name"]
 
-    mutations = []
-    mutations.append((dict(vector["headers"]), body + b" "))
-    timestamp = dict(vector["headers"])
-    timestamp["X-Nvoken-Timestamp"] = "1784635801"
-    mutations.append((timestamp, body))
-    delivery = dict(vector["headers"])
-    delivery["X-Nvoken-Delivery-ID"] = "different"
-    mutations.append((delivery, body))
-    signature = dict(vector["headers"])
-    signature["X-Nvoken-Signature"] = "sha256=00"
-    mutations.append((signature, body))
-    for headers, candidate in mutations:
+    for headers, candidate in tamperings(vector["headers"], body):
         with pytest.raises(ValueError):
             verify_callback(key, headers, candidate, now=now)
 
@@ -840,6 +863,47 @@ async def test_shared_callback_signing_and_deduplication_vector() -> None:
     stored, replayed = await deduplicate_callback_result(store, TOOL_CALL_ID, {"ok": False})
     assert replayed is True
     assert stored == {"ok": True}
+
+
+def test_shared_webhook_signing_vector() -> None:
+    """The callback vector's twin, and the point of having both.
+
+    The same key, the same canonical string, the same tampering set, a
+    different verifier. A scheme that drifted apart for one delivery kind would
+    fail here rather than at an integrator who believed the promise that there
+    is only one.
+    """
+    document = delivery_signing_vectors()
+    vector = document["vectors"]["webhook"]
+    key = document["key"].encode()
+    body = vector["body"].encode()
+    now = datetime.fromtimestamp(document["now"], timezone.utc)
+    verified = verify_webhook(key, vector["headers"], body, now=now)
+    assert verified.event == vector["event"]
+    assert verified.sequence == vector["sequence"]
+    assert verified.invocation_id == INVOCATION_ID
+    assert verified.session_id == SESSION_ID
+
+    for headers, candidate in tamperings(vector["headers"], body):
+        with pytest.raises(ValueError):
+            verify_webhook(key, headers, candidate, now=now)
+
+    # A webhook's key is the App's webhook-purpose key and a callback's is its
+    # callback key. Nothing in the wire format says which is which, so a
+    # receiver that crossed them would verify nothing; each vector must refuse
+    # the other's verifier.
+    callback = document["vectors"]["callback"]
+    with pytest.raises(ValueError):
+        verify_webhook(key, callback["headers"], callback["body"].encode(), now=now)
+    with pytest.raises(ValueError):
+        verify_callback(key, vector["headers"], body, now=now)
+
+    # Delivery is at least once and a redelivery can land after a later
+    # transition, so folding is by sequence rather than by arrival.
+    assert verified.supersedes(vector["sequence"] - 1) is True
+    assert verified.supersedes(vector["sequence"]) is False
+    assert webhook_status_is_retried(accept_webhook().status) is False
+    assert webhook_status_is_retried(retry_webhook().status) is True
 
 
 def test_shared_reducer_vector() -> None:
@@ -909,7 +973,7 @@ async def test_cancellation_propagates_through_replay_and_waits() -> None:
 async def test_session_stream_uses_public_operation_and_follows_later_turns() -> None:
     path = Path(__file__).parents[2] / "conformance/fixtures/reducer.json"
     events = json.loads(path.read_text())["events"]
-    later_invocation_id = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb399"
+    later_invocation_id = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb399"
     later_event = json.loads(json.dumps(events[1]))
     for message in later_event["data"]["messages"]:
         message["invocation_id"] = later_invocation_id
@@ -1365,7 +1429,7 @@ def test_shared_invocation_nudge_fixture_pins_the_steering_contract() -> None:
     drained = Nudge.from_dict(
         {
             "id": "nudge_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-            "invocation_id": "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "status": NudgeStatus.DRAINED.value,
             "content": "focus on the marine segment",
             "created_at": "2026-08-02T09:15:00Z",

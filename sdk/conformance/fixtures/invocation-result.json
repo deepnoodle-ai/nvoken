@@ -10,7 +10,7 @@
           },
           {
             "type": "tool_use",
-            "id": "tcal_fixture",
+            "id": "call_fixture",
             "name": "lookup",
             "input": {}
           },

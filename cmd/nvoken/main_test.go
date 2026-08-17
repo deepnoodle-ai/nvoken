@@ -18,9 +18,9 @@ import (
 
 const (
 	testAgentID      = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	testInvocationID = "invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	testSessionID    = "sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	testToolCallID   = "tcal_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	testInvocationID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	testSessionID    = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	testToolCallID   = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 )
 
 func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
@@ -216,7 +216,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		false,
 		"invocation",
 		"wait",
-		"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
+		"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
 		"--until",
 		"actionable",
 	)
@@ -438,10 +438,10 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 			response.Header().Set("Content-Type", "application/json")
 			response.WriteHeader(http.StatusAccepted)
 			_, _ = io.WriteString(response, `{
-				"id":"invk_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+				"id":"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
 				"agent_id":"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
 				"agent_key":"support",
-				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+				"session_id":"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
 				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 				"definition_revision":1,
 				"definition":null,
@@ -580,7 +580,7 @@ func TestModelCheckProbeCarriesAUsableOutputBudget(t *testing.T) {
 			_, _ = io.WriteString(response, `{
 				"agent_id":"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
 				"agent_key":"support",
-				"session_id":"sesn_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+				"session_id":"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
 				"id":"`+testInvocationID+`",
 				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
 				"definition_revision":1,
@@ -784,7 +784,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 			response.WriteHeader(http.StatusAccepted)
 			_, _ = io.WriteString(response, `{
 				"id":"inv_test","agent_id":"agent_test","agent_key":"support",
-				"session_id":"sesn_test","definition_id":"def_test",
+				"session_id":"sess_test","definition_id":"def_test",
 				"definition_revision":1,"status":"queued","active_execution_ms":0,
 				"attempt":0,"created_at":"2026-08-16T12:00:00Z","updated_at":"2026-08-16T12:00:00Z"
 			}`)
@@ -795,13 +795,13 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 			_, _ = io.WriteString(response, `{"id":"app_test","name":"raw-app"}`)
 		case "POST /v1/sessions":
 			response.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(response, `{"id":"sesn_test"}`)
-		case "POST /v1/sessions/sesn_source/fork":
+			_, _ = io.WriteString(response, `{"id":"sess_test"}`)
+		case "POST /v1/sessions/sess_source/fork":
 			response.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(response, `{"id":"sesn_fork"}`)
+			_, _ = io.WriteString(response, `{"id":"sess_fork"}`)
 		case "POST /v1/invocations/inv_test/tool-results":
 			response.WriteHeader(http.StatusAccepted)
-			_, _ = io.WriteString(response, `{"invocation_id":"inv_test","session_id":"sesn_test","status":"queued","results":[]}`)
+			_, _ = io.WriteString(response, `{"invocation_id":"inv_test","session_id":"sess_test","status":"queued","results":[]}`)
 		default:
 			http.NotFound(response, request)
 		}
@@ -850,7 +850,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 		},
 		{
 			name: "session fork",
-			args: []string{"session", "fork", "sesn_source", "--request-file", writeRequest("fork.json", `{
+			args: []string{"session", "fork", "sess_source", "--request-file", writeRequest("fork.json", `{
 				"from_message":7,"session_options":{"authorization_context":{"branch":"alternate"}}
 			}`)},
 		},
@@ -889,7 +889,7 @@ func TestCompleteRequestFilesAndBatchToolResults(t *testing.T) {
 	if createdSession["agent_id"] != "agent_test" || createdSession["session_options"] == nil {
 		t.Fatalf("complete Session request was not preserved: %#v", createdSession)
 	}
-	forkedSession := captured["POST /v1/sessions/sesn_source/fork"]
+	forkedSession := captured["POST /v1/sessions/sess_source/fork"]
 	if forkedSession["from_message"] != float64(7) || forkedSession["session_options"] == nil {
 		t.Fatalf("complete fork request was not preserved: %#v", forkedSession)
 	}
@@ -911,7 +911,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 		switch key {
 		case "GET /v1/invocations":
 			_, _ = io.WriteString(response, `{"items":[],"has_more":false,"next_cursor":null}`)
-		case "GET /v1/sessions/sesn_test/messages":
+		case "GET /v1/sessions/sess_test/messages":
 			_, _ = io.WriteString(response, `{"items":[],"has_more":false,"next_cursor":null}`)
 		case "GET /v1/usage/timeseries":
 			_, _ = io.WriteString(response, `{
@@ -949,7 +949,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 
 	commands := [][]string{
 		{"invocation", "list", "--tenant", "tenant-a", "--default-tenant"},
-		{"session", "messages", "sesn_test", "--order", "desc"},
+		{"session", "messages", "sess_test", "--order", "desc"},
 		{
 			"usage", "timeseries",
 			"--start-at", "2026-08-01T00:00:00Z", "--end-at", "2026-08-02T00:00:00Z", "--interval", "day",
@@ -987,7 +987,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 	if invocationQuery["tenant_key"][0] != "tenant-a" || invocationQuery["default_tenant"][0] != "true" {
 		t.Fatalf("Invocation query = %#v", invocationQuery)
 	}
-	messageQuery := queries["GET /v1/sessions/sesn_test/messages"]
+	messageQuery := queries["GET /v1/sessions/sess_test/messages"]
 	if messageQuery["order"][0] != "desc" {
 		t.Fatalf("Session message query = %#v", messageQuery)
 	}

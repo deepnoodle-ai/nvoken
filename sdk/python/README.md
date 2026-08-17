@@ -406,6 +406,64 @@ waiting Invocation's pending calls the same way a host call does, so
 must run yourself — answerable and `mode` `host` — and an `Agent` dispatches
 exactly that, whatever its own definition declares.
 
+## Invocation webhooks
+
+A turn that ends tells you so, without you holding a connection open to hear
+it. Ask for it when you start the turn:
+
+```python
+invocation = await client.create_invocation(
+    agent_key="support",
+    input="Where is my order?",
+    webhook=WebhookTarget(url="https://example.com/nvoken/webhooks"),
+)
+```
+
+Omitting `events` selects all three. `invocation.ended` fires once when the
+turn reaches a terminal status; `invocation.waiting` fires when it needs a host
+tool run; `invocation.paused` fires when a spending limit stopped it.
+
+Receiving one is the same verification you already wrote for callbacks — the
+signature scheme is identical, and `verify_webhook` is the same code path with
+a different body check:
+
+```python
+from nvoken import accept_webhook, retry_webhook, verify_webhook
+
+delivery = verify_webhook(webhook_signing_key, headers, raw_body)
+if delivery.supersedes(await last_applied_sequence(delivery.invocation_id)):
+    await settle(delivery.invocation_id, delivery.envelope["invocation"], delivery.sequence)
+return accept_webhook()
+```
+
+The key is the App's `webhook`-purpose signing key, not its `callback` key. A
+receiver serving both endpoints holds two, and must not try either against the
+other's deliveries.
+
+Three rules make a receiver correct:
+
+**Fold by sequence, not by arrival.** Delivery is at least once, so the same
+transition can arrive twice and a redelivery can land after a later one. Keep
+the highest `sequence` you have applied per Invocation and apply only what
+`supersedes` accepts. That is the deduplication too — a repeat carries a
+sequence you already applied — so nothing else is needed to make handling
+idempotent.
+
+**The payload is a pointer, not a copy.** It carries `status`, `stop_reason`,
+`failure_code`, `waiting_tool_call_ids`, and `credit_block`, and deliberately
+nothing else: no transcript, no output text, no usage. Read `get_invocation` or
+`get_invocation_result` when you need more, so you are reconciling against the
+authoritative record rather than a staler copy of it.
+
+**Answer `retry_webhook()` when you could not record it.** Any 5xx is
+redelivered, as are 408, 425, and 429. Every other non-2xx answer is permanent
+and that transition is never delivered again, so a 400 from a receiver that was
+merely busy is a settlement you silently lost.
+
+Retries are bounded, so webhooks alone are not a settlement guarantee.
+`client.list_ended_invocations` is the backstop: it walks turns in the order
+they ended, so a delivery that never landed is one you still find.
+
 ## Acting for one tenant or one end user
 
 An app-wide credential can reach every tenant in its App, so an id that arrives

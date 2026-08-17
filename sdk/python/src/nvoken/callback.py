@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any, Protocol, TypeVar, Generic
+
+from .signed_delivery import verify_signed_delivery
 
 
 @dataclass(frozen=True)
@@ -35,32 +35,14 @@ def verify_callback(
     *,
     now: datetime | None = None,
 ) -> VerifiedCallback:
-    normalized = {name.lower(): value for name, value in headers.items()}
-    if len(key) < 32:
-        raise ValueError("callback signing key must be at least 32 bytes")
-    if normalized.get("x-nvoken-signature-version") != "v1":
-        raise ValueError("unsupported callback signature version")
-    try:
-        timestamp_seconds = int(normalized["x-nvoken-timestamp"])
-        key_version = int(normalized["x-nvoken-signing-key-version"])
-    except (KeyError, ValueError) as error:
-        raise ValueError("callback timestamp or key version is invalid") from error
-    timestamp = datetime.fromtimestamp(timestamp_seconds, timezone.utc)
-    current = now or datetime.now(timezone.utc)
-    if abs(current - timestamp) > timedelta(minutes=5):
-        raise ValueError("callback timestamp is outside the accepted window")
-    delivery_id = normalized.get("x-nvoken-delivery-id", "")
-    tool_call_id = normalized.get("idempotency-key", "")
-    key_id = normalized.get("x-nvoken-signing-key-id", "")
-    if not delivery_id or not tool_call_id or not key_id or key_version <= 0:
-        raise ValueError("callback identity headers are invalid")
-    provided = normalized.get("x-nvoken-signature", "")
-    if not provided.startswith("sha256="):
-        raise ValueError("callback signature must use sha256 prefix")
-    canonical = f"v1.{delivery_id}.{timestamp_seconds}.".encode() + raw_body
-    expected = "sha256=" + hmac.new(key, canonical, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(provided, expected):
-        raise ValueError("callback signature mismatch")
+    """Check one tool-callback delivery and return its signed body.
+
+    The signature scheme is shared with :func:`verify_webhook`; only the checks
+    below, which are about what a callback body must say, are particular to it.
+    """
+    delivery = verify_signed_delivery(key, headers, raw_body, now=now)
+    delivery_id = delivery.delivery_id
+    tool_call_id = delivery.idempotency_key
     envelope = json.loads(raw_body)
     context = envelope.get("nvoken", {})
     if context.get("schema_version") != 1:
@@ -79,9 +61,9 @@ def verify_callback(
         delivery_id=delivery_id,
         tool_call_id=tool_call_id,
         tool_name=tool_name,
-        key_id=key_id,
-        key_version=key_version,
-        timestamp=timestamp,
+        key_id=delivery.key_id,
+        key_version=delivery.key_version,
+        timestamp=delivery.timestamp,
     )
 
 
