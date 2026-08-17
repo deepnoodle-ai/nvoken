@@ -14,6 +14,30 @@ without republishing every artifact.
   enables the browser boundary and generates and registers an Ed25519 client
   keypair while keeping its private seed local.
 
+- **Every operation intended for facade use is now covered in all four SDKs.**
+  TypeScript, Python, and Rust gain App and Org provisioning, client and
+  signing keys, anonymous grants, Invocation logs, and memory reads. Python and
+  Rust also gain direct credential and Session create/fork helpers; Rust adds
+  transcript reads, provider-key writes, and credential rotation. Go adds the
+  credential-free anonymous-token exchange and preserves an Org target when it
+  creates a credential.
+
+- **Public status values, resource types, and not-found helpers are available
+  without reaching into generated packages.** The helpers are `isNotFound`,
+  `is_not_found`, and `IsNotFound` according to each language's conventions.
+
+- **TypeScript callback tools accept `callback.timeoutSeconds`,** preserving
+  the per-tool reply deadline through Agent Definition writes. TypeScript and
+  Python Session deletion tests now pin `force` forwarding at the facade.
+
+- **Breaking: TypeScript requires an explicit API base URL.** `new Client()`
+  still reads `NVOKEN_BASE_URL` and a marked quickstart environment file, but
+  no longer falls back to `http://localhost:8080`; missing configuration fails
+  immediately as a validation error instead of a loopback network failure.
+
+- **The accidental root `server` build artifact is no longer tracked.** The
+  root path is ignored so local builds cannot add the binary again.
+
 - **`syncDefinitions` replaces hand-rolled drift detection.**
   `syncDefinitions` / `SyncDefinitions` / `sync_definitions` writes a whole set
   of Agent Definitions and reports `created`, `updated`, or `unchanged` per

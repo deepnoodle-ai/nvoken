@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { InvocationStatus } from "../generated/models/index.js";
 import {
+  InvocationStatus,
   isTerminalStatus,
   isTurnOver,
   TERMINAL_INVOCATION_STATUSES,
-} from "../invocation-status.js";
+} from "../index.js";
 
 // The classification is exhaustive over the contract's enum, so a status added
 // later fails here until someone says which side it belongs on. That is the

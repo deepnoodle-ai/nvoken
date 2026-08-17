@@ -71,7 +71,11 @@ from nvoken import (
     ASK_USER_TOOL_NAME,
     AskUserInput,
     AskUserOutput,
+    AppSigningKeyPurpose,
     Client,
+    CreateClientKeyRequest,
+    CreateSessionRequest,
+    CredentialProfile,
     ClientInterface,
     ContextCompaction,
     ContextItem,
@@ -84,12 +88,19 @@ from nvoken import (
     NvokenError,
     AgentOptions,
     InvocationOptions,
+    ForkSessionRequest,
+    MemoryKind,
+    MemorySearchMode,
+    MintAppSigningKeyRequest,
+    Operation,
     ProviderKeySelection,
     RetryPolicy,
+    RegisterAppRequest,
     Reasoning,
     Sampling,
     Scope,
     SessionOptions,
+    UpdateAppRequest,
     Reducer,
     StreamEvent,
     ToolResult,
@@ -98,6 +109,8 @@ from nvoken import (
     ask_user_input_schema,
     ask_user_tool,
     host_tool_calls,
+    is_not_found,
+    issue_anonymous_token,
     SessionRetention,
     WebSearchLocation,
     WebSearchTool,
@@ -1460,6 +1473,226 @@ async def test_collection_transcript_and_provider_key_operations() -> None:
     )
     assert rotate_body.key.api_key == "rotated-secret"
     assert rotate_body.idempotency_key == "rotate-key"
+
+
+@pytest.mark.asyncio
+async def test_management_session_observation_and_memory_facades_forward_inputs() -> None:
+    async with Client("http://nvoken.test", "test-key") as client:
+        calls: dict[str, Any] = {}
+
+        async def register_org(body: Any) -> Any:
+            calls["register_org"] = body
+            return "registered-org"
+
+        async def update_org(org_id: str, body: Any) -> Any:
+            calls["update_org"] = (org_id, body)
+            return "updated-org"
+
+        async def register_app(body: Any) -> Any:
+            calls["register_app"] = body
+            return "registered-app"
+
+        async def update_app(app_id: str, body: Any) -> Any:
+            calls["update_app"] = (app_id, body)
+            return "updated-app"
+
+        async def create_client_key(app_id: str, body: Any) -> Any:
+            calls["create_client_key"] = (app_id, body)
+            return "client-key"
+
+        async def mint_signing_key(app_id: str, body: Any) -> Any:
+            calls["mint_signing_key"] = (app_id, body)
+            return "signing-key"
+
+        async def create_credential(key: str, body: Any) -> Any:
+            calls["create_credential"] = (key, body)
+            return "credential"
+
+        async def list_logs(invocation_id: str, **kwargs: Any) -> Any:
+            calls["list_logs"] = (invocation_id, kwargs)
+            return "logs"
+
+        async def list_memories(agent_id: str, **kwargs: Any) -> Any:
+            calls["list_memories"] = (agent_id, kwargs)
+            return "memories"
+
+        async def create_session(body: Any) -> Any:
+            calls["create_session"] = body
+            return SimpleNamespace(id="sess_created")
+
+        async def fork_session(session_id: str, body: Any) -> Any:
+            calls["fork_session"] = (session_id, body)
+            return SimpleNamespace(id="sess_forked")
+
+        async def delete_session(session_id: str, **kwargs: Any) -> None:
+            calls["delete_session"] = (session_id, kwargs)
+
+        client.orgs.register_org = register_org
+        client.orgs.update_org = update_org
+        client.apps.register_app = register_app
+        client.apps.update_app = update_app
+        client.apps.create_app_client_key = create_client_key
+        client.apps.mint_app_signing_key = mint_signing_key
+        client.identity.create_credential = create_credential
+        client.invocations.list_invocation_logs = list_logs
+        client.memories.list_memories = list_memories
+        client.sessions.create_session = create_session
+        client.sessions.fork_session = fork_session
+        client.sessions.delete_session = delete_session
+
+        register_app_request = RegisterAppRequest(
+            name="support",
+            display_name="Support",
+            callback_timeout_seconds=20,
+        )
+        update_app_request = UpdateAppRequest(anonymous_access=None)
+        client_key_request = CreateClientKeyRequest(
+            name="browser",
+            public_key="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        )
+        signing_key_request = MintAppSigningKeyRequest(
+            purpose=AppSigningKeyPurpose.CALLBACK,
+            activate=True,
+        )
+        session_request = CreateSessionRequest(
+            agent_key="support",
+            tenant_key="acme",
+            user_key="user-1",
+            session_key="case-1",
+        )
+        fork_request = ForkSessionRequest.from_dict(
+            {"from_message": 1, "session_key": "case-1-alt"}
+        )
+        assert fork_request is not None
+
+        assert await client.register_org(
+            "Acme", external_ref="org-acme"
+        ) == "registered-org"
+        assert await client.update_org("org_1", "Acme, Inc.") == "updated-org"
+        assert await client.register_app(register_app_request) == "registered-app"
+        assert await client.update_app("app_1", update_app_request) == "updated-app"
+        assert await client.create_app_client_key(
+            "app_1", client_key_request
+        ) == "client-key"
+        assert await client.mint_app_signing_key(
+            "app_1", signing_key_request
+        ) == "signing-key"
+        assert await client.create_credential(
+            name="deployer",
+            profile=CredentialProfile.OPERATOR,
+            app_id="app_1",
+            org_id=None,
+            tenant_key="acme",
+            session_id=SESSION_ID,
+            operations=[Operation.GET_APP],
+            expires_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+            idempotency_key="credential-1",
+        ) == "credential"
+        assert await client.list_invocation_logs(
+            INVOCATION_ID,
+            cursor="logs-2",
+            limit=20,
+            trace_id="0123456789abcdef0123456789abcdef",
+        ) == "logs"
+        assert await client.list_memories(
+            agent_id=AGENT_ID,
+            tenant_key="acme",
+            user_key="user-1",
+            query="refund policy",
+            search_mode=MemorySearchMode.HYBRID,
+            kind=MemoryKind.FACT,
+            cursor="memories-2",
+            limit=10,
+        ) == "memories"
+        assert (await client.create_session(session_request)).id == "sess_created"
+        assert (await client.fork_session(SESSION_ID, fork_request)).id == "sess_forked"
+        await client.delete_session(SESSION_ID, force=True)
+
+    assert calls["register_org"].to_dict() == {
+        "display_name": "Acme",
+        "external_ref": "org-acme",
+    }
+    assert calls["update_org"][0] == "org_1"
+    assert calls["update_org"][1].display_name == "Acme, Inc."
+    assert calls["register_app"] is register_app_request
+    assert calls["update_app"] == ("app_1", update_app_request)
+    assert calls["create_client_key"] == ("app_1", client_key_request)
+    assert calls["mint_signing_key"] == ("app_1", signing_key_request)
+    credential_key, credential_body = calls["create_credential"]
+    assert credential_key == "credential-1"
+    assert credential_body.org_id is None
+    assert credential_body.profile is CredentialProfile.OPERATOR
+    assert credential_body.operations == [Operation.GET_APP]
+    assert calls["list_logs"] == (
+        INVOCATION_ID,
+        {
+            "cursor": "logs-2",
+            "limit": 20,
+            "trace_id": "0123456789abcdef0123456789abcdef",
+        },
+    )
+    assert calls["list_memories"] == (
+        AGENT_ID,
+        {
+            "tenant_key": "acme",
+            "user_key": "user-1",
+            "query": "refund policy",
+            "search_mode": MemorySearchMode.HYBRID,
+            "kind": MemoryKind.FACT,
+            "cursor": "memories-2",
+            "limit": 10,
+        },
+    )
+    assert calls["create_session"] is session_request
+    assert calls["fork_session"] == (SESSION_ID, fork_request)
+    assert calls["delete_session"] == (SESSION_ID, {"force": True})
+
+
+@pytest.mark.asyncio
+async def test_anonymous_access_has_a_credential_free_facade(monkeypatch: Any) -> None:
+    import nvoken.client as client_module
+
+    calls: list[tuple[str, str, Any]] = []
+
+    class FakeApiClient:
+        def __init__(self, _configuration: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> FakeApiClient:
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            pass
+
+    class FakeAppsApi:
+        def __init__(self, _api_client: Any) -> None:
+            pass
+
+        async def issue_anonymous_token(
+            self,
+            app_id: str,
+            origin: str,
+            request: Any,
+        ) -> Any:
+            calls.append((app_id, origin, request))
+            return SimpleNamespace(visitor_token="visitor-2")
+
+    monkeypatch.setattr(client_module, "ApiClient", FakeApiClient)
+    monkeypatch.setattr(client_module, "AppsApi", FakeAppsApi)
+    token = await issue_anonymous_token(
+        "https://runtime.example.test/",
+        "app_1",
+        "https://app.example.test",
+        visitor_token="visitor-1",
+    )
+    assert token.visitor_token == "visitor-2"
+    assert calls[0][0:2] == ("app_1", "https://app.example.test")
+    assert calls[0][2].visitor_token == "visitor-1"
+
+
+def test_is_not_found_uses_the_authoritative_error_category() -> None:
+    assert is_not_found(NvokenError("not_found", "missing", status=404)) is True
+    assert is_not_found(SimpleNamespace(status=404, code="not_found")) is False
 
 
 @pytest.mark.asyncio

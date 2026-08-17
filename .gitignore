@@ -6,6 +6,7 @@
 # Go
 /cmd/nvoken/nvoken
 /nvoken
+/server
 bin/
 dist/
 *.exe

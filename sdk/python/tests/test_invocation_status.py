@@ -3,11 +3,11 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from nvoken import (
+    InvocationStatus,
     TERMINAL_INVOCATION_STATUSES,
     is_terminal_status,
     is_turn_over,
 )
-from nvoken_generated.models.invocation_status import InvocationStatus
 
 # The classification is exhaustive over the contract's enum, so a status added
 # later fails here until someone says which side it belongs on. Exporting the

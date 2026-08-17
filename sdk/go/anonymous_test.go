@@ -1,0 +1,66 @@
+package nvoken
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
+	visitor := "visitor-1"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/apps/app_test/anonymous-tokens" {
+			t.Errorf("path = %q", request.URL.Path)
+		}
+		if request.Header.Get("Origin") != "https://app.example.test" {
+			t.Errorf("origin = %q", request.Header.Get("Origin"))
+		}
+		if request.Header.Get("Authorization") != "" {
+			t.Errorf("authorization = %q", request.Header.Get("Authorization"))
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["visitor_token"] != visitor {
+			t.Errorf("visitor_token = %#v", body["visitor_token"])
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusCreated)
+		_, _ = writer.Write([]byte(`{
+			"access_token":"access-1",
+			"access_token_expires_at":"2026-08-17T12:15:00Z",
+			"visitor_token":"visitor-2",
+			"visitor_token_expires_at":"2027-08-17T12:00:00Z",
+			"session_id":null
+		}`))
+	}))
+	defer server.Close()
+
+	token, err := IssueAnonymousToken(
+		context.Background(),
+		server.URL,
+		"app_test",
+		"https://app.example.test",
+		AnonymousTokenOptions{VisitorToken: &visitor},
+	)
+	if err != nil {
+		t.Fatalf("IssueAnonymousToken: %v", err)
+	}
+	if token.VisitorToken != "visitor-2" {
+		t.Errorf("visitor token = %q", token.VisitorToken)
+	}
+}
+
+func TestIsNotFoundUsesTheSDKErrorCategory(t *testing.T) {
+	notFound := &Error{Category: ErrorNotFound, Status: http.StatusNotFound}
+	if !IsNotFound(notFound) || !IsNotFound(errors.Join(errors.New("read failed"), notFound)) {
+		t.Error("not-found SDK error was not recognized")
+	}
+	if IsNotFound(errors.New("404 not found")) {
+		t.Error("untyped error was recognized as not found")
+	}
+}

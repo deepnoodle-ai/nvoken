@@ -22,6 +22,7 @@ type AppSigningKeyPurpose = generated.AppSigningKeyPurpose
 type AppSigningKeySecret = generated.AppSigningKeySecret
 type AppSigningKey = generated.AppSigningKey
 type AppSigningKeyList = generated.AppSigningKeyList
+type AnonymousTokenResponse = generated.AnonymousTokenResponse
 type ArchiveStatus = generated.ArchiveStatus
 type ClientKey = generated.ClientKey
 
@@ -989,6 +990,7 @@ type CreateCredentialInput struct {
 	Name           string
 	Profile        CredentialProfile
 	AppID          *string
+	OrgID          *string
 	TenantKey      *string
 	SessionID      *string
 	Operations     []RuntimeOperation

@@ -8,7 +8,7 @@ import {
   MAX_MEDIA_INPUT_BYTES,
   MAX_MEDIA_TITLE_CHARACTERS,
 } from "../client.js";
-import { createBrowserClient } from "../browser.js";
+import { createBrowserClient, issueAnonymousToken } from "../browser.js";
 import {
   CLIENT_TOKEN_LIFETIME_LIMIT_MS,
   allBrowserOperations,
@@ -50,6 +50,7 @@ import {
   toolInput,
   answerableToolCalls,
   hostToolCalls,
+  isNotFound,
   verifyCallback,
   verifyWebhook,
   webhookSupersedes,
@@ -57,17 +58,27 @@ import {
   acceptWebhook,
   retryWebhook,
   type HostTool,
+  type App,
+  type AppRegistration,
+  type AppSigningKeySecret,
   type ClientOptions,
+  type ClientKey,
   type ContextItem,
   type ContextTier,
+  type CreateClientKeyRequest,
   type Credential,
   type CredentialIssuance,
   type CredentialList,
   type CredentialProfile,
   type CurrentIdentity,
   type Invocation,
+  type InvocationLogList,
   type InvocationResult,
+  type MemoryList,
+  type MintAppSigningKeyRequest,
   type ModelDescriptor,
+  type Org,
+  type RegisterAppRequest,
   type SessionOptions,
   type CallbackReply,
   type ToolCallSummary,
@@ -82,6 +93,7 @@ import {
   type ToolChoice,
   type StandardJSONSchemaV1,
   type TypedInvocation,
+  type UpdateAppRequest,
 } from "../index.js";
 
 const agentId = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320";
@@ -882,7 +894,10 @@ function wireCompleteAgentDefinitionResource(): Record<string, unknown> {
         name: "refund",
         description: "Issue a refund.",
         input_schema: { type: "object", properties: { id: { type: "string" } } },
-        callback: { url: "https://tools.example.test/refund" },
+        callback: {
+          url: "https://tools.example.test/refund",
+          timeout_seconds: 180,
+        },
       },
     ],
     mcp_servers: [{
@@ -1205,7 +1220,9 @@ test("public diagnostics stay concise and provider-aware", () => {
 });
 
 test("InvocationError is actionable without a formatter", () => {
-  const handle = new Client({ apiKey: "test-key" }).invocation(invocationId);
+  const handle = new Client({ baseUrl: "https://api.example.test", apiKey: "test-key" }).invocation(
+    invocationId,
+  );
   handle.modelProvider = "openai";
   const invocation = {
     id: invocationId,
@@ -1989,6 +2006,161 @@ test("client reads only marked quickstart env files and explicit options win", a
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("client refuses a missing baseUrl before any loopback request can exist", () => {
+  const previous = process.env.NVOKEN_BASE_URL;
+  delete process.env.NVOKEN_BASE_URL;
+  try {
+    assert.throws(
+      () => new Client({ apiKey: "key", envFile: false }),
+      (error: unknown) => error instanceof NvokenError
+        && error.category === "validation"
+        && error.message.includes("baseUrl is required"),
+    );
+  } finally {
+    if (previous === undefined) delete process.env.NVOKEN_BASE_URL;
+    else process.env.NVOKEN_BASE_URL = previous;
+  }
+});
+
+test("management, observation, and memory facades forward their complete inputs", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+  });
+  const calls: Record<string, unknown> = {};
+  client.orgs.registerOrg = async (request) => {
+    calls.registerOrg = request;
+    return {} as Org;
+  };
+  client.orgs.updateOrg = async (request) => {
+    calls.updateOrg = request;
+    return {} as Org;
+  };
+  client.apps.registerApp = async (request) => {
+    calls.registerApp = request;
+    return {} as AppRegistration;
+  };
+  client.apps.updateApp = async (request) => {
+    calls.updateApp = request;
+    return {} as App;
+  };
+  client.apps.createAppClientKey = async (request) => {
+    calls.createAppClientKey = request;
+    return {} as ClientKey;
+  };
+  client.apps.mintAppSigningKey = async (request) => {
+    calls.mintAppSigningKey = request;
+    return {} as AppSigningKeySecret;
+  };
+  client.invocations.listInvocationLogs = async (request) => {
+    calls.listInvocationLogs = request;
+    return {} as InvocationLogList;
+  };
+  client.memories.listMemories = async (request) => {
+    calls.listMemories = request;
+    return {} as MemoryList;
+  };
+
+  const registerApp: RegisterAppRequest = {
+    name: "support",
+    displayName: "Support",
+    callbackTimeoutSeconds: 20,
+  };
+  const updateApp: UpdateAppRequest = { anonymousAccess: null };
+  const clientKey: CreateClientKeyRequest = {
+    name: "browser",
+    publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  };
+  const signingKey: MintAppSigningKeyRequest = {
+    purpose: "callback",
+    activate: true,
+  };
+  await client.registerOrg("Acme", { externalRef: "org-acme" });
+  await client.updateOrg("org_1", "Acme, Inc.");
+  await client.registerApp(registerApp);
+  await client.updateApp("app_1", updateApp);
+  await client.createAppClientKey("app_1", clientKey);
+  await client.mintAppSigningKey("app_1", signingKey);
+  await client.listInvocationLogs("inv_1", {
+    cursor: "logs-2",
+    limit: 20,
+    traceId: "0123456789abcdef0123456789abcdef",
+  });
+  await client.listMemories({
+    agentId: "agent_1",
+    tenantKey: "acme",
+    userKey: "user-1",
+    query: "refund policy",
+    searchMode: "hybrid",
+    kind: "fact",
+    cursor: "memories-2",
+    limit: 10,
+  });
+
+  assert.deepEqual(calls.registerOrg, {
+    registerOrgRequest: { displayName: "Acme", externalRef: "org-acme" },
+  });
+  assert.deepEqual(calls.updateOrg, {
+    orgId: "org_1",
+    updateOrgRequest: { displayName: "Acme, Inc." },
+  });
+  assert.deepEqual(calls.registerApp, { registerAppRequest: registerApp });
+  assert.deepEqual(calls.updateApp, { appId: "app_1", updateAppRequest: updateApp });
+  assert.deepEqual(calls.createAppClientKey, {
+    appId: "app_1",
+    createClientKeyRequest: clientKey,
+  });
+  assert.deepEqual(calls.mintAppSigningKey, {
+    appId: "app_1",
+    mintAppSigningKeyRequest: signingKey,
+  });
+  assert.deepEqual(calls.listInvocationLogs, {
+    invocationId: "inv_1",
+    cursor: "logs-2",
+    limit: 20,
+    traceId: "0123456789abcdef0123456789abcdef",
+  });
+  assert.deepEqual(calls.listMemories, {
+    agentId: "agent_1",
+    tenantKey: "acme",
+    userKey: "user-1",
+    query: "refund policy",
+    searchMode: "hybrid",
+    kind: "fact",
+    cursor: "memories-2",
+    limit: 10,
+  });
+});
+
+test("anonymous access has a credential-free browser facade", async () => {
+  let seenHeaders = new Headers();
+  const token = await issueAnonymousToken({
+    baseUrl: "https://runtime.example.test/",
+    appId: "app_1",
+    origin: "https://app.example.test",
+    visitorToken: "visitor-1",
+    fetch: async (_input, init) => {
+      seenHeaders = new Headers(init?.headers);
+      return Response.json({
+        access_token: "access-1",
+        access_token_expires_at: "2026-08-17T12:15:00Z",
+        visitor_token: "visitor-2",
+        visitor_token_expires_at: "2027-08-17T12:00:00Z",
+        session_id: null,
+      }, { status: 201 });
+    },
+  });
+  assert.equal(token.visitorToken, "visitor-2");
+  assert.equal(seenHeaders.get("Origin"), "https://app.example.test");
+  assert.equal(seenHeaders.get("Authorization"), null);
+});
+
+test("isNotFound branches on the SDK's authoritative error category", () => {
+  assert.equal(isNotFound(new NvokenError("not_found", "missing", 404, "not_found")), true);
+  assert.equal(isNotFound({ status: 404, code: "not_found" }), false);
 });
 
 test("session conflicts normalize to SessionBusyError with active work", async () => {

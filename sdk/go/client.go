@@ -1166,6 +1166,7 @@ func (c *Client) CreateCredential(
 		AppID:     input.AppID,
 		ExpiresAt: input.ExpiresAt,
 		Name:      input.Name,
+		OrgID:     input.OrgID,
 		Profile:   input.Profile,
 		SessionID: input.SessionID,
 		TenantKey: input.TenantKey,

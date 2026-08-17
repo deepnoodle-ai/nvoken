@@ -1,4 +1,12 @@
-import { Client, type ClientOptions } from "./client.js";
+import {
+  Client,
+  NvokenError,
+  normalizeError,
+  type ClientOptions,
+} from "./client.js";
+import { AppsApi } from "./generated/apis/AppsApi.js";
+import type { AnonymousTokenResponse } from "./generated/models/AnonymousTokenResponse.js";
+import { Configuration } from "./generated/runtime.js";
 
 /**
  * How a page talks to nvoken.
@@ -45,6 +53,43 @@ export function createBrowserClient(options: BrowserClientOptions): Client {
     envFile: false,
     apiKey: async () => refuseMachineCredential(await resolve()),
   });
+}
+
+export interface AnonymousTokenOptions {
+  baseUrl: string;
+  appId: string;
+  origin: string;
+  visitorToken?: string;
+  fetch?: typeof globalThis.fetch;
+}
+
+/**
+ * Mints or renews credential-free browser access for an App that enabled
+ * anonymous visitors. Persist the returned visitor token and pass it on the
+ * next call to keep the same visitor partition and Session.
+ */
+export async function issueAnonymousToken(
+  options: AnonymousTokenOptions,
+): Promise<AnonymousTokenResponse> {
+  if (!options.baseUrl) {
+    throw new NvokenError("validation", "baseUrl is required to issue anonymous access");
+  }
+  if (!options.appId || !options.origin) {
+    throw new NvokenError("validation", "appId and origin are required");
+  }
+  const api = new AppsApi(new Configuration({
+    basePath: options.baseUrl.replace(/\/$/, ""),
+    fetchApi: options.fetch,
+  }));
+  try {
+    return await api.issueAnonymousToken({
+      appId: options.appId,
+      origin: options.origin,
+      anonymousTokenRequest: { visitorToken: options.visitorToken },
+    });
+  } catch (error) {
+    throw await normalizeError(error);
+  }
 }
 
 /**

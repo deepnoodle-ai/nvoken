@@ -111,8 +111,11 @@ console.log(await agent.text("Why was I charged twice?"));
 
 1. explicit constructor options;
 2. `NVOKEN_*` process environment variables;
-3. a `.env` whose first line is the marker written by `nvokend quickstart`;
-4. `http://localhost:8080` for the base URL.
+3. a `.env` whose first line is the marker written by `nvokend quickstart`.
+
+Both `baseUrl` and `apiKey` are required after configuration is resolved. If
+either is missing, construction fails with a validation error before any
+network request is attempted.
 
 It never loads an arbitrary `.env` or mutates `process.env`. `NVOKEN_API_KEY` is
 required.
