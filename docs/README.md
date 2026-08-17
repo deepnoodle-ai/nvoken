@@ -18,6 +18,9 @@ Read it before proposing a change to either.
   the Session, and gives callback authorization a field of its own
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
+- [Receiving signed deliveries](reference/callback-receivers.md) — the key
+  table, the reply discipline, deduplication, and what a signature does and
+  does not prove
 - [The streaming protocol](reference/streaming-protocol.md)
 - [Streaming protocol assessment](reference/streaming-protocol-assessment.md),
   spent, and kept as the record of the argument

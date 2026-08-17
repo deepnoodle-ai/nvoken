@@ -3,6 +3,7 @@ package nvoken
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,7 +24,18 @@ type CallbackEnvelope struct {
 		AgentKey     string  `json:"agent_key"`
 		TenantKey    *string `json:"tenant_key,omitempty"`
 	} `json:"nvoken"`
-	Input json.RawMessage `json:"input"`
+	// AuthorizationContext is what the Session was bound to at creation, in the
+	// host's own terms, absent when it was created without one.
+	//
+	// It is a sibling of Nvoken rather than a member of it, and the placement is
+	// the rule: everything inside Nvoken is a fact nvoken minted or resolved,
+	// while this is a value the host asserted and nvoken carried unchanged.
+	// Signing proves it reached the receiver as recorded, not that it is true.
+	//
+	// A value repeated in tool input may only agree with this, never establish
+	// it. The model writes the input; it does not write this.
+	AuthorizationContext map[string]string `json:"authorization_context,omitempty"`
+	Input                json.RawMessage   `json:"input"`
 }
 
 type VerifiedCallback struct {
@@ -32,9 +44,14 @@ type VerifiedCallback struct {
 	DeliveryID string
 	ToolCallID string
 	ToolName   string
-	KeyID      string
-	KeyVersion int64
-	Timestamp  time.Time
+	// AuthorizationContext is the Session's authorization context, read off the
+	// signed body. Authorize the delivery from this rather than from anything in
+	// Envelope.Input, and treat a value that appears in both as agreement to
+	// check rather than as a second source.
+	AuthorizationContext map[string]string
+	KeyID                string
+	KeyVersion           int64
+	Timestamp            time.Time
 }
 
 // VerifyCallback checks one tool-callback delivery and returns its signed
@@ -64,14 +81,15 @@ func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Tim
 		return VerifiedCallback{}, fmt.Errorf("callback envelope is missing tool_name")
 	}
 	return VerifiedCallback{
-		Envelope:   envelope,
-		RawBody:    append([]byte(nil), rawBody...),
-		DeliveryID: deliveryID,
-		ToolCallID: toolCallID,
-		ToolName:   envelope.Nvoken.ToolName,
-		KeyID:      delivery.KeyID,
-		KeyVersion: delivery.KeyVersion,
-		Timestamp:  delivery.Timestamp,
+		Envelope:             envelope,
+		RawBody:              append([]byte(nil), rawBody...),
+		DeliveryID:           deliveryID,
+		ToolCallID:           toolCallID,
+		ToolName:             envelope.Nvoken.ToolName,
+		AuthorizationContext: envelope.AuthorizationContext,
+		KeyID:                delivery.KeyID,
+		KeyVersion:           delivery.KeyVersion,
+		Timestamp:            delivery.Timestamp,
 	}, nil
 }
 
@@ -112,17 +130,210 @@ func AcknowledgeCallback() CallbackReply {
 	return CallbackReply{Status: http.StatusAccepted}
 }
 
+// CallbackResultStore is where a receiver records what it already answered, so
+// a redelivery returns that answer instead of running the tool again.
+//
+// Both operations are needed and they are needed in this order. Find runs
+// before the tool does, because a redelivery that re-runs it repeats every
+// effect it had. PutIfAbsent runs after, because two deliveries of one ToolCall
+// can be in flight at once and only one answer may win.
 type CallbackResultStore interface {
-	PutIfAbsent(ctx context.Context, toolCallID string, result json.RawMessage) (stored json.RawMessage, inserted bool, err error)
+	Find(ctx context.Context, toolCallID string) (reply CallbackReply, found bool, err error)
+	PutIfAbsent(ctx context.Context, toolCallID string, reply CallbackReply) (stored CallbackReply, inserted bool, err error)
 }
 
-func DeduplicateCallbackResult(ctx context.Context, store CallbackResultStore, toolCallID string, result json.RawMessage) (json.RawMessage, bool, error) {
-	if store == nil {
-		return nil, false, fmt.Errorf("callback result store is required")
-	}
-	stored, inserted, err := store.PutIfAbsent(ctx, toolCallID, append(json.RawMessage(nil), result...))
+// CallbackToolHandler runs one tool for one delivery. Return the reply —
+// CallbackResult to settle the call, AcknowledgeCallback to take it away and
+// settle it later.
+//
+// A tool that failed still returns: CallbackResult(reason, true) settles the
+// call carrying is_error, which the model can read and correct itself against.
+// Returning an error means something in the receiver failed, not the tool, and
+// answers 503 so nvoken redelivers.
+type CallbackToolHandler func(ctx context.Context, delivery VerifiedCallback) (CallbackReply, error)
+
+// CallbackOutcome is what a receiver did with one delivery.
+//
+// It is what the status alone cannot say — a 200 that replayed a recorded
+// answer did no work.
+type CallbackOutcome string
+
+const (
+	CallbackSettled      CallbackOutcome = "settled"
+	CallbackAcknowledged CallbackOutcome = "acknowledged"
+	CallbackReplayed     CallbackOutcome = "replayed"
+	CallbackRefused      CallbackOutcome = "refused"
+	CallbackFailed       CallbackOutcome = "failed"
+)
+
+// CallbackDelivery is one answered delivery: the reply the host writes, and
+// enough about what happened to log it.
+//
+// Reason is a stable token for a log line and is never echoed into the reply
+// body, because nvoken is not the audience for it and a refused sender should
+// learn nothing.
+type CallbackDelivery struct {
+	Reply   CallbackReply
+	Outcome CallbackOutcome
+	Reason  string
+	// Delivery is set once the signature checked out, whatever happened after.
+	Delivery VerifiedCallback
+	Verified bool
+	// Cause is the error behind a refused or failed outcome, for the host's
+	// logger. It is never rendered into the reply.
+	Cause error
+}
+
+// CallbackReceiver answers a tool-callback endpoint: key selection, signature
+// verification, dispatch on the signed tool name, deduplication, and the reply
+// discipline nvoken reads.
+//
+// That discipline is the part worth having in one place, because every status
+// here is a decision about whether nvoken tries again:
+//
+//	no keys configured                        503  an operator error, still fixable inside the retry window
+//	signing identity not held                 401  a real identity failure; redelivery reproduces it
+//	signature, timestamp, or envelope invalid 401  the same bytes fail the same way
+//	no handler for the signed tool name       400  nothing here can ever run it
+//	handler returned a reply             200/202  the tool answered, or took the call away
+//	handler returned an error                 503  the receiver failed, not the tool — and the store makes retrying safe
+//
+// A tool that failed is not a receiver that failed. Settle it with
+// CallbackResult(reason, true): the model can read a tool error and correct
+// itself, while a 5xx only has nvoken deliver the same doomed call again.
+//
+// The endpoint is public because nvoken must reach it, and it is not anonymous:
+// nothing below the signature check runs until the HMAC over the raw bytes
+// verifies.
+type CallbackReceiver struct {
+	keys  map[deliveryKeySlot][]byte
+	tools map[string]CallbackToolHandler
+	store CallbackResultStore
+	now   func() time.Time
+}
+
+// CallbackReceiverOptions configures a receiver.
+type CallbackReceiverOptions struct {
+	// Keys is every secret this endpoint accepts. Two entries span a rotation.
+	Keys []DeliverySigningKey
+	// Tools maps the tool name nvoken signs into the body to its handler.
+	Tools map[string]CallbackToolHandler
+	// Store is where answered ToolCalls are recorded. Leave it nil only when
+	// every tool here is safe to run twice: without a store, a redelivery runs
+	// the tool again.
+	Store CallbackResultStore
+	Now   func() time.Time
+}
+
+// NewCallbackReceiver builds a receiver, refusing a key table that could only
+// fail later at delivery time.
+func NewCallbackReceiver(options CallbackReceiverOptions) (*CallbackReceiver, error) {
+	table, err := deliverySigningKeys(options.Keys)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return stored, !inserted, nil
+	tools := make(map[string]CallbackToolHandler, len(options.Tools))
+	for name, handler := range options.Tools {
+		if name == "" || handler == nil {
+			return nil, fmt.Errorf("callback tool handler is missing a name or a function")
+		}
+		tools[name] = handler
+	}
+	now := options.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &CallbackReceiver{keys: table, tools: tools, store: options.Store, now: now}, nil
+}
+
+// Handle answers one delivery. It never returns an error: everything that can
+// go wrong is a status nvoken understands, and the outcome says which.
+func (r *CallbackReceiver) Handle(ctx context.Context, header http.Header, rawBody []byte) CallbackDelivery {
+	secret, err := selectDeliveryKey(r.keys, header)
+	if err == nil {
+		var verified VerifiedCallback
+		verified, err = VerifyCallback(secret, header, rawBody, r.now())
+		if err == nil {
+			return r.dispatch(ctx, verified)
+		}
+	}
+	keyErr := &DeliveryKeyError{}
+	reason, retryable := "invalid_signature", false
+	if errors.As(err, &keyErr) {
+		reason, retryable = keyErr.Reason, keyErr.Retryable
+	}
+	if retryable {
+		return CallbackDelivery{
+			Reply:   CallbackReply{Status: http.StatusServiceUnavailable},
+			Outcome: CallbackFailed,
+			Reason:  reason,
+			Cause:   err,
+		}
+	}
+	return CallbackDelivery{
+		Reply:   CallbackReply{Status: http.StatusUnauthorized},
+		Outcome: CallbackRefused,
+		Reason:  reason,
+		Cause:   err,
+	}
+}
+
+func (r *CallbackReceiver) dispatch(ctx context.Context, verified VerifiedCallback) CallbackDelivery {
+	answered := CallbackDelivery{Delivery: verified, Verified: true}
+	handler, known := r.tools[verified.ToolName]
+	if !known {
+		answered.Reply = CallbackReply{Status: http.StatusBadRequest}
+		answered.Outcome, answered.Reason = CallbackRefused, "unknown_tool"
+		return answered
+	}
+
+	failed := func(reason string, err error) CallbackDelivery {
+		answered.Reply = CallbackReply{Status: http.StatusServiceUnavailable}
+		answered.Outcome, answered.Reason, answered.Cause = CallbackFailed, reason, err
+		return answered
+	}
+
+	if r.store != nil {
+		recorded, found, err := r.store.Find(ctx, verified.ToolCallID)
+		if err != nil {
+			return failed("store_unreadable", err)
+		}
+		if found {
+			answered.Reply = recorded
+			answered.Outcome, answered.Reason = CallbackReplayed, "recorded"
+			return answered
+		}
+	}
+
+	reply, err := handler(ctx, verified)
+	if err != nil {
+		return failed("handler_failed", err)
+	}
+	if r.store == nil {
+		answered.Reply = reply
+		answered.Outcome, answered.Reason = settledOrAcknowledged(reply), "ran"
+		return answered
+	}
+
+	stored, inserted, err := r.store.PutIfAbsent(ctx, verified.ToolCallID, reply)
+	if err != nil {
+		return failed("store_unwritable", err)
+	}
+	answered.Reply = stored
+	if inserted {
+		answered.Outcome, answered.Reason = settledOrAcknowledged(stored), "ran"
+		return answered
+	}
+	// Another delivery of the same ToolCall answered first. Its reply is the one
+	// nvoken already has, so returning ours would be a second answer to a call
+	// that has one.
+	answered.Outcome, answered.Reason = CallbackReplayed, "raced"
+	return answered
+}
+
+func settledOrAcknowledged(reply CallbackReply) CallbackOutcome {
+	if reply.Status == http.StatusAccepted {
+		return CallbackAcknowledged
+	}
+	return CallbackSettled
 }

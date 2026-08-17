@@ -460,6 +460,109 @@ Retries are bounded, so webhooks alone are not a settlement guarantee.
 `ListEndedInvocations` is the backstop: it walks turns in the order they ended,
 so a delivery that never landed is one you still find.
 
+`NewWebhookReceiver` is `NewCallbackReceiver`'s twin — same key table, same
+reply discipline — for the endpoint that has more than one event. A handler
+returning `nil` answers 200; one returning an error answers 503 and nvoken
+delivers again. An event you subscribed to but registered no handler for
+answers 200 with outcome `WebhookIgnored`: retrying it would only spend
+nvoken's bounded attempts reaching the same absent handler. The sequence fold
+stays yours, deliberately — the compare and the write have to happen in the
+same transaction as the state they guard, and the receiver cannot open it.
+
+## Receiving callbacks
+
+`VerifyCallback` is the signature. Around it every receiver writes the same key
+table, the same deduplication, and the same reply discipline —
+`NewCallbackReceiver` is that, so you write the tools:
+
+```go
+receiver, err := nvoken.NewCallbackReceiver(nvoken.CallbackReceiverOptions{
+	// Two entries span a rotation: nvoken mints the next version while still
+	// signing with the current one.
+	Keys: []nvoken.DeliverySigningKey{
+		{KeyID: keyID, Version: 2, Secret: secret},
+		{KeyID: keyID, Version: 1, Secret: previousSecret},
+	},
+	Store: ticketReplies,
+	Tools: map[string]nvoken.CallbackToolHandler{
+		"open_ticket": func(ctx context.Context, delivery nvoken.VerifiedCallback) (nvoken.CallbackReply, error) {
+			board := delivery.AuthorizationContext["board"]
+			ticket, err := openTicket(ctx, board, delivery.Envelope.Input)
+			if err != nil {
+				// The tool failed, not the receiver: settle it so the model can
+				// read the error and correct itself.
+				return nvoken.CallbackResult(map[string]string{"error": err.Error()}, true)
+			}
+			return nvoken.CallbackResult(ticket, false)
+		},
+	},
+})
+
+http.HandleFunc("POST /nvoken/callbacks", func(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	answered := receiver.Handle(r.Context(), r.Header, body)
+	slog.Info("nvoken callback", "outcome", answered.Outcome, "reason", answered.Reason)
+	w.WriteHeader(answered.Reply.Status)
+	_, _ = w.Write(answered.Reply.Body)
+})
+```
+
+`Handle` never returns an error. Everything that can go wrong is a status nvoken
+understands, and `Outcome` — `CallbackSettled`, `CallbackAcknowledged`,
+`CallbackReplayed`, `CallbackRefused`, `CallbackFailed` — is what the status
+alone cannot tell you, with a stable `Reason` token for the log line.
+
+The statuses are decisions about whether nvoken tries again:
+
+| situation | status |
+| --- | --- |
+| no keys configured | 503 — an operator error, still fixable in the window |
+| signing identity not held | 401 — redelivery reproduces it |
+| signature or envelope invalid | 401 — the same bytes fail the same way |
+| no handler for the signed tool name | 400 — nothing here can ever run it |
+| a tool answered, or failed | 200 — settle it, carrying `is_error` if it failed |
+| your handler returned an error | 503 — you failed, not the tool |
+
+`Store` is a `Find`-then-`PutIfAbsent` pair, in that order. `Find` runs before
+your tool does, because delivery is at least once and re-running the tool
+repeats every effect it had; `PutIfAbsent` runs after, because two deliveries of
+one ToolCall can be in flight at once and only one reply may win. Leave `Store`
+nil only when every tool on the endpoint is safe to run twice.
+
+The key table is validated when the receiver is built: a non-positive version, a
+secret under 32 bytes, or the same `(KeyID, Version)` twice fails at startup
+rather than refusing a live delivery, where the refusal would be permanent.
+
+### Authorizing a delivery
+
+Verification proves the delivery came from nvoken. It does not say what the work
+belongs to, and the tool input cannot either — the model wrote it.
+`SessionOptions.AuthorizationContext` is what you asserted when the Session was
+created, and it arrives inside the signed body as a **sibling** of `nvoken`:
+
+```json
+{
+  "nvoken": { "tool_name": "open_ticket", "tenant_key": "acme" },
+  "authorization_context": { "board": "brd_9f21" },
+  "input": { "board": "brd_9f21", "ticket": "A-42" }
+}
+```
+
+Everything inside `nvoken` is a fact nvoken minted; this is a value you asserted
+and nvoken carried unchanged. Signing proves it reached you as recorded, not
+that it is true. Which gives the rule:
+
+> **A value repeated in tool input may only agree with the authorization
+> context, never establish it.**
+
+Checking that the two agree is reasonable. Reading the board out of `input` when
+the context is absent is not. Authorizing from the signed sibling is also what
+removes the per-delivery `GetInvocation` a receiver otherwise needs to recover
+which of your objects the work is for.
+
+[Receiving signed deliveries](../../docs/reference/callback-receivers.md) is the
+long form, language-neutral.
+
 ## Browser-direct access
 
 Your page can talk to nvoken itself, with no server of yours in the path. Mint

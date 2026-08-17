@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
 use futures_util::StreamExt;
@@ -7,19 +8,20 @@ use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
     accept_webhook, all_browser_operations, answerable_tool_calls, ask_user_input_schema,
-    ask_user_tool, ask_user_tool_with, deduplicate_callback_result, fetch_tool, host_tool_calls,
-    mint_client_token, preflight_input_blocks, preflight_output_schema, retry_webhook,
-    verify_callback, verify_webhook, webhook_status_is_retried, AgentDefinition,
-    AgentInvocationOptions, AgentOptions, AskUserInput, AskUserKind, AskUserOutput,
-    BudgetExhaustionBehavior, CallbackResultStore, Client, ClientInterface, ClientTokenClaims,
-    CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
-    DeliveryError, ErrorCategory, IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions,
-    ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders,
-    MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool,
-    Reasoning, ReasoningEffort, Reducer, RetryPolicy, SessionOptions, SessionOptionsConflict,
-    StreamEvent, StreamPreview, ToolCallListOptions, ToolChoice, ToolMode, ToolResult,
-    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookTarget,
-    ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
+    ask_user_tool, ask_user_tool_with, fetch_tool, host_tool_calls, mint_client_token,
+    preflight_input_blocks, preflight_output_schema, retry_webhook, verify_callback,
+    verify_webhook, webhook_status_is_retried, AgentDefinition, AgentInvocationOptions,
+    AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
+    CallbackOutcome, CallbackReceiver, CallbackReply, CallbackResultStore, Client, ClientInterface,
+    ClientTokenClaims, CompactionListOptions, ContextCompaction, ContextCompactionTrigger,
+    ContextItem, ContextTier, DeliveryError, DeliverySigningKey, ErrorCategory, IfActivePolicy,
+    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
+    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
+    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
+    RetryPolicy, SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview,
+    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, VerifiedCallback, VerifiedWebhook,
+    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookOutcome,
+    WebhookReceiver, WebhookTarget, ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -1210,7 +1212,7 @@ struct ServerState {
 }
 
 #[tokio::test]
-async fn shared_callback_signing_and_deduplication_vector() {
+async fn shared_callback_signing_vector() {
     let document = delivery_signing_vectors();
     let vector = &document.vectors.callback;
     let key = document.key.as_bytes();
@@ -1232,17 +1234,239 @@ async fn shared_callback_signing_and_deduplication_vector() {
         assert!(verify_callback(key, &tampered, vector.body.as_bytes(), now).is_err());
     }
 
-    let store = MemoryStore::default();
-    let (_, replayed) = deduplicate_callback_result(&store, TOOL_CALL_ID, json!({"ok": true}))
-        .await
+    // The authorization context is a sibling of `nvoken`, not a member, and the
+    // vector is what holds four SDKs to that placement. The input repeats one of
+    // its keys on purpose: a receiver may check that the two agree, and may
+    // never read the board out of the input alone, because the model wrote it.
+    assert!(!vector.authorization_context.is_empty());
+    assert_eq!(verified.authorization_context, vector.authorization_context);
+    assert_eq!(
+        verified.envelope.authorization_context,
+        vector.authorization_context
+    );
+    assert_eq!(
+        verified.envelope.input["board"].as_str(),
+        verified
+            .authorization_context
+            .get("board")
+            .map(String::as_str)
+    );
+}
+
+/// Every row of the discipline the receiver owns.
+///
+/// The receiver's whole job is the answer it gives nvoken, since that answer
+/// decides whether a ToolCall settles, retries, or fails for good. Driving it
+/// against the published vector rather than a body written for the test is what
+/// keeps the two from being separately right.
+#[tokio::test]
+async fn callback_receiver_reply_discipline() {
+    let document = delivery_signing_vectors();
+    let vector = &document.vectors.callback;
+    let headers = header_map(&vector.headers);
+    let body = vector.body.as_bytes();
+    let now = UNIX_EPOCH + Duration::from_secs(document.now);
+    let key = || {
+        DeliverySigningKey::new(
+            vector.headers["X-Nvoken-Signing-Key-ID"].clone(),
+            1,
+            document.key.clone(),
+        )
+    };
+
+    let ran = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&ran);
+    let receiver = CallbackReceiver::builder(vec![key()])
+        .tool(
+            vector.tool_name.clone(),
+            move |delivery: &VerifiedCallback| {
+                let counted = Arc::clone(&counted);
+                // Authorization comes off the signed sibling, never off the input.
+                let board = delivery.authorization_context.get("board").cloned();
+                async move {
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(board.as_deref(), Some("brd_9f21"));
+                    nvoken::callback_result(json!({"ticket": "T-1042"}), false)
+                        .map_err(|error| error.to_string())
+                }
+            },
+        )
+        .store(MemoryStore::default())
+        .build()
         .unwrap();
-    assert!(!replayed);
-    let (stored, replayed) =
-        deduplicate_callback_result(&store, TOOL_CALL_ID, json!({"ok": false}))
-            .await
-            .unwrap();
-    assert!(replayed);
-    assert_eq!(stored, json!({"ok": true}));
+
+    let settled = receiver.handle(&headers, body, now).await;
+    assert_eq!(settled.outcome, CallbackOutcome::Settled);
+    assert_eq!(settled.reply.status, 200);
+    assert_eq!(
+        settled.delivery.as_ref().map(|d| d.tool_call_id.as_str()),
+        Some(TOOL_CALL_ID)
+    );
+
+    // A redelivery answers from the store. The tool must not run twice: it would
+    // repeat every effect it had, which is the whole reason the store exists.
+    let replayed = receiver.handle(&headers, body, now).await;
+    assert_eq!(replayed.outcome, CallbackOutcome::Replayed);
+    assert_eq!(replayed.reply, settled.reply);
+    assert_eq!(ran.load(Ordering::SeqCst), 1);
+
+    // An identity this receiver does not hold is refused permanently, and an
+    // unconfigured one is not: only one of the two is the sender's fault, and
+    // they are indistinguishable to nvoken unless the status separates them.
+    let rotated = CallbackReceiver::builder(vec![DeliverySigningKey::new(
+        vector.headers["X-Nvoken-Signing-Key-ID"].clone(),
+        2,
+        document.key.clone(),
+    )])
+    .build()
+    .unwrap();
+    let unknown = rotated.handle(&headers, body, now).await;
+    assert_eq!((unknown.reply.status, unknown.reason), (401, "unknown_key"));
+
+    let unconfigured = CallbackReceiver::builder(vec![]).build().unwrap();
+    let answered = unconfigured.handle(&headers, body, now).await;
+    assert_eq!(
+        (answered.reply.status, answered.reason),
+        (503, "not_configured")
+    );
+
+    let no_tool = CallbackReceiver::builder(vec![key()]).build().unwrap();
+    let refused = no_tool.handle(&headers, body, now).await;
+    assert_eq!(
+        (refused.reply.status, refused.reason),
+        (400, "unknown_tool")
+    );
+
+    // An `Err` is the receiver failing, not the tool. The tool failing settles
+    // the call with is_error, which the model can read and correct itself
+    // against.
+    let broken = CallbackReceiver::builder(vec![key()])
+        .tool(vector.tool_name.clone(), |_: &VerifiedCallback| async {
+            Err::<CallbackReply, String>("database unreachable".to_owned())
+        })
+        .build()
+        .unwrap();
+    let failed = broken.handle(&headers, body, now).await;
+    assert_eq!(
+        (failed.reply.status, failed.reason),
+        (503, "handler_failed")
+    );
+    assert!(failed.delivery.is_some());
+
+    let tool_error = CallbackReceiver::builder(vec![key()])
+        .tool(vector.tool_name.clone(), |_: &VerifiedCallback| async {
+            nvoken::callback_result(json!({"error": "no such ticket"}), true)
+                .map_err(|error| error.to_string())
+        })
+        .build()
+        .unwrap();
+    let settled_error = tool_error.handle(&headers, body, now).await;
+    assert_eq!(settled_error.outcome, CallbackOutcome::Settled);
+    assert!(settled_error
+        .reply
+        .body
+        .as_deref()
+        .unwrap_or_default()
+        .contains("\"is_error\":true"));
+
+    // A version that cannot be read as a positive integer fails the build rather
+    // than a live delivery, where the refusal would be permanent.
+    assert!(CallbackReceiver::builder(vec![DeliverySigningKey::new(
+        vector.headers["X-Nvoken-Signing-Key-ID"].clone(),
+        0,
+        document.key.clone(),
+    )])
+    .build()
+    .is_err());
+    assert!(CallbackReceiver::builder(vec![key(), key()])
+        .build()
+        .is_err());
+    assert!(CallbackReceiver::builder(vec![DeliverySigningKey::new(
+        vector.headers["X-Nvoken-Signing-Key-ID"].clone(),
+        1,
+        "too short",
+    )])
+    .build()
+    .is_err());
+}
+
+/// Where the webhook receiver differs from its callback twin: nvoken ignores
+/// the body, an unhandled event is not a failure, and ordering stays the host's.
+#[tokio::test]
+async fn webhook_receiver_reply_discipline() {
+    let document = delivery_signing_vectors();
+    let vector = &document.vectors.webhook;
+    let headers = header_map(&vector.headers);
+    let body = vector.body.as_bytes();
+    let now = UNIX_EPOCH + Duration::from_secs(document.now);
+    let key = || {
+        DeliverySigningKey::new(
+            vector.headers["X-Nvoken-Signing-Key-ID"].clone(),
+            1,
+            document.key.clone(),
+        )
+    };
+
+    let applied = Arc::new(AtomicI64::new(0));
+    let folded = Arc::clone(&applied);
+    let handled = WebhookReceiver::builder(vec![key()])
+        .event(vector.event, move |delivery: &VerifiedWebhook| {
+            let folded = Arc::clone(&folded);
+            // The fold the host owns: only a delivery that advances the
+            // Invocation is applied, and the comparison belongs in its own
+            // transaction.
+            let sequence = delivery.sequence;
+            let supersedes = delivery.supersedes(folded.load(Ordering::SeqCst));
+            async move {
+                if supersedes {
+                    folded.store(sequence, Ordering::SeqCst);
+                }
+                Ok(())
+            }
+        })
+        .build()
+        .unwrap()
+        .handle(&headers, body, now)
+        .await;
+    assert_eq!(handled.outcome, WebhookOutcome::Handled);
+    assert_eq!(handled.reply.status, 200);
+    assert_eq!(applied.load(Ordering::SeqCst), vector.sequence);
+
+    // An event with no handler is still a delivery. Retrying it would spend
+    // nvoken's bounded attempts reaching the same absent handler.
+    let ignored = WebhookReceiver::builder(vec![key()])
+        .build()
+        .unwrap()
+        .handle(&headers, body, now)
+        .await;
+    assert_eq!(ignored.outcome, WebhookOutcome::Ignored);
+    assert_eq!(ignored.reason, "unhandled_event");
+    assert!(!webhook_status_is_retried(ignored.reply.status));
+
+    let failed = WebhookReceiver::builder(vec![key()])
+        .event(vector.event, |_: &VerifiedWebhook| async {
+            Err::<(), String>("store unreachable".to_owned())
+        })
+        .build()
+        .unwrap()
+        .handle(&headers, body, now)
+        .await;
+    assert_eq!(failed.outcome, WebhookOutcome::Failed);
+    assert_eq!(failed.reason, "handler_failed");
+    assert!(webhook_status_is_retried(failed.reply.status));
+
+    // The callback key must not verify a webhook and the reverse, which is what
+    // the two purposes are for.
+    let crossed = WebhookReceiver::builder(vec![DeliverySigningKey::new(
+        document.vectors.callback.headers["X-Nvoken-Signing-Key-ID"].clone(),
+        1,
+        document.key.clone(),
+    )])
+    .build()
+    .unwrap()
+    .handle(&headers, body, now)
+    .await;
+    assert_eq!((crossed.reply.status, crossed.reason), (401, "unknown_key"));
 }
 
 /// The callback vector's twin, and the point of having both: the same key, the
@@ -1312,6 +1536,7 @@ struct DeliveryVectors {
 #[derive(Deserialize)]
 struct CallbackVector {
     tool_name: String,
+    authorization_context: HashMap<String, String>,
     headers: HashMap<String, String>,
     body: String,
 }
@@ -1388,22 +1613,27 @@ fn header_map(values: &HashMap<String, String>) -> HeaderMap {
 
 #[derive(Default)]
 struct MemoryStore {
-    value: Mutex<Option<Value>>,
+    replies: Mutex<HashMap<String, CallbackReply>>,
 }
 
 #[async_trait::async_trait]
-impl CallbackResultStore<Value> for MemoryStore {
+impl CallbackResultStore for MemoryStore {
+    async fn find(&self, tool_call_id: &str) -> Result<Option<CallbackReply>, String> {
+        let replies = self.replies.lock().map_err(|error| error.to_string())?;
+        Ok(replies.get(tool_call_id).cloned())
+    }
+
     async fn put_if_absent(
         &self,
-        _tool_call_id: &str,
-        result: Value,
-    ) -> Result<(Value, bool), String> {
-        let mut stored = self.value.lock().map_err(|error| error.to_string())?;
-        if let Some(value) = stored.as_ref() {
-            return Ok((value.clone(), false));
+        tool_call_id: &str,
+        reply: CallbackReply,
+    ) -> Result<(CallbackReply, bool), String> {
+        let mut replies = self.replies.lock().map_err(|error| error.to_string())?;
+        if let Some(existing) = replies.get(tool_call_id) {
+            return Ok((existing.clone(), false));
         }
-        *stored = Some(result.clone());
-        Ok((result, true))
+        replies.insert(tool_call_id.to_owned(), reply.clone());
+        Ok((reply, true))
     }
 }
 

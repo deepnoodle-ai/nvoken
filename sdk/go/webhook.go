@@ -1,7 +1,9 @@
 package nvoken
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -168,4 +170,138 @@ func WebhookStatusIsRetried(status int) bool {
 		return true
 	}
 	return status >= 500
+}
+
+// WebhookEventHandler records one transition. Returning an error asks nvoken to
+// deliver it again, so return one when the receiver could not record it and nil
+// when it did.
+type WebhookEventHandler func(ctx context.Context, delivery VerifiedWebhook) error
+
+// WebhookOutcome is what a receiver did with one webhook delivery.
+type WebhookOutcome string
+
+const (
+	WebhookHandled WebhookOutcome = "handled"
+	WebhookIgnored WebhookOutcome = "ignored"
+	WebhookRefused WebhookOutcome = "refused"
+	WebhookFailed  WebhookOutcome = "failed"
+)
+
+// WebhookDelivery is one answered delivery: the reply the host writes, and
+// enough about what happened to log it.
+type WebhookDelivery struct {
+	Reply   WebhookReply
+	Outcome WebhookOutcome
+	// Reason is a stable token for a log line. It is never echoed to nvoken,
+	// which ignores webhook bodies.
+	Reason   string
+	Delivery VerifiedWebhook
+	Verified bool
+	Cause    error
+}
+
+// WebhookReceiver answers an Invocation-webhook endpoint. It is the callback
+// receiver's twin — same key table, same reply discipline — because nvoken
+// signs both deliveries the same way.
+//
+// It is a separate receiver rather than a mode of one, because the two
+// endpoints hold different keys: callbacks are signed with the App's
+// callback-purpose key and webhooks with its webhook-purpose key, and neither
+// may be tried against the other's deliveries.
+//
+//	no keys configured                        503  an operator error, still fixable inside the retry window
+//	signing identity not held                 401  a real identity failure; redelivery reproduces it
+//	signature, timestamp, or envelope invalid 401  the same bytes fail the same way
+//	no handler for the signed event           200  it was delivered; redelivering finds the same absent handler
+//	handler returned nil                      200  the transition is recorded
+//	handler returned an error                 503  the receiver could not record it, so ask for it again
+//
+// Ordering stays yours. Delivery is at least once and out of order, so the
+// highest applied sequence per Invocation has to be read and written in the same
+// transaction as the state it guards — which is the host's transaction, not one
+// this kit can open. Call VerifiedWebhook.Supersedes inside it. A superseded
+// delivery is still a delivery: record nothing and return nil, so it answers
+// 200.
+type WebhookReceiver struct {
+	keys   map[deliveryKeySlot][]byte
+	events map[WebhookEvent]WebhookEventHandler
+	now    func() time.Time
+}
+
+// WebhookReceiverOptions configures a receiver.
+type WebhookReceiverOptions struct {
+	// Keys is every secret this endpoint accepts. Two entries span a rotation.
+	Keys []DeliverySigningKey
+	// Events maps the event nvoken signs into the body to its handler.
+	Events map[WebhookEvent]WebhookEventHandler
+	Now    func() time.Time
+}
+
+// NewWebhookReceiver builds a receiver, refusing a key table that could only
+// fail later at delivery time.
+func NewWebhookReceiver(options WebhookReceiverOptions) (*WebhookReceiver, error) {
+	table, err := deliverySigningKeys(options.Keys)
+	if err != nil {
+		return nil, err
+	}
+	events := make(map[WebhookEvent]WebhookEventHandler, len(options.Events))
+	for event, handler := range options.Events {
+		if event == "" || handler == nil {
+			return nil, fmt.Errorf("webhook event handler is missing an event or a function")
+		}
+		events[event] = handler
+	}
+	now := options.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &WebhookReceiver{keys: table, events: events, now: now}, nil
+}
+
+// Handle answers one delivery. It never returns an error: everything that can
+// go wrong is a status nvoken understands, and the outcome says which.
+func (r *WebhookReceiver) Handle(ctx context.Context, header http.Header, rawBody []byte) WebhookDelivery {
+	secret, err := selectDeliveryKey(r.keys, header)
+	if err == nil {
+		var verified VerifiedWebhook
+		verified, err = VerifyWebhook(secret, header, rawBody, r.now())
+		if err == nil {
+			return r.dispatch(ctx, verified)
+		}
+	}
+	keyErr := &DeliveryKeyError{}
+	reason, retryable := "invalid_signature", false
+	if errors.As(err, &keyErr) {
+		reason, retryable = keyErr.Reason, keyErr.Retryable
+	}
+	if retryable {
+		return WebhookDelivery{Reply: RetryWebhook(), Outcome: WebhookFailed, Reason: reason, Cause: err}
+	}
+	return WebhookDelivery{
+		Reply:   WebhookReply{Status: http.StatusUnauthorized},
+		Outcome: WebhookRefused,
+		Reason:  reason,
+		Cause:   err,
+	}
+}
+
+func (r *WebhookReceiver) dispatch(ctx context.Context, verified VerifiedWebhook) WebhookDelivery {
+	answered := WebhookDelivery{Delivery: verified, Verified: true}
+	handler, known := r.events[verified.Event]
+	// A subscribed event with no handler is a gap in this receiver, not a failure
+	// of the delivery. Answering 503 would only spend nvoken's bounded retries
+	// reaching the same absent handler, and lose it anyway.
+	if !known {
+		answered.Reply = AcceptWebhook()
+		answered.Outcome, answered.Reason = WebhookIgnored, "unhandled_event"
+		return answered
+	}
+	if err := handler(ctx, verified); err != nil {
+		answered.Reply = RetryWebhook()
+		answered.Outcome, answered.Reason, answered.Cause = WebhookFailed, "handler_failed", err
+		return answered
+	}
+	answered.Reply = AcceptWebhook()
+	answered.Outcome, answered.Reason = WebhookHandled, "recorded"
+	return answered
 }

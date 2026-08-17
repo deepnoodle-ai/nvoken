@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from .signed_delivery import verify_signed_delivery
+from .signed_delivery import (
+    DeliveryKeyError,
+    DeliverySigningKey,
+    delivery_signing_keys,
+    select_delivery_key,
+    verify_signed_delivery,
+)
 
 #: The closed set of Invocation webhook events.
 WEBHOOK_EVENTS = ("invocation.waiting", "invocation.paused", "invocation.ended")
@@ -146,3 +153,117 @@ def webhook_status_is_retried(status: int) -> bool:
     are indistinguishable to nvoken and only one of them is the sender's fault.
     """
     return status in (408, 425, 429) or status >= 500
+
+
+#: Records one transition. Raising asks nvoken to deliver it again, so raise
+#: when the receiver could not record it and return when it did.
+WebhookEventHandler = Callable[["VerifiedWebhook"], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class WebhookDelivery:
+    """What a receiver did with one webhook delivery, and the reply to write."""
+
+    reply: WebhookReply
+    outcome: Literal["handled", "ignored", "refused", "failed"]
+    #: A stable token for a log line. Never echoed to nvoken, which ignores
+    #: webhook bodies.
+    reason: str
+    delivery: VerifiedWebhook | None = None
+    cause: BaseException | None = None
+
+
+class WebhookReceiver:
+    """Answers an Invocation-webhook endpoint.
+
+    It is :class:`~nvoken.callback.CallbackReceiver`'s twin — same key table,
+    same reply discipline — because nvoken signs both deliveries the same way.
+
+    It is a separate receiver rather than a mode of one, because the two
+    endpoints hold different keys: callbacks are signed with the App's
+    ``callback``-purpose key and webhooks with its ``webhook``-purpose key, and
+    neither may be tried against the other's deliveries.
+
+    =========================================  ======  ================================================
+    situation                                  status  why
+    =========================================  ======  ================================================
+    no keys configured                         503     an operator error, still fixable in the window
+    signing identity not held                  401     a real identity failure; redelivery repeats it
+    signature, timestamp, or envelope invalid  401     the same bytes fail the same way
+    no handler for the signed event            200     it was delivered; redelivery finds the same gap
+    handler returned                           200     the transition is recorded
+    handler raised                             503     the receiver could not record it
+    =========================================  ======  ================================================
+
+    **Ordering stays yours.** Delivery is at least once and out of order, so the
+    highest applied ``sequence`` per Invocation has to be read and written in
+    the same transaction as the state it guards — which is the host's
+    transaction, not one this kit can open. Call
+    :meth:`VerifiedWebhook.supersedes` inside it. A superseded delivery is
+    still a delivery: record nothing and return, so it answers 200.
+    """
+
+    def __init__(
+        self,
+        *,
+        keys: Sequence[DeliverySigningKey],
+        events: Mapping[str, WebhookEventHandler],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._keys = delivery_signing_keys(keys)
+        self._events = dict(events)
+        self._now = now
+
+    async def handle(self, headers: dict[str, str], raw_body: bytes) -> WebhookDelivery:
+        """Answer one delivery.
+
+        It never raises: everything that can go wrong is a status nvoken
+        understands, and the outcome says which.
+        """
+        try:
+            secret = select_delivery_key(self._keys, headers)
+            delivery = verify_webhook(
+                secret, headers, raw_body, now=self._now() if self._now else None
+            )
+        except DeliveryKeyError as error:
+            return WebhookDelivery(
+                reply=retry_webhook() if error.retryable else WebhookReply(status=401),
+                outcome="failed" if error.retryable else "refused",
+                reason=error.reason,
+                cause=error,
+            )
+        except Exception as error:  # noqa: BLE001 - every failure is a status
+            return WebhookDelivery(
+                reply=WebhookReply(status=401),
+                outcome="refused",
+                reason="invalid_signature",
+                cause=error,
+            )
+
+        handler = self._events.get(delivery.event)
+        # A subscribed event with no handler is a gap in this receiver, not a
+        # failure of the delivery. Answering 503 would only spend nvoken's
+        # bounded retries reaching the same absent handler, and lose it anyway.
+        if handler is None:
+            return WebhookDelivery(
+                reply=accept_webhook(),
+                outcome="ignored",
+                reason="unhandled_event",
+                delivery=delivery,
+            )
+        try:
+            await handler(delivery)
+        except Exception as error:  # noqa: BLE001 - every failure is a status
+            return WebhookDelivery(
+                reply=retry_webhook(),
+                outcome="failed",
+                reason="handler_failed",
+                delivery=delivery,
+                cause=error,
+            )
+        return WebhookDelivery(
+            reply=accept_webhook(),
+            outcome="handled",
+            reason="recorded",
+            delivery=delivery,
+        )
