@@ -29,15 +29,17 @@ pub use callback::{
 };
 pub use client::{
     fetch_tool, AgentDefinition, AgentDefinitionOverrides, BudgetExhaustionBehavior, Client,
-    CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
-    CreateAgentInput, ErrorCategory, HostToolHandler, IfActivePolicy, InvocationHandle,
-    InvokeRequest, Limits, ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationsOptions,
-    ListModelsOptions, ListOrder, ListSessionsOptions, McpServer, McpServerHeaders,
-    MessageListOptions, Model, NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool,
-    Reasoning, ReasoningEffort, RetryPolicy, Sampling, SessionOptions, SessionRetention,
-    StreamOptions, Tool, ToolCallListOptions, ToolChoice, ToolHandlerError, ToolMode, ToolResult,
-    UpdateAgentInput, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent,
-    WebhookTarget,
+    ClientInterface, CompactionListOptions, ContextCompaction, ContextCompactionTrigger,
+    ContextItem, ContextTier, CreateAgentDefinitionOptions, CreateAgentInput, DeleteSessionOptions,
+    ErrorCategory, HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits,
+    ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
+    ListOrder, ListSessionsOptions, McpServer, McpServerHeaders, McpTimeouts, MemoryConfig,
+    MemoryContextConfig, MemoryContextMode, MemoryScope, MessageListOptions, Model, NvokenError,
+    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, RetryPolicy,
+    Sampling, SessionOptions, SessionRetention, StreamOptions, Tool, ToolCallListOptions,
+    ToolChoice, ToolHandlerError, ToolMode, ToolResult, UpdateAgentDefinitionOptions,
+    UpdateAgentInput, UpdateSessionOptions, WaitCondition, WaitOptions, WebSearchLocation,
+    WebSearchTool, WebhookEvent, WebhookTarget,
 };
 pub use invocation_status::{is_terminal_status, is_turn_over, TERMINAL_INVOCATION_STATUSES};
 pub use media_preflight::{

@@ -9,7 +9,7 @@ use reqwest::{Request, Response, StatusCode};
 use reqwest_middleware::{
     ClientBuilder as MiddlewareClientBuilder, Error as MiddlewareError, Middleware, Next,
 };
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{json, Value};
 
 use crate::apis;
@@ -396,7 +396,7 @@ impl McpServer {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Limits {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_timeout_seconds: Option<u32>,
@@ -600,10 +600,107 @@ pub enum ToolChoice {
     Named(String),
 }
 
-/// Reusable App-owned execution configuration.
+/// Which principal a definition's durable memories belong to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryScope {
+    Tenant,
+    /// Requires a user key on every admitted Invocation.
+    User,
+}
+
+/// How much memory text a turn receives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryContextMode {
+    Index,
+    Full,
+    /// Attaches the memory tools without putting memory text in the turn.
+    Off,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MemoryContextConfig {
+    pub mode: Option<MemoryContextMode>,
+    /// Defaults to 1536 for index and 131072 for full; must be zero for off.
+    pub max_bytes: Option<u32>,
+}
+
+/// Opts a definition into durable memory and its three memory tools.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MemoryConfig {
+    pub scope: Option<MemoryScope>,
+    pub context: Option<MemoryContextConfig>,
+}
+
+impl MemoryConfig {
+    pub fn scope(mut self, scope: MemoryScope) -> Self {
+        self.scope = Some(scope);
+        self
+    }
+
+    pub fn context(mut self, context: MemoryContextConfig) -> Self {
+        self.context = Some(context);
+        self
+    }
+}
+
+/// One definition-specific browser authorization.
+///
+/// It grants authorship and settlement only, never selective read visibility:
+/// every public transcript item in a browser-reachable Session must be treated
+/// as client-visible. `None` on a definition means it is not
+/// client-token-capable; an empty `ClientInterface::default()` opts in with no
+/// client-authored context or tools.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClientInterface {
+    /// Recorded-context names a client may append or supersede, contextual
+    /// tier only.
+    pub context_names: Vec<String>,
+    /// Host-mode tools whose parked calls a client may see and settle.
+    pub tool_names: Vec<String>,
+}
+
+impl ClientInterface {
+    pub fn context_name(mut self, name: impl Into<String>) -> Self {
+        self.context_names.push(name.into());
+        self
+    }
+
+    pub fn tool_name(mut self, name: impl Into<String>) -> Self {
+        self.tool_names.push(name.into());
+        self
+    }
+}
+
+/// Everything writable on an App-owned Agent Definition.
+///
+/// It is flat, matching the contract's `AgentDefinitionWrite`. Reads return an
+/// `AgentDefinitionResource`, which is this same flat object plus `id`,
+/// `revision`, and timestamps, so a read-modify-write is a conversion and a
+/// replace:
+///
+/// ```ignore
+/// let current = client.get_agent_definition(id).await?;
+/// let mut definition = AgentDefinition::from_resource(&current)?;
+/// definition.instructions = Some("Be concise and warm.".to_string());
+/// client
+///     .update_agent_definition(
+///         &current.id,
+///         definition,
+///         UpdateAgentDefinitionOptions::new(current.revision as u32),
+///     )
+///     .await?;
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct AgentDefinition {
     pub model: Model,
+    /// Caller-chosen immutable key, unique within the App. Required to create.
+    /// A replacement cannot move a resource to another key, so it is dropped
+    /// there and a definition read back from the server may carry one along.
+    pub definition_key: Option<String>,
+    /// Display name. Defaults to `definition_key`, and because a replacement
+    /// replaces the whole resource, omitting it on update resets the name to
+    /// the key rather than keeping the current one.
+    pub name: Option<String>,
     pub instructions: Option<String>,
     pub sampling: Option<Sampling>,
     pub reasoning: Option<Reasoning>,
@@ -612,6 +709,8 @@ pub struct AgentDefinition {
     pub tools: Vec<Tool>,
     pub mcp_servers: Vec<McpServer>,
     pub provider_tools: Vec<ProviderTool>,
+    pub memory: Option<MemoryConfig>,
+    pub client_interface: Option<ClientInterface>,
     pub output_schema: Option<HashMap<String, Value>>,
 }
 
@@ -665,6 +764,153 @@ impl AgentDefinition {
             model,
             ..Self::default()
         }
+    }
+
+    /// Reads a resource back into the definition that produced it.
+    ///
+    /// A replacement replaces the whole resource, so a field this dropped
+    /// would be erased on write. It therefore carries every writable field
+    /// across and leaves the read-only ones — `id`, `revision`, and the
+    /// timestamps — behind.
+    pub fn from_resource(resource: &models::AgentDefinitionResource) -> Result<Self, NvokenError> {
+        let mut tools = Vec::new();
+        for declaration in resource.tools.iter().flatten() {
+            tools.push(match declaration {
+                models::ToolDeclaration::Builtin(_) => Tool::fetch(),
+                models::ToolDeclaration::Host(host) => Tool::host(
+                    host.name.clone(),
+                    host.description.clone(),
+                    host.input_schema.clone(),
+                ),
+                models::ToolDeclaration::Callback(callback) => Tool::callback(
+                    callback.name.clone(),
+                    callback.description.clone(),
+                    callback.input_schema.clone(),
+                    callback.callback.url.clone(),
+                ),
+            });
+        }
+        let limits = resource
+            .limits
+            .as_ref()
+            .map(|limits| serde_json::from_value(json!(limits)))
+            .transpose()
+            .map_err(|error| NvokenError::validation(error.to_string()))?;
+        Ok(Self {
+            model: Model::new(
+                resource.model.provider.to_string(),
+                resource.model.id.clone(),
+            ),
+            definition_key: Some(resource.definition_key.clone()),
+            name: Some(resource.name.clone()),
+            instructions: resource.instructions.clone(),
+            sampling: resource.sampling.as_ref().map(|sampling| Sampling {
+                temperature: sampling.temperature,
+            }),
+            reasoning: resource.reasoning.as_ref().map(|reasoning| Reasoning {
+                effort: reasoning.effort.map(|effort| match effort {
+                    models::ReasoningEffort::EffortLow => ReasoningEffort::Low,
+                    models::ReasoningEffort::EffortMedium => ReasoningEffort::Medium,
+                    models::ReasoningEffort::EffortHigh => ReasoningEffort::High,
+                    models::ReasoningEffort::EffortXHigh => ReasoningEffort::XHigh,
+                    models::ReasoningEffort::EffortMax => ReasoningEffort::Max,
+                }),
+                budget_tokens: reasoning.budget_tokens,
+            }),
+            tool_choice: resource
+                .tool_choice
+                .as_ref()
+                .map(|choice| match choice.mode {
+                    models::ModelToolChoiceMode::ChoiceAuto => Ok(ToolChoice::Auto),
+                    models::ModelToolChoiceMode::ChoiceNone => Ok(ToolChoice::None),
+                    models::ModelToolChoiceMode::ChoiceRequired => Ok(ToolChoice::Required),
+                    models::ModelToolChoiceMode::ChoiceNamed => {
+                        choice.name.clone().map(ToolChoice::Named).ok_or_else(|| {
+                            NvokenError::validation("tool choice named requires name")
+                        })
+                    }
+                })
+                .transpose()?,
+            limits,
+            tools,
+            mcp_servers: resource
+                .mcp_servers
+                .iter()
+                .flatten()
+                .map(|server| McpServer {
+                    name: server.name.clone(),
+                    url: server.url.clone(),
+                    allowed_tools: server.allowed_tools.clone().unwrap_or_default(),
+                    timeouts: server.timeouts.as_ref().map(|timeouts| McpTimeouts {
+                        discovery_seconds: timeouts.discovery_seconds,
+                        call_seconds: timeouts.call_seconds,
+                    }),
+                })
+                .collect(),
+            provider_tools: resource
+                .provider_tools
+                .iter()
+                .flatten()
+                .map(|tool| {
+                    let search = &tool.web_search;
+                    ProviderTool::WebSearch(WebSearchTool {
+                        max_uses: search.max_uses,
+                        allowed_domains: search.allowed_domains.clone().unwrap_or_default(),
+                        blocked_domains: search.blocked_domains.clone().unwrap_or_default(),
+                        user_location: search.user_location.as_ref().map(|location| {
+                            WebSearchLocation {
+                                city: location.city.clone(),
+                                region: location.region.clone(),
+                                country: location.country.clone(),
+                                timezone: location.timezone.clone(),
+                            }
+                        }),
+                    })
+                })
+                .collect(),
+            memory: resource.memory.as_ref().map(|memory| MemoryConfig {
+                scope: memory.scope.map(|scope| match scope {
+                    models::memory_config::Scope::Tenant => MemoryScope::Tenant,
+                    models::memory_config::Scope::User => MemoryScope::User,
+                }),
+                context: memory.context.as_ref().map(|context| MemoryContextConfig {
+                    mode: context.mode.map(|mode| match mode {
+                        models::MemoryContextMode::Index => MemoryContextMode::Index,
+                        models::MemoryContextMode::Full => MemoryContextMode::Full,
+                        models::MemoryContextMode::False => MemoryContextMode::Off,
+                    }),
+                    max_bytes: context.max_bytes,
+                }),
+            }),
+            client_interface: resource
+                .client_interface
+                .as_ref()
+                .map(|interface| ClientInterface {
+                    context_names: interface.context_names.clone().unwrap_or_default(),
+                    tool_names: interface.tool_names.clone().unwrap_or_default(),
+                }),
+            output_schema: resource.output_schema.clone(),
+        })
+    }
+
+    pub fn definition_key(mut self, key: impl Into<String>) -> Self {
+        self.definition_key = Some(key.into());
+        self
+    }
+
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    pub fn memory(mut self, memory: MemoryConfig) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
+    pub fn client_interface(mut self, client_interface: ClientInterface) -> Self {
+        self.client_interface = Some(client_interface);
+        self
     }
 
     pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
@@ -1056,6 +1302,36 @@ pub struct UpdateAgentInput {
     pub clear_pinned_revision: bool,
 }
 
+/// How one create is sent, as opposed to what it says.
+#[derive(Debug, Clone, Default)]
+pub struct CreateAgentDefinitionOptions {
+    /// Optional, and nothing is invented for it: a key this SDK made up would
+    /// be new on every attempt and so could never deduplicate anything. The
+    /// definition key already scopes replay.
+    pub idempotency_key: Option<String>,
+}
+
+impl CreateAgentDefinitionOptions {
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// How one replacement is sent, as opposed to what it says.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UpdateAgentDefinitionOptions {
+    /// The revision the caller read, sent as `If-Match`. Required, because a
+    /// replacement with no expectation is a lost update waiting to happen.
+    pub expected_revision: u32,
+}
+
+impl UpdateAgentDefinitionOptions {
+    pub fn new(expected_revision: u32) -> Self {
+        Self { expected_revision }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ListAgentDefinitionsOptions {
     /// Narrows the page to the resource this caller-owned key names. The key
@@ -1078,6 +1354,32 @@ pub struct ListInvocationsOptions {
     pub statuses: Vec<models::InvocationStatus>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
+}
+
+/// One Session metadata patch: a present key replaces, a `None` value deletes,
+/// and an unmentioned key survives.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateSessionOptions {
+    pub metadata: HashMap<String, Option<String>>,
+}
+
+impl UpdateSessionOptions {
+    pub fn new(metadata: HashMap<String, Option<String>>) -> Self {
+        Self { metadata }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DeleteSessionOptions {
+    /// Erases a Session even when it holds a nonterminal Invocation,
+    /// discarding that turn's settlement.
+    pub force: bool,
+}
+
+impl DeleteSessionOptions {
+    pub fn force() -> Self {
+        Self { force: true }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1326,8 +1628,7 @@ impl Client {
     /// again when a turn is admitted.
     pub fn agent_definition_body(
         &self,
-        name: &str,
-        mut definition: AgentDefinition,
+        definition: AgentDefinition,
     ) -> Result<models::AgentDefinitionWrite, NvokenError> {
         if definition.model.is_unset() {
             return Err(NvokenError::validation("model is required"));
@@ -1409,8 +1710,37 @@ impl Client {
             tools.push(mode);
         }
         let mut body = models::AgentDefinitionWrite::new(model);
-        body.name = optional_name(name);
+        body.definition_key = definition.definition_key;
+        body.name = definition.name;
         body.instructions = definition.instructions;
+        body.memory = definition.memory.map(|memory| {
+            Box::new(models::MemoryConfig {
+                scope: memory.scope.map(|scope| match scope {
+                    MemoryScope::Tenant => models::memory_config::Scope::Tenant,
+                    MemoryScope::User => models::memory_config::Scope::User,
+                }),
+                context: memory.context.map(|context| {
+                    Box::new(models::MemoryContextConfig {
+                        mode: context.mode.map(|mode| match mode {
+                            MemoryContextMode::Index => models::MemoryContextMode::Index,
+                            MemoryContextMode::Full => models::MemoryContextMode::Full,
+                            MemoryContextMode::Off => models::MemoryContextMode::False,
+                        }),
+                        max_bytes: context.max_bytes,
+                    })
+                }),
+            })
+        });
+        // An empty `ClientInterface` is not the same as none: it opts the
+        // definition into client tokens with no client-authored context or
+        // tools, so the empty object has to reach the wire.
+        body.client_interface = definition.client_interface.map(|interface| {
+            Box::new(models::BrowserClientInterface {
+                context_names: (!interface.context_names.is_empty())
+                    .then_some(interface.context_names),
+                tool_names: (!interface.tool_names.is_empty()).then_some(interface.tool_names),
+            })
+        });
         body.sampling = sampling;
         body.reasoning = reasoning;
         body.tool_choice = tool_choice;
@@ -1796,19 +2126,27 @@ impl Client {
             .map_err(|error| self.normalize_generated_error(error))
     }
 
-    /// Creates one reusable App-owned Agent Definition resource. The
-    /// idempotency key makes retries safe; equal content under another key gets
-    /// an independent resource ID.
+    /// Creates one reusable App-owned Agent Definition resource, or returns the
+    /// one its key names.
+    ///
+    /// `definition_key` is unique within the App, so this is ensure-shaped:
+    /// restating an existing definition returns it, and a key already held by a
+    /// different definition is a conflict naming the resource to update
+    /// instead. `name` defaults to the key. The optional idempotency key pins
+    /// replay to a specific create; the definition key already scopes replay
+    /// without it.
     pub async fn create_agent_definition(
         &self,
-        idempotency_key: &str,
-        definition_key: &str,
-        name: &str,
         definition: AgentDefinition,
+        options: CreateAgentDefinitionOptions,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        let write = self.agent_definition_body(name, definition)?;
+        let write = self.agent_definition_body(definition)?;
+        let definition_key = write
+            .definition_key
+            .filter(|key| !key.is_empty())
+            .ok_or_else(|| NvokenError::validation("definition_key is required"))?;
         let body = models::AgentDefinitionCreate {
-            definition_key: definition_key.to_string(),
+            definition_key,
             name: write.name,
             instructions: write.instructions,
             model: write.model,
@@ -1826,7 +2164,10 @@ impl Client {
         apis::agent_definitions_api::create_agent_definition(
             &self.configuration,
             body,
-            optional_name(idempotency_key).as_deref(),
+            options
+                .idempotency_key
+                .as_deref()
+                .filter(|key| !key.is_empty()),
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))
@@ -1870,14 +2211,26 @@ impl Client {
         .map_err(|error| self.normalize_generated_error(error))
     }
 
+    /// Replaces one Agent Definition, failing when it has moved on.
+    ///
+    /// This replaces the whole resource, so send back everything you want
+    /// kept. `AgentDefinition::from_resource` reads one back into a definition
+    /// that carries every writable field across. The expected revision travels
+    /// as `If-Match`, so a concurrent write fails rather than overwriting.
     pub async fn update_agent_definition(
         &self,
         definition_id: &str,
-        expected_revision: u32,
-        name: &str,
         definition: AgentDefinition,
+        options: UpdateAgentDefinitionOptions,
     ) -> Result<models::AgentDefinitionResource, NvokenError> {
-        let body = self.agent_definition_body(name, definition)?;
+        if options.expected_revision < 1 {
+            return Err(NvokenError::validation("expected_revision is required"));
+        }
+        let mut body = self.agent_definition_body(definition)?;
+        // A replacement cannot move a resource to another key, so a definition
+        // read back from the server carries one that is dropped here.
+        body.definition_key = None;
+        let expected_revision = options.expected_revision;
         apis::agent_definitions_api::update_agent_definition(
             &self.configuration,
             &format!("\"{expected_revision}\""),
@@ -2174,8 +2527,12 @@ impl Client {
     /// This is not account erasure by itself: nvoken keeps no account
     /// tombstone, so a caller honouring a deletion request must stop admitting
     /// work for the tenant before paginating and deleting.
-    pub async fn delete_session(&self, session_id: &str, force: bool) -> Result<(), NvokenError> {
-        apis::sessions_api::delete_session(&self.configuration, session_id, Some(force))
+    pub async fn delete_session(
+        &self,
+        session_id: &str,
+        options: DeleteSessionOptions,
+    ) -> Result<(), NvokenError> {
+        apis::sessions_api::delete_session(&self.configuration, session_id, Some(options.force))
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
@@ -2193,7 +2550,7 @@ impl Client {
     pub async fn update_session(
         &self,
         session_id: &str,
-        metadata: HashMap<String, Option<String>>,
+        options: UpdateSessionOptions,
     ) -> Result<models::Session, NvokenError> {
         let mut request = self
             .configuration
@@ -2203,7 +2560,7 @@ impl Client {
                 self.configuration.base_path,
                 apis::urlencode(session_id),
             ))
-            .json(&serde_json::json!({ "metadata": metadata }));
+            .json(&serde_json::json!({ "metadata": options.metadata }));
         if let Some(token) = &self.configuration.bearer_access_token {
             request = request.bearer_auth(token);
         }

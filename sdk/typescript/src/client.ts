@@ -3,15 +3,21 @@
 // in resolveEnvironment, the only place that touches the filesystem.
 
 import {
+  AdmissionsApi,
   AgentDefinitionsApi,
   AgentsApi,
+  AppsApi,
   CreditsApi,
   IdentityApi,
   InvocationsApi,
   MCPApi,
+  MemoriesApi,
   ModelsApi,
+  OrgsApi,
   ProviderKeysApi,
   SessionsApi,
+  TenantsApi,
+  UsageApi,
 } from "./generated/apis/index.js";
 import type {
   Agent as AgentResource,
@@ -696,10 +702,36 @@ export interface SessionOptions {
 }
 
 /**
- * Reusable execution configuration stored as an App-owned versioned resource.
- * Invocations name an Agent instance rather than carrying this object.
+ * Everything writable on an App-owned Agent Definition, flat, matching the
+ * wire's `AgentDefinitionWrite`. Reads return {@link AgentDefinitionResource},
+ * which is this same flat object plus `id`, `revision`, and timestamps, so a
+ * read-modify-write is a spread:
+ *
+ * ```ts
+ * const current = await client.getAgentDefinition(id);
+ * await client.updateAgentDefinition(
+ *   id,
+ *   { ...current, instructions: "Be concise and warm." },
+ *   { expectedRevision: current.revision },
+ * );
+ * ```
+ *
+ * The read-only fields a spread carries along are dropped on the way to the
+ * wire rather than rejected.
  */
 export interface AgentDefinition<TOutput extends object = JsonObject> {
+  /**
+   * Caller-chosen immutable key, unique within the App. Required to create.
+   * A replacement cannot move a resource to another key, so this is ignored
+   * there and a spread resource may carry it along.
+   */
+  definitionKey?: string;
+  /**
+   * Display name. Defaults to `definitionKey`, and because a replacement
+   * replaces the whole resource, omitting it on update resets the name to the
+   * key rather than keeping the current one.
+   */
+  name?: string;
   instructions?: string;
   model: ModelInput;
   sampling?: Sampling;
@@ -714,7 +746,44 @@ export interface AgentDefinition<TOutput extends object = JsonObject> {
    * and nvoken does not execute them.
    */
   providerTools?: Array<ProviderTool>;
+  /** Durable memory scope and how much of it reaches each turn. */
+  memory?: MemoryConfig;
+  /**
+   * What a browser client principal may do against this definition. Omission
+   * means the definition is not client-token-capable; an explicit empty object
+   * opts in with no client-authored context or tools.
+   */
+  clientInterface?: ClientInterface;
   outputSchema?: OutputSchema<TOutput>;
+}
+
+export type MemoryScope = "tenant" | "user";
+
+/** `index` and `full` differ in how much memory text a turn receives. */
+export type MemoryContextMode = "index" | "full" | "false";
+
+export interface MemoryContextConfig {
+  mode?: MemoryContextMode;
+  /** Defaults to 1536 for `index` and 131072 for `full`; must be zero for `false`. */
+  maxBytes?: number;
+}
+
+export interface MemoryConfig {
+  /** `user` scope requires a user key on every admitted Invocation. */
+  scope?: MemoryScope;
+  context?: MemoryContextConfig;
+}
+
+/**
+ * One definition-specific browser authorization. It grants authorship and
+ * settlement only, never selective read visibility: every public transcript
+ * item in a browser-reachable Session must be treated as client-visible.
+ */
+export interface ClientInterface {
+  /** Recorded-context names a client may append or supersede, contextual tier only. */
+  contextNames?: Iterable<string>;
+  /** Host-mode tools whose parked calls a client may see and settle. */
+  toolNames?: Iterable<string>;
 }
 
 /**
@@ -761,9 +830,22 @@ export function webSearchTool(options: WebSearchTool = {}): ProviderTool {
   return { type: "web_search", webSearch: options };
 }
 
-export type ToolChoice =
-  | { mode: "auto" | "none" | "required"; name?: never }
-  | { mode: "named"; name: string };
+export type ToolChoiceMode = "auto" | "none" | "required" | "named";
+
+/**
+ * Portable tool selection. `auto` preserves normal selection, `none` disables
+ * tools for the turn, and `required` and `named` apply to the first durable
+ * model iteration and then return to `auto`.
+ *
+ * `name` belongs to `named` and to nothing else. That pairing is checked when
+ * the definition is sent rather than in the type, so the shape stays the one
+ * the wire and the other SDKs use and a definition read back from the server
+ * can be passed straight into a write.
+ */
+export interface ToolChoice {
+  mode: ToolChoiceMode;
+  name?: string;
+}
 
 /**
  * Declares a remote MCP server. It carries no secrets, so authentication
@@ -1190,6 +1272,27 @@ export interface ListCompactionOptions {
   limit?: number;
 }
 
+export interface DeleteSessionOptions {
+  /**
+   * Erase a Session that still holds a live turn. Without it that Session is
+   * refused with `session_invocation_active`. Erasure skips settlement: the
+   * turn is removed rather than ended, so it records no terminal status and
+   * fires no `invocation.ended` webhook. Cancel and wait first if you bill or
+   * reconcile on settlement; force is for erasing on an end user's behalf.
+   */
+  force?: boolean;
+}
+
+/**
+ * A metadata merge patch: a string sets the key, `null` deletes it, and a key
+ * you leave out survives.
+ */
+export type MetadataPatch = Record<string, string | null>;
+
+export interface UpdateSessionOptions {
+  metadata: MetadataPatch;
+}
+
 export type SessionKeyScope = (
   | { agentId: string; agentKey?: never }
   | { agentKey: string; agentId?: never }
@@ -1213,11 +1316,15 @@ export interface ListAgentOptions {
   limit?: number;
 }
 
-export interface CreateAgentDefinitionOptions<TOutput extends object = JsonObject> {
-  definitionKey: string;
-  /** Display name. Defaults to `definitionKey`. */
-  name?: string;
-  definition: AgentDefinition<TOutput>;
+/** An {@link AgentDefinition} with the key a create needs. */
+export type CreateAgentDefinitionOptions<TOutput extends object = JsonObject> =
+  AgentDefinition<TOutput> & { definitionKey: string };
+
+/** An {@link AgentDefinition}. A replacement cannot change the key. */
+export type UpdateAgentDefinitionOptions<TOutput extends object = JsonObject> =
+  AgentDefinition<TOutput>;
+
+export interface CreateAgentDefinitionRequestOptions {
   /**
    * Pins replay to this specific create, so the same key keeps returning that
    * create's revision-1 resource even after later revisions moved it on.
@@ -1225,19 +1332,15 @@ export interface CreateAgentDefinitionOptions<TOutput extends object = JsonObjec
    * Leave it unset for the ordinary case. `definitionKey` is unique within the
    * App and already scopes replay: restating a definition resolves to the
    * existing resource at its current revision, which is what a deploy-time
-   * sync wants.
+   * sync wants. Nothing is invented on your behalf here, because a key the SDK
+   * made up would be new on every attempt and so could never deduplicate one.
    */
   idempotencyKey?: string;
 }
 
-export interface UpdateAgentDefinitionOptions<TOutput extends object = JsonObject> {
+export interface UpdateAgentDefinitionRequestOptions {
+  /** The `revision` the definition was read at. Sent as `If-Match`. */
   expectedRevision: number;
-  /**
-   * Display name. Required here, unlike on create: an update replaces the
-   * whole resource and this call does not hold the key to fall back to.
-   */
-  name: string;
-  definition: AgentDefinition<TOutput>;
 }
 
 export interface TranscriptPageOptions {
@@ -1275,6 +1378,17 @@ export class Client {
   readonly providerKeys: ProviderKeysApi;
   readonly sessions: SessionsApi;
   readonly identity: IdentityApi;
+  readonly memories: MemoriesApi;
+  readonly usage: UsageApi;
+  /**
+   * Org-scoped management operations. They resolve no tenant and are not part
+   * of the Runtime surface an App key reaches, so they carry no hand-written
+   * wrapper — the generated API is the whole interface.
+   */
+  readonly apps: AppsApi;
+  readonly orgs: OrgsApi;
+  readonly tenants: TenantsApi;
+  readonly admissions: AdmissionsApi;
   readonly configuration: Configuration;
   readonly retry: Required<RetryPolicy>;
   readonly fetch: typeof globalThis.fetch;
@@ -1325,6 +1439,12 @@ export class Client {
     this.providerKeys = new ProviderKeysApi(this.configuration);
     this.sessions = new SessionsApi(this.configuration);
     this.identity = new IdentityApi(this.configuration);
+    this.memories = new MemoriesApi(this.configuration);
+    this.usage = new UsageApi(this.configuration);
+    this.apps = new AppsApi(this.configuration);
+    this.orgs = new OrgsApi(this.configuration);
+    this.tenants = new TenantsApi(this.configuration);
+    this.admissions = new AdmissionsApi(this.configuration);
     this.retry = {
       maxAttempts: options.retry?.maxAttempts ?? 4,
       minDelayMs: options.retry?.minDelayMs ?? 100,
@@ -1345,6 +1465,7 @@ export class Client {
     }
   }
 
+  /** Every generated API, so nothing on the contract is out of reach. */
   raw(): {
     agents: AgentsApi;
     credits: CreditsApi;
@@ -1355,6 +1476,12 @@ export class Client {
     providerKeys: ProviderKeysApi;
     sessions: SessionsApi;
     identity: IdentityApi;
+    memories: MemoriesApi;
+    usage: UsageApi;
+    apps: AppsApi;
+    orgs: OrgsApi;
+    tenants: TenantsApi;
+    admissions: AdmissionsApi;
   } {
     return {
       agents: this.agents,
@@ -1366,6 +1493,12 @@ export class Client {
       providerKeys: this.providerKeys,
       sessions: this.sessions,
       identity: this.identity,
+      memories: this.memories,
+      usage: this.usage,
+      apps: this.apps,
+      orgs: this.orgs,
+      tenants: this.tenants,
+      admissions: this.admissions,
     };
   }
 
@@ -1842,11 +1975,12 @@ export class Client {
    * want one.
    */
   async createAgentDefinition<TOutput extends object = JsonObject>(
-    options: CreateAgentDefinitionOptions<TOutput>,
+    definition: CreateAgentDefinitionOptions<TOutput>,
+    options: CreateAgentDefinitionRequestOptions = {},
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
-    validateAgentDefinition(options.definition);
-    if (!options.definitionKey) {
+    validateAgentDefinition(definition);
+    if (!definition.definitionKey) {
       throw new NvokenError("validation", "definitionKey is required");
     }
     return await this.replaySafe(
@@ -1857,9 +1991,8 @@ export class Client {
           // here: the runtime applies that default, and duplicating it would
           // make two places to change it.
           agentDefinitionCreate: agentDefinitionToWire(
-            options.definition,
-            options.name,
-            options.definitionKey,
+            definition,
+            { definitionKey: definition.definitionKey },
           ) as AgentDefinitionCreate,
         },
         { signal },
@@ -1926,20 +2059,40 @@ export class Client {
     return page.items[0] ?? null;
   }
 
+  /**
+   * Publishes the next revision of an Agent Definition, replacing the whole
+   * resource. Pass the definition you read, changed:
+   *
+   * ```ts
+   * const current = await client.getAgentDefinition(id);
+   * await client.updateAgentDefinition(
+   *   id,
+   *   { ...current, instructions: "Be concise and warm." },
+   *   { expectedRevision: current.revision },
+   * );
+   * ```
+   *
+   * A field you leave out is cleared, not kept, which is why spreading the
+   * current resource rather than restating it by hand is the safe habit.
+   */
   updateAgentDefinition<TOutput extends object = JsonObject>(
     definitionId: string,
-    options: UpdateAgentDefinitionOptions<TOutput>,
+    definition: UpdateAgentDefinitionOptions<TOutput>,
+    options: UpdateAgentDefinitionRequestOptions,
     signal?: AbortSignal,
   ): Promise<AgentDefinitionResource> {
-    validateAgentDefinition(options.definition);
-    if (!options.name) {
-      throw new NvokenError("validation", "name is required");
+    validateAgentDefinition(definition);
+    if (!(options.expectedRevision >= 1)) {
+      throw new NvokenError("validation", "expectedRevision must be positive");
     }
     return this.replaySafe(
       () => this.agentDefinitions.updateAgentDefinition({
         agentDefinitionId: definitionId,
         ifMatch: `"${options.expectedRevision}"`,
-        agentDefinitionWrite: agentDefinitionToWire(options.definition, options.name),
+        // The key is immutable, so it is dropped rather than sent back: a
+        // spread resource always carries one and the replacement schema does
+        // not want it.
+        agentDefinitionWrite: agentDefinitionToWire(definition, {}),
       }, { signal }),
       signal,
     );
@@ -2250,10 +2403,17 @@ export class Client {
    * so a caller honouring a deletion request must stop admitting work for the
    * tenant before paginating and deleting.
    */
-  async deleteSession(sessionId: string, signal?: AbortSignal): Promise<void> {
+  async deleteSession(
+    sessionId: string,
+    options: DeleteSessionOptions = {},
+    signal?: AbortSignal,
+  ): Promise<void> {
     // Deletion is idempotent by shape — a repeat is not-found rather than a
     // second erasure — so it is safe to replay.
-    await this.replaySafe(() => this.sessions.deleteSession({ sessionId }, { signal }), signal);
+    await this.replaySafe(
+      () => this.sessions.deleteSession({ sessionId, force: options.force }, { signal }),
+      signal,
+    );
   }
 
   /**
@@ -2264,18 +2424,16 @@ export class Client {
    */
   async updateSession(
     sessionId: string,
-    metadata: Record<string, string | null>,
+    options: UpdateSessionOptions,
     signal?: AbortSignal,
   ): Promise<Session> {
-    // The wire accepts `null` to delete a key, but the generator flattens the
-    // value union to `string`, so the deleting half of the patch is not
-    // expressible in the generated type. The cast keeps it expressible here
-    // rather than forcing callers to drop to raw fetch to delete a key.
-    const request = { metadata } as unknown as UpdateSessionRequest;
-	return this.replaySafe(
-      () => this.sessions.updateSession({ sessionId, updateSessionRequest: request }, { signal }),
+    return this.replaySafe(
+      () => this.sessions.updateSession(
+        { sessionId, updateSessionRequest: updateSessionRequestToWire(options) },
+        { signal },
+      ),
       signal,
-	) as Promise<Session>;
+    ) as Promise<Session>;
   }
 
   async getSessionByKey(
@@ -3437,21 +3595,28 @@ function sessionOptionsToWire(
 }
 
 /**
- * Renders one Agent Definition. Invocation and resource creation both send
- * exactly this object, so a field either reaches the wire for both or neither.
+ * Renders one Agent Definition onto the wire.
+ *
+ * Every field is named explicitly rather than spread, which is what lets a
+ * caller pass a whole {@link AgentDefinitionResource} back: `id`, `revision`,
+ * and the timestamps simply have no line here, and the schema is
+ * `additionalProperties: false`, so sending them would be a rejection rather
+ * than a harmless extra.
+ *
+ * `definitionKey` comes from the caller instead of the definition because only
+ * a create carries one.
  */
 function agentDefinitionToWire<TOutput extends object>(
   definition: AgentDefinition<TOutput>,
-  name: string | undefined,
-  definitionKey?: string,
+  identity: { definitionKey?: string },
 ): AgentDefinitionWrite {
   const outputSchema = definition.outputSchema
     ? schemaToJSON(definition.outputSchema, "output")
     : undefined;
   if (outputSchema) preflightOutputSchema(outputSchema);
   return {
-    definitionKey,
-    name,
+    definitionKey: identity.definitionKey,
+    name: definition.name,
     instructions: definition.instructions,
     model: normalizeModel(definition.model),
     sampling: definition.sampling === undefined
@@ -3505,8 +3670,38 @@ function agentDefinitionToWire<TOutput extends object>(
             : { ...tool.webSearch.userLocation },
         },
       })),
+    memory: definition.memory === undefined ? undefined : {
+      scope: definition.memory.scope,
+      context: definition.memory.context === undefined
+        ? undefined
+        : { ...definition.memory.context },
+    },
+    clientInterface: definition.clientInterface === undefined ? undefined : {
+      // The contract marks both sets uniqueItems, so the generated type is a
+      // Set and the SDK accepts any iterable to build one.
+      contextNames: definition.clientInterface.contextNames === undefined
+        ? undefined
+        : new Set(definition.clientInterface.contextNames),
+      toolNames: definition.clientInterface.toolNames === undefined
+        ? undefined
+        : new Set(definition.clientInterface.toolNames),
+    },
     outputSchema,
   };
+}
+
+/**
+ * Renders a Session metadata patch.
+ *
+ * The wire accepts `null` to delete a key, but the generator flattens the
+ * value's `string | null` union to `string`, so the deleting half of a patch
+ * has no generated type to be expressed in. The runtime converter passes
+ * `null` through unchanged, so the mismatch is a typing gap and this is the
+ * one place that bridges it — callers keep {@link MetadataPatch} and never
+ * have to drop to raw fetch to delete a key.
+ */
+function updateSessionRequestToWire(options: UpdateSessionOptions): UpdateSessionRequest {
+  return { metadata: { ...options.metadata } } as unknown as UpdateSessionRequest;
 }
 
 function invocationRequestToWire<TOutput extends object>(
@@ -3564,6 +3759,21 @@ function validateAgentDefinition<TOutput extends object>(
   if (definition.instructions !== undefined && !definition.instructions.trim()) {
     throw new NvokenError("validation", "instructions cannot be blank");
   }
+  validateToolChoice(definition.toolChoice);
+}
+
+/** `name` belongs to `named` mode and to nothing else. */
+function validateToolChoice(toolChoice: ToolChoice | undefined): void {
+  if (toolChoice === undefined) return;
+  if (toolChoice.mode === "named" && !toolChoice.name) {
+    throw new NvokenError("validation", "toolChoice mode named requires a tool name");
+  }
+  if (toolChoice.mode !== "named" && toolChoice.name !== undefined) {
+    throw new NvokenError(
+      "validation",
+      `toolChoice mode ${toolChoice.mode} cannot name a tool`,
+    );
+  }
 }
 
 function validateAgentDefinitionOverrides<TOutput extends object>(
@@ -3574,6 +3784,7 @@ function validateAgentDefinitionOverrides<TOutput extends object>(
     throw new NvokenError("validation", "overrides require at least one member");
   }
   if (overrides.model !== undefined) normalizeModel(overrides.model);
+  validateToolChoice(overrides.toolChoice);
   if (overrides.outputSchema !== undefined) {
     preflightOutputSchema(schemaToJSON(overrides.outputSchema, "output"));
   }

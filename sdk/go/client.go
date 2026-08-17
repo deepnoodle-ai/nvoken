@@ -225,28 +225,30 @@ func (c *Client) Invocation(invocationID string) *InvocationHandle {
 	return &InvocationHandle{client: c, InvocationID: invocationID}
 }
 
-// CreateAgentDefinition creates a stable App-owned Agent Definition resource.
-// The idempotency key makes retries safe; equal definitions created with
-// different keys receive different resource IDs.
+// CreateAgentDefinition creates a stable App-owned Agent Definition resource,
+// or returns the one DefinitionKey already names.
+//
+// The key is unique within the App, so this is ensure-shaped: restating an
+// existing definition returns it rather than creating a second, and a key
+// already held by a different definition is a conflict naming the resource to
+// update instead. That makes it safe to call on every deploy without a
+// caller-invented idempotency key — see CreateAgentDefinitionOptions for when
+// you still want one.
 func (c *Client) CreateAgentDefinition(
 	ctx context.Context,
-	input CreateAgentDefinitionInput,
+	definition AgentDefinition,
+	options CreateAgentDefinitionOptions,
 ) (*AgentDefinitionResource, error) {
-	if input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition idempotency key is required"}
+	if definition.DefinitionKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition key is required"}
 	}
-	if input.DefinitionKey == "" || input.Name == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition key and name are required"}
-	}
-	encoded, err := input.Definition.encoded()
+	encoded, err := definition.encoded(true)
 	if err != nil {
 		if sdkError, ok := err.(*Error); ok {
 			return nil, sdkError
 		}
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
-	encoded["definition_key"] = input.DefinitionKey
-	encoded["name"] = input.Name
 	body, err := json.Marshal(encoded)
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
@@ -258,15 +260,22 @@ func (c *Client) CreateAgentDefinition(
 		func() (callResult[generated.AgentDefinitionResource], error) {
 			response, callErr := c.raw.CreateAgentDefinitionWithBodyWithResponse(
 				ctx,
-				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(input.IdempotencyKey)},
+				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(options.IdempotencyKey)},
 				"application/json",
 				bytes.NewReader(body),
 			)
 			if callErr != nil {
 				return callResult[generated.AgentDefinitionResource]{}, callErr
 			}
+			// A restated definition answers 200 with the existing resource
+			// rather than 201, which is the ordinary deploy-time outcome and
+			// not an error.
+			value := response.JSON201
+			if value == nil {
+				value = response.JSON200
+			}
 			return callResult[generated.AgentDefinitionResource]{
-				Value:  response.JSON201,
+				Value:  value,
 				Status: response.StatusCode(),
 				Header: responseHeader(response.HTTPResponse),
 				Body:   response.Body,
@@ -339,25 +348,34 @@ func (c *Client) ListAgentDefinitions(
 	})
 }
 
+// UpdateAgentDefinition publishes the next revision of an Agent Definition,
+// replacing the whole resource. Pass the definition you read, changed:
+//
+//	current, err := client.GetAgentDefinition(ctx, id)
+//	definition, err := nvoken.AgentDefinitionFromResource(current)
+//	definition.Instructions = "Be concise and warm."
+//	next, err := client.UpdateAgentDefinition(ctx, id, definition,
+//		nvoken.UpdateAgentDefinitionOptions{ExpectedRevision: current.Revision})
+//
+// A field left at its zero value is cleared, not kept, which is why starting
+// from AgentDefinitionFromResource rather than restating the definition by
+// hand is the safe habit.
 func (c *Client) UpdateAgentDefinition(
 	ctx context.Context,
 	id string,
-	input UpdateAgentDefinitionInput,
+	definition AgentDefinition,
+	options UpdateAgentDefinitionOptions,
 ) (*AgentDefinitionResource, error) {
-	if input.ExpectedRevision < 1 {
+	if options.ExpectedRevision < 1 {
 		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive"}
 	}
-	if input.Name == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition name is required"}
-	}
-	encoded, err := input.Definition.encoded()
+	encoded, err := definition.encoded(false)
 	if err != nil {
 		if sdkError, ok := err.(*Error); ok {
 			return nil, sdkError
 		}
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
 	}
-	encoded["name"] = input.Name
 	body, err := json.Marshal(encoded)
 	if err != nil {
 		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
@@ -366,7 +384,7 @@ func (c *Client) UpdateAgentDefinition(
 		response, callErr := c.raw.UpdateAgentDefinitionWithBodyWithResponse(
 			ctx,
 			id,
-			&generated.UpdateAgentDefinitionParams{IfMatch: fmt.Sprintf("\"%d\"", input.ExpectedRevision)},
+			&generated.UpdateAgentDefinitionParams{IfMatch: fmt.Sprintf("\"%d\"", options.ExpectedRevision)},
 			"application/json",
 			bytes.NewReader(body),
 		)
@@ -943,8 +961,14 @@ func (c *Client) CreateCredential(
 	ctx context.Context,
 	input CreateCredentialInput,
 ) (*CredentialIssuance, error) {
-	if input.Name == "" || !input.Profile.Valid() || input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "credential name, profile, and idempotency key are required"}
+	if input.Name == "" || !input.Profile.Valid() {
+		return nil, &Error{Category: ErrorValidation, Message: "credential name and profile are required"}
+	}
+	// The contract requires a key here, so one is generated when the caller
+	// omits it. That protects this call's own retries; a caller that wants a
+	// retry of its own to deduplicate has to supply the key itself.
+	if input.IdempotencyKey == "" {
+		input.IdempotencyKey = generatedIdempotencyKey()
 	}
 	body := generated.CreateCredentialRequest{
 		AppID:     input.AppID,
@@ -1000,8 +1024,11 @@ func (c *Client) RotateCredential(
 	credentialID string,
 	input RotateCredentialInput,
 ) (*CredentialIssuance, error) {
-	if credentialID == "" || input.IdempotencyKey == "" || input.OverlapSeconds < 0 || input.OverlapSeconds > 86400 {
-		return nil, &Error{Category: ErrorValidation, Message: "credential ID and idempotency key are required, and overlap seconds must be between 0 and 86400"}
+	if credentialID == "" || input.OverlapSeconds < 0 || input.OverlapSeconds > 86400 {
+		return nil, &Error{Category: ErrorValidation, Message: "credential ID is required, and overlap seconds must be between 0 and 86400"}
+	}
+	if input.IdempotencyKey == "" {
+		input.IdempotencyKey = generatedIdempotencyKey()
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CredentialIssuance], error) {
 		response, err := c.raw.RotateCredentialWithResponse(
@@ -1096,8 +1123,11 @@ func (c *Client) CreateProviderKey(
 	ctx context.Context,
 	input CreateProviderKeyInput,
 ) (*ProviderKey, error) {
-	if input.APIKey == "" || input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	if input.APIKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key is required"}
+	}
+	if input.IdempotencyKey == "" {
+		input.IdempotencyKey = generatedIdempotencyKey()
 	}
 	body := generated.CreateProviderKeyRequest{
 		Key: generated.ProviderStaticKey{
@@ -1209,7 +1239,7 @@ func (c *Client) ListUsageRecords(ctx context.Context, params *ListUsageRecordsP
 
 func (c *Client) AllocateCredits(ctx context.Context, input AllocateCreditsInput) (*AllocateCreditsResult, error) {
 	if input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "credit allocation idempotency key is required"}
+		input.IdempotencyKey = generatedIdempotencyKey()
 	}
 	body := generated.AllocateCreditsRequest{
 		Amount:         input.Amount,
@@ -1267,8 +1297,11 @@ func (c *Client) RotateProviderKey(
 	id string,
 	input RotateProviderKeyInput,
 ) (*ProviderKey, error) {
-	if input.APIKey == "" || input.IdempotencyKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "provider API key and idempotency key are required"}
+	if input.APIKey == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "provider API key is required"}
+	}
+	if input.IdempotencyKey == "" {
+		input.IdempotencyKey = generatedIdempotencyKey()
 	}
 	body := generated.RotateProviderKeyRequest{
 		Key: generated.ProviderStaticKey{

@@ -25,6 +25,7 @@ from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.builtin_tool_declaration import BuiltinToolDeclaration
 from nvoken_generated.models.tool_declaration import ToolDeclaration as GeneratedToolDeclaration
 from nvoken_generated.models.tool_call_summary import ToolCallSummary
+from nvoken_generated.models.agent_definition_resource import AgentDefinitionResource
 
 from nvoken_generated.models.reminder_block import ReminderBlock
 from nvoken_generated.models.session_content_block import SessionContentBlock
@@ -62,6 +63,7 @@ from nvoken import (
     AskUserInput,
     AskUserOutput,
     Client,
+    ClientInterface,
     ContextCompaction,
     ContextItem,
     InvocationHandle,
@@ -164,8 +166,12 @@ def test_shared_session_lifecycle_fixture() -> None:
     assert retention["metadata"] == fixture["invocation_metadata"]
     assert (
         client._agent_definition_body(
-            AgentDefinition(model=model, provider_tools=(web_search_tool(),)),
-            name="Support",
+            AgentDefinition(
+                name="Support",
+                model=model,
+                provider_tools=(web_search_tool(),),
+            ),
+            include_key=False,
         ).to_dict()["provider_tools"]
         == fixture["provider_tools"]["defaults"]
     )
@@ -183,6 +189,7 @@ def test_shared_session_lifecycle_fixture() -> None:
     assert every["session_options"] == fixture["session_options"]["every_member"]
     configured_definition = client._agent_definition_body(
         AgentDefinition(
+            name="Support",
             model=model,
             provider_tools=(web_search_tool(WebSearchTool(
                 max_uses=5,
@@ -195,7 +202,7 @@ def test_shared_session_lifecycle_fixture() -> None:
                 ),
             )),),
         ),
-        name="Support",
+        include_key=False,
     ).to_dict()
     assert (
         configured_definition["provider_tools"]
@@ -422,14 +429,12 @@ def test_resource_creation_renders_the_named_definition() -> None:
     )
     client = Client(base_url="https://runtime.example.test", api_key="key")
     definition = AgentDefinition(
+        definition_key="support",
+        name="Billing support",
         instructions="You are a concise billing support agent.",
         model=Model(provider="anthropic", id="claude-sonnet-5"),
     )
-    creation = client._agent_definition_body(
-        definition,
-        name="Billing support",
-        definition_key="support",
-    ).to_dict()
+    creation = client._agent_definition_body(definition, include_key=True).to_dict()
     assert creation == fixture["creation"]["request"]
 
 
@@ -1439,3 +1444,139 @@ def test_shared_recorded_context_fixture_is_expressible() -> None:
     assert refused(tuple(
         item(f"c{index}", "a" * limits["content_bytes"]) for index in range(3)
     )), "oversize-total"
+
+
+def complete_agent_definition_resource() -> AgentDefinitionResource:
+    """One Agent Definition with every writable field populated."""
+    return AgentDefinitionResource.from_dict({
+        "id": "def_1",
+        "definition_key": "support",
+        "name": "Billing support",
+        "revision": 4,
+        "instructions": "Be brief.",
+        "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+        "sampling": {"temperature": 0.4},
+        "reasoning": {"effort": "high", "budget_tokens": 2048},
+        "tool_choice": {"mode": "named", "name": "lookup_invoice"},
+        "limits": {"max_iterations": 6, "max_output_tokens": 1024},
+        "output_schema": {
+            "type": "object",
+            "properties": {"answer": {"type": "string"}},
+        },
+        "tools": [
+            {"mode": "builtin", "name": "nvoken_fetch"},
+            {
+                "mode": "host",
+                "name": "lookup_invoice",
+                "description": "Look up an invoice.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                },
+            },
+            {
+                "mode": "callback",
+                "name": "refund",
+                "description": "Issue a refund.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                },
+                "callback": {"url": "https://tools.example.test/refund"},
+            },
+        ],
+        "mcp_servers": [{
+            "name": "billing",
+            "url": "https://mcp.example.test/billing",
+            "transport": "streamable_http",
+            "allowed_tools": ["search"],
+            "timeouts": {"discovery_seconds": 5, "call_seconds": 30},
+        }],
+        "provider_tools": [{
+            "type": "web_search",
+            "web_search": {"max_uses": 3, "allowed_domains": ["example.test"]},
+        }],
+        "memory": {"scope": "user", "context": {"mode": "index", "max_bytes": 1536}},
+        "client_interface": {
+            "context_names": ["cart"],
+            "tool_names": ["lookup_invoice"],
+        },
+        "created_at": "2026-07-21T12:00:00Z",
+        "updated_at": "2026-07-21T12:00:00Z",
+        "archived_at": None,
+    })
+
+
+# A replacement replaces the whole resource, so a read-modify-write that drops a
+# field is silent data loss rather than a compile error.
+def test_read_modify_write_keeps_every_writable_field() -> None:
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    current = complete_agent_definition_resource()
+    definition = AgentDefinition.from_resource(current)
+    written = client._agent_definition_body(
+        replace(definition, instructions="Be concise and warm."),
+        include_key=False,
+    ).to_dict()
+    expected = current.to_dict()
+    for read_only in ("id", "revision", "definition_key",
+                      "created_at", "updated_at", "archived_at"):
+        expected.pop(read_only, None)
+    expected["instructions"] = "Be concise and warm."
+    assert written == expected
+
+
+# Creation sends the flat definition and its key, and invents no idempotency key:
+# one this SDK made up would be new on every attempt and deduplicate nothing.
+@pytest.mark.asyncio
+async def test_create_agent_definition_sends_the_flat_definition() -> None:
+    async with Client("https://runtime.example.test", "key") as client:
+        seen: dict[str, Any] = {}
+
+        async def create(body: Any, idempotency_key: str | None = None) -> Any:
+            seen["body"] = body.to_dict()
+            seen["idempotency_key"] = idempotency_key
+            return complete_agent_definition_resource()
+
+        client.agent_definitions.create_agent_definition = create
+        await client.create_agent_definition(AgentDefinition(
+            definition_key="support",
+            name="Billing support",
+            instructions="Be brief.",
+            model=Model(provider="anthropic", id="claude-sonnet-5"),
+            client_interface=ClientInterface(context_names=("cart",)),
+        ))
+        assert seen["idempotency_key"] is None
+        assert seen["body"] == {
+            "definition_key": "support",
+            "name": "Billing support",
+            "instructions": "Be brief.",
+            "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+            "client_interface": {"context_names": ["cart"]},
+        }
+        with pytest.raises(NvokenError):
+            await client.create_agent_definition(AgentDefinition(
+                model=Model(provider="anthropic", id="claude-sonnet-5"),
+            ))
+
+
+# The mode and the name have to agree, which is the check the flat shape gives up
+# in the type system and takes back at the boundary.
+def test_tool_choice_names_a_tool_only_in_named_mode() -> None:
+    client = Client(base_url="https://runtime.example.test", api_key="key")
+    model = Model(provider="anthropic", id="claude-sonnet-5")
+
+    def render(tool_choice: ToolChoice) -> dict[str, Any]:
+        return client._agent_definition_body(
+            AgentDefinition(model=model, tool_choice=tool_choice),
+            include_key=False,
+        ).to_dict()
+
+    assert render(ToolChoice(mode="named", name="lookup_invoice"))["tool_choice"] == {
+        "mode": "named",
+        "name": "lookup_invoice",
+    }
+    assert render(ToolChoice(mode="auto"))["tool_choice"] == {"mode": "auto"}
+    with pytest.raises(NvokenError):
+        render(ToolChoice(mode="named"))
+    with pytest.raises(NvokenError):
+        render(ToolChoice(mode="auto", name="lookup_invoice"))

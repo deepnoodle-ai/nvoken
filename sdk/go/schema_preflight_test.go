@@ -1,12 +1,15 @@
 package nvoken
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -58,18 +61,15 @@ func TestCreateAgentDefinitionPreflightsOutputSchemaBeforeTransport(t *testing.T
 		t.Fatalf("new client: %v", err)
 	}
 	for _, test := range loadOutputSchemaFixture(t).Rejected {
-		_, err = client.CreateAgentDefinition(context.Background(), CreateAgentDefinitionInput{
-			DefinitionKey:  "schema-preflight",
-			Name:           "Schema preflight",
-			IdempotencyKey: "schema-preflight",
-			Definition: AgentDefinition{
-				Model: Model{
-					Provider: "anthropic",
-					ID:       "test-model",
-				},
-				OutputSchema: expandOutputSchemaFixture(t, test),
+		_, err = client.CreateAgentDefinition(context.Background(), AgentDefinition{
+			DefinitionKey: "schema-preflight",
+			Name:          "Schema preflight",
+			Model: Model{
+				Provider: "anthropic",
+				ID:       "test-model",
 			},
-		})
+			OutputSchema: expandOutputSchemaFixture(t, test),
+		}, CreateAgentDefinitionOptions{})
 		var sdkError *Error
 		if !errors.As(err, &sdkError) ||
 			sdkError.Code != SchemaPreflightCode {
@@ -224,4 +224,216 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f(request)
+}
+
+// A replacement replaces the whole resource, so a writable field this SDK
+// forgets to carry from a read into the next write is data loss. The fixture
+// populates every one of them, and the assertion is that the body sent back is
+// the resource it was read from, minus the read-only fields and the immutable
+// key, with exactly one field changed.
+func TestAgentDefinitionRoundTripKeepsEveryWritableField(t *testing.T) {
+	resource := completeAgentDefinitionResource()
+	var written map[string]any
+	var ifMatch string
+	client, err := NewClient(
+		"https://runtime.example.test",
+		"test-key",
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			if request.Method == http.MethodPut {
+				ifMatch = request.Header.Get("If-Match")
+				body, readErr := io.ReadAll(request.Body)
+				if readErr != nil {
+					return nil, readErr
+				}
+				if unmarshalErr := json.Unmarshal(body, &written); unmarshalErr != nil {
+					return nil, unmarshalErr
+				}
+			}
+			payload, marshalErr := json.Marshal(resource)
+			if marshalErr != nil {
+				return nil, marshalErr
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(payload)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}),
+	)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	current, err := client.GetAgentDefinition(context.Background(), "def_1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	definition, err := AgentDefinitionFromResource(current)
+	if err != nil {
+		t.Fatalf("from resource: %v", err)
+	}
+	definition.Instructions = "Be concise and warm."
+	if _, err := client.UpdateAgentDefinition(
+		context.Background(),
+		current.ID,
+		definition,
+		UpdateAgentDefinitionOptions{ExpectedRevision: current.Revision},
+	); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	if ifMatch != `"4"` {
+		t.Fatalf("If-Match = %q", ifMatch)
+	}
+	expected := map[string]any{}
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatalf("encode resource: %v", err)
+	}
+	if err := json.Unmarshal(encoded, &expected); err != nil {
+		t.Fatalf("decode resource: %v", err)
+	}
+	for _, readOnly := range []string{
+		"id", "revision", "definition_key", "created_at", "updated_at", "archived_at",
+	} {
+		delete(expected, readOnly)
+	}
+	expected["instructions"] = "Be concise and warm."
+	if !reflect.DeepEqual(written, expected) {
+		t.Fatalf("replacement body\n got %#v\nwant %#v", written, expected)
+	}
+}
+
+func TestCreateAgentDefinitionSendsTheFlatDefinition(t *testing.T) {
+	var written map[string]any
+	var idempotencyKey string
+	client, err := NewClient(
+		"https://runtime.example.test",
+		"test-key",
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			idempotencyKey = request.Header.Get("Idempotency-Key")
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				return nil, readErr
+			}
+			if unmarshalErr := json.Unmarshal(body, &written); unmarshalErr != nil {
+				return nil, unmarshalErr
+			}
+			payload, marshalErr := json.Marshal(completeAgentDefinitionResource())
+			if marshalErr != nil {
+				return nil, marshalErr
+			}
+			return &http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(bytes.NewReader(payload)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}),
+	)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	if _, err := client.CreateAgentDefinition(context.Background(), AgentDefinition{
+		DefinitionKey: "support",
+		Name:          "Billing support",
+		Instructions:  "Be brief.",
+		Model:         Model{Provider: "anthropic", ID: "claude-sonnet-5"},
+		ClientInterface: &ClientInterface{
+			ContextNames: []string{"cart"},
+			ToolNames:    []string{},
+		},
+	}, CreateAgentDefinitionOptions{}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Nothing is invented: a key the SDK made up would be new on every attempt.
+	if idempotencyKey != "" {
+		t.Fatalf("Idempotency-Key = %q", idempotencyKey)
+	}
+	expected := map[string]any{
+		"definition_key":   "support",
+		"name":             "Billing support",
+		"instructions":     "Be brief.",
+		"model":            map[string]any{"provider": "anthropic", "id": "claude-sonnet-5"},
+		"client_interface": map[string]any{"context_names": []any{"cart"}},
+	}
+	if !reflect.DeepEqual(written, expected) {
+		t.Fatalf("create body\n got %#v\nwant %#v", written, expected)
+	}
+}
+
+func TestAgentDefinitionToolChoiceNamesAToolOnlyInNamedMode(t *testing.T) {
+	base := AgentDefinition{
+		DefinitionKey: "support",
+		Model:         Model{Provider: "anthropic", ID: "claude-sonnet-5"},
+	}
+	for _, test := range []struct {
+		name   string
+		choice ToolChoice
+	}{
+		{"named without a name", ToolChoice{Mode: ToolChoiceNamed}},
+		{"auto with a name", ToolChoice{Mode: ToolChoiceAuto, Name: "x"}},
+	} {
+		definition := base
+		definition.ToolChoice = &test.choice
+		if _, err := definition.encoded(true); err == nil {
+			t.Fatalf("%s: expected a validation error", test.name)
+		}
+	}
+	definition := base
+	definition.ToolChoice = &ToolChoice{Mode: ToolChoiceNamed, Name: "x"}
+	if _, err := definition.encoded(true); err != nil {
+		t.Fatalf("named with a name: %v", err)
+	}
+}
+
+func completeAgentDefinitionResource() *AgentDefinitionResource {
+	var resource AgentDefinitionResource
+	if err := json.Unmarshal([]byte(`{
+		"id": "def_1",
+		"definition_key": "support",
+		"name": "Billing support",
+		"revision": 4,
+		"instructions": "Be brief.",
+		"model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+		"sampling": {"temperature": 0.4},
+		"reasoning": {"effort": "high", "budget_tokens": 2048},
+		"tool_choice": {"mode": "named", "name": "lookup_invoice"},
+		"limits": {"max_iterations": 6, "max_output_tokens": 1024},
+		"output_schema": {"type": "object", "properties": {"answer": {"type": "string"}}},
+		"tools": [
+			{"mode": "builtin", "name": "nvoken_fetch"},
+			{
+				"mode": "host",
+				"name": "lookup_invoice",
+				"description": "Look up an invoice.",
+				"input_schema": {"type": "object", "properties": {"id": {"type": "string"}}}
+			},
+			{
+				"mode": "callback",
+				"name": "refund",
+				"description": "Issue a refund.",
+				"input_schema": {"type": "object", "properties": {"id": {"type": "string"}}},
+				"callback": {"url": "https://tools.example.test/refund"}
+			}
+		],
+		"mcp_servers": [{
+			"name": "billing",
+			"url": "https://mcp.example.test/billing",
+			"transport": "streamable_http",
+			"allowed_tools": ["search"],
+			"timeouts": {"discovery_seconds": 5, "call_seconds": 30}
+		}],
+		"provider_tools": [{
+			"type": "web_search",
+			"web_search": {"max_uses": 3, "allowed_domains": ["example.test"]}
+		}],
+		"memory": {"scope": "user", "context": {"mode": "index", "max_bytes": 1536}},
+		"client_interface": {"context_names": ["cart"], "tool_names": ["lookup_invoice"]},
+		"created_at": "2026-07-21T12:00:00Z",
+		"updated_at": "2026-07-21T12:00:00Z",
+		"archived_at": null
+	}`), &resource); err != nil {
+		panic(err)
+	}
+	return &resource
 }

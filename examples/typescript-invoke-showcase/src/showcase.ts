@@ -86,9 +86,8 @@ async function main(): Promise<void> {
   const resource = await client.createAgentDefinition({
     definitionKey: `${runId}-support`,
     name: "Support",
-    definition: baseDefinition(),
-    idempotencyKey: `${runId}:definition`,
-  });
+    ...baseDefinition(),
+  }, { idempotencyKey: `${runId}:definition` });
   await Promise.all([
     client.createAgent({ tenantKey: tenantA, agentKey: primaryAgentKey, name: "Support", definitionId: resource.id }),
     client.createAgent({ tenantKey: tenantB, agentKey: primaryAgentKey, name: "Support", definitionId: resource.id }),
@@ -308,14 +307,11 @@ async function main(): Promise<void> {
   const toolDefinition = await client.createAgentDefinition({
     definitionKey: `${runId}-tools`,
     name: "Order tools",
-    definition: {
-      instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
-      model: { provider, id: model },
-      limits: { maxOutputTokens: 200, maxIterations: 3 },
-      tools: [lookupOrder],
-    },
-    idempotencyKey: `${runId}:tool-definition`,
-  });
+    instructions: "Always call lookup_order exactly once before answering an order-status question. Never invent tool results.",
+    model: { provider, id: model },
+    limits: { maxOutputTokens: 200, maxIterations: 3 },
+    tools: [lookupOrder],
+  }, { idempotencyKey: `${runId}:tool-definition` });
   await client.createAgent({
     tenantKey: tenantA,
     agentKey: toolAgentKey,
@@ -400,14 +396,11 @@ async function main(): Promise<void> {
   const structuredDefinition = await client.createAgentDefinition<SupportClassification>({
     definitionKey: `${runId}-structured`,
     name: "Support classification",
-    definition: {
-      instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
-      model: { provider, id: model },
-      limits: { maxOutputTokens: 200, maxIterations: 3 },
-      outputSchema: supportClassification,
-    },
-    idempotencyKey: `${runId}:structured-definition`,
-  });
+    instructions: "Submit the requested structured classification, then give one short confirmation sentence.",
+    model: { provider, id: model },
+    limits: { maxOutputTokens: 200, maxIterations: 3 },
+    outputSchema: supportClassification,
+  }, { idempotencyKey: `${runId}:structured-definition` });
   await client.createAgent({
     tenantKey: tenantA,
     agentKey: structuredAgentKey,

@@ -165,12 +165,12 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Create one Agent Definition resource without starting a turn").
 		Flags(
 			cli.String("definition-key").Required().Help("Immutable caller-owned Definition key"),
-			cli.String("name").Required().Help("Human-facing Definition name"),
+			cli.String("name").Help("Human-facing Definition name; defaults to the Definition key"),
 			cli.String("file", "f").Help("JSON Agent Definition to create; - reads stdin"),
 			cli.String("instructions").Help("Agent instructions; ignored with --file"),
 			cli.String("provider").Help("Model provider; required without --file"),
 			cli.String("model", "m").Help("Exact model ID; required without --file"),
-			cli.String("idempotency-key").Required().Help("Stable create request identity"),
+			cli.String("idempotency-key").Help("Pin replay to this create; the Definition key already scopes replay"),
 		).
 		Run(runCreateAgentDefinition)
 	agentDefinitions.Command("get").
@@ -194,8 +194,8 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Replace one Agent Definition at an expected revision").
 		AddArg(requiredArg("definition-id", "Opaque Agent Definition ID")).
 		Flags(
-			cli.String("name").Required().Help("Replacement human-facing Definition name"),
-			cli.String("file", "f").Help("Replacement JSON Agent Definition; - reads stdin"),
+			cli.String("name").Help("Replacement Definition name; defaults to the Definition key"),
+			cli.String("file", "f").Help("Replacement JSON Agent Definition, as `get --json` prints it; - reads stdin"),
 			cli.String("instructions").Help("Agent instructions; ignored with --file"),
 			cli.String("provider").Help("Model provider; required without --file"),
 			cli.String("model", "m").Help("Exact model ID; required without --file"),
@@ -787,12 +787,11 @@ func runCreateAgentDefinition(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	resource, err := client.CreateAgentDefinition(command.Context(), nvoken.CreateAgentDefinitionInput{
-		DefinitionKey:  command.String("definition-key"),
-		Name:           command.String("name"),
-		Definition:     *definition,
-		IdempotencyKey: command.String("idempotency-key"),
-	})
+	resource, err := client.CreateAgentDefinition(
+		command.Context(),
+		*definition,
+		nvoken.CreateAgentDefinitionOptions{IdempotencyKey: command.String("idempotency-key")},
+	)
 	if err != nil {
 		return err
 	}
@@ -869,11 +868,12 @@ func runUpdateAgentDefinition(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	resource, err := client.UpdateAgentDefinition(command.Context(), command.Arg(0), nvoken.UpdateAgentDefinitionInput{
-		Name:             command.String("name"),
-		Definition:       *definition,
-		ExpectedRevision: int64(command.Int("revision")),
-	})
+	resource, err := client.UpdateAgentDefinition(
+		command.Context(),
+		command.Arg(0),
+		*definition,
+		nvoken.UpdateAgentDefinitionOptions{ExpectedRevision: int64(command.Int("revision"))},
+	)
 	if err != nil {
 		return err
 	}
@@ -910,30 +910,39 @@ func runRestoreAgentDefinition(command *cli.Context) error {
 // agentDefinitionFlags reads a whole definition from a file, or builds the
 // minimal one the inline flags can express. Tools, MCP servers, and output
 // schemas have no flag spelling that stays readable, so a definition using them
-// is supplied as JSON.
+// is supplied as JSON — the same flat shape the API accepts, so a definition
+// read back with --json can be edited and sent straight back.
+//
+// --definition-key and --name are part of that shape, so a flag naming either
+// wins over the file rather than sitting beside it.
 func agentDefinitionFlags(command *cli.Context) (*nvoken.AgentDefinition, error) {
 	path := command.String("file")
 	provider := command.String("provider")
 	model := command.String("model")
-	if path == "" {
+	definition := &nvoken.AgentDefinition{}
+	switch {
+	case path == "":
 		if provider == "" || model == "" {
 			return nil, errors.New("--provider and --model are required without --file")
 		}
-		return &nvoken.AgentDefinition{
-			Instructions: command.String("instructions"),
-			Model:        nvoken.Model{Provider: provider, ID: model},
-		}, nil
-	}
-	if provider != "" || model != "" {
+		definition.Instructions = command.String("instructions")
+		definition.Model = nvoken.Model{Provider: provider, ID: model}
+	case provider != "" || model != "":
 		return nil, errors.New("--file is mutually exclusive with --provider and --model")
+	default:
+		payload, err := readDefinitionFile(command, path)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(payload, definition); err != nil {
+			return nil, fmt.Errorf("parse agent definition: %w", err)
+		}
 	}
-	payload, err := readDefinitionFile(command, path)
-	if err != nil {
-		return nil, err
+	if key := command.String("definition-key"); key != "" {
+		definition.DefinitionKey = key
 	}
-	definition := &nvoken.AgentDefinition{}
-	if err := json.Unmarshal(payload, definition); err != nil {
-		return nil, fmt.Errorf("parse agent definition: %w", err)
+	if name := command.String("name"); name != "" {
+		definition.Name = name
 	}
 	return definition, nil
 }

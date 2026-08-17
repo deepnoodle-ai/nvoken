@@ -68,11 +68,9 @@ const client = new Client();
 const definition = await client.createAgentDefinition({
   definitionKey: "research",
   name: "Research",
-  definition: {
-    instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
-    model: { provider: "anthropic", id: "claude-sonnet-5" },
-    tools: [fetchTool()],
-  },
+  instructions: "Use nvoken_fetch for public URLs, then summarize the source.",
+  model: { provider: "anthropic", id: "claude-sonnet-5" },
+  tools: [fetchTool()],
 });
 const agent = client.agent({ agentKey: "research", definitionKey: definition.definitionKey });
 ```
@@ -98,10 +96,8 @@ const client = new Client();
 // every deploy.
 await client.createAgentDefinition({
   definitionKey: "support",
-  definition: {
-    instructions: "Be concise and helpful.",
-    model: "anthropic/claude-sonnet-5",
-  },
+  instructions: "Be concise and helpful.",
+  model: "anthropic/claude-sonnet-5",
 });
 
 // The Agent is declared from its keys and creates its record on first use.
@@ -142,10 +138,8 @@ appears:
 ```ts
 await client.createAgentDefinition({
   definitionKey: "support",
-  definition: {
-    instructions: "Be concise and helpful.",
-    model: "anthropic/claude-sonnet-5",
-  },
+  instructions: "Be concise and helpful.",
+  model: "anthropic/claude-sonnet-5",
 });
 ```
 
@@ -349,11 +343,8 @@ tenant-scoped Agent instance that binds to the template before admitting work:
 const resource = await client.createAgentDefinition({
   definitionKey: "support",
   name: "Support",
-  definition: {
-    instructions: "Be concise and helpful.",
-    model: { provider: "anthropic", id: "claude-sonnet-5" },
-  },
-  idempotencyKey: "support-definition-v1",
+  instructions: "Be concise and helpful.",
+  model: { provider: "anthropic", id: "claude-sonnet-5" },
 });
 
 const support = client.agent({
@@ -365,6 +356,24 @@ const handle = await support.invoke("Why was I charged twice?", {
   sessionKey: "ticket-483",
 });
 ```
+
+`AgentDefinition` is flat and matches the wire, and a read gives back the same
+fields plus `id`, `revision`, and timestamps, so a change is a read, a spread,
+and a write:
+
+```ts
+const current = await client.getAgentDefinition(resource.id);
+await client.updateAgentDefinition(
+  current.id,
+  { ...current, instructions: "Be concise." },
+  { expectedRevision: current.revision },
+);
+```
+
+An update replaces the whole resource, so send back everything you want kept;
+spreading the resource is what keeps it whole, and the read-only fields it
+carries are dropped on the way to the wire. `expectedRevision` travels as
+`If-Match`, so a concurrent write fails rather than overwriting.
 
 Creating a Definition starts no turn. It has an immutable `definitionKey`, a
 stable ID, and an increasing revision; `getAgentDefinitionRevision()` reads

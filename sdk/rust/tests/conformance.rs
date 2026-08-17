@@ -10,13 +10,13 @@ use nvoken::{
     deduplicate_callback_result, fetch_tool, host_tool_calls, preflight_input_blocks,
     preflight_output_schema, verify_callback, AgentDefinition, AgentInvocationOptions,
     AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
-    CallbackError, CallbackResultStore, Client, CompactionListOptions, ContextCompaction,
-    ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory, IfActivePolicy,
-    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
-    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
-    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
-    RetryPolicy, SessionOptions, StreamEvent, StreamPreview, ToolCallListOptions, ToolChoice,
-    ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
+    CallbackError, CallbackResultStore, Client, ClientInterface, CompactionListOptions,
+    ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier, ErrorCategory,
+    IfActivePolicy, InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions,
+    ListModelsOptions, ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model,
+    NvokenError, ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort,
+    Reducer, RetryPolicy, SessionOptions, StreamEvent, StreamPreview, ToolCallListOptions,
+    ToolChoice, ToolMode, ToolResult, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool,
     WebhookEvent, WebhookTarget, ASK_USER_TOOL_NAME,
 };
 use serde::Deserialize;
@@ -418,13 +418,14 @@ fn resource_creation_matches_the_agent_definition_an_invocation_nests() {
     .unwrap();
     let client = Client::new("https://runtime.example.test", "key").unwrap();
     let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+        .definition_key("support")
+        .name("Billing support")
         .instructions("You are a concise billing support agent.");
-    let creation = client
-        .agent_definition_body("Billing support", definition)
-        .unwrap();
-    let mut expected = fixture["creation"]["request"].clone();
-    expected.as_object_mut().unwrap().remove("definition_key");
-    assert_eq!(serde_json::to_value(&creation).unwrap(), expected);
+    let creation = client.agent_definition_body(definition).unwrap();
+    assert_eq!(
+        serde_json::to_value(&creation).unwrap(),
+        fixture["creation"]["request"]
+    );
 }
 
 // A reusable definition is durable configuration, so MCP headers must ride
@@ -1662,4 +1663,121 @@ fn fixture_context_item(item: &Value) -> ContextItem {
         },
         item["content"].as_str().unwrap(),
     )
+}
+
+fn complete_agent_definition_resource() -> models::AgentDefinitionResource {
+    serde_json::from_value(json!({
+        "id": "def_1",
+        "definition_key": "support",
+        "name": "Billing support",
+        "revision": 4,
+        "instructions": "Be brief.",
+        "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+        "sampling": {"temperature": 0.4},
+        "reasoning": {"effort": "high", "budget_tokens": 2048},
+        "tool_choice": {"mode": "named", "name": "lookup_invoice"},
+        "limits": {"max_iterations": 6, "max_output_tokens": 1024},
+        "output_schema": {"type": "object", "properties": {"answer": {"type": "string"}}},
+        "tools": [
+            {"mode": "builtin", "name": "nvoken_fetch"},
+            {
+                "mode": "host",
+                "name": "lookup_invoice",
+                "description": "Look up an invoice.",
+                "input_schema": {"type": "object", "properties": {"id": {"type": "string"}}}
+            },
+            {
+                "mode": "callback",
+                "name": "refund",
+                "description": "Issue a refund.",
+                "input_schema": {"type": "object", "properties": {"id": {"type": "string"}}},
+                "callback": {"url": "https://tools.example.test/refund"}
+            }
+        ],
+        "mcp_servers": [{
+            "name": "billing",
+            "url": "https://mcp.example.test/billing",
+            "transport": "streamable_http",
+            "allowed_tools": ["search"],
+            "timeouts": {"discovery_seconds": 5, "call_seconds": 30}
+        }],
+        "provider_tools": [{
+            "type": "web_search",
+            "web_search": {"max_uses": 3, "allowed_domains": ["example.test"]}
+        }],
+        "memory": {"scope": "user", "context": {"mode": "index", "max_bytes": 1536}},
+        "client_interface": {"context_names": ["cart"], "tool_names": ["lookup_invoice"]},
+        "created_at": "2026-07-21T12:00:00Z",
+        "updated_at": "2026-07-21T12:00:00Z",
+        "archived_at": null
+    }))
+    .unwrap()
+}
+
+// A replacement replaces the whole resource, so a read-modify-write that drops
+// a field is silent data loss rather than a compile error.
+#[test]
+fn read_modify_write_keeps_every_writable_field() {
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let current = complete_agent_definition_resource();
+    let mut definition = AgentDefinition::from_resource(&current).unwrap();
+    definition.instructions = Some("Be concise and warm.".to_string());
+    let mut written = client.agent_definition_body(definition).unwrap();
+    // What `update_agent_definition` drops on the way to a replacement.
+    written.definition_key = None;
+
+    let mut expected = serde_json::to_value(&current).unwrap();
+    let object = expected.as_object_mut().unwrap();
+    for read_only in [
+        "id",
+        "revision",
+        "definition_key",
+        "created_at",
+        "updated_at",
+        "archived_at",
+    ] {
+        object.remove(read_only);
+    }
+    object.insert("instructions".to_string(), json!("Be concise and warm."));
+    assert_eq!(serde_json::to_value(&written).unwrap(), expected);
+}
+
+// Creation sends the flat definition and its key, and the definition key is the
+// one field a replacement must not carry.
+#[test]
+fn creation_sends_the_flat_definition_and_its_key() {
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+        .definition_key("support")
+        .name("Billing support")
+        .instructions("Be brief.")
+        .client_interface(ClientInterface::default().context_name("cart"));
+    let body = client.agent_definition_body(definition).unwrap();
+    assert_eq!(
+        serde_json::to_value(&body).unwrap(),
+        json!({
+            "definition_key": "support",
+            "name": "Billing support",
+            "instructions": "Be brief.",
+            "model": {"provider": "anthropic", "id": "claude-sonnet-5"},
+            "client_interface": {"context_names": ["cart"]}
+        })
+    );
+}
+
+// An empty client interface opts a definition into client tokens with no
+// client-authored context or tools, so it must not be mistaken for omission.
+#[test]
+fn an_empty_client_interface_reaches_the_wire() {
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let body = client
+        .agent_definition_body(
+            AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+                .client_interface(ClientInterface::default()),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&body).unwrap()["client_interface"],
+        json!({})
+    );
 }

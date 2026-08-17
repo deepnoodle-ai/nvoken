@@ -59,15 +59,13 @@ Opt into the fixed guarded public-web reader with `fetch_tool()`:
 ```python
 from nvoken import AgentDefinition, AgentOptions, Model, fetch_tool
 
-definition = await client.create_agent_definition(
-    "research",
-    "Research",
-    AgentDefinition(
-        instructions="Use nvoken_fetch for public URLs, then summarize the source.",
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-        tools=(fetch_tool(),),
-    ),
-)
+definition = await client.create_agent_definition(AgentDefinition(
+    definition_key="research",
+    name="Research",
+    instructions="Use nvoken_fetch for public URLs, then summarize the source.",
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
+    tools=(fetch_tool(),),
+))
 options = AgentOptions(agent_key="research", definition_key=definition.definition_key)
 ```
 
@@ -271,15 +269,12 @@ Every turn runs against an App-owned, versioned Agent Definition. Create a
 tenant-scoped Agent instance that binds to the template before admitting work:
 
 ```python
-resource = await client.create_agent_definition(
-    "support",
-    "Support",
-    AgentDefinition(
-        instructions="Help with billing questions.",
-        model=Model(provider="anthropic", id="claude-sonnet-5"),
-    ),
-    idempotency_key="support-definition-v1",
-)
+resource = await client.create_agent_definition(AgentDefinition(
+    definition_key="support",
+    name="Support",
+    instructions="Help with billing questions.",
+    model=Model(provider="anthropic", id="claude-sonnet-5"),
+))
 agent = client.agent(AgentOptions(
     agent_key="support",
     definition_key=resource.definition_key,
@@ -287,6 +282,25 @@ agent = client.agent(AgentOptions(
 
 handle = await agent.invoke("Why was I charged twice?")
 ```
+
+`AgentDefinition` is flat and matches the wire, and a read gives back the same
+fields plus `id`, `revision`, and timestamps, so a change is a read, a
+`replace()`, and a write:
+
+```python
+from dataclasses import replace
+
+current = await client.get_agent_definition(resource.id)
+await client.update_agent_definition(
+    current.id,
+    replace(AgentDefinition.from_resource(current), instructions="Be concise."),
+    expected_revision=current.revision,
+)
+```
+
+An update replaces the whole resource, so send back everything you want kept;
+`from_resource` is what keeps it whole. `expected_revision` travels as
+`If-Match`, so a concurrent write fails rather than overwriting.
 
 Creating a Definition starts no turn. It has an immutable `definition_key`, a
 stable ID, and an increasing revision; `get_agent_definition_revision()` reads

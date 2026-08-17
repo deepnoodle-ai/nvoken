@@ -15,18 +15,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	definition, err := client.CreateAgentDefinition(ctx, nvoken.CreateAgentDefinitionInput{
-		DefinitionKey:  "support",
-		Name:           "Support",
-		IdempotencyKey: "quickstart-support-definition",
-		Definition: nvoken.AgentDefinition{
-			Instructions: "Help the customer with billing questions.",
-			Model: nvoken.Model{
-				Provider: "anthropic",
-				ID:       "claude-sonnet-5",
-			},
+	definition, err := client.CreateAgentDefinition(ctx, nvoken.AgentDefinition{
+		DefinitionKey: "support",
+		Name:          "Support",
+		Instructions:  "Help the customer with billing questions.",
+		Model: nvoken.Model{
+			Provider: "anthropic",
+			ID:       "claude-sonnet-5",
 		},
-	})
+	}, nvoken.CreateAgentDefinitionOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}

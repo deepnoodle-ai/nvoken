@@ -263,14 +263,11 @@ tenant-scoped Agent instance that binds to the template before admitting work:
 
 ```rust
 let definition = AgentDefinition::new(Model::new("anthropic", "claude-sonnet-5"))
+    .definition_key("support")
+    .name("Support")
     .instructions("Help with billing questions.");
 let resource = client
-    .create_agent_definition(
-        "support-definition-v1",
-        "support",
-        "Support",
-        definition,
-    )
+    .create_agent_definition(definition, CreateAgentDefinitionOptions::default())
     .await?;
 
 let agent = client.agent(AgentOptions::declared("support", resource.definition_key))?;
@@ -278,6 +275,27 @@ let handle = agent
     .invoke("Why was I charged twice?", AgentInvocationOptions::default())
     .await?;
 ```
+
+`AgentDefinition` is flat and matches the wire, and a read gives back the same
+fields plus `id`, `revision`, and timestamps, so a change is a read, an edit,
+and a write:
+
+```rust
+let current = client.get_agent_definition(&resource.id).await?;
+let mut definition = AgentDefinition::from_resource(&current)?;
+definition.instructions = Some("Be concise.".to_string());
+client
+    .update_agent_definition(
+        &current.id,
+        definition,
+        UpdateAgentDefinitionOptions::new(current.revision as u32),
+    )
+    .await?;
+```
+
+An update replaces the whole resource, so send back everything you want kept;
+`from_resource` is what keeps it whole. The expected revision travels as
+`If-Match`, so a concurrent write fails rather than overwriting.
 
 Creating a Definition starts no turn. It has an immutable `definition_key`, a
 stable ID, and an increasing revision; `get_agent_definition_revision` reads
