@@ -104,11 +104,11 @@ detail, as `P1` through `T3` across six categories.
 ### How this repository relates to the rest
 
 - [Public SDK repository design](../design/001-public-sdk-repository.md)
-  explains why the contract is authored in `nvoken-cloud` and only synchronized
-  here. Most of the MCP migration lands there rather than in this repository.
-- [SDK and contract development](../guides/sdk-development.md) covers the sync
-  workflow and the cross-language reliability rules any new protocol surface
-  would have to satisfy.
+  explains why the contract is authored by the service and only published here.
+  Most of the MCP migration lands in the service rather than in this repository.
+- [SDK and contract development](../guides/sdk-development.md) covers how a
+  published contract is adopted and the cross-language reliability rules any
+  new protocol surface would have to satisfy.
 - [Session options conflict scope](../design/002-session-options-conflict-scope.md)
   is not about protocols, but it is the house style for arguing a change, for
   whenever one of these research documents graduates into a decision.
@@ -116,8 +116,8 @@ detail, as `P1` through `T3` across six categories.
 ### What is not here
 
 Worth knowing so nobody goes looking. The service implementation, including the
-MCP client that would carry the `2026-07-28` migration, lives in `nvoken-cloud`.
-Product documentation and the published streaming guide live in
-`nvoken-website` under `content/docs/`. The console that builds a live
-transcript, used as the worked example for the incremental-rendering findings in
-the streaming reference, is `nvoken-website/app/components/console/chat/`.
+MCP client that would carry the `2026-07-28` migration, is not in this
+repository and is not public. Neither is the product documentation, the
+published streaming guide, or the nvoken console — the live-transcript client
+used as the worked example for the incremental-rendering findings in the
+streaming reference.

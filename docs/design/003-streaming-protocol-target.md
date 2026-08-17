@@ -22,7 +22,7 @@ argues what to change and in what order; this document specifies the state
 those particular changes converge on. That is narrower than a target, because
 the set of changes was drawn from the rough-edge list rather than from what
 the protocol should be. See [Design direction](DIRECTION.md).
-**Applies to:** `nvoken-cloud` for the contract and runtime behavior; this
+**Applies to:** the service for the contract and runtime behavior; this
 repository for regenerated types, SDK changes, and conformance fixtures.
 
 ## Context
@@ -302,7 +302,7 @@ path regardless of what the stream carries; nvoken's `tool-results` endpoint
 already passes a content block array through to the model unchanged, but its
 limits (1 MiB body, 256 KiB per result) make that a thumbnail-sized path
 today, which the retrieval store below could eventually relieve in both
-directions. Second, a verification item for `nvoken-cloud`: what the MCP
+directions. Second, a verification item for the service: what the MCP
 client does with image content in a tool result today, given the silent-drop
 precedent recorded in [004-mcp-apps](../research/004-mcp-apps.md).
 
@@ -316,7 +316,7 @@ with ordinary caching. Inlining was considered and rejected. Base64 bloats a
 payload by a third, one large PDF would dwarf every frame-size and
 write-timeout budget the connection has, and slow consumers would be dropped
 on exactly the turns with the richest output. The open design question for
-`nvoken-cloud` is the authorization scope of the read, not whether it
+the service is the authorization scope of the read, not whether it
 exists.
 
 ### 11. Streaming at the tool boundary (stance only, not scheduled)
@@ -480,17 +480,17 @@ because area 1 was written first and the rest built on it.
 
 | Area | Wave | Lands in | Status |
 | --- | --- | --- | --- |
-| 1. Compatibility policy | 3 | `nvoken-cloud` contract | Done |
-| 2. Stated guarantees | 5 | `nvoken-cloud` contract prose | Done |
-| 3. Lifecycle parity | 4 (wire); P3 lands as prose in 5 | `nvoken-cloud` runtime and contract | Done |
-| 4. Preview identity | 4 | `nvoken-cloud` runtime and contract | Done |
-| 5. Tool-call visibility | 4 | `nvoken-cloud` runtime and contract | Settlement only |
-| 6. Flow control | 4 | `nvoken-cloud` runtime and contract | Done |
-| 7. The thinking story | 4 | `nvoken-cloud` contract and runtime | Live half only |
-| 8. Name cleanups | 6 | `nvoken-cloud` contract, names only | Done |
-| 9. Transport stance | 5 | `nvoken-cloud` contract prose | Done |
-| 10. Bulk content boundary | 4 | `nvoken-cloud` contract and runtime | Contract only |
-| 11. Tool boundary streaming | stance only, unscheduled | `nvoken-cloud` contract and runtime, later | Unscheduled |
+| 1. Compatibility policy | 3 | service contract | Done |
+| 2. Stated guarantees | 5 | service contract prose | Done |
+| 3. Lifecycle parity | 4 (wire); P3 lands as prose in 5 | service runtime and contract | Done |
+| 4. Preview identity | 4 | service runtime and contract | Done |
+| 5. Tool-call visibility | 4 | service runtime and contract | Settlement only |
+| 6. Flow control | 4 | service runtime and contract | Done |
+| 7. The thinking story | 4 | service contract and runtime | Live half only |
+| 8. Name cleanups | 6 | service contract, names only | Done |
+| 9. Transport stance | 5 | service contract prose | Done |
+| 10. Bulk content boundary | 4 | service contract and runtime | Contract only |
+| 11. Tool boundary streaming | stance only, unscheduled | service contract and runtime, later | Unscheduled |
 
 Waves 1 and 7, the SDK work, run independently of all of this in this
 repository, and every contract change above reached this repository through

@@ -7,18 +7,17 @@
 
 ## Context
 
-The private `deepnoodle-ai/nvoken-cloud` repository now owns the nvoken service,
-including the authoritative OpenAPI contract. The public
-`deepnoodle-ai/nvoken` repository needs to become the distribution and
-development home for the Go, Python, TypeScript, and Rust SDKs and the Go
-`nvoken` client CLI. Mature implementations of those clients already exist in
-`nvoken-cloud`; leaving them there would couple public package development and
-release access to the private backend and would make the public repository a
-misleading placeholder.
+The nvoken service is developed privately and owns the authoritative OpenAPI
+contract. The public `deepnoodle-ai/nvoken` repository needs to become the
+distribution and development home for the Go, Python, TypeScript, and Rust SDKs
+and the Go `nvoken` client CLI. Mature implementations of those clients already
+exist alongside the service; leaving them there would couple public package
+development and release access to the private backend and would make the public
+repository a misleading placeholder.
 
-This split follows the useful part of the `mobius` / `mobius-cloud` precedent:
-the service owns the API, while the public repository owns client ergonomics,
-generated artifacts, conformance tests, packaging, and releases.
+The split is the familiar one: the service owns the API, while the public
+repository owns client ergonomics, generated artifacts, conformance tests,
+packaging, and releases.
 
 ## Goals
 
@@ -26,8 +25,8 @@ generated artifacts, conformance tests, packaging, and releases.
   `nvoken` CLI.
 - Port the current Go, Python, TypeScript, and Rust clients without losing their
   reliability facades, tests, examples, or package metadata.
-- Generate low-level transports and models from a synchronized snapshot of the
-  authoritative `nvoken-cloud/openapi/nvoken.yaml` contract.
+- Generate low-level transports and models from the published copy of the
+  authoritative `openapi/nvoken.yaml` contract.
 - Make generation reproducible in public CI without requiring access to the
   private service repository.
 - Give contributors one local gate that verifies generated drift,
@@ -61,10 +60,10 @@ nvoken/
 │   ├── conformance/            # shared fixtures and local HTTP test server
 │   ├── scripts/                # generation and validation orchestration
 │   └── operations.json         # generated operation-coverage manifest
-├── openapi/                    # synchronized, non-authoritative snapshot
+├── openapi/                    # published, non-authoritative copy
 ├── examples/                   # executable SDK examples
 ├── docs/                       # repository and SDK development guidance
-└── scripts/                    # contract sync and CLI release tooling
+└── scripts/                    # CLI release tooling
 ```
 
 This is deliberately simpler than Clean or Hexagonal Architecture. Each SDK is
@@ -75,28 +74,31 @@ and one private local-storage package. It does not import service internals.
 
 ### Contract ownership and synchronization
 
-`nvoken-cloud/openapi/nvoken.yaml` is authoritative. This repository commits a
-byte-for-byte snapshot under `openapi/` so a public pull
-request can regenerate and test clients without access to a private repository.
-`openapi/SOURCE.json` records the upstream repository and the commit that last
-changed the contract.
+The service's contract is authoritative. This repository commits a
+byte-for-byte copy under `openapi/` so a public pull request can regenerate and
+test clients with nothing but this checkout.
 
-`make openapi-sync` copies the contract from `NVOKEN_CLOUD_REPO`
-(defaulting to `../nvoken-cloud`) and refreshes provenance. `make
-openapi-sync-check` proves that the committed snapshot matches a local upstream
-checkout. The normal public CI gate validates generation from the committed
-snapshot. Synchronization is intentionally manual for now: a maintainer with
-both repositories checked out runs the sync and generation targets, reviews the
-result, and opens a public pull request. The public repository does not receive
-a credential that can read private repositories.
+The copy is published inward: the service writes `openapi/nvoken.yaml` here as
+part of a reviewed contract change. Publishing is intentionally manual for now —
+a maintainer runs it, regenerates, reviews the cross-language diff, and opens a
+public pull request. This repository holds no path, credential, or provenance
+record pointing at the service, and its CI gate validates generation from the
+committed copy alone.
+
+> Superseded detail: this document originally specified the reverse — a
+> `make openapi-sync` target here that read a neighboring service checkout and
+> recorded its commit in `openapi/SOURCE.json`. That made the public repository
+> name and locate a private one to build. The direction was reversed and both
+> the target and the provenance file were removed; the ownership decision this
+> document records is unchanged.
 
 The invariant is:
 
 ```text
-nvoken-cloud OpenAPI
-        │ sync + review
+authoritative OpenAPI
+        │ publish + review
         ▼
-public OpenAPI snapshot
+public OpenAPI copy
         │ pinned generators
         ▼
 generated transports
@@ -106,14 +108,14 @@ idiomatic SDK facades ──► CLI / applications
 ```
 
 Generated directories are committed so normal package installs do not require
-Java, Go code generators, network access, or a private repository checkout.
+Java, Go code generators, network access, or any other checkout.
 Generator versions and the OpenAPI Generator jar checksum remain pinned.
 
 ### SDK boundaries
 
 Each language package contains:
 
-1. Generated models and endpoint clients derived from the synchronized
+1. Generated models and endpoint clients derived from the published
    contract.
 2. A handwritten facade for durable invocation admission, waiting, resumable
    streaming, cancellation, ToolCall submission, callbacks, validation, and
@@ -131,7 +133,7 @@ cancellation.
 
 `cmd/nvoken` is the only binary in this repository. It uses the Go SDK for API
 operations and keeps filesystem credential profiles in `internal/authstore`.
-The daemon remains in `nvoken-cloud/cmd/nvokend`. CLI releases therefore contain
+The `nvokend` daemon is not in this repository. CLI releases therefore contain
 only the `nvoken` binary and the license.
 
 ### Validation and releases
@@ -151,11 +153,11 @@ Releases remain independently retryable:
 
 ### Generate directly from the private repository in every public CI run
 
-This removes the snapshot but makes ordinary external pull requests impossible
-to validate without exposing a private-repository credential. It also makes old
-SDK commits irreproducible when the backend contract advances.
+This removes the committed copy but makes ordinary external pull requests
+impossible to validate without exposing a private-repository credential. It also
+makes old SDK commits irreproducible when the backend contract advances.
 
-### Keep SDKs in `nvoken-cloud` and mirror only release artifacts
+### Keep SDKs beside the service and mirror only release artifacts
 
 This preserves one source tree but defeats the purpose of a public SDK
 repository: contributors cannot inspect generation, tests, examples, or
@@ -169,8 +171,8 @@ pull requests. The current team and release volume do not justify that cost.
 
 ## Tradeoffs and consequences
 
-- The public OpenAPI snapshot is deliberate duplication. Provenance and sync
-  checks are required to prevent it from being mistaken for the authority.
+- The public OpenAPI copy is deliberate duplication. It is documented as
+  non-editable here to prevent it from being mistaken for the authority.
 - Generated code makes the repository larger, but package builds and external
   contributions become deterministic and self-contained.
 - A single repository makes contract-wide changes easy but means contributors
@@ -183,12 +185,12 @@ pull requests. The current team and release volume do not justify that cost.
 
 ## Rollout
 
-1. Port the current SDK, conformance, CLI, examples, and release files from the
-   current `nvoken-cloud` main branch.
+1. Port the current SDK, conformance, CLI, examples, and release files out of
+   the service repository.
 2. Remove daemon/backend dependencies and adapt contract generation to the
-   synchronized snapshot boundary.
-3. Run the complete local gate, then stop changing SDK and CLI sources in
-   `nvoken-cloud`.
+   published-copy boundary.
+3. Run the complete local gate, then stop changing SDK and CLI sources beside
+   the service.
 4. Configure registry trusted publishers and the Homebrew token.
 5. Publish the first aligned release from this repository after review.
 

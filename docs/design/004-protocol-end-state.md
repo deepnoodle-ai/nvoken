@@ -8,9 +8,8 @@ never by drift. Part 2 was the path, and all three of its steps landed on
 2026-08-14; it is kept as the record of how this was sequenced.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
-**Applies to:** `openapi/nvoken.yaml` and the runtime behind it, in
-`nvoken-cloud`; the SDKs, conformance fixtures, and reference documentation
-in this repository.
+**Applies to:** `openapi/nvoken.yaml` and the runtime behind it; the SDKs,
+conformance fixtures, and reference documentation in this repository.
 **Reading order:** [DIRECTION](DIRECTION.md) says why this document exists.
 [The streaming protocol](../reference/streaming-protocol.md) describes what
 exists today. This document says what should exist, then how to get there.
@@ -51,7 +50,7 @@ matters, because Part 2 must not damage any of it.
 - **Bytes stay off the stream.** Transcript media travels as descriptor
   blocks, and the bytes are one authorized, content-addressed HTTP read
   away, per design 003 area 10. The authorization scope of that read is
-  still `nvoken-cloud`'s open question.
+  still the service's open question.
 - **The compatibility policy.** Discriminated unions, open schemas,
   tolerant readers, and enums that grow, per design 003 area 1. The end
   state is not a license to close schemas again.
@@ -289,9 +288,9 @@ change as we learn.
 
 ### The rule for every step
 
-Each collapse lands as one coordinated change: contract and runtime in
-`nvoken-cloud`, then SDKs, conformance fixtures, console, CLI, and
-published guides through the ordinary sync. No step leaves both the old
+Each collapse lands as one coordinated change: contract and runtime in the
+service, then SDKs, conformance fixtures, console, CLI, and published guides
+through the ordinary publish. No step leaves both the old
 and new way live beyond the release that carries it. A step that cannot
 retire what it replaces is not ready to land.
 
@@ -355,7 +354,7 @@ unbuilt is progress from a running tool, which needs that ingestion path.
 
 ### What each step costs
 
-| Step | `nvoken-cloud` | SDKs | Fixtures | Console | Guides |
+| Step | Service | SDKs | Fixtures | Console | Guides |
 | --- | --- | --- | --- | --- | --- |
 | A | Contract and two projections | Regenerate, small reducer edits | Touch | Small | Tool and streaming pages |
 | B | Contract and browser serialization | Regenerate, delete patch block | Touch | Type names | Little |

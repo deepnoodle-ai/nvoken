@@ -1,8 +1,8 @@
 # CLI development and release
 
 `cmd/nvoken` is a client and operator CLI over the public Go SDK. The nvoken
-service daemon is owned and released by `nvoken-cloud`; this repository must not
-grow daemon, persistence, deployment, or provider-execution dependencies.
+service daemon is owned and released separately; this repository must not grow
+daemon, persistence, deployment, or provider-execution dependencies.
 
 Run the CLI from source:
 

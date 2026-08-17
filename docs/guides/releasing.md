@@ -25,8 +25,7 @@ repository Actions secret.
    `sdk/typescript/package.json`, `sdk/typescript/src/version.ts`,
    `sdk/python/pyproject.toml`, and `sdk/rust/Cargo.toml`.
 2. Run `make sdk-generate` so generated package metadata uses those versions.
-3. Run `make check` and `make openapi-sync-check
-   NVOKEN_CLOUD_REPO=../nvoken-cloud`.
+3. Run `make check`.
 4. Merge the release pull request and confirm the `check` workflow passed on
    `main`.
 

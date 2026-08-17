@@ -3,15 +3,15 @@
 ## Ownership
 
 This repository owns SDK ergonomics, generated client artifacts, conformance
-fixtures, examples, the `nvoken` CLI, and package releases. The private
-`deepnoodle-ai/nvoken-cloud` repository owns server behavior and the
-authoritative OpenAPI contract.
+fixtures, examples, the `nvoken` CLI, and package releases. The nvoken service
+owns server behavior and the authoritative OpenAPI contract, and publishes that
+contract to `openapi/nvoken.yaml` here.
 
-Change the server contract in `nvoken-cloud` first. Then synchronize the public
-snapshot, regenerate all clients, and review the complete cross-language diff:
+`openapi/nvoken.yaml` is therefore not editable in this repository. When a new
+contract lands, regenerate all clients and review the complete cross-language
+diff in one change:
 
 ```bash
-make openapi-sync NVOKEN_CLOUD_REPO=../nvoken-cloud
 make sdk-generate
 make check
 ```

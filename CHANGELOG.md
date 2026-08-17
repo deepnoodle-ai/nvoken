@@ -83,6 +83,13 @@ without republishing every artifact.
   for every round trip, including requests that failed before a response
   existed.
 
+- **The contract arrives here; this repository no longer fetches it.** The
+  nvoken service publishes `openapi/nvoken.yaml`, so `make openapi-sync`,
+  `make openapi-sync-check`, `scripts/sync_openapi.py`, and
+  `openapi/SOURCE.json` are gone. Regenerate with `make sdk-generate` when a
+  new contract lands; `make sdk-generate-check` still proves the transports
+  match it.
+
 ## 0.20.0 - 2026-08-16
 
 - **The CLI covers the complete public outbound API.** Every operation now has
@@ -357,8 +364,8 @@ see [the streaming protocol](docs/reference/streaming-protocol.md).
 - Clean up Budget conformance naming, CLI tenant terminology, and registry
   release guidance after the 0.10.0 migration.
 - Track OpenAPI provenance by the commit that last changed the contract, so
-  unrelated `nvoken-cloud` commits no longer fail `make openapi-sync-check`
-  against a byte-identical snapshot.
+  unrelated upstream commits no longer fail the snapshot check against
+  byte-identical content.
 - Use `claude-opus-5` in the Python, TypeScript, and Rust reasoning examples.
 
 ## 0.10.0 - 2026-08-09
@@ -374,7 +381,7 @@ see [the streaming protocol](docs/reference/streaming-protocol.md).
 
 - Establish this repository as the public home of the Go, Python, TypeScript,
   and Rust SDKs and the Go `nvoken` CLI.
-- Port the existing `0.9.0` client implementations from `nvoken-cloud`.
+- Port the existing `0.9.0` client implementations into this repository.
 - Add reproducible OpenAPI synchronization, generation, conformance, CI, and
   release workflows.
 - Publish the first Python and Rust releases from the public repository and
