@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
 from datetime import datetime
-from pydantic import Field, StrictBool, field_validator
+from pydantic import Field, StrictBool, StrictStr, field_validator
 from typing import List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
@@ -1013,7 +1013,7 @@ class InvocationsApi:
     ) -> NudgeAcknowledgement:
         """Send extra direction to a running Invocation
 
-        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next model-call boundary: before the next model call in a running builtin or MCP tool loop, when a host-tool result resumes the next execution segment, or when a turn that thought it was finished re-enters its loop to answer you. A parked host tool is not woken; its result still has to resume the turn. A model call or tool run already in flight is never aborted to deliver a Nudge. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -1091,7 +1091,7 @@ class InvocationsApi:
     ) -> ApiResponse[NudgeAcknowledgement]:
         """Send extra direction to a running Invocation
 
-        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next model-call boundary: before the next model call in a running builtin or MCP tool loop, when a host-tool result resumes the next execution segment, or when a turn that thought it was finished re-enters its loop to answer you. A parked host tool is not woken; its result still has to resume the turn. A model call or tool run already in flight is never aborted to deliver a Nudge. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -1169,7 +1169,7 @@ class InvocationsApi:
     ) -> RESTResponseType:
         """Send extra direction to a running Invocation
 
-        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+        Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next model-call boundary: before the next model call in a running builtin or MCP tool loop, when a host-tool result resumes the next execution segment, or when a turn that thought it was finished re-enters its loop to answer you. A parked host tool is not woken; its result still has to resume the turn. A model call or tool run already in flight is never aborted to deliver a Nudge. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
 
         :param invocation_id: (required)
         :type invocation_id: str
@@ -3357,6 +3357,7 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        parent_invocation_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
         ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -3392,6 +3393,8 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param parent_invocation_id: Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity.
+        :type parent_invocation_id: str
         :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
         :type ended: bool
         :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
@@ -3430,6 +3433,7 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            parent_invocation_id=parent_invocation_id,
             ended=ended,
             ended_since=ended_since,
             cursor=cursor,
@@ -3470,6 +3474,7 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        parent_invocation_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
         ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -3505,6 +3510,8 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param parent_invocation_id: Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity.
+        :type parent_invocation_id: str
         :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
         :type ended: bool
         :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
@@ -3543,6 +3550,7 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            parent_invocation_id=parent_invocation_id,
             ended=ended,
             ended_since=ended_since,
             cursor=cursor,
@@ -3583,6 +3591,7 @@ class InvocationsApi:
         agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Mutually exclusive with agent_key.")] = None,
         agent_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned Agent key. On Session and Invocation lists this is mutually exclusive with agent_id. ")] = None,
         status: Annotated[Optional[Annotated[List[InvocationStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
+        parent_invocation_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
         ended_since: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position. ")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
@@ -3618,6 +3627,8 @@ class InvocationsApi:
         :type agent_key: str
         :param status: Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding.
         :type status: List[InvocationStatus]
+        :param parent_invocation_id: Select direct children of one Invocation. Send the literal `null` to select top-level Invocations; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity.
+        :type parent_invocation_id: str
         :param ended: Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above.
         :type ended: bool
         :param ended_since: Inclusive RFC 3339 lower bound on `ended_at`, for starting a feed that has no cursor yet. Requires `ended=true`, and is mutually exclusive with `cursor`, which already carries a position.
@@ -3656,6 +3667,7 @@ class InvocationsApi:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            parent_invocation_id=parent_invocation_id,
             ended=ended,
             ended_since=ended_since,
             cursor=cursor,
@@ -3691,6 +3703,7 @@ class InvocationsApi:
         agent_id,
         agent_key,
         status,
+        parent_invocation_id,
         ended,
         ended_since,
         cursor,
@@ -3745,6 +3758,10 @@ class InvocationsApi:
         if status is not None:
 
             _query_params.append(('status', status))
+
+        if parent_invocation_id is not None:
+
+            _query_params.append(('parent_invocation_id', parent_invocation_id))
 
         if ended is not None:
 

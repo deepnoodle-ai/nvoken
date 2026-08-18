@@ -84,6 +84,7 @@ from nvoken_generated.models.host_tool_declaration import HostToolDeclaration
 from nvoken_generated.models.create_invocation_request import CreateInvocationRequest
 from nvoken_generated.models.mcp_server_headers import MCPServerHeaders as GeneratedMCPServerHeaders
 from nvoken_generated.models.invocation import Invocation
+from nvoken_generated.models.invocation_trigger import InvocationTrigger
 from nvoken_generated.models.invocation_change import InvocationChange
 from nvoken_generated.models.invocation_log_list import InvocationLogList
 from nvoken_generated.models.invocation_context_item import (
@@ -683,6 +684,8 @@ class InvokeRequest:
     session_id: str | None = None
     session_key: str | None = None
     session_options: SessionOptions | None = None
+    triggered_by: InvocationTrigger | None = None
+    """Verified parent Invocation and ToolCall that caused this turn."""
     provider_keys: tuple[ProviderKeySelection, ...] = ()
     webhook: WebhookTarget | None = None
     context: tuple[ContextItem, ...] = ()
@@ -1354,6 +1357,7 @@ class Client:
             session_id=request.session_id,
             session_key=request.session_key,
             session_options=_generated_session_options(request.session_options),
+            triggered_by=request.triggered_by,
             metadata=dict(request.metadata) if request.metadata else None,
             idempotency_key=idempotency_key,
             if_active=request.if_active,
@@ -1792,6 +1796,7 @@ class Client:
         agent_id: str | None = None,
         agent_key: str | None = None,
         status: InvocationStatus | list[InvocationStatus] | None = None,
+        parent_invocation_id: str | None = None,
         ended: bool | None = None,
         ended_since: datetime | None = None,
         cursor: str | None = None,
@@ -1810,6 +1815,7 @@ class Client:
                     if isinstance(status, list)
                     else [status] if status is not None else None
                 ),
+                parent_invocation_id=parent_invocation_id,
                 ended=ended,
                 ended_since=ended_since,
                 cursor=cursor,
@@ -1827,6 +1833,7 @@ class Client:
         agent_id: str | None = None,
         agent_key: str | None = None,
         status: InvocationStatus | list[InvocationStatus] | None = None,
+        parent_invocation_id: str | None = None,
         ended_since: datetime | None = None,
         cursor: str | None = None,
         limit: int | None = None,
@@ -1869,6 +1876,7 @@ class Client:
             agent_id=agent_id,
             agent_key=agent_key,
             status=status,
+            parent_invocation_id=parent_invocation_id,
             ended=True,
             ended_since=ended_since,
             cursor=cursor,
@@ -1884,6 +1892,7 @@ class Client:
         agent_id: str | None = None,
         agent_key: str | None = None,
         status: InvocationStatus | list[InvocationStatus] | None = None,
+        parent_invocation_id: str | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[Invocation]:
         cursor: str | None = None
@@ -1895,6 +1904,7 @@ class Client:
                 agent_id=agent_id,
                 agent_key=agent_key,
                 status=status,
+                parent_invocation_id=parent_invocation_id,
                 cursor=cursor,
                 limit=limit,
             )

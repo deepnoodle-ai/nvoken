@@ -15,6 +15,8 @@ type Invocation = generated.Invocation
 type InvocationResult = generated.InvocationResult
 type InvocationStatus = generated.InvocationStatus
 type InvocationStopReason = generated.InvocationStopReason
+type InvocationTrigger = generated.InvocationTrigger
+type InvocationChildCounts = generated.InvocationChildCounts
 type App = generated.App
 type AppList = generated.AppList
 type AppRegistration = generated.AppRegistration
@@ -886,10 +888,14 @@ type InvokeRequest struct {
 	// it is also the memory partition — it decides whose durable memories the
 	// model can recall — so it is required on the turn that opens a Session for
 	// such an Agent.
-	UserKey            *string
-	SessionID          *string
-	SessionKey         *string
-	SessionOptions     *SessionOptions
+	UserKey        *string
+	SessionID      *string
+	SessionKey     *string
+	SessionOptions *SessionOptions
+	// TriggeredBy records that this Invocation was admitted because one
+	// durable ToolCall on another Invocation requested it. The parent and
+	// ToolCall pair is verified by nvoken; it does not couple their lifecycles.
+	TriggeredBy        *InvocationTrigger
 	IdempotencyKey     string
 	DefinitionRevision *int64
 	Overrides          *AgentDefinitionOverrides
@@ -1039,8 +1045,12 @@ type ListInvocationsOptions struct {
 	AgentKey      *string
 	Status        *InvocationStatus
 	Statuses      []InvocationStatus
-	Cursor        *string
-	Limit         *int
+	// ParentInvocationID selects direct children of one Invocation. Point it
+	// at the literal "null" to select top-level Invocations; leave it nil for
+	// the unfiltered collection.
+	ParentInvocationID *string
+	Cursor             *string
+	Limit              *int
 }
 
 // ListEndedInvocationsOptions filters the reconciliation feed. It takes the
@@ -1055,6 +1065,9 @@ type ListEndedInvocationsOptions struct {
 	AgentKey      *string
 	Status        *InvocationStatus
 	Statuses      []InvocationStatus
+	// ParentInvocationID has the same direct-child, top-level, or unfiltered
+	// meaning as ListInvocationsOptions.ParentInvocationID.
+	ParentInvocationID *string
 	// EndedSince starts a feed that has no cursor yet. It is mutually exclusive
 	// with Cursor, which already carries a position.
 	EndedSince *time.Time
@@ -1844,6 +1857,9 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 			return nil, err
 		}
 		wire["session_options"] = r.SessionOptions
+	}
+	if r.TriggeredBy != nil {
+		wire["triggered_by"] = r.TriggeredBy
 	}
 	if len(r.Metadata) > 0 {
 		wire["metadata"] = r.Metadata

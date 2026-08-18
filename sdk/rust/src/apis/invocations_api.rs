@@ -411,7 +411,7 @@ pub async fn create_invocation(
     }
 }
 
-/// Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next clean stopping point: when it starts its next step, when it pauses for you to run a tool, or when a turn that thought it was finished re-enters its loop to answer you. A model call or tool run already in flight is never aborted to deliver it. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
+/// Sends extra direction to a turn that is already running — \"focus on the marine segment\" — without stopping it and without losing the work you are steering. Use this when a long turn is heading the wrong way and you want to correct it in place.  Compare with `if_active: supersede` on a new Invocation, which replaces the running turn and discards what it had produced. Steering a long turn that way throws away exactly the work you were trying to redirect.  **A nudge is not an interrupt, and it is not immediate.** The turn picks it up at its next model-call boundary: before the next model call in a running builtin or MCP tool loop, when a host-tool result resumes the next execution segment, or when a turn that thought it was finished re-enters its loop to answer you. A parked host tool is not woken; its result still has to resume the turn. A model call or tool run already in flight is never aborted to deliver a Nudge. A turn you have interrupted is never given more work — the interrupt wins and the direction you staged expires unused.  Nudges and Invocations never turn into each other. Posting to `/v1/invocations` against a busy Session behaves exactly as its `if_active` setting says; it never quietly becomes a nudge, and a nudge never quietly becomes a new turn.  If the turn ends without ever picking it up, your Nudge is marked `expired` at that moment and has no effect on any later turn. Check `GET .../nudges` to see whether it was used or missed. Whether to re-send missed direction as the next turn's input is your call.  `content` must be text — a string, or an array of text blocks. Images and documents are fine on a turn's own input but are refused here, because a turn resuming in place carries text only, and silently dropping your attachment would be worse than telling you now.  Requires the same permission as cancelling the turn.
 pub async fn create_nudge(
     configuration: &configuration::Configuration,
     invocation_id: &str,
@@ -861,6 +861,7 @@ pub async fn list_invocations(
     agent_id: Option<&str>,
     agent_key: Option<&str>,
     status: Option<Vec<models::InvocationStatus>>,
+    parent_invocation_id: Option<&str>,
     ended: Option<bool>,
     ended_since: Option<chrono::DateTime<chrono::FixedOffset>>,
     cursor: Option<&str>,
@@ -874,6 +875,7 @@ pub async fn list_invocations(
     let p_query_agent_id = agent_id;
     let p_query_agent_key = agent_key;
     let p_query_status = status;
+    let p_query_parent_invocation_id = parent_invocation_id;
     let p_query_ended = ended;
     let p_query_ended_since = ended_since;
     let p_query_cursor = cursor;
@@ -918,6 +920,9 @@ pub async fn list_invocations(
                     .to_string(),
             )]),
         };
+    }
+    if let Some(ref param_value) = p_query_parent_invocation_id {
+        req_builder = req_builder.query(&[("parent_invocation_id", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_ended {
         req_builder = req_builder.query(&[("ended", &param_value.to_string())]);

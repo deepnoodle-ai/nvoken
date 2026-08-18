@@ -84,6 +84,19 @@ nvoken invoke --agent-key support "Hello"
 
 Use `nvoken --help` for the exact command surface.
 
+When one turn is triggered by another turn's ToolCall, preserve that cause and
+keep temporary transcript lifetime explicit:
+
+```bash
+nvoken invoke --agent-key researcher \
+  --parent-invocation-id inv_... --tool-call-id call_... \
+  "Investigate this branch"
+nvoken invocation list --parent-invocation-id null # top-level only
+```
+
+The child still owns a normal Session. Set `session_options.retention` in an
+SDK request or a complete CLI request file when that Session should expire.
+
 ## Repository layout
 
 ```text

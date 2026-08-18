@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Invocation : One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, and `limits`.
+/// Invocation : One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, `limits`, `triggered_by`, and `child_invocation_counts`.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Invocation {
     /// Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
@@ -33,6 +33,20 @@ pub struct Invocation {
         skip_serializing_if = "Option::is_none"
     )]
     pub user_key: Option<Option<String>>,
+    /// Null for a top-level Invocation. For a child, names the exact ToolCall and parent Invocation that caused it. Machine audience only; omitted from browser projections.
+    #[serde(
+        rename = "triggered_by",
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub triggered_by: Option<Option<Box<models::InvocationTrigger>>>,
+    /// Direct children grouped for a collapsed hierarchy branch. Machine audience only; omitted from browser projections.
+    #[serde(
+        rename = "child_invocation_counts",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub child_invocation_counts: Option<Box<models::InvocationChildCounts>>,
     /// Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
     #[serde(rename = "definition_id")]
     pub definition_id: String,
@@ -128,7 +142,7 @@ pub struct Invocation {
 }
 
 impl Invocation {
-    /// One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, and `limits`.
+    /// One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, `limits`, `triggered_by`, and `child_invocation_counts`.
     pub fn new(
         id: String,
         agent_id: String,
@@ -153,6 +167,8 @@ impl Invocation {
             agent_key,
             session_id,
             user_key: None,
+            triggered_by: None,
+            child_invocation_counts: None,
             definition_id,
             definition_revision,
             definition: None,

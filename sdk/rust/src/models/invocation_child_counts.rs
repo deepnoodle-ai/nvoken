@@ -11,122 +11,26 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
+/// InvocationChildCounts : Direct-child counts; descendants are not folded in recursively.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CreateInvocationRequest {
-    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-    #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    /// Stable caller-controlled Agent key, unique within the effective tenant. Mutually exclusive with `agent_id`.
-    #[serde(rename = "agent_key", skip_serializing_if = "Option::is_none")]
-    pub agent_key: Option<String>,
-    /// Optional tenant partition. For Session-key resolution or a new Session, precedence is credential constraint, this explicit value, then the default partition. For Session-ID resolution, an App credential without a tenant constraint may omit it and use the stored partition.
-    #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
-    pub tenant_key: Option<String>,
-    /// Who this turn is for. The first request that opens a Session fixes its `user_key`, including fixing it to absent; every later turn either sends the same one or leaves it out and inherits it. A turn naming a different end user is refused with `session_user_key_conflict`.  It is a filter, and on an Agent whose Definition sets `memory.scope: user` it is also the memory partition — it decides whose durable memories the model can recall — so it is required on the turn that opens a Session for such an Agent.
-    #[serde(rename = "user_key", skip_serializing_if = "Option::is_none")]
-    pub user_key: Option<String>,
-    /// The exact ToolCall and parent Invocation that caused this turn. nvoken verifies the pair, inherits and enforces its tenant and user scope, and keeps it as immutable idempotency evidence. Accepted only from machine credentials. One ToolCall may trigger multiple children with different idempotency keys.
-    #[serde(rename = "triggered_by", skip_serializing_if = "Option::is_none")]
-    pub triggered_by: Option<Box<models::InvocationTrigger>>,
-    /// Existing Session to continue. Mutually exclusive with session_key.
-    #[serde(rename = "session_id", skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    /// Caller key resolved within (effective tenant partition, Agent, session_key). Mutually exclusive with session_id.
-    #[serde(rename = "session_key", skip_serializing_if = "Option::is_none")]
-    pub session_key: Option<String>,
-    /// Settings stored on the Session itself, rather than on this turn.  On a new Session these are saved. On a Session that already exists they are checked rather than applied: matching values are fine, and a different value returns `session_options_conflict` telling you which paths disagreed. This keeps two callers from silently reconfiguring each other's conversation. Send `on_conflict: \"join\"` when you mean \"reach whatever Session is there\" rather than \"it should be configured like this\".  If no compaction policy is stored yet, this turn can install one, because the policy needs a model to validate against and only a turn supplies that.  A Session's title and other descriptive labels are not here. They are `metadata`, written with `PATCH /v1/sessions/{session_id}`.
-    #[serde(rename = "session_options", skip_serializing_if = "Option::is_none")]
-    pub session_options: Option<Box<models::SessionOptions>>,
-    /// Your own data to attach to this turn — a ticket number, a trace ID, whatever helps you tie it back to your system. nvoken stores it and hands it back untouched.  It is fixed once the turn is created and counts as part of the request for idempotency. Retrying with the same `idempotency_key` but different metadata is treated as a different request and returns a conflict rather than updating it. A genuine retry of the same original request carries the same values anyway.  Session metadata is a separate thing and can be changed — see `PATCH /v1/sessions/{session_id}`.
-    #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<std::collections::HashMap<String, String>>,
-    /// Your key for making retries safe. Send the same unchanged request again after a 5xx, a timeout, a dropped connection, or any case where you never saw the response, and you get the original turn back instead of starting a second one.  Keys are scoped to the tenant and resolved Agent, so the same key under a different tenant or Agent is a different request. Deduplication lasts as long as the original turn still exists.
-    #[serde(rename = "idempotency_key")]
-    pub idempotency_key: String,
-    /// What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes.
-    #[serde(rename = "if_active", skip_serializing_if = "Option::is_none")]
-    pub if_active: Option<IfActive>,
-    /// What to do when the turn runs out of one of its consumption limits. `stop` ends it as `incomplete`. `hold` leaves it as `budget_hold` so you can raise the limit and continue it.  Covers the iteration, output-token, and per-turn estimated-cost limits, and exhausted tenant credits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
-    #[serde(
-        rename = "on_budget_exhausted",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub on_budget_exhausted: Option<OnBudgetExhausted>,
-    /// Ordered application-owned state snapshots to record before this turn's input. Send a name again to supersede its prior value. An unchanged latest value is deduplicated from the transcript, while this exact pre-deduplication payload remains part of the Invocation and of idempotency comparison.  A Session may observe at most 16 distinct names over its lifetime. Names are stored and shown to the model with the reserved `app-` prefix, which callers must omit here. Context is not part of the Agent Definition and never advances its revision.
-    #[serde(rename = "context", skip_serializing_if = "Option::is_none")]
-    pub context: Option<Vec<models::InvocationContextItem>>,
-    #[serde(rename = "input")]
-    pub input: Box<models::InvocationInput>,
-    #[serde(rename = "webhook", skip_serializing_if = "Option::is_none")]
-    pub webhook: Option<Box<models::WebhookTarget>>,
-    /// Optional one-turn revision pin, ahead of Session and Agent pins.
-    #[serde(
-        rename = "definition_revision",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub definition_revision: Option<u64>,
-    #[serde(rename = "overrides", skip_serializing_if = "Option::is_none")]
-    pub overrides: Option<Box<models::AgentDefinitionOverrides>>,
-    /// Per-Invocation secret headers keyed to MCP server names in the selected Agent Definition. Encrypted for this turn and never stored in, hashed into, or returned with the Agent Definition.
-    #[serde(rename = "mcp_server_headers", skip_serializing_if = "Option::is_none")]
-    pub mcp_server_headers: Option<Vec<models::McpServerHeaders>>,
-    /// Which key pays for the model on this turn. Names a source; never contains a secret.  Leave it out and nvoken works down its default order: your app's stored key for that provider, then a self-hosted installation's environment key (`config_byok`), then platform funding if the installation allows it.  Whichever source is chosen is fixed when the turn starts. A turn never silently falls through to a different payer partway through, so the bill cannot move once work has begun.
-    #[serde(rename = "provider_keys", skip_serializing_if = "Option::is_none")]
-    pub provider_keys: Option<Vec<models::ProviderKeySelection>>,
+pub struct InvocationChildCounts {
+    #[serde(rename = "total")]
+    pub total: u64,
+    /// Direct children in any nonterminal status.
+    #[serde(rename = "open")]
+    pub open: u64,
+    /// Direct children whose status is `failed`.
+    #[serde(rename = "failed")]
+    pub failed: u64,
 }
 
-impl CreateInvocationRequest {
-    pub fn new(idempotency_key: String, input: models::InvocationInput) -> CreateInvocationRequest {
-        CreateInvocationRequest {
-            agent_id: None,
-            agent_key: None,
-            tenant_key: None,
-            user_key: None,
-            triggered_by: None,
-            session_id: None,
-            session_key: None,
-            session_options: None,
-            metadata: None,
-            idempotency_key,
-            if_active: None,
-            on_budget_exhausted: None,
-            context: None,
-            input: Box::new(input),
-            webhook: None,
-            definition_revision: None,
-            overrides: None,
-            mcp_server_headers: None,
-            provider_keys: None,
+impl InvocationChildCounts {
+    /// Direct-child counts; descendants are not folded in recursively.
+    pub fn new(total: u64, open: u64, failed: u64) -> InvocationChildCounts {
+        InvocationChildCounts {
+            total,
+            open,
+            failed,
         }
-    }
-}
-/// What to do when the Session already has a turn running. A Session runs one turn at a time.  - `reject` (the default) refuses this request with   `session_invocation_active` and leaves the running turn alone. - `supersede` cancels the running turn and starts this one in its   place. The cancelled turn's work is discarded and does not carry   forward — \"discard and redo\". - `interrupt` asks the running turn to stop cleanly and starts   this one only once it has, so this turn builds on what the   stopped one produced — \"stop and redo\".  Omitting the field and sending `reject` are the same request for idempotency purposes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum IfActive {
-    #[serde(rename = "reject")]
-    Reject,
-    #[serde(rename = "supersede")]
-    Supersede,
-    #[serde(rename = "interrupt")]
-    Interrupt,
-}
-
-impl Default for IfActive {
-    fn default() -> IfActive {
-        Self::Reject
-    }
-}
-/// What to do when the turn runs out of one of its consumption limits. `stop` ends it as `incomplete`. `hold` leaves it as `budget_hold` so you can raise the limit and continue it.  Covers the iteration, output-token, and per-turn estimated-cost limits, and exhausted tenant credits. Deadlines are not covered — a turn that runs out of time always ends and can never be resumed.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub enum OnBudgetExhausted {
-    #[serde(rename = "stop")]
-    Stop,
-    #[serde(rename = "hold")]
-    Hold,
-}
-
-impl Default for OnBudgetExhausted {
-    fn default() -> OnBudgetExhausted {
-        Self::Stop
     }
 }

@@ -95,6 +95,7 @@ from nvoken_generated.models.image_reference_block import ImageReferenceBlock
 from nvoken_generated.models.input_block import InputBlock
 from nvoken_generated.models.invocation import Invocation
 from nvoken_generated.models.invocation_change import InvocationChange
+from nvoken_generated.models.invocation_child_counts import InvocationChildCounts
 from nvoken_generated.models.invocation_context_item import InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure
 from nvoken_generated.models.invocation_input import InvocationInput
@@ -106,6 +107,7 @@ from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason
 from nvoken_generated.models.invocation_timeline import InvocationTimeline
 from nvoken_generated.models.invocation_timeline_step import InvocationTimelineStep
+from nvoken_generated.models.invocation_trigger import InvocationTrigger
 from nvoken_generated.models.invocation_webhook_context import InvocationWebhookContext
 from nvoken_generated.models.invocation_webhook_request import InvocationWebhookRequest
 from nvoken_generated.models.invocation_webhook_subject import InvocationWebhookSubject

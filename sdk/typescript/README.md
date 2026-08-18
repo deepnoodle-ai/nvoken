@@ -898,6 +898,29 @@ reordering that equivalent set does not change cursor identity. Session get
 and list responses expose typed nullable `usage`, computed from durable
 Invocation usage as a convenience estimate rather than a billing ledger.
 
+### Child Invocations
+
+Record the exact ToolCall that caused another turn, and use normal Session
+retention when the child's transcript is temporary:
+
+```ts
+const child = await client.invoke({
+  agentKey: "researcher",
+  input: "Investigate this branch",
+  triggeredBy: {
+    type: "tool_call",
+    parentInvocationId: parent.id,
+    toolCallId: call.id,
+  },
+  sessionOptions: { retention: { ttlSeconds: 3600 } },
+});
+```
+
+Pass `parentInvocationId` to `listInvocations`: an Invocation ID selects its
+direct children, the literal `"null"` selects top-level Invocations, and
+omission keeps the unfiltered collection. Lineage does not propagate
+cancellation, budgets, results, or lifecycle state.
+
 ## Sessions, messages, and transcripts
 
 The facade has symmetric page and drain helpers:

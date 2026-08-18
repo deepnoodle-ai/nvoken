@@ -111,6 +111,28 @@ Equivalent status sets share cursor identity regardless of input order.
 Session get/list models expose typed optional usage, computed from durable
 Invocation usage as a convenience estimate rather than a billing ledger.
 
+### Child Invocations
+
+Record the exact ToolCall that caused another turn, and use normal Session
+retention when the child's transcript is temporary:
+
+```rust
+use nvoken::{models, InvokeRequest, SessionOptions};
+
+let mut child = InvokeRequest::new("researcher", "Investigate this branch");
+child.triggered_by = Some(models::InvocationTrigger::new(
+    models::invocation_trigger::Type::ToolCall,
+    parent.id,
+    call.id,
+));
+child.session_options = Some(SessionOptions::default().retention(3600));
+```
+
+Set `parent_invocation_id` on `ListInvocationsOptions` to an Invocation ID for
+its direct children, to the literal `"null"` for top-level Invocations, or
+leave it absent for the unfiltered collection. Lineage does not propagate
+cancellation, budgets, results, or lifecycle state.
+
 Install restart-stable compaction on a new or existing Session:
 
 ```rust

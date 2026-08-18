@@ -18,6 +18,7 @@ from .client import (
     ContextItem,
     IfActivePolicy,
     InvocationHandle,
+    InvocationTrigger,
     InvokeRequest,
     MCPServerHeaders,
     WebhookTarget,
@@ -122,6 +123,7 @@ class InvocationOptions:
     # serves many end users; the first turn on a Session fixes it and later
     # turns inherit it. See `InvokeRequest.user_key`.
     user_key: str | None = None
+    triggered_by: InvocationTrigger | None = None
     webhook: WebhookTarget | None = None
     # Application state snapshots to record ahead of this turn's input.
     # Per-call rather than per-Agent, because a snapshot is what changes between
@@ -520,6 +522,7 @@ class Agent(Generic[StructuredT]):
             ),
             tenant_key=self.options.tenant_key,
             user_key=options.user_key,
+            triggered_by=options.triggered_by,
             session_id=options.session_id,
             session_key=options.session_key,
             session_options=options.session_options,

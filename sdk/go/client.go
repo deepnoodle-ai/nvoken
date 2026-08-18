@@ -2196,17 +2196,18 @@ func (c *Client) listInvocations(
 		statusFilter = &statuses
 	}
 	params := &generated.ListInvocationsParams{
-		TenantKey:     options.TenantKey,
-		DefaultTenant: options.DefaultTenant,
-		UserKey:       options.UserKey,
-		SessionID:     options.SessionID,
-		AgentID:       options.AgentID,
-		AgentKey:      options.AgentKey,
-		Status:        statusFilter,
-		Ended:         ended,
-		EndedSince:    endedSince,
-		Cursor:        options.Cursor,
-		Limit:         options.Limit,
+		TenantKey:          options.TenantKey,
+		DefaultTenant:      options.DefaultTenant,
+		UserKey:            options.UserKey,
+		SessionID:          options.SessionID,
+		AgentID:            options.AgentID,
+		AgentKey:           options.AgentKey,
+		Status:             statusFilter,
+		ParentInvocationID: options.ParentInvocationID,
+		Ended:              ended,
+		EndedSince:         endedSince,
+		Cursor:             options.Cursor,
+		Limit:              options.Limit,
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationList], error) {
 		response, err := c.raw.ListInvocationsWithResponse(ctx, params)
@@ -2253,16 +2254,17 @@ func (c *Client) listInvocations(
 func (c *Client) ListEndedInvocations(ctx context.Context, options ListEndedInvocationsOptions) (*InvocationList, error) {
 	ended := true
 	return c.listInvocations(ctx, ListInvocationsOptions{
-		TenantKey:     options.TenantKey,
-		DefaultTenant: options.DefaultTenant,
-		UserKey:       options.UserKey,
-		SessionID:     options.SessionID,
-		AgentID:       options.AgentID,
-		AgentKey:      options.AgentKey,
-		Status:        options.Status,
-		Statuses:      options.Statuses,
-		Cursor:        options.Cursor,
-		Limit:         options.Limit,
+		TenantKey:          options.TenantKey,
+		DefaultTenant:      options.DefaultTenant,
+		UserKey:            options.UserKey,
+		SessionID:          options.SessionID,
+		AgentID:            options.AgentID,
+		AgentKey:           options.AgentKey,
+		Status:             options.Status,
+		Statuses:           options.Statuses,
+		ParentInvocationID: options.ParentInvocationID,
+		Cursor:             options.Cursor,
+		Limit:              options.Limit,
 	}, &ended, options.EndedSince)
 }
 
