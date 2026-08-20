@@ -3467,6 +3467,15 @@ type CreateCredentialRequest struct {
 // configuration. Admission resolves and pins the Agent's Definition
 // revision atomically; an unknown Agent is `agent_not_found` and nothing
 // is created as a side effect.
+//
+// Name the Agent with exactly one of `agent_id` or `agent_key`. A browser
+// token is the exception: it already names the Agent, so a browser
+// request sends neither, and one that names an Agent the token disagrees
+// with is `invalid_request` rather than an override. That is the same
+// rule responses follow — what a browser carries outside the body is
+// simply absent from it — which is why neither field is required here.
+// A machine credential that sends neither is
+// `Supply exactly one of agent_id or agent_key.`
 type CreateInvocationRequest struct {
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
 	AgentID *AgentID `json:"agent_id,omitempty"`

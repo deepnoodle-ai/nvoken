@@ -3864,3 +3864,56 @@ test("the browser entry refuses a machine credential", async () => {
   });
   await assert.rejects(() => client.listSessions());
 });
+
+// A browser token names the Agent, the Definition revision, the tenant, and
+// the end user. Requiring an Agent field here would leave browser-direct
+// access with no typed call for the one operation it exists for, which is what
+// sends a page to a hand-rolled fetch.
+test("a browser client invokes without naming an Agent", async () => {
+  let body: Record<string, unknown> | undefined;
+  const client = createBrowserClient({
+    baseUrl: "https://api.example.com",
+    clientToken: () => "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return admissionResponse();
+    },
+  });
+  const handle = await client.invoke({
+    idempotencyKey: "widget-7f21:turn-1",
+    input: "How do I rotate an API key?",
+  });
+  assert.ok(handle.invocationId);
+  // The anonymous grant resolves its own Session, and the handle is where the
+  // page learns which one it landed in.
+  assert.ok(handle.sessionId);
+  // Absent, not null: the token carries them, so the body never mentions them.
+  assert.equal("agent_id" in (body ?? {}), false);
+  assert.equal("agent_key" in (body ?? {}), false);
+  assert.equal(body?.idempotency_key, "widget-7f21:turn-1");
+  assert.equal(body?.input, "How do I rotate an API key?");
+});
+
+// The relaxation is scoped to the credential that earns it. A machine client
+// omitting the Agent is the mistake it looks like, and is still caught before
+// a request goes out.
+test("a machine client still names exactly one Agent", async () => {
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async () => admissionResponse(),
+  });
+  assert.equal(client.browserCredential, false);
+  await assert.rejects(
+    // The type rejects this too; the cast is what lets the runtime guard be
+    // tested, and a caller who reaches for `any` still gets stopped.
+    () => client.invoke({ input: "hello" } as never),
+    /supply exactly one of agentId and agentKey/,
+  );
+  await assert.rejects(
+    () => client.invoke({ agentId: "agent_1", agentKey: "support", input: "hello" } as never),
+    /supply exactly one of agentId and agentKey/,
+  );
+});

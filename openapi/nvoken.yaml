@@ -1900,6 +1900,17 @@ paths:
                       required: [category]
                       properties:
                         category: { type: string }
+              browserToken:
+                summary: A turn from a browser, where the token names the Agent
+                description: |
+                  The whole body. Agent, tenant, end user, and Definition
+                  revision arrive in the token, so a page has nothing to
+                  choose and nothing to get wrong. An anonymous grant also
+                  resolves its own Session, which is why `session_id` is
+                  absent as well.
+                value:
+                  idempotency_key: widget-7f21:turn-1
+                  input: How do I rotate an API key?
       responses:
         "202":
           description: |
@@ -6045,14 +6056,18 @@ components:
         configuration. Admission resolves and pins the Agent's Definition
         revision atomically; an unknown Agent is `agent_not_found` and nothing
         is created as a side effect.
-      oneOf:
-        - required: [agent_id]
-          not:
-            required: [agent_key]
-        - required: [agent_key]
-          not:
-            required: [agent_id]
+
+        Name the Agent with exactly one of `agent_id` or `agent_key`. A browser
+        token is the exception: it already names the Agent, so a browser
+        request sends neither, and one that names an Agent the token disagrees
+        with is `invalid_request` rather than an override. That is the same
+        rule responses follow — what a browser carries outside the body is
+        simply absent from it — which is why neither field is required here.
+        A machine credential that sends neither is
+        `Supply exactly one of agent_id or agent_key.`
       allOf:
+        - not:
+            required: [agent_id, agent_key]
         - not:
             required: [session_id, session_key]
       properties:

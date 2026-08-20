@@ -35,8 +35,10 @@ const client = createBrowserClient({
  * stay alive for the length of a turn, and a closed tab costs a turn nothing.
  */
 export async function send(sessionId: string, text: string): Promise<void> {
+  // No Agent named here. The token names it, along with the tenant, the end
+  // user, and the Definition revision, so there is nothing for the page to
+  // choose and nothing for it to get wrong.
   const turn = await client.invoke({
-    agentKey: "support",
     sessionId,
     input: text,
   });
