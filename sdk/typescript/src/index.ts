@@ -12,6 +12,13 @@ export * from "./browser.js";
 export * from "./signed-delivery.js";
 export * from "./webhook.js";
 export * from "./ask-user.js";
+// The modeling layer. A reduced snapshot is not yet a thing you can draw: tool
+// results arrive in a different message from the calls they answer, compaction
+// is a boundary rather than a message, and one turn's deltas arrive as several
+// content indices. Every consumer that renders a conversation closed that gap
+// itself until these moved here.
+export * from "./transcript.js";
+export * from "./activity.js";
 export * from "./version.js";
 export type {
   AgentList,

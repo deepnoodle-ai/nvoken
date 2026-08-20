@@ -33,6 +33,14 @@
     "./client-token": {
       "types": "./dist/client-token.d.ts",
       "import": "./dist/client-token.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript.d.ts",
+      "import": "./dist/transcript.js"
+    },
+    "./activity": {
+      "types": "./dist/activity.d.ts",
+      "import": "./dist/activity.js"
     }
   },
   "bin": {
@@ -40,6 +48,8 @@
   },
   "sideEffects": false,
   "files": [
+    "dist/activity.d.ts",
+    "dist/activity.js",
     "dist/ask-user.d.ts",
     "dist/ask-user.js",
     "dist/browser.d.ts",
@@ -68,6 +78,8 @@
     "dist/signed-delivery.js",
     "dist/stream.d.ts",
     "dist/stream.js",
+    "dist/transcript.d.ts",
+    "dist/transcript.js",
     "dist/version.d.ts",
     "dist/version.js",
     "dist/webhook.d.ts",
