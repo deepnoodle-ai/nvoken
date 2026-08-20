@@ -1671,6 +1671,16 @@ paths:
             minItems: 1
             items:
               $ref: "#/components/schemas/InvocationStatus"
+        - name: parent_invocation_id
+          in: query
+          description: |
+            Select direct children of one Invocation. Send the literal `null`
+            to select top-level Invocations; omit the parameter to retain the
+            authoritative unfiltered collection. This filter is part of the
+            opaque cursor's collection identity.
+          schema:
+            type: string
+            example: inv_01JABCDEF0123456789ABCDEFG
         - name: ended
           in: query
           description: |
@@ -2607,12 +2617,14 @@ paths:
         redirect.
 
         **A nudge is not an interrupt, and it is not immediate.** The turn
-        picks it up at its next clean stopping point: when it starts its next
-        step, when it pauses for you to run a tool, or when a turn that
-        thought it was finished re-enters its loop to answer you. A model call
-        or tool run already in flight is never aborted to deliver it. A turn
-        you have interrupted is never given more work — the interrupt wins and
-        the direction you staged expires unused.
+        picks it up at its next model-call boundary: before the next model call
+        in a running builtin or MCP tool loop, when a host-tool result resumes
+        the next execution segment, or when a turn that thought it was finished
+        re-enters its loop to answer you. A parked host tool is not woken; its
+        result still has to resume the turn. A model call or tool run already in
+        flight is never aborted to deliver a Nudge. A turn you have interrupted
+        is never given more work — the interrupt wins and the direction you
+        staged expires unused.
 
         Nudges and Invocations never turn into each other. Posting to
         `/v1/invocations` against a busy Session behaves exactly as its
@@ -6078,6 +6090,14 @@ components:
             `memory.scope: user` it is also the memory partition — it decides
             whose durable memories the model can recall — so it is required on
             the turn that opens a Session for such an Agent.
+        triggered_by:
+          $ref: "#/components/schemas/InvocationTrigger"
+          description: |
+            The exact ToolCall and parent Invocation that caused this turn.
+            nvoken verifies the pair, inherits and enforces its tenant and user
+            scope, and keeps it as immutable idempotency evidence. Accepted
+            only from machine credentials. One ToolCall may trigger multiple
+            children with different idempotency keys.
         session_id:
           $ref: "#/components/schemas/SessionID"
           description: Existing Session to continue. Mutually exclusive with session_key.
@@ -8336,6 +8356,43 @@ components:
         not a shortfall.
 
         Expect new values here over time.
+    InvocationTrigger:
+      type: object
+      additionalProperties: false
+      required: [type, parent_invocation_id, tool_call_id]
+      properties:
+        type:
+          type: string
+          enum: [tool_call]
+        parent_invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        tool_call_id:
+          $ref: "#/components/schemas/ToolCallID"
+      description: |
+        Immutable causal evidence for a child Invocation. The ToolCall must
+        belong to the named parent. The IDs remain readable after the source
+        Session is erased; they do not imply cancellation, budget, or result
+        propagation.
+    InvocationChildCounts:
+      type: object
+      additionalProperties: false
+      required: [total, open, failed]
+      properties:
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+        open:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Direct children in any nonterminal status.
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Direct children whose status is `failed`.
+      description: Direct-child counts; descendants are not folded in recursively.
     Invocation:
       type: object
       additionalProperties: false
@@ -8347,8 +8404,8 @@ components:
         required. Omission is the whole mechanism, so one schema decodes every
         response and nothing has to be guessed from the payload. The omitted
         set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
-        `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
-        `limits`.
+        `usage`, `provenance`, `structured_output_provenance`, `metadata`,
+        `limits`, `triggered_by`, and `child_invocation_counts`.
       required: [id, agent_id, agent_key, session_id, definition_id, definition_revision,
                  status, stop_reason, attempt, error, structured_output,
                  active_execution_ms, deadline_at,
@@ -8373,6 +8430,19 @@ components:
             filtering lists. It is not a security boundary — no request is
             ever refused because of it, so do not rely on it to keep one
             user's data away from another.
+        triggered_by:
+          oneOf:
+            - $ref: "#/components/schemas/InvocationTrigger"
+            - type: "null"
+          description: |
+            Null for a top-level Invocation. For a child, names the exact
+            ToolCall and parent Invocation that caused it. Machine audience
+            only; omitted from browser projections.
+        child_invocation_counts:
+          $ref: "#/components/schemas/InvocationChildCounts"
+          description: |
+            Direct children grouped for a collapsed hierarchy branch. Machine
+            audience only; omitted from browser projections.
         definition_id:
           $ref: "#/components/schemas/AgentDefinitionID"
         definition_revision:

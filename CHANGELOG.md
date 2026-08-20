@@ -6,6 +6,17 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Invocations can record the exact ToolCall that triggered them.** All four
+  SDKs and the CLI accept `parent_invocation_id` plus `tool_call_id`, expose
+  immutable `triggered_by` evidence and direct-child counts, and filter lists
+  to one parent's children or the top-level collection.
+
+- **Short-lived child work uses ordinary Sessions with retention.** Callers
+  set `session_options.retention.ttl_seconds`; no nil or ephemeral Session type
+  is introduced, so transcript ownership and erasure remain consistent.
+
 ## 0.22.0 - 2026-08-17
 
 - **Breaking: resumable budget exhaustion is now a budget hold.** Invocation

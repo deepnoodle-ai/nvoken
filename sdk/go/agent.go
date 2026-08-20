@@ -51,6 +51,7 @@ type AgentInvocationOptions struct {
 	SessionID          *string
 	SessionKey         *string
 	SessionOptions     *SessionOptions
+	TriggeredBy        *InvocationTrigger
 	// UserKey says who this turn is for. Per-call rather than per-Agent,
 	// because one Agent serves many end users; the first turn on a Session
 	// fixes it and later turns inherit it.
@@ -359,6 +360,7 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		SessionKey:         options.SessionKey,
 		UserKey:            options.UserKey,
 		SessionOptions:     options.SessionOptions,
+		TriggeredBy:        options.TriggeredBy,
 		IdempotencyKey:     options.IdempotencyKey,
 		DefinitionRevision: options.DefinitionRevision,
 		Overrides:          options.Overrides,

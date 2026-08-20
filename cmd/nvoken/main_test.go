@@ -495,6 +495,10 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 		"support",
 		"--idempotency-key",
 		"flat-admission-test",
+		"--parent-invocation-id",
+		testInvocationID,
+		"--tool-call-id",
+		testToolCallID,
 	)
 	if err != nil || !json.Valid([]byte(output)) {
 		t.Fatalf("flat admission output=%q err=%v", output, err)
@@ -506,6 +510,12 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 	}
 	if admission["agent_key"] != "support" || admission["agent_id"] != nil {
 		t.Fatalf("admission did not carry only the Agent key: %#v", admission)
+	}
+	if trigger, ok := admission["triggered_by"].(map[string]any); !ok ||
+		trigger["type"] != "tool_call" ||
+		trigger["parent_invocation_id"] != testInvocationID ||
+		trigger["tool_call_id"] != testToolCallID {
+		t.Fatalf("admission trigger = %#v", admission["triggered_by"])
 	}
 
 	output, err = executeCLI(
@@ -948,7 +958,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	commands := [][]string{
-		{"invocation", "list", "--tenant", "tenant-a", "--default-tenant"},
+		{"invocation", "list", "--tenant", "tenant-a", "--default-tenant", "--parent-invocation-id", "null"},
 		{"session", "messages", "sess_test", "--order", "desc"},
 		{
 			"usage", "timeseries",
@@ -984,7 +994,9 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 	}
 
 	invocationQuery := queries["GET /v1/invocations"]
-	if invocationQuery["tenant_key"][0] != "tenant-a" || invocationQuery["default_tenant"][0] != "true" {
+	if invocationQuery["tenant_key"][0] != "tenant-a" ||
+		invocationQuery["default_tenant"][0] != "true" ||
+		invocationQuery["parent_invocation_id"][0] != "null" {
 		t.Fatalf("Invocation query = %#v", invocationQuery)
 	}
 	messageQuery := queries["GET /v1/sessions/sess_test/messages"]

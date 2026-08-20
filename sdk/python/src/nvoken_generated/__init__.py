@@ -125,6 +125,7 @@ __all__ = [
     "InputBlock",
     "Invocation",
     "InvocationChange",
+    "InvocationChildCounts",
     "InvocationContextItem",
     "InvocationFailure",
     "InvocationInput",
@@ -136,6 +137,7 @@ __all__ = [
     "InvocationStopReason",
     "InvocationTimeline",
     "InvocationTimelineStep",
+    "InvocationTrigger",
     "InvocationWebhookContext",
     "InvocationWebhookRequest",
     "InvocationWebhookSubject",
@@ -396,6 +398,7 @@ from nvoken_generated.models.image_reference_block import ImageReferenceBlock as
 from nvoken_generated.models.input_block import InputBlock as InputBlock
 from nvoken_generated.models.invocation import Invocation as Invocation
 from nvoken_generated.models.invocation_change import InvocationChange as InvocationChange
+from nvoken_generated.models.invocation_child_counts import InvocationChildCounts as InvocationChildCounts
 from nvoken_generated.models.invocation_context_item import InvocationContextItem as InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure as InvocationFailure
 from nvoken_generated.models.invocation_input import InvocationInput as InvocationInput
@@ -407,6 +410,7 @@ from nvoken_generated.models.invocation_status import InvocationStatus as Invoca
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason as InvocationStopReason
 from nvoken_generated.models.invocation_timeline import InvocationTimeline as InvocationTimeline
 from nvoken_generated.models.invocation_timeline_step import InvocationTimelineStep as InvocationTimelineStep
+from nvoken_generated.models.invocation_trigger import InvocationTrigger as InvocationTrigger
 from nvoken_generated.models.invocation_webhook_context import InvocationWebhookContext as InvocationWebhookContext
 from nvoken_generated.models.invocation_webhook_request import InvocationWebhookRequest as InvocationWebhookRequest
 from nvoken_generated.models.invocation_webhook_subject import InvocationWebhookSubject as InvocationWebhookSubject

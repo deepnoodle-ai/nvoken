@@ -148,6 +148,8 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("user").Help("End-user label recorded on this Invocation and its messages; filtering only"),
 			cli.String("session-id").Help("Existing Session ID"),
 			cli.String("session-key").Help("Caller Session key; one turn may be active at a time"),
+			cli.String("parent-invocation-id").Help("Invocation whose durable ToolCall triggered this turn; requires --tool-call-id"),
+			cli.String("tool-call-id").Help("ToolCall on --parent-invocation-id that triggered this turn"),
 			cli.String("if-active").Default("reject").Enum("reject", "supersede", "interrupt").Help("Reject active work, atomically replace it, or stop it gracefully and keep what it produced"),
 			cli.String("webhook-url").Help("HTTPS endpoint for signed Invocation webhooks"),
 			cli.Strings("webhook-event").Help("Restrict webhooks to invocation.waiting, invocation.budget_hold, or invocation.ended; repeatable, default all"),
@@ -433,6 +435,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("agent-key").Help("Filter by host-owned Agent key; mutually exclusive with --agent-id"),
 			cli.String("user").Help("Filter by the per-turn end-user key"),
 			cli.Strings("status").Help("Filter by Invocation status; repeat for a union"),
+			cli.String("parent-invocation-id").Help("Filter by direct parent Invocation ID; use null for top-level Invocations"),
 		).
 		Run(runInvocationList)
 
@@ -1120,6 +1123,18 @@ func runInvoke(command *cli.Context) error {
 	request.UserKey = optionalString(command.String("user"))
 	request.SessionID = optionalString(command.String("session-id"))
 	request.SessionKey = optionalString(command.String("session-key"))
+	parentInvocationID := command.String("parent-invocation-id")
+	toolCallID := command.String("tool-call-id")
+	if (parentInvocationID == "") != (toolCallID == "") {
+		return errors.New("--parent-invocation-id and --tool-call-id must be supplied together")
+	}
+	if parentInvocationID != "" {
+		request.TriggeredBy = &nvoken.InvocationTrigger{
+			Type:               "tool_call",
+			ParentInvocationID: parentInvocationID,
+			ToolCallID:         toolCallID,
+		}
+	}
 	if request.Webhook, err = notifyTargetFlags(command); err != nil {
 		return err
 	}
@@ -1139,7 +1154,8 @@ func runInvokeRequestFile(command *cli.Context, client *nvoken.Client, path stri
 	}
 	for _, flag := range []string{
 		"agent-key", "agent-id", "idempotency-key", "definition-revision", "provider", "model",
-		"tenant", "user", "session-id", "session-key", "if-active", "webhook-url",
+		"tenant", "user", "session-id", "session-key", "parent-invocation-id", "tool-call-id",
+		"if-active", "webhook-url",
 		"webhook-event", "context", "context-operator", "image", "document", "image-url",
 		"document-url",
 	} {
@@ -1928,15 +1944,16 @@ func runInvocationList(command *cli.Context) error {
 		statuses[index] = nvoken.InvocationStatus(status)
 	}
 	page, err := client.ListInvocations(command.Context(), nvoken.ListInvocationsOptions{
-		TenantKey:     optionalString(command.String("tenant")),
-		DefaultTenant: optionalBool(command.Bool("default-tenant")),
-		UserKey:       optionalString(command.String("user")),
-		SessionID:     optionalString(command.String("session-id")),
-		AgentID:       optionalString(command.String("agent-id")),
-		AgentKey:      optionalString(command.String("agent-key")),
-		Statuses:      statuses,
-		Cursor:        optionalString(command.String("cursor")),
-		Limit:         optionalInt(command.Int("limit")),
+		TenantKey:          optionalString(command.String("tenant")),
+		DefaultTenant:      optionalBool(command.Bool("default-tenant")),
+		UserKey:            optionalString(command.String("user")),
+		SessionID:          optionalString(command.String("session-id")),
+		AgentID:            optionalString(command.String("agent-id")),
+		AgentKey:           optionalString(command.String("agent-key")),
+		Statuses:           statuses,
+		ParentInvocationID: optionalString(command.String("parent-invocation-id")),
+		Cursor:             optionalString(command.String("cursor")),
+		Limit:              optionalInt(command.Int("limit")),
 	})
 	if err != nil {
 		return err

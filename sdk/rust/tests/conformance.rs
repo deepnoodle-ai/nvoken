@@ -201,6 +201,22 @@ fn shared_agent_request_fixture_is_expressible() {
 }
 
 #[test]
+fn invocation_trigger_reaches_the_admission_body() {
+    let client = Client::new("https://runtime.example.test", "key").unwrap();
+    let mut request = InvokeRequest::new("support", "hello");
+    request.triggered_by = Some(models::InvocationTrigger::new(
+        models::invocation_trigger::Type::ToolCall,
+        INVOCATION_ID.to_owned(),
+        TOOL_CALL_ID.to_owned(),
+    ));
+
+    let body = client.invocation_body(request).unwrap();
+    let trigger = body.triggered_by.unwrap();
+    assert_eq!(trigger.parent_invocation_id, INVOCATION_ID);
+    assert_eq!(trigger.tool_call_id, TOOL_CALL_ID);
+}
+
+#[test]
 fn shared_fetch_builtin_fixture_is_expressible() {
     let fixture: Value = serde_json::from_str(include_str!(
         "../../conformance/fixtures/fetch-builtin-v1.json"
@@ -756,6 +772,7 @@ async fn shared_fault_server_semantics() {
             session_id: None,
             session_key: None,
             session_options: None,
+            triggered_by: None,
             idempotency_key: Some("rust-lost-ack".to_owned()),
             if_active: Some(IfActivePolicy::Supersede),
             on_budget_exhausted: None,

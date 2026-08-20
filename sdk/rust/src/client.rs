@@ -1081,6 +1081,8 @@ pub struct InvokeRequest {
     pub session_id: Option<String>,
     pub session_key: Option<String>,
     pub session_options: Option<SessionOptions>,
+    /// Verified parent Invocation and ToolCall that caused this turn.
+    pub triggered_by: Option<models::InvocationTrigger>,
     pub idempotency_key: Option<String>,
     pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
@@ -1121,6 +1123,7 @@ impl InvokeRequest {
             session_id: None,
             session_key: None,
             session_options: None,
+            triggered_by: None,
             idempotency_key: None,
             if_active: None,
             on_budget_exhausted: None,
@@ -1440,6 +1443,9 @@ pub struct ListInvocationsOptions {
     pub agent_key: Option<String>,
     pub status: Option<models::InvocationStatus>,
     pub statuses: Vec<models::InvocationStatus>,
+    /// Selects direct children of one Invocation. Use the literal `"null"`
+    /// for top-level Invocations; leave absent for the unfiltered collection.
+    pub parent_invocation_id: Option<String>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
 }
@@ -1457,6 +1463,7 @@ pub struct ListEndedInvocationsOptions {
     pub agent_key: Option<String>,
     pub status: Option<models::InvocationStatus>,
     pub statuses: Vec<models::InvocationStatus>,
+    pub parent_invocation_id: Option<String>,
     /// Starts a feed that has no cursor yet. Mutually exclusive with `cursor`,
     /// which already carries a position.
     pub ended_since: Option<chrono::DateTime<chrono::FixedOffset>>,
@@ -2418,6 +2425,7 @@ impl Client {
                 Ok::<_, NvokenError>(Box::new(options))
             })
             .transpose()?;
+        body.triggered_by = request.triggered_by.map(Box::new);
         body.metadata = request.metadata;
         body.if_active = request.if_active.map(|policy| match policy {
             IfActivePolicy::Reject => models::create_invocation_request::IfActive::Reject,
@@ -3117,6 +3125,7 @@ impl Client {
             options.agent_id.as_deref(),
             options.agent_key.as_deref(),
             (!statuses.is_empty()).then_some(statuses),
+            options.parent_invocation_id.as_deref(),
             None,
             None,
             options.cursor.as_deref(),
@@ -3168,6 +3177,7 @@ impl Client {
             options.agent_id.as_deref(),
             options.agent_key.as_deref(),
             (!statuses.is_empty()).then_some(statuses),
+            options.parent_invocation_id.as_deref(),
             Some(true),
             options.ended_since,
             options.cursor.as_deref(),

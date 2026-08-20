@@ -13,13 +13,6 @@
  */
 
 import { mapValues } from '../runtime.js';
-import type { InvocationFailure } from './InvocationFailure.js';
-import {
-    InvocationFailureFromJSON,
-    InvocationFailureFromJSONTyped,
-    InvocationFailureToJSON,
-    InvocationFailureToJSONTyped,
-} from './InvocationFailure.js';
 import type { InvocationStatus } from './InvocationStatus.js';
 import {
     InvocationStatusFromJSON,
@@ -55,20 +48,6 @@ import {
     ModelProvenanceToJSON,
     ModelProvenanceToJSONTyped,
 } from './ModelProvenance.js';
-import type { InvocationStopReason } from './InvocationStopReason.js';
-import {
-    InvocationStopReasonFromJSON,
-    InvocationStopReasonFromJSONTyped,
-    InvocationStopReasonToJSON,
-    InvocationStopReasonToJSONTyped,
-} from './InvocationStopReason.js';
-import type { ResolvedLimits } from './ResolvedLimits.js';
-import {
-    ResolvedLimitsFromJSON,
-    ResolvedLimitsFromJSONTyped,
-    ResolvedLimitsToJSON,
-    ResolvedLimitsToJSONTyped,
-} from './ResolvedLimits.js';
 import type { AgentDefinition } from './AgentDefinition.js';
 import {
     AgentDefinitionFromJSON,
@@ -83,6 +62,41 @@ import {
     CreditBlockToJSON,
     CreditBlockToJSONTyped,
 } from './CreditBlock.js';
+import type { InvocationFailure } from './InvocationFailure.js';
+import {
+    InvocationFailureFromJSON,
+    InvocationFailureFromJSONTyped,
+    InvocationFailureToJSON,
+    InvocationFailureToJSONTyped,
+} from './InvocationFailure.js';
+import type { InvocationTrigger } from './InvocationTrigger.js';
+import {
+    InvocationTriggerFromJSON,
+    InvocationTriggerFromJSONTyped,
+    InvocationTriggerToJSON,
+    InvocationTriggerToJSONTyped,
+} from './InvocationTrigger.js';
+import type { InvocationChildCounts } from './InvocationChildCounts.js';
+import {
+    InvocationChildCountsFromJSON,
+    InvocationChildCountsFromJSONTyped,
+    InvocationChildCountsToJSON,
+    InvocationChildCountsToJSONTyped,
+} from './InvocationChildCounts.js';
+import type { InvocationStopReason } from './InvocationStopReason.js';
+import {
+    InvocationStopReasonFromJSON,
+    InvocationStopReasonFromJSONTyped,
+    InvocationStopReasonToJSON,
+    InvocationStopReasonToJSONTyped,
+} from './InvocationStopReason.js';
+import type { ResolvedLimits } from './ResolvedLimits.js';
+import {
+    ResolvedLimitsFromJSON,
+    ResolvedLimitsFromJSONTyped,
+    ResolvedLimitsToJSON,
+    ResolvedLimitsToJSONTyped,
+} from './ResolvedLimits.js';
 import type { StructuredOutputProvenance } from './StructuredOutputProvenance.js';
 import {
     StructuredOutputProvenanceFromJSON,
@@ -99,8 +113,8 @@ import {
  * required. Omission is the whole mechanism, so one schema decodes every
  * response and nothing has to be guessed from the payload. The omitted
  * set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
- * `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
- * `limits`.
+ * `usage`, `provenance`, `structured_output_provenance`, `metadata`,
+ * `limits`, `triggered_by`, and `child_invocation_counts`.
  *
  * @export
  * @interface Invocation
@@ -140,6 +154,23 @@ export interface Invocation {
      * @memberof Invocation
      */
     userKey?: string | null;
+    /**
+     * Null for a top-level Invocation. For a child, names the exact
+     * ToolCall and parent Invocation that caused it. Machine audience
+     * only; omitted from browser projections.
+     *
+     * @type {InvocationTrigger}
+     * @memberof Invocation
+     */
+    triggeredBy?: InvocationTrigger | null;
+    /**
+     * Direct children grouped for a collapsed hierarchy branch. Machine
+     * audience only; omitted from browser projections.
+     *
+     * @type {InvocationChildCounts}
+     * @memberof Invocation
+     */
+    childInvocationCounts?: InvocationChildCounts;
     /**
      * Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.
      * @type {string}
@@ -350,6 +381,8 @@ export function InvocationFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'agentKey': json['agent_key'],
         'sessionId': json['session_id'],
         'userKey': json['user_key'] == null ? undefined : json['user_key'],
+        'triggeredBy': json['triggered_by'] == null ? undefined : InvocationTriggerFromJSON(json['triggered_by']),
+        'childInvocationCounts': json['child_invocation_counts'] == null ? undefined : InvocationChildCountsFromJSON(json['child_invocation_counts']),
         'definitionId': json['definition_id'],
         'definitionRevision': json['definition_revision'],
         'definition': json['definition'] == null ? undefined : AgentDefinitionFromJSON(json['definition']),
@@ -391,6 +424,8 @@ export function InvocationToJSONTyped(value?: Invocation | null, ignoreDiscrimin
         'agent_key': value['agentKey'],
         'session_id': value['sessionId'],
         'user_key': value['userKey'],
+        'triggered_by': InvocationTriggerToJSON(value['triggeredBy']),
+        'child_invocation_counts': InvocationChildCountsToJSON(value['childInvocationCounts']),
         'definition_id': value['definitionId'],
         'definition_revision': value['definitionRevision'],
         'definition': AgentDefinitionToJSON(value['definition']),

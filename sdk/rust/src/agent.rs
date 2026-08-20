@@ -143,6 +143,7 @@ pub struct AgentInvocationOptions {
     /// serves many end users; the first turn on a Session fixes it and later
     /// turns inherit it. See [`InvokeRequest::user_key`].
     pub user_key: Option<String>,
+    pub triggered_by: Option<models::InvocationTrigger>,
     pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub webhook: Option<WebhookTarget>,
@@ -436,6 +437,7 @@ impl Agent {
             session_id: options.session_id.clone(),
             session_key: options.session_key.clone(),
             session_options: options.session_options.clone(),
+            triggered_by: options.triggered_by.clone(),
             idempotency_key: options.idempotency_key.clone(),
             if_active: options.if_active,
             on_budget_exhausted: options

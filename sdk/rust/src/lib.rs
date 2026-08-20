@@ -63,10 +63,10 @@ pub use models::{
     AnonymousTokenRequest, AnonymousTokenResponse, App, AppRegistration, AppSigningKeySecret,
     ClientKey, CreateClientKeyRequest, CreateCredentialRequest, CreateProviderKeyRequest,
     CreateSessionRequest, CredentialIssuance, CredentialProfile, ForkSessionRequest, Invocation,
-    InvocationLog, InvocationLogList, InvocationStatus, Memory, MemoryKind, MemoryList,
-    MemorySearchMode, MintAppSigningKeyRequest, Operation, Org, ProviderKey, RegisterAppRequest,
-    RegisterOrgRequest, RotateCredentialRequest, RotateProviderKeyRequest, Session,
-    TranscriptSnapshot, UpdateAppRequest, UpdateOrgRequest,
+    InvocationChildCounts, InvocationLog, InvocationLogList, InvocationStatus, InvocationTrigger,
+    Memory, MemoryKind, MemoryList, MemorySearchMode, MintAppSigningKeyRequest, Operation, Org,
+    ProviderKey, RegisterAppRequest, RegisterOrgRequest, RotateCredentialRequest,
+    RotateProviderKeyRequest, Session, TranscriptSnapshot, UpdateAppRequest, UpdateOrgRequest,
 };
 pub use schema_preflight::{preflight_output_schema, SchemaIssue};
 pub use signed_delivery::{

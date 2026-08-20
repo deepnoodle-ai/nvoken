@@ -41,6 +41,7 @@ import type {
   CreateSessionRequest,
   ForkSessionRequest,
   Invocation,
+  InvocationTrigger,
   InvocationChange,
   InvocationLogList,
   InvocationList,
@@ -100,6 +101,8 @@ export type {
   ToolCallList,
   ToolCallMode,
   ToolCallStatus,
+  InvocationChildCounts,
+  InvocationTrigger,
 } from "./generated/models/index.js";
 import type {
   Credential,
@@ -961,6 +964,12 @@ interface InvokeRequestBase {
    * such an Agent.
    */
   userKey?: string;
+  /**
+   * Records that this Invocation was admitted because one durable ToolCall on
+   * another Invocation requested it. nvoken verifies the exact pair without
+   * coupling the two lifecycles.
+   */
+  triggeredBy?: InvocationTrigger;
   /** Optional one-turn revision pin, ahead of Session and Agent pins. */
   definitionRevision?: number;
   /** Safe per-turn replacements that cannot expand Agent authority. */
@@ -1140,6 +1149,7 @@ export interface InvocationOptions {
    * turns inherit it. See {@link InvokeRequest.userKey}.
    */
   userKey?: string;
+  triggeredBy?: InvocationTrigger;
   idempotencyKey?: string;
   definitionRevision?: number;
   overrides?: AgentDefinitionOverrides;
@@ -1231,6 +1241,11 @@ export interface ListInvocationOptions {
   agentId?: string;
   agentKey?: string;
   status?: InvocationStatus | InvocationStatus[];
+  /**
+   * Selects direct children of one Invocation. Use the literal `"null"` for
+   * top-level Invocations; omit it for the unfiltered collection.
+   */
+  parentInvocationId?: string;
   cursor?: string;
   limit?: number;
 }
@@ -3377,6 +3392,7 @@ export class Agent<TOutput extends object = JsonObject> {
       ...identity,
       tenantKey: this.options.tenantKey,
       userKey: options.userKey,
+      triggeredBy: options.triggeredBy,
       idempotencyKey,
       definitionRevision: options.definitionRevision,
       overrides: options.overrides,
@@ -4196,6 +4212,7 @@ function invocationRequestToWire<TOutput extends object>(
     agentKey: "agentKey" in request ? request.agentKey : undefined,
     tenantKey: request.tenantKey,
     userKey: request.userKey,
+    triggeredBy: request.triggeredBy,
     definitionRevision: request.definitionRevision,
     overrides: request.overrides === undefined
       ? undefined

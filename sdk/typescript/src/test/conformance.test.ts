@@ -290,6 +290,35 @@ test("shared agent-definition-reuse fixture is expressible", async () => {
   assert.equal(body?.definition_id, undefined);
 });
 
+test("Invocation trigger reaches the admission body", async () => {
+  let body: Record<string, unknown> | undefined;
+  const client = new Client({
+    baseUrl: "https://runtime.example.test",
+    apiKey: "key",
+    retry: { maxAttempts: 1 },
+    fetch: async (_input, init) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return admissionResponse();
+    },
+  });
+
+  await client.invoke({
+    agentKey: "support",
+    input: "hello",
+    triggeredBy: {
+      type: "tool_call",
+      parentInvocationId: invocationId,
+      toolCallId,
+    },
+  });
+
+  assert.deepEqual(body?.triggered_by, {
+    type: "tool_call",
+    parent_invocation_id: invocationId,
+    tool_call_id: toolCallId,
+  });
+});
+
 test("Agent Definition creation returns a stable resource used by Invocation ID", async () => {
   const fixture = JSON.parse(await readFile(
     new URL("../../../conformance/fixtures/agent-definition-reuse-v1.json", import.meta.url),

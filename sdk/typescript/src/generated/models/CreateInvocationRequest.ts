@@ -41,6 +41,13 @@ import {
     InvocationInputToJSON,
     InvocationInputToJSONTyped,
 } from './InvocationInput.js';
+import type { InvocationTrigger } from './InvocationTrigger.js';
+import {
+    InvocationTriggerFromJSON,
+    InvocationTriggerFromJSONTyped,
+    InvocationTriggerToJSON,
+    InvocationTriggerToJSONTyped,
+} from './InvocationTrigger.js';
 import type { ProviderKeySelection } from './ProviderKeySelection.js';
 import {
     ProviderKeySelectionFromJSON,
@@ -110,6 +117,17 @@ export interface CreateInvocationRequest {
      * @memberof CreateInvocationRequest
      */
     userKey?: string;
+    /**
+     * The exact ToolCall and parent Invocation that caused this turn.
+     * nvoken verifies the pair, inherits and enforces its tenant and user
+     * scope, and keeps it as immutable idempotency evidence. Accepted
+     * only from machine credentials. One ToolCall may trigger multiple
+     * children with different idempotency keys.
+     *
+     * @type {InvocationTrigger}
+     * @memberof CreateInvocationRequest
+     */
+    triggeredBy?: InvocationTrigger;
     /**
      * Existing Session to continue. Mutually exclusive with session_key.
      * @type {string}
@@ -323,6 +341,7 @@ export function CreateInvocationRequestFromJSONTyped(json: any, ignoreDiscrimina
         'agentKey': json['agent_key'] == null ? undefined : json['agent_key'],
         'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
         'userKey': json['user_key'] == null ? undefined : json['user_key'],
+        'triggeredBy': json['triggered_by'] == null ? undefined : InvocationTriggerFromJSON(json['triggered_by']),
         'sessionId': json['session_id'] == null ? undefined : json['session_id'],
         'sessionKey': json['session_key'] == null ? undefined : json['session_key'],
         'sessionOptions': json['session_options'] == null ? undefined : SessionOptionsFromJSON(json['session_options']),
@@ -355,6 +374,7 @@ export function CreateInvocationRequestToJSONTyped(value?: CreateInvocationReque
         'agent_key': value['agentKey'],
         'tenant_key': value['tenantKey'],
         'user_key': value['userKey'],
+        'triggered_by': InvocationTriggerToJSON(value['triggeredBy']),
         'session_id': value['sessionId'],
         'session_key': value['sessionKey'],
         'session_options': SessionOptionsToJSON(value['sessionOptions']),

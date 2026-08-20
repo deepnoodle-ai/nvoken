@@ -838,6 +838,21 @@ func (e InvocationTimelineStepKind) Valid() bool {
 	}
 }
 
+// Defines values for InvocationTriggerType.
+const (
+	InvocationTriggerTypeToolCall InvocationTriggerType = "tool_call"
+)
+
+// Valid indicates whether the value is a known member of the InvocationTriggerType enum.
+func (e InvocationTriggerType) Valid() bool {
+	switch e {
+	case InvocationTriggerTypeToolCall:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvocationWebhookContextSchemaVersion.
 const (
 	InvocationWebhookContextSchemaVersionN1 InvocationWebhookContextSchemaVersion = 1
@@ -3584,6 +3599,13 @@ type CreateInvocationRequest struct {
 	// stored partition.
 	TenantKey *string `json:"tenant_key,omitempty"`
 
+	// TriggeredBy The exact ToolCall and parent Invocation that caused this turn.
+	// nvoken verifies the pair, inherits and enforces its tenant and user
+	// scope, and keeps it as immutable idempotency evidence. Accepted
+	// only from machine credentials. One ToolCall may trigger multiple
+	// children with different idempotency keys.
+	TriggeredBy *InvocationTrigger `json:"triggered_by,omitempty"`
+
 	// UserKey Who this turn is for. The first request that opens a Session fixes
 	// its `user_key`, including fixing it to absent; every later turn
 	// either sends the same one or leaves it out and inherits it. A turn
@@ -4181,8 +4203,8 @@ type InputBlock struct {
 // required. Omission is the whole mechanism, so one schema decodes every
 // response and nothing has to be guessed from the payload. The omitted
 // set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
-// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
-// `limits`.
+// `usage`, `provenance`, `structured_output_provenance`, `metadata`,
+// `limits`, `triggered_by`, and `child_invocation_counts`.
 type Invocation struct {
 	ActiveExecutionMs int `json:"active_execution_ms"`
 
@@ -4197,6 +4219,10 @@ type Invocation struct {
 	// discarding provisional output from an earlier attempt. Zero
 	// before the first claim.
 	Attempt int `json:"attempt"`
+
+	// ChildInvocationCounts Direct children grouped for a collapsed hierarchy branch. Machine
+	// audience only; omitted from browser projections.
+	ChildInvocationCounts *InvocationChildCounts `json:"child_invocation_counts,omitempty"`
 
 	// Context The ordered context payload accepted with this turn, before
 	// transcript deduplication. Null when omitted and in Invocation list
@@ -4299,7 +4325,12 @@ type Invocation struct {
 	// ToolCalls Every tool call this turn has made, with its current status.
 	// Omitted when the turn has made none.
 	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
-	UpdatedAt time.Time          `json:"updated_at"`
+
+	// TriggeredBy Null for a top-level Invocation. For a child, names the exact
+	// ToolCall and parent Invocation that caused it. Machine audience
+	// only; omitted from browser projections.
+	TriggeredBy *InvocationTrigger `json:"triggered_by,omitempty"`
+	UpdatedAt   time.Time          `json:"updated_at"`
 
 	// Usage One normalized terminal aggregate, not a billing ledger.
 	Usage *ModelUsage `json:"usage,omitempty"`
@@ -4400,6 +4431,16 @@ type InvocationChange struct {
 	// disconnected sees it on replay.
 	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
 	Usage     *ModelUsage        `json:"usage,omitempty"`
+}
+
+// InvocationChildCounts Direct-child counts; descendants are not folded in recursively.
+type InvocationChildCounts struct {
+	// Failed Direct children whose status is `failed`.
+	Failed int64 `json:"failed"`
+
+	// Open Direct children in any nonterminal status.
+	Open  int64 `json:"open"`
+	Total int64 `json:"total"`
 }
 
 // InvocationContextItem defines model for InvocationContextItem.
@@ -4547,8 +4588,8 @@ type InvocationResult struct {
 	// required. Omission is the whole mechanism, so one schema decodes every
 	// response and nothing has to be guessed from the payload. The omitted
 	// set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
-	// `usage`, `provenance`, `structured_output_provenance`, `metadata`, and
-	// `limits`.
+	// `usage`, `provenance`, `structured_output_provenance`, `metadata`,
+	// `limits`, `triggered_by`, and `child_invocation_counts`.
 	Invocation Invocation `json:"invocation"`
 
 	// Messages Every canonical SessionMessage owned by this Invocation, all
@@ -4673,6 +4714,25 @@ type InvocationTimelineStep struct {
 
 // InvocationTimelineStepKind defines model for InvocationTimelineStep.Kind.
 type InvocationTimelineStepKind string
+
+// InvocationTrigger Immutable causal evidence for a child Invocation. The ToolCall must
+// belong to the named parent. The IDs remain readable after the source
+// Session is erased; they do not imply cancellation, budget, or result
+// propagation.
+type InvocationTrigger struct {
+	// ParentInvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	ParentInvocationID InvocationID `json:"parent_invocation_id"`
+
+	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
+	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
+	// back verbatim as `tool_call_id` when submitting results. The same value
+	// is the `Idempotency-Key` on a callback delivery.
+	ToolCallID ToolCallID            `json:"tool_call_id"`
+	Type       InvocationTriggerType `json:"type"`
+}
+
+// InvocationTriggerType defines model for InvocationTrigger.Type.
+type InvocationTriggerType string
 
 // InvocationWebhookContext defines model for InvocationWebhookContext.
 type InvocationWebhookContext struct {
@@ -7392,6 +7452,12 @@ type ListInvocationsParams struct {
 	// Status Repeat to select a union of statuses. Order and duplicates are
 	// normalized before cursor binding.
 	Status *[]InvocationStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// ParentInvocationID Select direct children of one Invocation. Send the literal `null`
+	// to select top-level Invocations; omit the parameter to retain the
+	// authoritative unfiltered collection. This filter is part of the
+	// opaque cursor's collection identity.
+	ParentInvocationID *string `form:"parent_invocation_id,omitempty" json:"parent_invocation_id,omitempty"`
 
 	// Ended Walk the turns that ended, oldest first, instead of listing current
 	// state newest first. See the description above.
@@ -10217,12 +10283,14 @@ type ClientInterface interface {
 	// redirect.
 	//
 	// **A nudge is not an interrupt, and it is not immediate.** The turn
-	// picks it up at its next clean stopping point: when it starts its next
-	// step, when it pauses for you to run a tool, or when a turn that
-	// thought it was finished re-enters its loop to answer you. A model call
-	// or tool run already in flight is never aborted to deliver it. A turn
-	// you have interrupted is never given more work — the interrupt wins and
-	// the direction you staged expires unused.
+	// picks it up at its next model-call boundary: before the next model call
+	// in a running builtin or MCP tool loop, when a host-tool result resumes
+	// the next execution segment, or when a turn that thought it was finished
+	// re-enters its loop to answer you. A parked host tool is not woken; its
+	// result still has to resume the turn. A model call or tool run already in
+	// flight is never aborted to deliver a Nudge. A turn you have interrupted
+	// is never given more work — the interrupt wins and the direction you
+	// staged expires unused.
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
@@ -10259,12 +10327,14 @@ type ClientInterface interface {
 	// redirect.
 	//
 	// **A nudge is not an interrupt, and it is not immediate.** The turn
-	// picks it up at its next clean stopping point: when it starts its next
-	// step, when it pauses for you to run a tool, or when a turn that
-	// thought it was finished re-enters its loop to answer you. A model call
-	// or tool run already in flight is never aborted to deliver it. A turn
-	// you have interrupted is never given more work — the interrupt wins and
-	// the direction you staged expires unused.
+	// picks it up at its next model-call boundary: before the next model call
+	// in a running builtin or MCP tool loop, when a host-tool result resumes
+	// the next execution segment, or when a turn that thought it was finished
+	// re-enters its loop to answer you. A parked host tool is not woken; its
+	// result still has to resume the turn. A model call or tool run already in
+	// flight is never aborted to deliver a Nudge. A turn you have interrupted
+	// is never given more work — the interrupt wins and the direction you
+	// staged expires unused.
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
@@ -12729,12 +12799,14 @@ func (c *Client) ListNudges(ctx context.Context, invocationID InvocationID, para
 // redirect.
 //
 // **A nudge is not an interrupt, and it is not immediate.** The turn
-// picks it up at its next clean stopping point: when it starts its next
-// step, when it pauses for you to run a tool, or when a turn that
-// thought it was finished re-enters its loop to answer you. A model call
-// or tool run already in flight is never aborted to deliver it. A turn
-// you have interrupted is never given more work — the interrupt wins and
-// the direction you staged expires unused.
+// picks it up at its next model-call boundary: before the next model call
+// in a running builtin or MCP tool loop, when a host-tool result resumes
+// the next execution segment, or when a turn that thought it was finished
+// re-enters its loop to answer you. A parked host tool is not woken; its
+// result still has to resume the turn. A model call or tool run already in
+// flight is never aborted to deliver a Nudge. A turn you have interrupted
+// is never given more work — the interrupt wins and the direction you
+// staged expires unused.
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
@@ -12781,12 +12853,14 @@ func (c *Client) CreateNudgeWithBody(ctx context.Context, invocationID Invocatio
 // redirect.
 //
 // **A nudge is not an interrupt, and it is not immediate.** The turn
-// picks it up at its next clean stopping point: when it starts its next
-// step, when it pauses for you to run a tool, or when a turn that
-// thought it was finished re-enters its loop to answer you. A model call
-// or tool run already in flight is never aborted to deliver it. A turn
-// you have interrupted is never given more work — the interrupt wins and
-// the direction you staged expires unused.
+// picks it up at its next model-call boundary: before the next model call
+// in a running builtin or MCP tool loop, when a host-tool result resumes
+// the next execution segment, or when a turn that thought it was finished
+// re-enters its loop to answer you. A parked host tool is not woken; its
+// result still has to resume the turn. A model call or tool run already in
+// flight is never aborted to deliver a Nudge. A turn you have interrupted
+// is never given more work — the interrupt wins and the direction you
+// staged expires unused.
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
@@ -16244,6 +16318,18 @@ func NewListInvocationsRequest(server string, params *ListInvocationsParams) (*h
 		if params.Status != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ParentInvocationID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent_invocation_id", *params.ParentInvocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -20800,12 +20886,14 @@ type ClientWithResponsesInterface interface {
 	// redirect.
 	//
 	// **A nudge is not an interrupt, and it is not immediate.** The turn
-	// picks it up at its next clean stopping point: when it starts its next
-	// step, when it pauses for you to run a tool, or when a turn that
-	// thought it was finished re-enters its loop to answer you. A model call
-	// or tool run already in flight is never aborted to deliver it. A turn
-	// you have interrupted is never given more work — the interrupt wins and
-	// the direction you staged expires unused.
+	// picks it up at its next model-call boundary: before the next model call
+	// in a running builtin or MCP tool loop, when a host-tool result resumes
+	// the next execution segment, or when a turn that thought it was finished
+	// re-enters its loop to answer you. A parked host tool is not woken; its
+	// result still has to resume the turn. A model call or tool run already in
+	// flight is never aborted to deliver a Nudge. A turn you have interrupted
+	// is never given more work — the interrupt wins and the direction you
+	// staged expires unused.
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
@@ -20842,12 +20930,14 @@ type ClientWithResponsesInterface interface {
 	// redirect.
 	//
 	// **A nudge is not an interrupt, and it is not immediate.** The turn
-	// picks it up at its next clean stopping point: when it starts its next
-	// step, when it pauses for you to run a tool, or when a turn that
-	// thought it was finished re-enters its loop to answer you. A model call
-	// or tool run already in flight is never aborted to deliver it. A turn
-	// you have interrupted is never given more work — the interrupt wins and
-	// the direction you staged expires unused.
+	// picks it up at its next model-call boundary: before the next model call
+	// in a running builtin or MCP tool loop, when a host-tool result resumes
+	// the next execution segment, or when a turn that thought it was finished
+	// re-enters its loop to answer you. A parked host tool is not woken; its
+	// result still has to resume the turn. A model call or tool run already in
+	// flight is never aborted to deliver a Nudge. A turn you have interrupted
+	// is never given more work — the interrupt wins and the direction you
+	// staged expires unused.
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
@@ -30757,12 +30847,14 @@ func (c *ClientWithResponses) ListNudgesWithResponse(ctx context.Context, invoca
 // redirect.
 //
 // **A nudge is not an interrupt, and it is not immediate.** The turn
-// picks it up at its next clean stopping point: when it starts its next
-// step, when it pauses for you to run a tool, or when a turn that
-// thought it was finished re-enters its loop to answer you. A model call
-// or tool run already in flight is never aborted to deliver it. A turn
-// you have interrupted is never given more work — the interrupt wins and
-// the direction you staged expires unused.
+// picks it up at its next model-call boundary: before the next model call
+// in a running builtin or MCP tool loop, when a host-tool result resumes
+// the next execution segment, or when a turn that thought it was finished
+// re-enters its loop to answer you. A parked host tool is not woken; its
+// result still has to resume the turn. A model call or tool run already in
+// flight is never aborted to deliver a Nudge. A turn you have interrupted
+// is never given more work — the interrupt wins and the direction you
+// staged expires unused.
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
@@ -30805,12 +30897,14 @@ func (c *ClientWithResponses) CreateNudgeWithBodyWithResponse(ctx context.Contex
 // redirect.
 //
 // **A nudge is not an interrupt, and it is not immediate.** The turn
-// picks it up at its next clean stopping point: when it starts its next
-// step, when it pauses for you to run a tool, or when a turn that
-// thought it was finished re-enters its loop to answer you. A model call
-// or tool run already in flight is never aborted to deliver it. A turn
-// you have interrupted is never given more work — the interrupt wins and
-// the direction you staged expires unused.
+// picks it up at its next model-call boundary: before the next model call
+// in a running builtin or MCP tool loop, when a host-tool result resumes
+// the next execution segment, or when a turn that thought it was finished
+// re-enters its loop to answer you. A parked host tool is not woken; its
+// result still has to resume the turn. A model call or tool run already in
+// flight is never aborted to deliver a Nudge. A turn you have interrupted
+// is never given more work — the interrupt wins and the direction you
+// staged expires unused.
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its

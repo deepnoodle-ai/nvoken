@@ -23,10 +23,12 @@ from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_definition import AgentDefinition
 from nvoken_generated.models.credit_block import CreditBlock
+from nvoken_generated.models.invocation_child_counts import InvocationChildCounts
 from nvoken_generated.models.invocation_context_item import InvocationContextItem
 from nvoken_generated.models.invocation_failure import InvocationFailure
 from nvoken_generated.models.invocation_status import InvocationStatus
 from nvoken_generated.models.invocation_stop_reason import InvocationStopReason
+from nvoken_generated.models.invocation_trigger import InvocationTrigger
 from nvoken_generated.models.model_provenance import ModelProvenance
 from nvoken_generated.models.model_usage import ModelUsage
 from nvoken_generated.models.resolved_limits import ResolvedLimits
@@ -38,13 +40,15 @@ from pydantic_core import to_jsonable_python
 
 class Invocation(BaseModel):
     """
-    One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, and `limits`.
+    One turn.  Some fields are audience-restricted: they are present for a machine credential and omitted for a browser grant, which is why they are not required. Omission is the whole mechanism, so one schema decodes every response and nothing has to be guessed from the payload. The omitted set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`, `usage`, `provenance`, `structured_output_provenance`, `metadata`, `limits`, `triggered_by`, and `child_invocation_counts`.
     """ # noqa: E501
     id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `inv_` prefix. Treat the body as opaque.")
     agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     session_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `sess_` prefix. Treat the body as opaque.")
     user_key: Optional[StrictStr] = Field(default=None, description="Your own label for the end user this turn belongs to. Useful for filtering lists. It is not a security boundary — no request is ever refused because of it, so do not rely on it to keep one user's data away from another. ")
+    triggered_by: Optional[InvocationTrigger] = Field(default=None, description="Null for a top-level Invocation. For a child, names the exact ToolCall and parent Invocation that caused it. Machine audience only; omitted from browser projections. ")
+    child_invocation_counts: Optional[InvocationChildCounts] = Field(default=None, description="Direct children grouped for a collapsed hierarchy branch. Machine audience only; omitted from browser projections. ")
     definition_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Stable App-owned Agent Definition identifier with the public `def_` prefix. Treat the body as opaque.")
     definition_revision: Annotated[int, Field(strict=True, ge=1)] = Field(description="Immutable Agent Definition revision admitted for this turn.")
     definition: Optional[AgentDefinition] = Field(default=None, description="The agent definition this turn actually ran with, stored when the turn started and returned exactly as it was. Request headers for remote MCP servers are never stored and never appear here.  Present on `GET /v1/invocations/{id}` and on the result. Null in list items, where `definition_id` and `definition_revision` identify it instead. ")
@@ -67,7 +71,7 @@ class Invocation(BaseModel):
     updated_at: datetime
     ended_at: Optional[datetime]
     tool_calls: Optional[List[ToolCallSummary]] = Field(default=None, description="Every tool call this turn has made, with its current status. Omitted when the turn has made none. ")
-    __properties: ClassVar[List[str]] = ["id", "agent_id", "agent_key", "session_id", "user_key", "definition_id", "definition_revision", "definition", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "tool_calls"]
+    __properties: ClassVar[List[str]] = ["id", "agent_id", "agent_key", "session_id", "user_key", "triggered_by", "child_invocation_counts", "definition_id", "definition_revision", "definition", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "tool_calls"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -108,6 +112,12 @@ class Invocation(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of triggered_by
+        if self.triggered_by:
+            _dict['triggered_by'] = self.triggered_by.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of child_invocation_counts
+        if self.child_invocation_counts:
+            _dict['child_invocation_counts'] = self.child_invocation_counts.to_dict()
         # override the default output from pydantic by calling `to_dict()` of definition
         if self.definition:
             _dict['definition'] = self.definition.to_dict()
@@ -147,6 +157,11 @@ class Invocation(BaseModel):
         # and model_fields_set contains the field
         if self.user_key is None and "user_key" in self.model_fields_set:
             _dict['user_key'] = None
+
+        # set to None if triggered_by (nullable) is None
+        # and model_fields_set contains the field
+        if self.triggered_by is None and "triggered_by" in self.model_fields_set:
+            _dict['triggered_by'] = None
 
         # set to None if definition (nullable) is None
         # and model_fields_set contains the field
@@ -225,6 +240,8 @@ class Invocation(BaseModel):
             "agent_key": obj.get("agent_key"),
             "session_id": obj.get("session_id"),
             "user_key": obj.get("user_key"),
+            "triggered_by": InvocationTrigger.from_dict(obj["triggered_by"]) if obj.get("triggered_by") is not None else None,
+            "child_invocation_counts": InvocationChildCounts.from_dict(obj["child_invocation_counts"]) if obj.get("child_invocation_counts") is not None else None,
             "definition_id": obj.get("definition_id"),
             "definition_revision": obj.get("definition_revision"),
             "definition": AgentDefinition.from_dict(obj["definition"]) if obj.get("definition") is not None else None,

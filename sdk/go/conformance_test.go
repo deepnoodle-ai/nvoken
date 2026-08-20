@@ -229,7 +229,12 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		Input:          "hello",
 		SessionKey:     &sessionKey,
 		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
-		Metadata:       fixture.InvocationMetadata,
+		TriggeredBy: &InvocationTrigger{
+			Type:               "tool_call",
+			ParentInvocationID: conformanceInvocationID,
+			ToolCallID:         conformanceToolCallID,
+		},
+		Metadata: fixture.InvocationMetadata,
 	}.encoded()
 	if err != nil {
 		t.Fatalf("build request: %v", err)
@@ -240,6 +245,11 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 	}
 	assertEncodesTo(t, wire["metadata"], mustEncode(t, fixture.InvocationMetadata))
 	assertEncodesTo(t, wire["session_options"], fixture.SessionOptions.RetentionOnly)
+	assertEncodesTo(t, wire["triggered_by"], mustEncode(t, map[string]any{
+		"type":                 "tool_call",
+		"parent_invocation_id": conformanceInvocationID,
+		"tool_call_id":         conformanceToolCallID,
+	}))
 	if wire["agent_key"] != "support" {
 		t.Fatalf("agent_key = %#v", wire["agent_key"])
 	}

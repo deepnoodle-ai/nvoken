@@ -145,6 +145,33 @@ Equivalent status sets share cursor identity regardless of input order.
 Session get/list models expose typed nullable `usage`, computed from durable
 Invocation usage as a convenience estimate rather than a billing ledger.
 
+### Child Invocations
+
+Record the exact ToolCall that caused another turn, and use normal Session
+retention when the child's transcript is temporary:
+
+```python
+from nvoken import InvocationTrigger, InvokeRequest, SessionOptions, SessionRetention
+
+request = InvokeRequest(
+    agent_key="researcher",
+    input="Investigate this branch",
+    triggered_by=InvocationTrigger(
+        type="tool_call",
+        parent_invocation_id=parent.id,
+        tool_call_id=call.id,
+    ),
+    session_options=SessionOptions(
+        retention=SessionRetention(ttl_seconds=3600),
+    ),
+)
+```
+
+Pass `parent_invocation_id` to `list_invocations`: an Invocation ID selects
+its direct children, the literal `"null"` selects top-level Invocations, and
+omission keeps the unfiltered collection. Lineage does not propagate
+cancellation, budgets, results, or lifecycle state.
+
 Install restart-stable compaction on a new or existing Session:
 
 ```python

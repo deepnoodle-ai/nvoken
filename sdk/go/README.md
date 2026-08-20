@@ -154,6 +154,33 @@ Equivalent status sets share cursor identity regardless of input order.
 Session get/list values expose typed nullable `Usage`, computed from durable
 Invocation usage; it is an estimate, not a billing ledger.
 
+### Child Invocations
+
+When a ToolCall starts another turn, record the exact cause on admission. A
+child remains an ordinary Invocation in its own ordinary Session; give that
+Session a short retention window when its transcript is temporary:
+
+```go
+trigger := &nvoken.InvocationTrigger{
+	Type:               "tool_call",
+	ParentInvocationID: parent.ID,
+	ToolCallID:         call.ID,
+}
+handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
+	AgentKey:   "researcher",
+	Input:      "Investigate this branch",
+	TriggeredBy: trigger,
+	SessionOptions: &nvoken.SessionOptions{
+		Retention: &nvoken.SessionRetention{TTLSeconds: 3600},
+	},
+})
+```
+
+Set `ParentInvocationID` on `ListInvocationsOptions` to an Invocation ID for
+its direct children, to the literal `"null"` for top-level Invocations, or
+leave it nil for the unfiltered collection. Lineage does not propagate
+cancellation, budgets, results, or lifecycle state.
+
 For an intentional replace/regenerate action, use a new idempotency key and
 the typed policy:
 

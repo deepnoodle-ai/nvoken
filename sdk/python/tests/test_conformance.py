@@ -77,6 +77,7 @@ from nvoken import (
     CreateSessionRequest,
     CredentialProfile,
     ClientInterface,
+    InvocationTrigger,
     ContextCompaction,
     ContextItem,
     InvocationHandle,
@@ -193,10 +194,20 @@ def test_shared_session_lifecycle_fixture() -> None:
         input="hello",
         session_key="conformance",
         session_options=SessionOptions(retention=SessionRetention(ttl_seconds=86400)),
+        triggered_by=InvocationTrigger(
+            type="tool_call",
+            parent_invocation_id=INVOCATION_ID,
+            tool_call_id=TOOL_CALL_ID,
+        ),
         metadata=fixture["invocation_metadata"],
     ))
     assert retention["session_options"] == fixture["session_options"]["retention_only"]
     assert retention["metadata"] == fixture["invocation_metadata"]
+    assert retention["triggered_by"] == {
+        "type": "tool_call",
+        "parent_invocation_id": INVOCATION_ID,
+        "tool_call_id": TOOL_CALL_ID,
+    }
     assert (
         client._agent_definition_body(
             AgentDefinition(
