@@ -1,2 +1,2 @@
 /** The released version of the TypeScript SDK. */
-export const VERSION = "0.24.0";
+export const VERSION = "0.25.0";
