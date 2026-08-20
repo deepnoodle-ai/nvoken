@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.25.0 - 2026-08-20
 
 - **A browser client can be streamed.** `createBrowserClient` returns a
   `BrowserClient`, which is `Omit<Client, "invoke">` plus a narrower `invoke`.
