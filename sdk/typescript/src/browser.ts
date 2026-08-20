@@ -2,7 +2,10 @@ import {
   Client,
   NvokenError,
   normalizeError,
+  type BrowserInvokeRequest,
   type ClientOptions,
+  type InvocationHandle,
+  type JsonObject,
 } from "./client.js";
 import { AppsApi } from "./generated/apis/AppsApi.js";
 import type { AnonymousTokenResponse } from "./generated/models/AnonymousTokenResponse.js";
@@ -39,20 +42,43 @@ export interface BrowserClientOptions extends Omit<ClientOptions, "apiKey" | "en
  * accepted from a browser token and are not sent here — the token already
  * carries what they would assert.
  */
-export function createBrowserClient(options: BrowserClientOptions): Client {
+export function createBrowserClient(options: BrowserClientOptions): BrowserClient {
   const { clientToken, ...rest } = options;
   // A static token is checkable now, and now is when a developer can act on
   // it: at construction, in a test or at boot, rather than inside whatever
   // request happened to go first.
   if (typeof clientToken !== "function") refuseMachineCredential(clientToken);
   const resolve = typeof clientToken === "function" ? clientToken : () => clientToken;
-  return new Client({
+  const client = new Client({
     ...rest,
     // A browser has no .env to read, and probing for one is the kind of thing
     // that turns into a bundler warning nobody can act on.
     envFile: false,
     apiKey: async () => refuseMachineCredential(await resolve()),
+    browserCredential: true,
   });
+  // One Client, described to a page in the terms a page can act on. The
+  // assertion is needed because narrowing a parameter type is not a subtype
+  // relationship; the instance is unchanged, and `browserCredential` above is
+  // what makes the narrower contract true at runtime.
+  return client as unknown as BrowserClient;
+}
+
+/**
+ * A {@link Client} whose credential is a browser token.
+ *
+ * It is the same object with the same methods; one signature differs.
+ * `invoke` takes a {@link BrowserInvokeRequest}, which omits the Agent, the
+ * tenant, and the end user because the token already carries them, along with
+ * the fields the service refuses from a browser token. Everything a page may
+ * reach — streaming, reading a Session, answering a client tool — it reaches
+ * exactly as a machine client does.
+ */
+export interface BrowserClient extends Omit<Client, "invoke"> {
+  invoke<TOutput extends object = JsonObject>(
+    request: BrowserInvokeRequest,
+    signal?: AbortSignal,
+  ): Promise<InvocationHandle<TOutput>>;
 }
 
 export interface AnonymousTokenOptions {

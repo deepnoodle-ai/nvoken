@@ -6,6 +6,24 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **A page no longer names the Agent when it starts a turn.** A browser token
+  already carries the Agent, the Definition revision, the tenant, and the end
+  user, so `invoke({ input })` is the whole request. `createBrowserClient` now
+  returns a `BrowserClient`, whose `invoke` takes a `BrowserInvokeRequest`: the
+  Agent is absent, and so are the fields the service refuses from a browser
+  token — `sessionKey`, `sessionOptions`, `triggeredBy`, `providerKeys`,
+  `mcpServerHeaders`, and `webhook`. A machine client is unchanged and still
+  requires exactly one of `agentId` and `agentKey`. Build a `Client` directly
+  from a client token and set `browserCredential: true` for the same rule.
+
+- **`createBrowserClient` and `issueAnonymousToken` are exported from the
+  package root.** They were reachable only through `@deepnoodle/nvoken/browser`,
+  so autocomplete on the root surfaced neither at the moment someone goes
+  looking. The subpath still works, and `sideEffects: false` keeps the root
+  export free for callers who never touch it.
+
 ## 0.23.0 - 2026-08-20
 
 - **Invocations can record the exact ToolCall that triggered them.** All four

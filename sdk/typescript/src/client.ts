@@ -1015,12 +1015,47 @@ type AgentIdentityRequest =
   | { agentId: string; agentKey?: never }
   | { agentKey: string; agentId?: never };
 
-export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase
-  & AgentIdentityRequest & (
+type SessionTargetRequest =
   | { sessionId: string; sessionKey?: never; sessionOptions?: SessionOptions }
   | { sessionKey: string; sessionId?: never; sessionOptions?: SessionOptions }
-  | { sessionId?: never; sessionKey?: never; sessionOptions?: SessionOptions }
-);
+  | { sessionId?: never; sessionKey?: never; sessionOptions?: SessionOptions };
+
+export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase
+  & AgentIdentityRequest & SessionTargetRequest;
+
+/**
+ * What {@link Client.invoke} takes when the client holds a browser token.
+ *
+ * A browser token names the Agent, the Definition revision, the tenant, and
+ * the end user, so none of them appear here — there is nothing for a page to
+ * choose and nothing for it to get wrong. The fields a browser token is not
+ * allowed to send are absent for the same reason: `sessionKey`,
+ * `sessionOptions`, `triggeredBy`, `providerKeys`, `mcpServerHeaders`, and
+ * `webhook` are the host's authority, and the service refuses them here rather
+ * than ignoring them.
+ *
+ * `sessionId` continues a Session a host-minted token has already opened. An
+ * anonymous grant resolves its own Session from the visitor token, so it omits
+ * this too and reads the Session it landed in from the returned handle.
+ */
+export interface BrowserInvokeRequest {
+  input: InvokeInput;
+  idempotencyKey?: string;
+  /** Continue this Session. Omit it under an anonymous grant. */
+  sessionId?: string;
+  /** `supersede` is the host's authority and is refused from a browser token. */
+  ifActive?: Exclude<IfActivePolicy, "supersede">;
+  /** `hold` is the host's authority and is refused from a browser token. */
+  onBudgetExhausted?: Exclude<BudgetExhaustionBehavior, "hold">;
+  /** Safe per-turn replacements that cannot expand Agent authority. */
+  overrides?: AgentDefinitionOverrides;
+  /**
+   * Contextual state recorded before this turn's input. A browser token may
+   * only send names the Agent Definition's client interface lists.
+   */
+  context?: readonly ContextItem[];
+  metadata?: Metadata;
+}
 
 export interface ToolResult {
   toolCallId: string;
@@ -1069,6 +1104,20 @@ export interface ClientOptions {
    * Narrows every request this client makes. See {@link Scope}.
    */
   scope?: Scope;
+  /**
+   * Declares that this client's credential is a browser token.
+   *
+   * One rule changes: a browser token already names the Agent, so
+   * {@link Client.invoke} stops requiring `agentId` or `agentKey`. It is the
+   * same rule the contract states — what a browser supplies outside the body
+   * is absent from it — and without this flag the check written for machine
+   * credentials refuses the one request a browser is able to make.
+   *
+   * {@link createBrowserClient} sets it, and returns a client whose `invoke`
+   * is typed for a browser. Set it yourself only if you build a `Client`
+   * directly from a client token.
+   */
+  browserCredential?: boolean;
 }
 
 /**
@@ -1545,6 +1594,11 @@ export class Client {
   readonly streamReconnectTimeoutMs: number;
   /** The scope this client stamps, or undefined when it stamps none. */
   readonly scope: Scope | undefined;
+  /**
+   * Whether this client's credential is a browser token, which names the Agent
+   * itself. See {@link ClientOptions.browserCredential}.
+   */
+  readonly browserCredential: boolean;
   private readonly resolvedOptions: ClientOptions;
 
   constructor(options: ClientOptions = {}) {
@@ -1583,6 +1637,7 @@ export class Client {
       ? observedFetch(transport, options.onResponse)
       : transport;
     this.scope = scopeOrUndefined(options.scope);
+    this.browserCredential = options.browserCredential ?? false;
     this.resolvedOptions = { ...options, baseUrl, apiKey, fetch: transport };
     this.configuration = new Configuration({
       basePath: baseUrl.replace(/\/$/, ""),
@@ -2169,7 +2224,16 @@ export class Client {
     }
     const hasAgentId = "agentId" in request && Boolean(request.agentId);
     const hasAgentKey = "agentKey" in request && Boolean(request.agentKey);
-    if (hasAgentId === hasAgentKey) {
+    if (hasAgentId && hasAgentKey) {
+      throw new NvokenError(
+        "validation",
+        "supply exactly one of agentId and agentKey",
+      );
+    }
+    // A browser token names the Agent, so a page sends neither. Requiring one
+    // here would leave browser-direct access with no way to call the operation
+    // it exists for.
+    if (!hasAgentId && !hasAgentKey && !this.browserCredential) {
       throw new NvokenError(
         "validation",
         "supply exactly one of agentId and agentKey",

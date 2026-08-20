@@ -982,6 +982,14 @@ It refuses an `nvk_` API key outright. A machine credential in a page is
 readable by everyone who loads it and reaches every tenant in the App, and
 nothing about the request would look wrong — it would simply work, for anyone.
 
+Turns from that client name no Agent, because the token already does — along
+with the tenant, the end user, and the Definition revision. This is the whole
+request:
+
+```ts
+const turn = await client.invoke({ input: "How do I rotate an API key?" });
+```
+
 `nvoken client-key generate <app-id> --name web` produces the keypair and
 registers its public half in one step. The private seed is the App's browser
 authority, so it belongs in backend configuration and never in a bundle.
