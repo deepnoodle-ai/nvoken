@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.23.0 - 2026-08-20
 
 - **Invocations can record the exact ToolCall that triggered them.** All four
   SDKs and the CLI accept `parent_invocation_id` plus `tool_call_id`, expose
