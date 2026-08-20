@@ -24,6 +24,15 @@ without republishing every artifact.
   looking. The subpath still works, and `sideEffects: false` keeps the root
   export free for callers who never touch it.
 
+- **TypeScript resumes a stream with the `cursor` query parameter** instead of
+  the `Last-Event-ID` header. Both carry the same value and the contract says
+  `cursor` wins, but a header on a cross-origin request costs a CORS preflight
+  before every reconnect, and fails outright against a runtime whose CORS
+  policy predates allowing it. This SDK reads the stream with `fetch` rather
+  than `EventSource`, so nothing here is obliged to speak SSE's mechanics. Go,
+  Python, and Rust still send the header; the preflight is a browser problem
+  and TypeScript is the only one that runs in a browser.
+
 ## 0.23.0 - 2026-08-20
 
 - **Invocations can record the exact ToolCall that triggered them.** All four

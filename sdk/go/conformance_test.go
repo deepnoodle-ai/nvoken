@@ -899,7 +899,8 @@ func TestConformance(t *testing.T) {
 		CancelAttempts       int      `json:"cancel_attempts"`
 		InterruptAttempts    int      `json:"interrupt_attempts"`
 		StreamAttempts       int      `json:"stream_attempts"`
-		LastEventID          string   `json:"last_event_id"`
+		LastResumeCursor     string   `json:"last_resume_cursor"`
+		LastResumeSource     string   `json:"last_resume_source"`
 		LastStatuses         []string `json:"last_statuses"`
 		LastDeltas           string   `json:"last_deltas"`
 		LastInvocationFilter string   `json:"last_invocation_filter"`
@@ -908,7 +909,8 @@ func TestConformance(t *testing.T) {
 	if serverState.AdmissionAttempts != 2 || serverState.CredentialAdmissions != 2 ||
 		serverState.ResultAttempts != 2 || serverState.CancelAttempts != 1 ||
 		serverState.InterruptAttempts != 1 ||
-		serverState.StreamAttempts != 3 || serverState.LastEventID != "cursor-1" ||
+		serverState.StreamAttempts != 3 || serverState.LastResumeCursor != "cursor-1" ||
+		serverState.LastResumeSource != "last_event_id" ||
 		fmt.Sprint(serverState.LastStatuses) != "[waiting queued running]" ||
 		serverState.LastDeltas != "false" ||
 		serverState.LastInvocationFilter != conformanceInvocationID {
