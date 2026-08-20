@@ -34,6 +34,7 @@ import {
   SessionBusyError,
   NvokenError,
   Reducer,
+  streamSessionByID,
   raw,
   callbackResult,
   createCallbackReceiver,
@@ -3898,6 +3899,83 @@ test("a browser client invokes without naming an Agent", async () => {
   assert.equal("agent_key" in (body ?? {}), false);
   assert.equal(body?.idempotency_key, "widget-7f21:turn-1");
   assert.equal(body?.input, "How do I rotate an API key?");
+});
+
+// The flagship browser flow, end to end and in one place: mint a client, start
+// a turn, then follow the Session the turn landed in.
+//
+// The streaming half is the part that needs a test rather than a reader. The
+// stream helpers used to take `Client`, and `BrowserClient` is
+// `Omit<Client, "invoke">` plus a narrower `invoke` — `Omit` drops a class's
+// private members, so it was not assignable to `Client` and this call did not
+// compile. A page could mint a client and invoke with it, then had to cast to
+// read the answer back. It is the CX7b defect one step further along, and it
+// survived CX7b because that test built a `Client` with
+// `browserCredential: true` rather than streaming from what
+// `createBrowserClient` actually returns. This one streams from the real
+// thing, so compiling is half of what it asserts.
+test("a browser client streams the Session it just started", async () => {
+  const client = createBrowserClient({
+    baseUrl: "https://api.example.com",
+    clientToken: () => "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input : input.url,
+      );
+      if (url.pathname === "/v1/invocations") return admissionResponse();
+      return sseResponse([{
+        event: "transcript.update",
+        id: "cursor-1",
+        data: {
+          type: "transcript.update",
+          session_id: sessionId,
+          messages: [],
+          invocation_changes: [{
+            invocation_id: invocationId,
+            revision: 1,
+            status: "completed",
+            terminal: isTerminalStatus("completed"),
+            stop_reason: "end_turn",
+            through_message_sequence: null,
+            error: null,
+            structured_output: null,
+            occurred_at: "2026-07-21T12:00:01Z",
+          }],
+          cursor: "cursor-1",
+        },
+      }]);
+    },
+  });
+
+  const handle = await client.invoke({ input: "How do I rotate an API key?" });
+  assert.ok(handle.sessionId);
+
+  // No cast. That is the assertion.
+  //
+  // An unfiltered Session stream is a subscription: it carries turns started
+  // later by anyone and does not end on its own, so leaving is the caller's
+  // decision and `terminal` is what it decides on. Reading to exhaustion here
+  // would reconnect forever, which is the subscription behaving correctly.
+  const reducer = new Reducer();
+  const controller = new AbortController();
+  const seen: string[] = [];
+  for await (const update of streamSessionByID(
+    client,
+    handle.sessionId,
+    reducer,
+    {},
+    controller.signal,
+  )) {
+    for (const change of update.snapshot.invocationChanges) {
+      if (change.terminal) seen.push(change.status);
+    }
+    if (seen.length > 0) {
+      controller.abort();
+      break;
+    }
+  }
+  assert.deepEqual(seen, ["completed"]);
 });
 
 // The relaxation is scoped to the credential that earns it. A machine client

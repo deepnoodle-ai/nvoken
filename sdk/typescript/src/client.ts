@@ -1567,7 +1567,29 @@ export interface WaitOptions {
   until?: "terminal" | "actionable" | readonly InvocationStatus[];
 }
 
-export class Client {
+/**
+ * What reading a stream needs from a client.
+ *
+ * The stream helpers take this rather than `Client` so that a `BrowserClient`
+ * can be passed to them. `BrowserClient` is `Omit<Client, "invoke">` plus a
+ * narrower `invoke`, and `Omit` is built on `keyof`, which does not include a
+ * class's private members — so it is not assignable to `Client` even though it
+ * is one. Minting a browser client and streaming its Session is the flagship
+ * browser flow, and it should not need a cast to say so.
+ *
+ * `Client implements StreamClient` below is what keeps this honest: narrowing
+ * one of these members, or making it private, fails at the class rather than
+ * at whichever caller notices first.
+ */
+export interface StreamClient {
+  readonly sessions: SessionsApi;
+  readonly configuration: Configuration;
+  readonly retry: Required<RetryPolicy>;
+  readonly fetch: typeof globalThis.fetch;
+  readonly streamReconnectTimeoutMs: number;
+}
+
+export class Client implements StreamClient {
   readonly agents: AgentsApi;
   readonly credits: CreditsApi;
   readonly invocations: InvocationsApi;
