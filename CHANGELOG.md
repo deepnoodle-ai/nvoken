@@ -6,17 +6,20 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.24.0 - 2026-08-20
 
-- **A page no longer names the Agent when it starts a turn.** A browser token
-  already carries the Agent, the Definition revision, the tenant, and the end
-  user, so `invoke({ input })` is the whole request. `createBrowserClient` now
-  returns a `BrowserClient`, whose `invoke` takes a `BrowserInvokeRequest`: the
-  Agent is absent, and so are the fields the service refuses from a browser
-  token — `sessionKey`, `sessionOptions`, `triggeredBy`, `providerKeys`,
-  `mcpServerHeaders`, and `webhook`. A machine client is unchanged and still
-  requires exactly one of `agentId` and `agentKey`. Build a `Client` directly
-  from a client token and set `browserCredential: true` for the same rule.
+- **Breaking: a page no longer names the Agent when it starts a turn.** A
+  browser token already carries the Agent, the Definition revision, the tenant,
+  and the end user, so `invoke({ input })` is the whole request.
+  `createBrowserClient` now returns a `BrowserClient`, whose `invoke` takes a
+  `BrowserInvokeRequest`: the Agent is absent, and so are the fields the service
+  refuses from a browser token — `sessionKey`, `sessionOptions`, `triggeredBy`,
+  `providerKeys`, `mcpServerHeaders`, and `webhook`. 0.22 and 0.23 required an
+  Agent field here and threw without one, so a page written against them stops
+  compiling until that field is deleted — which is the whole change. A machine
+  client is unchanged and still requires exactly one of `agentId` and
+  `agentKey`. Build a `Client` directly from a client token and set
+  `browserCredential: true` for the same rule.
 
 - **`createBrowserClient` and `issueAnonymousToken` are exported from the
   package root.** They were reachable only through `@deepnoodle/nvoken/browser`,
