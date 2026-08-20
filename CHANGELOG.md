@@ -6,6 +6,19 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **A browser client can be streamed.** `createBrowserClient` returns a
+  `BrowserClient`, which is `Omit<Client, "invoke">` plus a narrower `invoke`.
+  `Omit` is built on `keyof`, which does not include a class's private members,
+  so the result was not assignable to `Client` — and every stream helper took
+  `Client`. A page could mint a client and start a turn with it, then needed a
+  cast to read the answer back, which is the flagship browser flow failing to
+  typecheck at its last step. The helpers now take `StreamClient`, an exported
+  interface naming the five public members they actually use, and `Client`
+  declares `implements StreamClient` so narrowing one fails at the class rather
+  than at whichever caller notices first. No runtime behaviour changes.
+
 ## 0.24.0 - 2026-08-20
 
 - **Breaking: a page no longer names the Agent when it starts a turn.** A

@@ -1,4 +1,4 @@
-import type { Client, InvocationHandle, JsonObject } from "./client.js";
+import type { InvocationHandle, JsonObject, StreamClient } from "./client.js";
 import { NvokenError, normalizeError, SessionBusyError } from "./client.js";
 import type {
   MessageDeltaEvent,
@@ -193,7 +193,7 @@ export class Reducer {
 }
 
 export async function* streamSession<TOutput extends object>(
-  client: Client,
+  client: StreamClient,
   handle: InvocationHandle<TOutput>,
   reducer: Reducer,
   signal?: AbortSignal,
@@ -202,7 +202,7 @@ export async function* streamSession<TOutput extends object>(
 }
 
 export async function* streamSessionWithOptions<TOutput extends object>(
-  client: Client,
+  client: StreamClient,
   handle: InvocationHandle<TOutput>,
   reducer: Reducer,
   options: StreamOptions,
@@ -222,7 +222,7 @@ export async function* streamSessionWithOptions<TOutput extends object>(
  * or aborting the signal.
  */
 export async function* streamSessionByID(
-  client: Client,
+  client: StreamClient,
   sessionId: string,
   reducer: Reducer,
   options: StreamOptions = {},
@@ -237,7 +237,7 @@ export async function* streamSessionByID(
  * and the only one.
  */
 export async function* streamInvocationByID<TOutput extends object>(
-  client: Client,
+  client: StreamClient,
   sessionId: string,
   invocationId: string,
   signal?: AbortSignal,
@@ -247,7 +247,7 @@ export async function* streamInvocationByID<TOutput extends object>(
 
 /** Follow one turn with per-connection delivery options. */
 export async function* streamInvocationByIDWithOptions<TOutput extends object>(
-  client: Client,
+  client: StreamClient,
   sessionId: string,
   invocationId: string,
   options: StreamOptions,
@@ -276,7 +276,7 @@ export async function* streamInvocationByIDWithOptions<TOutput extends object>(
  * drop says nothing at all, so neither is a reason to stop.
  */
 async function* readStream(
-  client: Client,
+  client: StreamClient,
   sessionId: string,
   invocationId: string | undefined,
   reducer: Reducer,
@@ -353,7 +353,7 @@ async function* readStream(
 }
 
 function streamDelay(
-  client: Client,
+  client: StreamClient,
   attempt: number,
   serverDelayMs: number,
   error: NvokenError,
@@ -460,7 +460,7 @@ function decodeStreamEvent(raw: StreamEvent): object | undefined {
 }
 
 async function fetchStream(
-  client: Client,
+  client: StreamClient,
   request: { path: string; method: string; headers: Record<string, string>; query?: unknown; body?: unknown },
   signal?: AbortSignal,
 ): Promise<Response> {
