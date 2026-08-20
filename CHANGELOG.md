@@ -8,6 +8,16 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **The stream helpers say that they already reconnect.** Every exported
+  helper — `streamSession`, `streamSessionWithOptions`, `streamSessionByID`,
+  `streamInvocationByID`, `streamInvocationByIDWithOptions` — now documents
+  that reconnection from the Reducer's cursor is its own job, that a throw
+  means either a non-retryable error or a full `streamReconnectTimeoutMs`
+  window of continuous connect failure, and that the fix for wanting to wait
+  longer is to raise `streamReconnectTimeoutMs` rather than to wrap the call.
+  Two of the five had no doc comment at all and one never mentioned
+  reconnection. Documentation only; no behaviour changes.
+
 - **Transcript and activity modeling are in the SDK.** A reduced snapshot is
   not yet something you can draw: a tool result arrives in a different message
   from the call it answers, a compaction is a boundary rather than a message,
