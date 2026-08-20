@@ -6,6 +6,28 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Transcript and activity modeling are in the SDK.** A reduced snapshot is
+  not yet something you can draw: a tool result arrives in a different message
+  from the call it answers, a compaction is a boundary rather than a message,
+  and one turn's deltas arrive as several content indices. Every consumer that
+  renders a conversation closed that gap itself. Two new modules close it once
+  — `foldMessages`, `buildTranscript`, `groupPreviews`, `mediaReference`, and
+  `blockField` behind `@deepnoodle/nvoken/transcript`; `resolveActivity`,
+  `settledInvocations`, `parkedCalls`, `awaitingOutput`, and
+  `settlementNotice` behind `@deepnoodle/nvoken/activity`. Both are also
+  exported from the package root. They add no dependencies: `transcript` has
+  no runtime imports at all, and `activity` imports only `invocation-status`
+  and `transcript`, so neither subpath pulls the client in.
+
+  The render-time pairing of a `tool_use` block with the `tool_result` that
+  answered it is called `RenderedToolCall`, not `ToolCall`. `ToolCall` at the
+  root is the API's own resource, and because `index.ts` exports that one
+  explicitly, a star-exported `ToolCall` would lose to it silently — appearing
+  exported while being unreachable. `RenderedToolCall` also pairs with
+  `RenderedMessage`, which is what it belongs next to.
+
 ## 0.25.0 - 2026-08-20
 
 - **A browser client can be streamed.** `createBrowserClient` returns a
