@@ -3410,16 +3410,30 @@ test("a stream that can never connect stops retrying and says so", async () => {
   assert.ok(attempts > 1, `retried before giving up, attempts = ${attempts}`);
 });
 
-test("the default fetch is callable with no receiver", () => {
-  // workerd refuses a fetch invoked with any receiver but globalThis, and only
-  // the stream path calls it that way — so an unbound default fails exactly
-  // where it is hardest to notice.
-  const client = new Client({ baseUrl: "https://runtime.example.test", apiKey: "key" });
-  const detached = client.fetch;
-  assert.doesNotThrow(() => {
-    const pending = detached("https://runtime.example.test/health");
-    void pending.catch(() => undefined);
+test("the default fetch keeps its browser receiver when streams call it as a Client method", async () => {
+  // workerd refuses a fetch invoked with any receiver but globalThis. Node's
+  // own fetch tolerates a different receiver, so replace it with the browser-
+  // like behavior the default transport must preserve.
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "fetch");
+  let receiver: unknown;
+  const receiverSensitiveFetch = function (this: unknown): Promise<Response> {
+    receiver = this;
+    if (this !== globalThis) throw new TypeError("Illegal invocation");
+    return Promise.resolve(new Response(null, { status: 204 }));
+  } as typeof globalThis.fetch;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: receiverSensitiveFetch,
   });
+
+  try {
+    const client = new Client({ baseUrl: "https://runtime.example.test", apiKey: "key" });
+    await client.fetch("https://runtime.example.test/health");
+    assert.equal(receiver, globalThis);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "fetch", descriptor);
+  }
 });
 
 test("a response observer sees status and failure without touching the body", async () => {
