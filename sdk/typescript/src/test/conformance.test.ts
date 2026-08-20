@@ -1544,7 +1544,8 @@ test("shared fault server semantics", async (context) => {
     cancel_attempts: number;
     interrupt_attempts: number;
     stream_attempts: number;
-    last_event_id: string;
+    last_resume_cursor: string;
+    last_resume_source: string;
     last_statuses: string[];
     last_deltas: string;
     last_invocation_filter: string;
@@ -1556,7 +1557,11 @@ test("shared fault server semantics", async (context) => {
     cancel_attempts: 1,
     interrupt_attempts: 1,
     stream_attempts: 3,
-    last_event_id: "cursor-1",
+    last_resume_cursor: "cursor-1",
+    // The query parameter, not the header: no CORS preflight before a
+    // reconnect, and it works against a runtime whose CORS policy predates
+    // allowing `Last-Event-ID`.
+    last_resume_source: "cursor",
     last_statuses: ["waiting", "queued", "running"],
     last_deltas: "false",
     last_invocation_filter: invocationId,

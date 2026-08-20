@@ -1047,7 +1047,8 @@ async fn shared_fault_server_semantics() {
     assert_eq!(state.cancel_attempts, 1);
     assert_eq!(state.interrupt_attempts, 1);
     assert_eq!(state.stream_attempts, 3);
-    assert_eq!(state.last_event_id, "cursor-1");
+    assert_eq!(state.last_resume_cursor, "cursor-1");
+    assert_eq!(state.last_resume_source, "last_event_id");
     assert_eq!(state.last_statuses, vec!["waiting", "queued", "running"]);
     assert_eq!(state.last_deltas, "false");
     assert_eq!(state.last_invocation_filter, INVOCATION_ID);
@@ -1222,7 +1223,8 @@ struct ServerState {
     cancel_attempts: u32,
     interrupt_attempts: u32,
     stream_attempts: u32,
-    last_event_id: String,
+    last_resume_cursor: String,
+    last_resume_source: String,
     last_statuses: Vec<String>,
     last_deltas: String,
     last_invocation_filter: String,

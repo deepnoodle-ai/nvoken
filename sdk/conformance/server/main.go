@@ -34,7 +34,8 @@ type state struct {
 	rateLimitAttempts    int
 	streamAttempts       int
 	lastInvocationFilter string
-	lastEventID          string
+	lastResumeCursor     string
+	lastResumeSource     string
 	lastStatuses         []string
 	lastDeltas           string
 	onboarding           *onboardingState
@@ -74,7 +75,8 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.rateLimitAttempts = 0
 		s.streamAttempts = 0
 		s.lastInvocationFilter = ""
-		s.lastEventID = ""
+		s.lastResumeCursor = ""
+		s.lastResumeSource = ""
 		s.lastStatuses = nil
 		s.lastDeltas = ""
 		s.mu.Unlock()
@@ -92,7 +94,8 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 			"credential_admissions":  s.credentialAdmissions,
 			"stream_attempts":        s.streamAttempts,
 			"last_invocation_filter": s.lastInvocationFilter,
-			"last_event_id":          s.lastEventID,
+			"last_resume_cursor":     s.lastResumeCursor,
+			"last_resume_source":     s.lastResumeSource,
 			"last_statuses":          s.lastStatuses,
 			"last_deltas":            s.lastDeltas,
 		})
@@ -798,7 +801,19 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	s.mu.Lock()
 	s.streamAttempts++
 	attempt := s.streamAttempts
-	s.lastEventID = request.Header.Get("Last-Event-ID")
+	// The resume position has one name. It arrives as the `cursor` query
+	// parameter or the `Last-Event-ID` header, and `cursor` wins when both are
+	// present, so record it the way the service resolves it rather than the way
+	// one SDK happens to spell it.
+	s.lastResumeCursor = request.URL.Query().Get("cursor")
+	s.lastResumeSource = "cursor"
+	if s.lastResumeCursor == "" {
+		s.lastResumeCursor = request.Header.Get("Last-Event-ID")
+		s.lastResumeSource = "last_event_id"
+	}
+	if s.lastResumeCursor == "" {
+		s.lastResumeSource = ""
+	}
 	s.lastDeltas = request.URL.Query().Get("deltas")
 	s.lastInvocationFilter = request.URL.Query().Get("invocation_id")
 	deltas := s.lastDeltas

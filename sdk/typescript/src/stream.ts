@@ -294,7 +294,13 @@ async function* readStream(
       sessionId,
       invocationId,
       deltas: options.deltas,
-      lastEventID: reducer.snapshot().cursor,
+      // The query parameter, not the `Last-Event-ID` header. Both carry the
+      // same value and the contract says this one wins, but a header on a
+      // cross-origin request costs a CORS preflight before every reconnect —
+      // and fails outright against any runtime whose CORS policy predates
+      // allowing it. This SDK reads the stream with `fetch` rather than
+      // `EventSource`, so nothing here is obliged to speak SSE's mechanics.
+      cursor: reducer.snapshot().cursor,
     });
     request.headers = { ...request.headers, Accept: "text/event-stream" };
 
