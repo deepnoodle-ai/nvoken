@@ -192,6 +192,12 @@ export class Reducer {
   }
 }
 
+/**
+ * Subscribe to the Session a handle belongs to, waiting for its id first.
+ *
+ * Reconnects on its own — see {@link streamSessionByID}, which this calls.
+ * Do not wrap it in a retry loop.
+ */
 export async function* streamSession<TOutput extends object>(
   client: StreamClient,
   handle: InvocationHandle<TOutput>,
@@ -201,6 +207,12 @@ export async function* streamSession<TOutput extends object>(
   yield* streamSessionWithOptions(client, handle, reducer, {}, signal);
 }
 
+/**
+ * {@link streamSession} with per-connection delivery options.
+ *
+ * Reconnects on its own — see {@link streamSessionByID}. Do not wrap it in
+ * a retry loop.
+ */
 export async function* streamSessionWithOptions<TOutput extends object>(
   client: StreamClient,
   handle: InvocationHandle<TOutput>,
@@ -220,6 +232,28 @@ export async function* streamSessionWithOptions<TOutput extends object>(
  * It never returns on its own: the stream stays open while the Session is idle
  * and a turn started later appears on it. Leave it by breaking out of the loop
  * or aborting the signal.
+ *
+ * ## Do not add your own retry
+ *
+ * Reconnection is this function's job and it is already doing it. A dropped
+ * connection, a `connection.closing` frame, and a rotation at the connection
+ * lifetime are all the same thing to it: reconnect from the cursor the Reducer
+ * holds, so no frame is missed and nothing is replayed twice. Reconnecting is
+ * otherwise unbounded, because the turn is durable on the server and a brief
+ * outage should not end a stream that will heal.
+ *
+ * So a throw is not "try again in a moment". It means one of two things, and a
+ * timer of your own makes both worse:
+ *
+ * - the error was not retryable, and retrying it will fail the same way; or
+ * - it failed to connect *continuously* for `streamReconnectTimeoutMs`
+ *   (5 minutes by default), having backed off across every attempt in that
+ *   window. A successful connect resets the window, so reaching this means the
+ *   stream is broken rather than briefly interrupted.
+ *
+ * Either way the loop you would be restarting is one this function deliberately
+ * ended. Surface the error instead. To wait longer before giving up, raise
+ * `streamReconnectTimeoutMs` on the client rather than wrapping the call.
  */
 export async function* streamSessionByID(
   client: StreamClient,
@@ -235,6 +269,11 @@ export async function* streamSessionByID(
  * Follow one turn. The stream is filtered to it, and the generator ends once a
  * change for that turn carries a terminal status, which is the terminal signal
  * and the only one.
+ *
+ * Reconnects from its cursor on any connection end, exactly as
+ * {@link streamSessionByID} does, and throws on the same two conditions. Do not
+ * wrap it in a retry loop; returning normally is how it reports the turn is
+ * over.
  */
 export async function* streamInvocationByID<TOutput extends object>(
   client: StreamClient,
@@ -245,7 +284,12 @@ export async function* streamInvocationByID<TOutput extends object>(
   yield* streamInvocationByIDWithOptions(client, sessionId, invocationId, {}, signal);
 }
 
-/** Follow one turn with per-connection delivery options. */
+/**
+ * Follow one turn with per-connection delivery options.
+ *
+ * Reconnects on its own — see {@link streamSessionByID}. Do not wrap it in
+ * a retry loop.
+ */
 export async function* streamInvocationByIDWithOptions<TOutput extends object>(
   client: StreamClient,
   sessionId: string,
@@ -274,6 +318,10 @@ export async function* streamInvocationByIDWithOptions<TOutput extends object>(
  * The one read loop. It reconnects from its last durable cursor on any
  * connection end. A `connection.closing` frame says only that, and a silent
  * drop says nothing at all, so neither is a reason to stop.
+ *
+ * This is private, so the promise callers actually rely on is stated on the
+ * exported helpers that reach it — see {@link streamSessionByID}. Weakening
+ * the guarantee here means weakening it there too.
  */
 async function* readStream(
   client: StreamClient,
