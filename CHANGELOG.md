@@ -6,7 +6,7 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
-## Unreleased
+## 0.27.0 - 2026-08-21
 
 - **Breaking: rendered blocks keep their position in the source message.**
   `RenderedMessage.visible` is now `RenderedBlock[]`, where each entry is
