@@ -108,9 +108,27 @@ export function mediaReference(block: Block): MediaReference | null {
  */
 export type HasContent = { content?: unknown };
 
+/**
+ * One visible block, still carrying its position in the original message.
+ *
+ * Folding removes `tool_result` blocks, so a block's position in `visible` is
+ * not its position in the message. The original position matters because
+ * `(messageId, contentIndex)` is the identity a durable block shares with the
+ * live preview that streamed it ({@link PreviewBlock}`.index` carries the same
+ * value), and a consumer keys its rows on that identity to make the
+ * preview-to-durable handoff an update rather than a swap. Before this type,
+ * consumers recovered the index by reference equality against
+ * {@link blocksOf}, which only worked because the fold happened to reuse the
+ * caller's block objects.
+ */
+export type RenderedBlock = {
+  block: Block;
+  contentIndex: number;
+};
+
 export type RenderedMessage<M = SessionMessage> = {
   message: M;
-  visible: Block[];
+  visible: RenderedBlock[];
   toolCalls: Map<string, RenderedToolCall>;
 };
 
@@ -121,32 +139,45 @@ export function blocksOf(message: HasContent): Block[] {
 /**
  * Fold each tool_result into its originating tool_use so results render on the
  * call's card instead of as orphan tool rows. A tool_result usually arrives in
- * a later message than its call, so the call index spans the whole transcript.
- * Messages left with nothing visible are dropped.
+ * a later message than its call, so the call index spans the whole input — and
+ * it is built before any pairing, so a result finds its call even when the
+ * caller's collection holds the result first (a newest-first page, or two
+ * transcript windows merged out of order). A result with no call anywhere in
+ * the input is a genuine orphan and stays visible. Messages left with nothing
+ * visible are dropped, which is how a result-only message disappears once its
+ * result is paired.
  */
 export function foldMessages<M extends HasContent>(messages: M[]): RenderedMessage<M>[] {
   const calls = new Map<string, RenderedToolCall>();
-  const rendered: RenderedMessage<M>[] = [];
   for (const message of messages) {
-    const visible: Block[] = [];
-    const ownCalls = new Map<string, RenderedToolCall>();
     for (const block of blocksOf(message)) {
       if (block.type === "tool_use" && typeof block.id === "string") {
-        const call: RenderedToolCall = { block };
-        calls.set(block.id, call);
-        ownCalls.set(block.id, call);
-        visible.push(block);
+        calls.set(block.id, { block });
+      }
+    }
+  }
+  const rendered: RenderedMessage<M>[] = [];
+  for (const message of messages) {
+    const visible: RenderedBlock[] = [];
+    const ownCalls = new Map<string, RenderedToolCall>();
+    for (const [contentIndex, block] of blocksOf(message).entries()) {
+      if (block.type === "tool_use" && typeof block.id === "string") {
+        ownCalls.set(block.id, calls.get(block.id)!);
+        visible.push({ block, contentIndex });
         continue;
       }
       if (block.type === "tool_result") {
         const toolUseId = blockField(block, "toolUseId", "tool_use_id");
         const call = typeof toolUseId === "string" ? calls.get(toolUseId) : undefined;
         if (call) {
+          // Results are folded in input order, so when malformed input carries
+          // two results for one call, the last one wins — the same result the
+          // one-pass fold produced.
           call.result = block;
           continue;
         }
       }
-      visible.push(block);
+      visible.push({ block, contentIndex });
     }
     if (visible.length > 0) rendered.push({ message, visible, toolCalls: ownCalls });
   }

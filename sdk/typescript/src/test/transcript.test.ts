@@ -124,6 +124,104 @@ test("foldMessages drops nothing else", () => {
   );
 });
 
+test("foldMessages hands back each block's index in the original message", () => {
+  const rendered = foldMessages([
+    message(1, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+    message(2, "user", [
+      { type: "tool_result", toolUseId: "call_1", content: "hit" },
+      { type: "text", text: "what do you make of it?" },
+    ]),
+  ]);
+  // (messageId, contentIndex) is the identity a durable block shares with the
+  // preview that streamed it. Folding the result away must not renumber the
+  // text block to index 0, or the row's key changes when the result lands.
+  assert.deepEqual(
+    rendered[1].visible.map(({ block, contentIndex }) => [block.type, contentIndex]),
+    [["text", 1]],
+  );
+});
+
+test("foldMessages keeps indices stable across a folded block", () => {
+  const rendered = foldMessages([
+    message(1, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+    message(2, "user", [
+      { type: "text", text: "before" },
+      { type: "tool_result", toolUseId: "call_1", content: "hit" },
+      { type: "text", text: "after" },
+    ]),
+  ]);
+  assert.deepEqual(
+    rendered[1].visible.map((entry) => entry.contentIndex),
+    [0, 2],
+  );
+});
+
+test("foldMessages reports the durable block at the index its preview streamed under", () => {
+  const rows = groupPreviews([
+    preview({ messageId: "msg_2", contentIndex: 1, delta: "an answer" }),
+  ]);
+  const rendered = foldMessages([
+    message(1, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+    message(2, "assistant", [
+      { type: "tool_result", toolUseId: "call_1", content: "hit" },
+      { type: "text", text: "an answer" },
+    ]),
+  ]);
+  // The consumer's row key for both sides is `${messageId}-${index}`, so the
+  // handoff from preview to durable is an update rather than a swap.
+  const durable = rendered[1].visible[0];
+  assert.equal(
+    `${rendered[1].message.id}-${durable.contentIndex}`,
+    `${rows[0].key}-${rows[0].blocks[0].index}`,
+  );
+});
+
+test("foldMessages folds a result that appears before its call", () => {
+  const rendered = foldMessages([
+    message(1, "user", [{ type: "tool_result", toolUseId: "call_1", content: "hit" }]),
+    message(2, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+  ]);
+  // A newest-first page holds the pair in this order. The result-only message
+  // has nothing left to show once paired.
+  assert.equal(rendered.length, 1);
+  assert.equal(rendered[0].toolCalls.get("call_1")?.result?.content, "hit");
+});
+
+test("foldMessages pairs the wire spelling independently of order too", () => {
+  const rendered = foldMessages([
+    message(1, "user", [{ type: "tool_result", tool_use_id: "call_1", content: "hit" }]),
+    message(2, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+  ]);
+  assert.equal(rendered.length, 1);
+  assert.equal(isSettled(rendered[0].toolCalls.get("call_1")!), true);
+});
+
+test("foldMessages pairs a result with a call later in the same message", () => {
+  const rendered = foldMessages([
+    message(1, "assistant", [
+      { type: "tool_result", toolUseId: "call_1", content: "hit" },
+      { type: "tool_use", id: "call_1", name: "search" },
+    ]),
+  ]);
+  assert.deepEqual(
+    rendered[0].visible.map((entry) => entry.contentIndex),
+    [1],
+  );
+  assert.equal(rendered[0].toolCalls.get("call_1")?.result?.content, "hit");
+});
+
+test("foldMessages folds every duplicate result and lets the last one win", () => {
+  // Duplicate results are malformed input; the runtime guarantees one
+  // authoritative result. The fold still leaves one answer, not two rows.
+  const rendered = foldMessages([
+    message(1, "assistant", [{ type: "tool_use", id: "call_1", name: "search" }]),
+    message(2, "user", [{ type: "tool_result", toolUseId: "call_1", content: "first" }]),
+    message(3, "user", [{ type: "tool_result", toolUseId: "call_1", content: "second" }]),
+  ]);
+  assert.equal(rendered.length, 1);
+  assert.equal(rendered[0].toolCalls.get("call_1")?.result?.content, "second");
+});
+
 test("mediaReference reads a transcript media block, which carries no bytes", () => {
   assert.deepEqual(
     mediaReference({

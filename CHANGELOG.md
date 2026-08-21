@@ -6,6 +6,29 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Breaking: rendered blocks keep their position in the source message.**
+  `RenderedMessage.visible` is now `RenderedBlock[]`, where each entry is
+  `{ block, contentIndex }`. Folding removes `tool_result` blocks, so a
+  block's position in `visible` was not its position in the message, and
+  `(messageId, contentIndex)` is the identity a durable block shares with the
+  live preview that streamed it (`PreviewBlock.index` from `groupPreviews`
+  carries the same value). Consumers were recovering the index by reference
+  equality against `blocksOf(message)`, which only worked because the fold
+  happened to reuse the caller's block objects. The migration is mechanical:
+  `for (const block of rendered.visible)` becomes
+  `for (const { block, contentIndex } of rendered.visible)`.
+
+- **Tool results fold regardless of input order.** `foldMessages()` now
+  indexes every call before pairing, so a result finds its `tool_use` even
+  when the caller's collection holds the result first: a newest-first page,
+  or two transcript windows merged out of order. A result with no call
+  anywhere in the input is a genuine orphan and stays visible; a result-only
+  message disappears only once its result is paired; when malformed input
+  carries duplicate results for one call, the last in input order still wins.
+  Callers holding canonical oldest-first transcripts see no change.
+
 ## 0.26.0 - 2026-08-20
 
 - **Transcript and activity modeling are in the SDK.** A reduced snapshot is
