@@ -1234,6 +1234,7 @@ class AppsApi:
         self,
         app_id: Annotated[str, Field(min_length=1, strict=True)],
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
         _request_timeout: Union[
             None,
@@ -1250,12 +1251,14 @@ class AppsApi:
     ) -> AnonymousTokenResponse:
         """Mint anonymous browser access for one configured App
 
-        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page's actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
 
         :param app_id: (required)
         :type app_id: str
         :param origin: One canonical browser origin configured on the App. (required)
         :type origin: str
+        :param idempotency_key: (required)
+        :type idempotency_key: str
         :param anonymous_token_request: (required)
         :type anonymous_token_request: AnonymousTokenRequest
         :param _request_timeout: timeout setting for this request. If one
@@ -1283,6 +1286,7 @@ class AppsApi:
         _param = self._issue_anonymous_token_serialize(
             app_id=app_id,
             origin=origin,
+            idempotency_key=idempotency_key,
             anonymous_token_request=anonymous_token_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -1297,6 +1301,7 @@ class AppsApi:
             '403': "ErrorResponse",
             '404': "ErrorResponse",
             '409': "ErrorResponse",
+            '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
         }
@@ -1316,6 +1321,7 @@ class AppsApi:
         self,
         app_id: Annotated[str, Field(min_length=1, strict=True)],
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
         _request_timeout: Union[
             None,
@@ -1332,12 +1338,14 @@ class AppsApi:
     ) -> ApiResponse[AnonymousTokenResponse]:
         """Mint anonymous browser access for one configured App
 
-        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page's actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
 
         :param app_id: (required)
         :type app_id: str
         :param origin: One canonical browser origin configured on the App. (required)
         :type origin: str
+        :param idempotency_key: (required)
+        :type idempotency_key: str
         :param anonymous_token_request: (required)
         :type anonymous_token_request: AnonymousTokenRequest
         :param _request_timeout: timeout setting for this request. If one
@@ -1365,6 +1373,7 @@ class AppsApi:
         _param = self._issue_anonymous_token_serialize(
             app_id=app_id,
             origin=origin,
+            idempotency_key=idempotency_key,
             anonymous_token_request=anonymous_token_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -1379,6 +1388,7 @@ class AppsApi:
             '403': "ErrorResponse",
             '404': "ErrorResponse",
             '409': "ErrorResponse",
+            '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
         }
@@ -1398,6 +1408,7 @@ class AppsApi:
         self,
         app_id: Annotated[str, Field(min_length=1, strict=True)],
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
+        idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
         _request_timeout: Union[
             None,
@@ -1414,12 +1425,14 @@ class AppsApi:
     ) -> RESTResponseType:
         """Mint anonymous browser access for one configured App
 
-        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+        Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page's actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
 
         :param app_id: (required)
         :type app_id: str
         :param origin: One canonical browser origin configured on the App. (required)
         :type origin: str
+        :param idempotency_key: (required)
+        :type idempotency_key: str
         :param anonymous_token_request: (required)
         :type anonymous_token_request: AnonymousTokenRequest
         :param _request_timeout: timeout setting for this request. If one
@@ -1447,6 +1460,7 @@ class AppsApi:
         _param = self._issue_anonymous_token_serialize(
             app_id=app_id,
             origin=origin,
+            idempotency_key=idempotency_key,
             anonymous_token_request=anonymous_token_request,
             _request_auth=_request_auth,
             _content_type=_content_type,
@@ -1461,6 +1475,7 @@ class AppsApi:
             '403': "ErrorResponse",
             '404': "ErrorResponse",
             '409': "ErrorResponse",
+            '429': "ErrorResponse",
             '500': "ErrorResponse",
             '503': "ErrorResponse",
         }
@@ -1475,6 +1490,7 @@ class AppsApi:
         self,
         app_id,
         origin,
+        idempotency_key,
         anonymous_token_request,
         _request_auth,
         _content_type,
@@ -1503,6 +1519,8 @@ class AppsApi:
         # process the header parameters
         if origin is not None:
             _header_params['Origin'] = origin
+        if idempotency_key is not None:
+            _header_params['Idempotency-Key'] = idempotency_key
         # process the form parameters
         # process the body parameter
         if anonymous_token_request is not None:

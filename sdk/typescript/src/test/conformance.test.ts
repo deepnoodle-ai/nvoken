@@ -2172,16 +2172,18 @@ test("management, observation, and memory facades forward their complete inputs"
 
 test("anonymous access has a credential-free browser facade", async () => {
   let seenHeaders = new Headers();
+  let seenURL = "";
   const token = await issueAnonymousToken({
     baseUrl: "https://runtime.example.test/",
     appId: "app_1",
-    origin: "https://app.example.test",
+    idempotencyKey: "anonymous-exchange-1",
     visitorToken: "visitor-1",
-    fetch: async (_input, init) => {
+    fetch: async (input, init) => {
+      seenURL = String(input);
       seenHeaders = new Headers(init?.headers);
       return Response.json({
         access_token: "access-1",
-        access_token_expires_at: "2026-08-17T12:15:00Z",
+        access_token_expires_in_seconds: 900,
         visitor_token: "visitor-2",
         visitor_token_expires_at: "2027-08-17T12:00:00Z",
         session_id: null,
@@ -2189,7 +2191,10 @@ test("anonymous access has a credential-free browser facade", async () => {
     },
   });
   assert.equal(token.visitorToken, "visitor-2");
-  assert.equal(seenHeaders.get("Origin"), "https://app.example.test");
+  assert.equal(token.accessTokenExpiresInSeconds, 900);
+  assert.equal(seenURL, "https://runtime.example.test/v1/apps/app_1/anonymous-tokens");
+  assert.equal(seenHeaders.get("Origin"), null);
+  assert.equal(seenHeaders.get("Idempotency-Key"), "anonymous-exchange-1");
   assert.equal(seenHeaders.get("Authorization"), null);
 });
 

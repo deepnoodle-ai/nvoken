@@ -18,6 +18,9 @@ func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 		if request.Header.Get("Origin") != "https://app.example.test" {
 			t.Errorf("origin = %q", request.Header.Get("Origin"))
 		}
+		if request.Header.Get("Idempotency-Key") != "anonymous-exchange-1" {
+			t.Errorf("idempotency key = %q", request.Header.Get("Idempotency-Key"))
+		}
 		if request.Header.Get("Authorization") != "" {
 			t.Errorf("authorization = %q", request.Header.Get("Authorization"))
 		}
@@ -32,7 +35,7 @@ func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 		writer.WriteHeader(http.StatusCreated)
 		_, _ = writer.Write([]byte(`{
 			"access_token":"access-1",
-			"access_token_expires_at":"2026-08-17T12:15:00Z",
+			"access_token_expires_in_seconds":900,
 			"visitor_token":"visitor-2",
 			"visitor_token_expires_at":"2027-08-17T12:00:00Z",
 			"session_id":null
@@ -45,12 +48,12 @@ func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 		server.URL,
 		"app_test",
 		"https://app.example.test",
-		AnonymousTokenOptions{VisitorToken: &visitor},
+		AnonymousTokenOptions{IdempotencyKey: "anonymous-exchange-1", VisitorToken: &visitor},
 	)
 	if err != nil {
 		t.Fatalf("IssueAnonymousToken: %v", err)
 	}
-	if token.VisitorToken != "visitor-2" {
+	if token.VisitorToken != "visitor-2" || token.AccessTokenExpiresInSeconds != 900 {
 		t.Errorf("visitor token = %q", token.VisitorToken)
 	}
 }

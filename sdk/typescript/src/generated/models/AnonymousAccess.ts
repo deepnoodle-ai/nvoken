@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { AnonymousRateLimits } from './AnonymousRateLimits.js';
+import {
+    AnonymousRateLimitsFromJSON,
+    AnonymousRateLimitsFromJSONTyped,
+    AnonymousRateLimitsToJSON,
+    AnonymousRateLimitsToJSONTyped,
+} from './AnonymousRateLimits.js';
 import type { Money } from './Money.js';
 import {
     MoneyFromJSON,
@@ -20,14 +27,21 @@ import {
     MoneyToJSON,
     MoneyToJSONTyped,
 } from './Money.js';
+import type { RetentionPolicy } from './RetentionPolicy.js';
+import {
+    RetentionPolicyFromJSON,
+    RetentionPolicyFromJSONTyped,
+    RetentionPolicyToJSON,
+    RetentionPolicyToJSONTyped,
+} from './RetentionPolicy.js';
 
 /**
  * Complete managed-anonymous mode. The Agent and its Definition must be
- * live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
- * user-scoped memory. The positive USD allowance is a lifetime retained-
- * cost ceiling for one opaque visitor subject. Clearing browser storage
- * can create a new subject, so the anonymous admission ceiling, tenant
- * Credits, and App admission limits remain aggregate hard caps.
+ * live and App-owned; the Definition must be client-capable and have
+ * memory disabled. The positive USD allowance is a fixed thirty-day
+ * visitor-continuity cost ceiling. Clearing browser storage can create a
+ * new subject, so anonymous limits, tenant Credits, and App admission
+ * limits remain aggregate hard caps.
  *
  * @export
  * @interface AnonymousAccess
@@ -46,12 +60,38 @@ export interface AnonymousAccess {
      */
     visitorAllowance: Money;
     /**
-     * Admission ceiling shared across all anonymous visitor subjects in this tenant.
-     * @type {number}
+     *
+     * @type {AnonymousRateLimits}
      * @memberof AnonymousAccess
      */
-    maxAdmissionsPerMinute: number;
+    limits: AnonymousRateLimits;
+    /**
+     *
+     * @type {RetentionPolicy}
+     * @memberof AnonymousAccess
+     */
+    sessionRetention: RetentionPolicy;
+    /**
+     * `browser_access` copies the App browser webhook onto anonymous
+     * Invocations. `disabled` creates no webhook delivery and requires
+     * every host-mode tool to be named in `client_interface`.
+     *
+     * @type {AnonymousAccessWebhookDeliveryEnum}
+     * @memberof AnonymousAccess
+     */
+    webhookDelivery: AnonymousAccessWebhookDeliveryEnum;
 }
+
+
+/**
+ * @export
+ */
+export const AnonymousAccessWebhookDeliveryEnum = {
+    BrowserAccess: 'browser_access',
+    Disabled: 'disabled'
+} as const;
+export type AnonymousAccessWebhookDeliveryEnum = typeof AnonymousAccessWebhookDeliveryEnum[keyof typeof AnonymousAccessWebhookDeliveryEnum];
+
 
 /**
  * Check if a given object implements the AnonymousAccess interface.
@@ -59,7 +99,9 @@ export interface AnonymousAccess {
 export function instanceOfAnonymousAccess(value: object): value is AnonymousAccess {
     if (!('agentId' in value) || value['agentId'] === undefined) return false;
     if (!('visitorAllowance' in value) || value['visitorAllowance'] === undefined) return false;
-    if (!('maxAdmissionsPerMinute' in value) || value['maxAdmissionsPerMinute'] === undefined) return false;
+    if (!('limits' in value) || value['limits'] === undefined) return false;
+    if (!('sessionRetention' in value) || value['sessionRetention'] === undefined) return false;
+    if (!('webhookDelivery' in value) || value['webhookDelivery'] === undefined) return false;
     return true;
 }
 
@@ -75,7 +117,9 @@ export function AnonymousAccessFromJSONTyped(json: any, ignoreDiscriminator: boo
 
         'agentId': json['agent_id'],
         'visitorAllowance': MoneyFromJSON(json['visitor_allowance']),
-        'maxAdmissionsPerMinute': json['max_admissions_per_minute'],
+        'limits': AnonymousRateLimitsFromJSON(json['limits']),
+        'sessionRetention': RetentionPolicyFromJSON(json['session_retention']),
+        'webhookDelivery': json['webhook_delivery'],
     };
 }
 
@@ -92,6 +136,8 @@ export function AnonymousAccessToJSONTyped(value?: AnonymousAccess | null, ignor
 
         'agent_id': value['agentId'],
         'visitor_allowance': MoneyToJSON(value['visitorAllowance']),
-        'max_admissions_per_minute': value['maxAdmissionsPerMinute'],
+        'limits': AnonymousRateLimitsToJSON(value['limits']),
+        'session_retention': RetentionPolicyToJSON(value['sessionRetention']),
+        'webhook_delivery': value['webhookDelivery'],
     };
 }

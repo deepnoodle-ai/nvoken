@@ -16,89 +16,59 @@ import { mapValues } from '../runtime.js';
 /**
  *
  * @export
- * @interface AnonymousTokenResponse
+ * @interface AnonymousRateLimits
  */
-export interface AnonymousTokenResponse {
+export interface AnonymousRateLimits {
     /**
-     * Short-lived bearer for browser-direct runtime requests.
-     * @type {string}
-     * @memberof AnonymousTokenResponse
-     */
-    accessToken: string;
-    /**
-     * Whole seconds until access-token expiry at issuance.
+     * Admission ceiling shared across all anonymous visitor subjects in this tenant.
      * @type {number}
-     * @memberof AnonymousTokenResponse
+     * @memberof AnonymousRateLimits
      */
-    accessTokenExpiresInSeconds: number;
+    maxAdmissionsPerMinute: number;
     /**
-     * Opaque replacement continuity bearer accepted only by this route.
-     * @type {string}
-     * @memberof AnonymousTokenResponse
+     * Replica-wide exchange ceiling for this App and canonical Origin bucket.
+     * @type {number}
+     * @memberof AnonymousRateLimits
      */
-    visitorToken: string;
-    /**
-     *
-     * @type {Date}
-     * @memberof AnonymousTokenResponse
-     */
-    visitorTokenExpiresAt: Date;
-    /**
-     * Canonical conversation for this visitor, or null before its first
-     * turn. Anonymous Invocations that omit Session selectors resume this
-     * Session automatically.
-     *
-     * @type {string}
-     * @memberof AnonymousTokenResponse
-     */
-    sessionId: string | null;
+    maxTokenExchangesPerMinute: number;
 }
 
 /**
- * Check if a given object implements the AnonymousTokenResponse interface.
+ * Check if a given object implements the AnonymousRateLimits interface.
  */
-export function instanceOfAnonymousTokenResponse(value: object): value is AnonymousTokenResponse {
-    if (!('accessToken' in value) || value['accessToken'] === undefined) return false;
-    if (!('accessTokenExpiresInSeconds' in value) || value['accessTokenExpiresInSeconds'] === undefined) return false;
-    if (!('visitorToken' in value) || value['visitorToken'] === undefined) return false;
-    if (!('visitorTokenExpiresAt' in value) || value['visitorTokenExpiresAt'] === undefined) return false;
-    if (!('sessionId' in value) || value['sessionId'] === undefined) return false;
+export function instanceOfAnonymousRateLimits(value: object): value is AnonymousRateLimits {
+    if (!('maxAdmissionsPerMinute' in value) || value['maxAdmissionsPerMinute'] === undefined) return false;
+    if (!('maxTokenExchangesPerMinute' in value) || value['maxTokenExchangesPerMinute'] === undefined) return false;
     return true;
 }
 
-export function AnonymousTokenResponseFromJSON(json: any): AnonymousTokenResponse {
-    return AnonymousTokenResponseFromJSONTyped(json, false);
+export function AnonymousRateLimitsFromJSON(json: any): AnonymousRateLimits {
+    return AnonymousRateLimitsFromJSONTyped(json, false);
 }
 
-export function AnonymousTokenResponseFromJSONTyped(json: any, ignoreDiscriminator: boolean): AnonymousTokenResponse {
+export function AnonymousRateLimitsFromJSONTyped(json: any, ignoreDiscriminator: boolean): AnonymousRateLimits {
     if (json == null) {
         return json;
     }
     return {
 
-        'accessToken': json['access_token'],
-        'accessTokenExpiresInSeconds': json['access_token_expires_in_seconds'],
-        'visitorToken': json['visitor_token'],
-        'visitorTokenExpiresAt': (new Date(json['visitor_token_expires_at'])),
-        'sessionId': json['session_id'],
+        'maxAdmissionsPerMinute': json['max_admissions_per_minute'],
+        'maxTokenExchangesPerMinute': json['max_token_exchanges_per_minute'],
     };
 }
 
-export function AnonymousTokenResponseToJSON(json: any): AnonymousTokenResponse {
-    return AnonymousTokenResponseToJSONTyped(json, false);
+export function AnonymousRateLimitsToJSON(json: any): AnonymousRateLimits {
+    return AnonymousRateLimitsToJSONTyped(json, false);
 }
 
-export function AnonymousTokenResponseToJSONTyped(value?: AnonymousTokenResponse | null, ignoreDiscriminator: boolean = false): any {
+export function AnonymousRateLimitsToJSONTyped(value?: AnonymousRateLimits | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
 
     return {
 
-        'access_token': value['accessToken'],
-        'access_token_expires_in_seconds': value['accessTokenExpiresInSeconds'],
-        'visitor_token': value['visitorToken'],
-        'visitor_token_expires_at': value['visitorTokenExpiresAt'].toISOString(),
-        'session_id': value['sessionId'],
+        'max_admissions_per_minute': value['maxAdmissionsPerMinute'],
+        'max_token_exchanges_per_minute': value['maxTokenExchangesPerMinute'],
     };
 }

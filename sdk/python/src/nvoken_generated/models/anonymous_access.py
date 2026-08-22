@@ -17,22 +17,33 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
+from nvoken_generated.models.anonymous_rate_limits import AnonymousRateLimits
 from nvoken_generated.models.money import Money
+from nvoken_generated.models.retention_policy import RetentionPolicy
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
 class AnonymousAccess(BaseModel):
     """
-    Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+    Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and have memory disabled. The positive USD allowance is a fixed thirty-day visitor-continuity cost ceiling. Clearing browser storage can create a new subject, so anonymous limits, tenant Credits, and App admission limits remain aggregate hard caps.
     """ # noqa: E501
     agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
     visitor_allowance: Money
-    max_admissions_per_minute: Annotated[int, Field(strict=True, ge=1)] = Field(description="Admission ceiling shared across all anonymous visitor subjects in this tenant.")
-    __properties: ClassVar[List[str]] = ["agent_id", "visitor_allowance", "max_admissions_per_minute"]
+    limits: AnonymousRateLimits
+    session_retention: RetentionPolicy
+    webhook_delivery: StrictStr = Field(description="`browser_access` copies the App browser webhook onto anonymous Invocations. `disabled` creates no webhook delivery and requires every host-mode tool to be named in `client_interface`. ")
+    __properties: ClassVar[List[str]] = ["agent_id", "visitor_allowance", "limits", "session_retention", "webhook_delivery"]
+
+    @field_validator('webhook_delivery')
+    def webhook_delivery_validate_enum(cls, value):
+        """Validates the enum"""
+        if value not in set(['browser_access', 'disabled']):
+            raise ValueError("must be one of enum values ('browser_access', 'disabled')")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -76,6 +87,12 @@ class AnonymousAccess(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of visitor_allowance
         if self.visitor_allowance:
             _dict['visitor_allowance'] = self.visitor_allowance.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of limits
+        if self.limits:
+            _dict['limits'] = self.limits.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of session_retention
+        if self.session_retention:
+            _dict['session_retention'] = self.session_retention.to_dict()
         return _dict
 
     @classmethod
@@ -90,6 +107,8 @@ class AnonymousAccess(BaseModel):
         _obj = cls.model_validate({
             "agent_id": obj.get("agent_id"),
             "visitor_allowance": Money.from_dict(obj["visitor_allowance"]) if obj.get("visitor_allowance") is not None else None,
-            "max_admissions_per_minute": obj.get("max_admissions_per_minute")
+            "limits": AnonymousRateLimits.from_dict(obj["limits"]) if obj.get("limits") is not None else None,
+            "session_retention": RetentionPolicy.from_dict(obj["session_retention"]) if obj.get("session_retention") is not None else None,
+            "webhook_delivery": obj.get("webhook_delivery")
         })
         return _obj

@@ -138,7 +138,10 @@ func runAppAnonymousToken(command *cli.Context) error {
 	response, err := client.IssueAnonymousTokenWithResponse(
 		command.Context(),
 		command.Arg(0),
-		&generated.IssueAnonymousTokenParams{Origin: command.String("origin")},
+		&generated.IssueAnonymousTokenParams{
+			Origin:         command.String("origin"),
+			IdempotencyKey: command.String("idempotency-key"),
+		},
 		generated.AnonymousTokenRequest{VisitorToken: optionalString(command.String("visitor-token"))},
 	)
 	if err != nil {
@@ -152,7 +155,7 @@ func runAppAnonymousToken(command *cli.Context) error {
 		if _, err := fmt.Fprintf(writer, "access_token\t%s\n", tokens.AccessToken); err != nil {
 			return err
 		}
-		if _, err := fmt.Fprintf(writer, "access_token_expires_at\t%s\n", tokens.AccessTokenExpiresAt.Format("2006-01-02T15:04:05Z07:00")); err != nil {
+		if _, err := fmt.Fprintf(writer, "access_token_expires_in_seconds\t%d\n", tokens.AccessTokenExpiresInSeconds); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(writer, "visitor_token\t%s\n", tokens.VisitorToken); err != nil {

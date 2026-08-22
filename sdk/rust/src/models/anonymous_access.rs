@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// AnonymousAccess : Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+/// AnonymousAccess : Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and have memory disabled. The positive USD allowance is a fixed thirty-day visitor-continuity cost ceiling. Clearing browser storage can create a new subject, so anonymous limits, tenant Credits, and App admission limits remain aggregate hard caps.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnonymousAccess {
     /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
@@ -19,22 +19,44 @@ pub struct AnonymousAccess {
     pub agent_id: String,
     #[serde(rename = "visitor_allowance")]
     pub visitor_allowance: Box<models::Money>,
-    /// Admission ceiling shared across all anonymous visitor subjects in this tenant.
-    #[serde(rename = "max_admissions_per_minute")]
-    pub max_admissions_per_minute: u64,
+    #[serde(rename = "limits")]
+    pub limits: Box<models::AnonymousRateLimits>,
+    #[serde(rename = "session_retention")]
+    pub session_retention: Box<models::RetentionPolicy>,
+    /// `browser_access` copies the App browser webhook onto anonymous Invocations. `disabled` creates no webhook delivery and requires every host-mode tool to be named in `client_interface`.
+    #[serde(rename = "webhook_delivery")]
+    pub webhook_delivery: WebhookDelivery,
 }
 
 impl AnonymousAccess {
-    /// Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and either have no memory or explicitly use user-scoped memory. The positive USD allowance is a lifetime retained- cost ceiling for one opaque visitor subject. Clearing browser storage can create a new subject, so the anonymous admission ceiling, tenant Credits, and App admission limits remain aggregate hard caps.
+    /// Complete managed-anonymous mode. The Agent and its Definition must be live and App-owned; the Definition must be client-capable and have memory disabled. The positive USD allowance is a fixed thirty-day visitor-continuity cost ceiling. Clearing browser storage can create a new subject, so anonymous limits, tenant Credits, and App admission limits remain aggregate hard caps.
     pub fn new(
         agent_id: String,
         visitor_allowance: models::Money,
-        max_admissions_per_minute: u64,
+        limits: models::AnonymousRateLimits,
+        session_retention: models::RetentionPolicy,
+        webhook_delivery: WebhookDelivery,
     ) -> AnonymousAccess {
         AnonymousAccess {
             agent_id,
             visitor_allowance: Box::new(visitor_allowance),
-            max_admissions_per_minute,
+            limits: Box::new(limits),
+            session_retention: Box::new(session_retention),
+            webhook_delivery,
         }
+    }
+}
+/// `browser_access` copies the App browser webhook onto anonymous Invocations. `disabled` creates no webhook delivery and requires every host-mode tool to be named in `client_interface`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum WebhookDelivery {
+    #[serde(rename = "browser_access")]
+    BrowserAccess,
+    #[serde(rename = "disabled")]
+    Disabled,
+}
+
+impl Default for WebhookDelivery {
+    fn default() -> WebhookDelivery {
+        Self::BrowserAccess
     }
 }

@@ -75,6 +75,7 @@ pub enum IssueAnonymousTokenError {
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
     Status409(models::ErrorResponse),
+    Status429(models::ErrorResponse),
     Status500(models::ErrorResponse),
     Status503(models::ErrorResponse),
     UnknownValue(serde_json::Value),
@@ -405,16 +406,18 @@ pub async fn get_app(
     }
 }
 
-/// Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+/// Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App's browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page's actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
 pub async fn issue_anonymous_token(
     configuration: &configuration::Configuration,
     app_id: &str,
     origin: &str,
+    idempotency_key: &str,
     anonymous_token_request: models::AnonymousTokenRequest,
 ) -> Result<models::AnonymousTokenResponse, Error<IssueAnonymousTokenError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_app_id = app_id;
     let p_header_origin = origin;
+    let p_header_idempotency_key = idempotency_key;
     let p_body_anonymous_token_request = anonymous_token_request;
 
     let uri_str = format!(
@@ -430,6 +433,7 @@ pub async fn issue_anonymous_token(
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
     req_builder = req_builder.header("Origin", p_header_origin.to_string());
+    req_builder = req_builder.header("Idempotency-Key", p_header_idempotency_key.to_string());
     req_builder = req_builder.json(&p_body_anonymous_token_request);
 
     let req = req_builder.build()?;

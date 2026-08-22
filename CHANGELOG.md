@@ -6,6 +6,14 @@ The repository uses aligned semantic versions where practical. Each ecosystem
 has an independent release tag so a registry-specific failure can be retried
 without republishing every artifact.
 
+## Unreleased
+
+- **Breaking: managed anonymous access now has its production contract.** App
+  configuration includes exchange limits, Session retention, and webhook mode;
+  token exchange requires a stable idempotency key and returns relative access
+  lifetime. The TypeScript browser facade removes its caller-supplied `origin`
+  option and relies on the browser's actual Origin.
+
 ## 0.27.0 - 2026-08-21
 
 - **Breaking: rendered blocks keep their position in the source message.**

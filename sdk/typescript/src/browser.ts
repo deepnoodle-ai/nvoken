@@ -7,9 +7,11 @@ import {
   type InvocationHandle,
   type JsonObject,
 } from "./client.js";
-import { AppsApi } from "./generated/apis/AppsApi.js";
-import type { AnonymousTokenResponse } from "./generated/models/AnonymousTokenResponse.js";
-import { Configuration } from "./generated/runtime.js";
+import {
+  AnonymousTokenResponseFromJSON,
+  type AnonymousTokenResponse,
+} from "./generated/models/AnonymousTokenResponse.js";
+import { ResponseError } from "./generated/runtime.js";
 
 /**
  * How a page talks to nvoken.
@@ -84,15 +86,18 @@ export interface BrowserClient extends Omit<Client, "invoke"> {
 export interface AnonymousTokenOptions {
   baseUrl: string;
   appId: string;
-  origin: string;
+  /** Reuse this key whenever the same logical exchange is retried. */
+  idempotencyKey: string;
   visitorToken?: string;
   fetch?: typeof globalThis.fetch;
 }
 
 /**
  * Mints or renews credential-free browser access for an App that enabled
- * anonymous visitors. Persist the returned visitor token and pass it on the
- * next call to keep the same visitor partition and Session.
+ * anonymous visitors. The browser supplies its actual Origin automatically.
+ * Persist the returned visitor token and pass it on the next call to keep the
+ * same visitor partition and Session. Reuse the idempotency key if transport
+ * fails and this logical exchange must be retried.
  */
 export async function issueAnonymousToken(
   options: AnonymousTokenOptions,
@@ -100,19 +105,30 @@ export async function issueAnonymousToken(
   if (!options.baseUrl) {
     throw new NvokenError("validation", "baseUrl is required to issue anonymous access");
   }
-  if (!options.appId || !options.origin) {
-    throw new NvokenError("validation", "appId and origin are required");
+  if (!options.appId) {
+    throw new NvokenError("validation", "appId is required to issue anonymous access");
   }
-  const api = new AppsApi(new Configuration({
-    basePath: options.baseUrl.replace(/\/$/, ""),
-    fetchApi: options.fetch,
-  }));
+  const idempotencyKeyBytes = new TextEncoder().encode(options.idempotencyKey ?? "").length;
+  if (idempotencyKeyBytes < 1 || idempotencyKeyBytes > 255) {
+    throw new NvokenError("validation", "idempotencyKey must be between 1 and 255 bytes");
+  }
+  const fetchApi = options.fetch ?? globalThis.fetch.bind(globalThis);
   try {
-    return await api.issueAnonymousToken({
-      appId: options.appId,
-      origin: options.origin,
-      anonymousTokenRequest: { visitorToken: options.visitorToken },
-    });
+    const response = await fetchApi(
+      `${options.baseUrl.replace(/\/$/, "")}/v1/apps/${encodeURIComponent(options.appId)}/anonymous-tokens`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": options.idempotencyKey,
+        },
+        body: JSON.stringify({ visitor_token: options.visitorToken }),
+      },
+    );
+    if (!response.ok) {
+      throw new ResponseError(response, "Anonymous token exchange returned an error code");
+    }
+    return AnonymousTokenResponseFromJSON(await response.json());
   } catch (error) {
     throw await normalizeError(error);
   }
