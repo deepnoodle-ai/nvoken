@@ -83,9 +83,14 @@ func TestAppProvisioningReachesBrowserAndAnonymousAccess(t *testing.T) {
 
 	if _, err := client.UpdateApp(context.Background(), "app_test", UpdateAppOptions{
 		AnonymousAccess: &AnonymousAccess{
-			AgentID:                "agent_test",
-			MaxAdmissionsPerMinute: 30,
-			VisitorAllowance:       Money{Amount: "1.000000", Currency: "USD"},
+			AgentID:          "agent_test",
+			VisitorAllowance: Money{Amount: "1.000000", Currency: "USD"},
+			Limits: AnonymousRateLimits{
+				MaxAdmissionsPerMinute:     30,
+				MaxTokenExchangesPerMinute: 60,
+			},
+			SessionRetention: SessionRetention{TTLSeconds: 604800},
+			WebhookDelivery:  AnonymousWebhookDeliveryDisabled,
 		},
 		MachineConcurrencyLimits: &MachineConcurrencyLimits{
 			MaxConcurrentInvocationsPerTenant: 20,
@@ -97,6 +102,12 @@ func TestAppProvisioningReachesBrowserAndAnonymousAccess(t *testing.T) {
 	anonymous, ok := updated["anonymous_access"].(map[string]any)
 	if !ok || anonymous["agent_id"] != "agent_test" {
 		t.Fatalf("updated = %#v", updated)
+	}
+	anonymousLimits, _ := anonymous["limits"].(map[string]any)
+	if anonymousLimits["max_admissions_per_minute"] != float64(30) ||
+		anonymousLimits["max_token_exchanges_per_minute"] != float64(60) ||
+		anonymous["webhook_delivery"] != "disabled" {
+		t.Fatalf("anonymous configuration = %#v", anonymous)
 	}
 	machineLimits, _ = updated["machine_concurrency_limits"].(map[string]any)
 	if machineLimits["max_concurrent_invocations_per_tenant"] != float64(20) ||

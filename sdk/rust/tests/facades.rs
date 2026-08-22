@@ -224,6 +224,7 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
         &base_url,
         "app_1",
         "https://app.example.test",
+        "anonymous-exchange-1",
         Some("visitor-1".to_owned()),
     )
     .await;
@@ -243,6 +244,10 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
     assert!(requests[14].path.contains("page_token=page-2"));
     assert_eq!(requests[15].headers.get("authorization"), None);
     assert_eq!(requests[15].headers["origin"], "https://app.example.test");
+    assert_eq!(
+        requests[15].headers["idempotency-key"],
+        "anonymous-exchange-1"
+    );
     assert_eq!(requests[15].body["visitor_token"], "visitor-1");
     assert!(requests[..15]
         .iter()

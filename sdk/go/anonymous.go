@@ -11,6 +11,9 @@ import (
 
 // AnonymousTokenOptions describes one credential-free visitor grant exchange.
 type AnonymousTokenOptions struct {
+	// IdempotencyKey names one logical exchange. Reuse it when retrying the
+	// same request after an uncertain response.
+	IdempotencyKey string
 	// VisitorToken renews a previously issued visitor; omit it on a first visit.
 	VisitorToken *string
 	// HTTPClient replaces the default transport, primarily for applications
@@ -28,10 +31,10 @@ func IssueAnonymousToken(
 	options AnonymousTokenOptions,
 ) (*AnonymousTokenResponse, error) {
 	baseURL = strings.TrimRight(baseURL, "/")
-	if baseURL == "" || appID == "" || origin == "" {
+	if baseURL == "" || appID == "" || origin == "" || options.IdempotencyKey == "" {
 		return nil, &Error{
 			Category: ErrorValidation,
-			Message:  "base URL, App ID, and origin are required",
+			Message:  "base URL, App ID, origin, and idempotency key are required",
 		}
 	}
 	httpClient := options.HTTPClient
@@ -57,7 +60,10 @@ func IssueAnonymousToken(
 			response, callErr := raw.IssueAnonymousTokenWithResponse(
 				ctx,
 				appID,
-				&generated.IssueAnonymousTokenParams{Origin: origin},
+				&generated.IssueAnonymousTokenParams{
+					Origin:         origin,
+					IdempotencyKey: options.IdempotencyKey,
+				},
 				generated.AnonymousTokenRequest{VisitorToken: options.VisitorToken},
 			)
 			if callErr != nil {

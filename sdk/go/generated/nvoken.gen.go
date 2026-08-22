@@ -64,6 +64,24 @@ func (e AdmissionOutcome) Valid() bool {
 	}
 }
 
+// Defines values for AnonymousAccessWebhookDelivery.
+const (
+	AnonymousAccessWebhookDeliveryBrowserAccess AnonymousAccessWebhookDelivery = "browser_access"
+	AnonymousAccessWebhookDeliveryDisabled      AnonymousAccessWebhookDelivery = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the AnonymousAccessWebhookDelivery enum.
+func (e AnonymousAccessWebhookDelivery) Valid() bool {
+	switch e {
+	case AnonymousAccessWebhookDeliveryBrowserAccess:
+		return true
+	case AnonymousAccessWebhookDeliveryDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AppSigningKeyPurpose.
 const (
 	AppSigningKeyPurposeCallback AppSigningKeyPurpose = "callback"
@@ -1287,16 +1305,16 @@ func (e NudgeStatus) Valid() bool {
 
 // Defines values for ObservationStatus.
 const (
-	Available ObservationStatus = "available"
-	Disabled  ObservationStatus = "disabled"
+	ObservationStatusAvailable ObservationStatus = "available"
+	ObservationStatusDisabled  ObservationStatus = "disabled"
 )
 
 // Valid indicates whether the value is a known member of the ObservationStatus enum.
 func (e ObservationStatus) Valid() bool {
 	switch e {
-	case Available:
+	case ObservationStatusAvailable:
 		return true
-	case Disabled:
+	case ObservationStatusDisabled:
 		return true
 	default:
 		return false
@@ -2928,18 +2946,52 @@ type AllocateCreditsResult struct {
 }
 
 // AnonymousAccess Complete managed-anonymous mode. The Agent and its Definition must be
-// live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
-// user-scoped memory. The positive USD allowance is a lifetime retained-
-// cost ceiling for one opaque visitor subject. Clearing browser storage
-// can create a new subject, so the anonymous admission ceiling, tenant
-// Credits, and App admission limits remain aggregate hard caps.
+// live and App-owned; the Definition must be client-capable and have
+// memory disabled. The positive USD allowance is a fixed thirty-day
+// visitor-continuity cost ceiling. Clearing browser storage can create a
+// new subject, so anonymous limits, tenant Credits, and App admission
+// limits remain aggregate hard caps.
 type AnonymousAccess struct {
 	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
-	AgentID AgentID `json:"agent_id"`
+	AgentID AgentID             `json:"agent_id"`
+	Limits  AnonymousRateLimits `json:"limits"`
 
+	// SessionRetention How long a Session can sit unused before nvoken deletes it. When the
+	// window passes, the Session and everything under it are erased, exactly
+	// as `DELETE /v1/sessions/{session_id}` would.
+	//
+	// The clock measures idle time, not age: it resets every time a turn
+	// starts and every time one finishes. A long-running turn can never
+	// expire out from under you.
+	//
+	// **Automatic expiry never cancels running work.** A Session holding a
+	// queued, running, or waiting Invocation is skipped and reconsidered on
+	// the next sweep. An explicit `DELETE` may still stop a running turn,
+	// because a person asked for it; a clock may not.
+	//
+	// Omitting retention retains the Session until it is deleted explicitly,
+	// which stays the default.
+	SessionRetention RetentionPolicy `json:"session_retention"`
+	VisitorAllowance Money           `json:"visitor_allowance"`
+
+	// WebhookDelivery `browser_access` copies the App browser webhook onto anonymous
+	// Invocations. `disabled` creates no webhook delivery and requires
+	// every host-mode tool to be named in `client_interface`.
+	WebhookDelivery AnonymousAccessWebhookDelivery `json:"webhook_delivery"`
+}
+
+// AnonymousAccessWebhookDelivery `browser_access` copies the App browser webhook onto anonymous
+// Invocations. `disabled` creates no webhook delivery and requires
+// every host-mode tool to be named in `client_interface`.
+type AnonymousAccessWebhookDelivery string
+
+// AnonymousRateLimits defines model for AnonymousRateLimits.
+type AnonymousRateLimits struct {
 	// MaxAdmissionsPerMinute Admission ceiling shared across all anonymous visitor subjects in this tenant.
 	MaxAdmissionsPerMinute int64 `json:"max_admissions_per_minute"`
-	VisitorAllowance       Money `json:"visitor_allowance"`
+
+	// MaxTokenExchangesPerMinute Replica-wide exchange ceiling for this App and canonical Origin bucket.
+	MaxTokenExchangesPerMinute int64 `json:"max_token_exchanges_per_minute"`
 }
 
 // AnonymousTokenRequest defines model for AnonymousTokenRequest.
@@ -2951,15 +3003,17 @@ type AnonymousTokenRequest struct {
 // AnonymousTokenResponse defines model for AnonymousTokenResponse.
 type AnonymousTokenResponse struct {
 	// AccessToken Short-lived bearer for browser-direct runtime requests.
-	AccessToken          string    `json:"access_token"`
-	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+	AccessToken string `json:"access_token"`
+
+	// AccessTokenExpiresInSeconds Whole seconds until access-token expiry at issuance.
+	AccessTokenExpiresInSeconds int64 `json:"access_token_expires_in_seconds"`
 
 	// SessionID Canonical conversation for this visitor, or null before its first
 	// turn. Anonymous Invocations that omit Session selectors resume this
 	// Session automatically.
 	SessionID *SessionID `json:"session_id"`
 
-	// VisitorToken Renewable continuity bearer accepted only by this route.
+	// VisitorToken Opaque replacement continuity bearer accepted only by this route.
 	VisitorToken          string    `json:"visitor_token"`
 	VisitorTokenExpiresAt time.Time `json:"visitor_token_expires_at"`
 }
@@ -7382,7 +7436,8 @@ type ListAppsParamsStatus string
 // IssueAnonymousTokenParams defines parameters for IssueAnonymousToken.
 type IssueAnonymousTokenParams struct {
 	// Origin One canonical browser origin configured on the App.
-	Origin string `json:"Origin"`
+	Origin         string         `json:"Origin"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
@@ -9664,17 +9719,21 @@ type ClientInterface interface {
 	//
 	// Public, credential-free exchange for Apps that explicitly enable
 	// anonymous access. The request must carry exactly one canonical Origin
-	// that appears in the App's browser allowlist. Omit `visitor_token` on a
-	// first visit; persist the returned visitor token in browser storage and
-	// present it on renewal to preserve the same opaque visitor partition,
-	// tenant-scoped Agent, and canonical Session. The response returns that
-	// Session ID once the visitor has completed a first turn, allowing the
-	// page to load its transcript immediately.
+	// that appears in the App's browser allowlist. Browser JavaScript does
+	// not set this header; the user agent supplies the page's actual Origin.
+	// Omit `visitor_token` on a first visit; persist every successful returned
+	// visitor token as an opaque replacement and present it on renewal to
+	// preserve the same visitor partition, tenant-scoped Agent, fixed
+	// thirty-day expiry, allowance, and canonical Session. Never discard a
+	// stored visitor token only because a network, `429`, or `5xx` response
+	// occurred.
 	//
-	// The access token lasts 15 minutes and is the bearer for browser-direct
-	// runtime calls. The visitor token lasts at most one year and is accepted
-	// only by this route. Responses are exact-origin CORS-enabled and use
-	// `Cache-Control: no-store`. Neither token proves a human identity.
+	// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+	// Exact retries recover the same visitor result without another rate
+	// slot; changed input conflicts. The access token lasts at most 15
+	// minutes and never beyond visitor expiry. Responses are exact-origin
+	// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+	// proves a human identity or supports individual revocation.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -9685,17 +9744,21 @@ type ClientInterface interface {
 	//
 	// Public, credential-free exchange for Apps that explicitly enable
 	// anonymous access. The request must carry exactly one canonical Origin
-	// that appears in the App's browser allowlist. Omit `visitor_token` on a
-	// first visit; persist the returned visitor token in browser storage and
-	// present it on renewal to preserve the same opaque visitor partition,
-	// tenant-scoped Agent, and canonical Session. The response returns that
-	// Session ID once the visitor has completed a first turn, allowing the
-	// page to load its transcript immediately.
+	// that appears in the App's browser allowlist. Browser JavaScript does
+	// not set this header; the user agent supplies the page's actual Origin.
+	// Omit `visitor_token` on a first visit; persist every successful returned
+	// visitor token as an opaque replacement and present it on renewal to
+	// preserve the same visitor partition, tenant-scoped Agent, fixed
+	// thirty-day expiry, allowance, and canonical Session. Never discard a
+	// stored visitor token only because a network, `429`, or `5xx` response
+	// occurred.
 	//
-	// The access token lasts 15 minutes and is the bearer for browser-direct
-	// runtime calls. The visitor token lasts at most one year and is accepted
-	// only by this route. Responses are exact-origin CORS-enabled and use
-	// `Cache-Control: no-store`. Neither token proves a human identity.
+	// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+	// Exact retries recover the same visitor result without another rate
+	// slot; changed input conflicts. The access token lasts at most 15
+	// minutes and never beyond visitor expiry. Responses are exact-origin
+	// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+	// proves a human identity or supports individual revocation.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10833,6 +10896,11 @@ type ClientInterface interface {
 	// `not_found`. So if you lose the response and retry, you can safely
 	// treat `404` as "already deleted". Deleting requires the Runtime or
 	// Operator profile; a Viewer credential cannot erase a transcript.
+	// A managed anonymous token may erase only its own fully constrained
+	// Session. Host-minted browser tokens remain unable to call this route.
+	// A still-live anonymous visitor token can subsequently start one empty
+	// replacement Session; conversation erasure is not credential
+	// revocation.
 	//
 	// **Deleting Sessions is not the same as deleting a user's account.**
 	// nvoken has no record that an account was deleted, so to honour a
@@ -11860,17 +11928,21 @@ func (c *Client) UpdateApp(ctx context.Context, appID AppID, body UpdateAppJSONR
 //
 // Public, credential-free exchange for Apps that explicitly enable
 // anonymous access. The request must carry exactly one canonical Origin
-// that appears in the App's browser allowlist. Omit `visitor_token` on a
-// first visit; persist the returned visitor token in browser storage and
-// present it on renewal to preserve the same opaque visitor partition,
-// tenant-scoped Agent, and canonical Session. The response returns that
-// Session ID once the visitor has completed a first turn, allowing the
-// page to load its transcript immediately.
+// that appears in the App's browser allowlist. Browser JavaScript does
+// not set this header; the user agent supplies the page's actual Origin.
+// Omit `visitor_token` on a first visit; persist every successful returned
+// visitor token as an opaque replacement and present it on renewal to
+// preserve the same visitor partition, tenant-scoped Agent, fixed
+// thirty-day expiry, allowance, and canonical Session. Never discard a
+// stored visitor token only because a network, `429`, or `5xx` response
+// occurred.
 //
-// The access token lasts 15 minutes and is the bearer for browser-direct
-// runtime calls. The visitor token lasts at most one year and is accepted
-// only by this route. Responses are exact-origin CORS-enabled and use
-// `Cache-Control: no-store`. Neither token proves a human identity.
+// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+// Exact retries recover the same visitor result without another rate
+// slot; changed input conflicts. The access token lasts at most 15
+// minutes and never beyond visitor expiry. Responses are exact-origin
+// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+// proves a human identity or supports individual revocation.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11891,17 +11963,21 @@ func (c *Client) IssueAnonymousTokenWithBody(ctx context.Context, appID AppID, p
 //
 // Public, credential-free exchange for Apps that explicitly enable
 // anonymous access. The request must carry exactly one canonical Origin
-// that appears in the App's browser allowlist. Omit `visitor_token` on a
-// first visit; persist the returned visitor token in browser storage and
-// present it on renewal to preserve the same opaque visitor partition,
-// tenant-scoped Agent, and canonical Session. The response returns that
-// Session ID once the visitor has completed a first turn, allowing the
-// page to load its transcript immediately.
+// that appears in the App's browser allowlist. Browser JavaScript does
+// not set this header; the user agent supplies the page's actual Origin.
+// Omit `visitor_token` on a first visit; persist every successful returned
+// visitor token as an opaque replacement and present it on renewal to
+// preserve the same visitor partition, tenant-scoped Agent, fixed
+// thirty-day expiry, allowance, and canonical Session. Never discard a
+// stored visitor token only because a network, `429`, or `5xx` response
+// occurred.
 //
-// The access token lasts 15 minutes and is the bearer for browser-direct
-// runtime calls. The visitor token lasts at most one year and is accepted
-// only by this route. Responses are exact-origin CORS-enabled and use
-// `Cache-Control: no-store`. Neither token proves a human identity.
+// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+// Exact retries recover the same visitor result without another rate
+// slot; changed input conflicts. The access token lasts at most 15
+// minutes and never beyond visitor expiry. Responses are exact-origin
+// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+// proves a human identity or supports individual revocation.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13719,6 +13795,11 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 // `not_found`. So if you lose the response and retry, you can safely
 // treat `404` as "already deleted". Deleting requires the Runtime or
 // Operator profile; a Viewer credential cannot erase a transcript.
+// A managed anonymous token may erase only its own fully constrained
+// Session. Host-minted browser tokens remain unable to call this route.
+// A still-live anonymous visitor token can subsequently start one empty
+// replacement Session; conversation erasure is not credential
+// revocation.
 //
 // **Deleting Sessions is not the same as deleting a user's account.**
 // nvoken has no record that an account was deleted, so to honour a
@@ -15379,6 +15460,15 @@ func NewIssueAnonymousTokenRequestWithBody(server string, appID AppID, params *I
 		}
 
 		req.Header.Set("Origin", headerParam0)
+
+		var headerParam1 string
+
+		headerParam1, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam1)
 
 	}
 
@@ -20231,17 +20321,21 @@ type ClientWithResponsesInterface interface {
 	//
 	// Public, credential-free exchange for Apps that explicitly enable
 	// anonymous access. The request must carry exactly one canonical Origin
-	// that appears in the App's browser allowlist. Omit `visitor_token` on a
-	// first visit; persist the returned visitor token in browser storage and
-	// present it on renewal to preserve the same opaque visitor partition,
-	// tenant-scoped Agent, and canonical Session. The response returns that
-	// Session ID once the visitor has completed a first turn, allowing the
-	// page to load its transcript immediately.
+	// that appears in the App's browser allowlist. Browser JavaScript does
+	// not set this header; the user agent supplies the page's actual Origin.
+	// Omit `visitor_token` on a first visit; persist every successful returned
+	// visitor token as an opaque replacement and present it on renewal to
+	// preserve the same visitor partition, tenant-scoped Agent, fixed
+	// thirty-day expiry, allowance, and canonical Session. Never discard a
+	// stored visitor token only because a network, `429`, or `5xx` response
+	// occurred.
 	//
-	// The access token lasts 15 minutes and is the bearer for browser-direct
-	// runtime calls. The visitor token lasts at most one year and is accepted
-	// only by this route. Responses are exact-origin CORS-enabled and use
-	// `Cache-Control: no-store`. Neither token proves a human identity.
+	// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+	// Exact retries recover the same visitor result without another rate
+	// slot; changed input conflicts. The access token lasts at most 15
+	// minutes and never beyond visitor expiry. Responses are exact-origin
+	// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+	// proves a human identity or supports individual revocation.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20252,17 +20346,21 @@ type ClientWithResponsesInterface interface {
 	//
 	// Public, credential-free exchange for Apps that explicitly enable
 	// anonymous access. The request must carry exactly one canonical Origin
-	// that appears in the App's browser allowlist. Omit `visitor_token` on a
-	// first visit; persist the returned visitor token in browser storage and
-	// present it on renewal to preserve the same opaque visitor partition,
-	// tenant-scoped Agent, and canonical Session. The response returns that
-	// Session ID once the visitor has completed a first turn, allowing the
-	// page to load its transcript immediately.
+	// that appears in the App's browser allowlist. Browser JavaScript does
+	// not set this header; the user agent supplies the page's actual Origin.
+	// Omit `visitor_token` on a first visit; persist every successful returned
+	// visitor token as an opaque replacement and present it on renewal to
+	// preserve the same visitor partition, tenant-scoped Agent, fixed
+	// thirty-day expiry, allowance, and canonical Session. Never discard a
+	// stored visitor token only because a network, `429`, or `5xx` response
+	// occurred.
 	//
-	// The access token lasts 15 minutes and is the bearer for browser-direct
-	// runtime calls. The visitor token lasts at most one year and is accepted
-	// only by this route. Responses are exact-origin CORS-enabled and use
-	// `Cache-Control: no-store`. Neither token proves a human identity.
+	// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+	// Exact retries recover the same visitor result without another rate
+	// slot; changed input conflicts. The access token lasts at most 15
+	// minutes and never beyond visitor expiry. Responses are exact-origin
+	// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+	// proves a human identity or supports individual revocation.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21474,6 +21572,11 @@ type ClientWithResponsesInterface interface {
 	// `not_found`. So if you lose the response and retry, you can safely
 	// treat `404` as "already deleted". Deleting requires the Runtime or
 	// Operator profile; a Viewer credential cannot erase a transcript.
+	// A managed anonymous token may erase only its own fully constrained
+	// Session. Host-minted browser tokens remain unable to call this route.
+	// A still-live anonymous visitor token can subsequently start one empty
+	// replacement Session; conversation erasure is not credential
+	// revocation.
 	//
 	// **Deleting Sessions is not the same as deleting a user's account.**
 	// nvoken has no record that an account was deleted, so to honour a
@@ -23660,6 +23763,11 @@ type IssueAnonymousTokenHTTPResponse201Headers struct {
 	CacheControl *string
 }
 
+// IssueAnonymousTokenHTTPResponse429Headers the declared response headers of an HTTP 429 response for IssueAnonymousToken
+type IssueAnonymousTokenHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
 type IssueAnonymousTokenHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -23674,13 +23782,17 @@ type IssueAnonymousTokenHTTPResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *AppArchived
+	JSON409 *ErrorResponse
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *Unavailable
 	// Headers201 the parsed response headers for an HTTP 201 response
 	Headers201 *IssueAnonymousTokenHTTPResponse201Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *IssueAnonymousTokenHTTPResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -23709,8 +23821,13 @@ func (r IssueAnonymousTokenHTTPResponse) GetJSON404() *NotFound {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r IssueAnonymousTokenHTTPResponse) GetJSON409() *AppArchived {
+func (r IssueAnonymousTokenHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r IssueAnonymousTokenHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -30000,17 +30117,21 @@ func (c *ClientWithResponses) UpdateAppWithResponse(ctx context.Context, appID A
 //
 // Public, credential-free exchange for Apps that explicitly enable
 // anonymous access. The request must carry exactly one canonical Origin
-// that appears in the App's browser allowlist. Omit `visitor_token` on a
-// first visit; persist the returned visitor token in browser storage and
-// present it on renewal to preserve the same opaque visitor partition,
-// tenant-scoped Agent, and canonical Session. The response returns that
-// Session ID once the visitor has completed a first turn, allowing the
-// page to load its transcript immediately.
+// that appears in the App's browser allowlist. Browser JavaScript does
+// not set this header; the user agent supplies the page's actual Origin.
+// Omit `visitor_token` on a first visit; persist every successful returned
+// visitor token as an opaque replacement and present it on renewal to
+// preserve the same visitor partition, tenant-scoped Agent, fixed
+// thirty-day expiry, allowance, and canonical Session. Never discard a
+// stored visitor token only because a network, `429`, or `5xx` response
+// occurred.
 //
-// The access token lasts 15 minutes and is the bearer for browser-direct
-// runtime calls. The visitor token lasts at most one year and is accepted
-// only by this route. Responses are exact-origin CORS-enabled and use
-// `Cache-Control: no-store`. Neither token proves a human identity.
+// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+// Exact retries recover the same visitor result without another rate
+// slot; changed input conflicts. The access token lasts at most 15
+// minutes and never beyond visitor expiry. Responses are exact-origin
+// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+// proves a human identity or supports individual revocation.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -30027,17 +30148,21 @@ func (c *ClientWithResponses) IssueAnonymousTokenWithBodyWithResponse(ctx contex
 //
 // Public, credential-free exchange for Apps that explicitly enable
 // anonymous access. The request must carry exactly one canonical Origin
-// that appears in the App's browser allowlist. Omit `visitor_token` on a
-// first visit; persist the returned visitor token in browser storage and
-// present it on renewal to preserve the same opaque visitor partition,
-// tenant-scoped Agent, and canonical Session. The response returns that
-// Session ID once the visitor has completed a first turn, allowing the
-// page to load its transcript immediately.
+// that appears in the App's browser allowlist. Browser JavaScript does
+// not set this header; the user agent supplies the page's actual Origin.
+// Omit `visitor_token` on a first visit; persist every successful returned
+// visitor token as an opaque replacement and present it on renewal to
+// preserve the same visitor partition, tenant-scoped Agent, fixed
+// thirty-day expiry, allowance, and canonical Session. Never discard a
+// stored visitor token only because a network, `429`, or `5xx` response
+// occurred.
 //
-// The access token lasts 15 minutes and is the bearer for browser-direct
-// runtime calls. The visitor token lasts at most one year and is accepted
-// only by this route. Responses are exact-origin CORS-enabled and use
-// `Cache-Control: no-store`. Neither token proves a human identity.
+// Reuse one `Idempotency-Key` while retrying the same logical exchange.
+// Exact retries recover the same visitor result without another rate
+// slot; changed input conflicts. The access token lasts at most 15
+// minutes and never beyond visitor expiry. Responses are exact-origin
+// CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+// proves a human identity or supports individual revocation.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31657,6 +31782,11 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 // `not_found`. So if you lose the response and retry, you can safely
 // treat `404` as "already deleted". Deleting requires the Runtime or
 // Operator profile; a Viewer credential cannot erase a transcript.
+// A managed anonymous token may erase only its own fully constrained
+// Session. Host-minted browser tokens remain unable to call this route.
+// A still-live anonymous visitor token can subsequently start one empty
+// replacement Session; conversation erasure is not credential
+// revocation.
 //
 // **Deleting Sessions is not the same as deleting a user's account.**
 // nvoken has no record that an account was deleted, so to honour a
@@ -33755,11 +33885,18 @@ func ParseIssueAnonymousTokenHTTPResponse(rsp *http.Response) (*IssueAnonymousTo
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest AppArchived
+		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
@@ -33788,6 +33925,16 @@ func ParseIssueAnonymousTokenHTTPResponse(rsp *http.Response) (*IssueAnonymousTo
 			headers.CacheControl = &value
 		}
 		response.Headers201 = &headers
+	case rsp.StatusCode == 429:
+		var headers IssueAnonymousTokenHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil

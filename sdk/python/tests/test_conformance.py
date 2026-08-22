@@ -1684,9 +1684,10 @@ async def test_anonymous_access_has_a_credential_free_facade(monkeypatch: Any) -
             self,
             app_id: str,
             origin: str,
+            idempotency_key: str,
             request: Any,
         ) -> Any:
-            calls.append((app_id, origin, request))
+            calls.append((app_id, origin, idempotency_key, request))
             return SimpleNamespace(visitor_token="visitor-2")
 
     monkeypatch.setattr(client_module, "ApiClient", FakeApiClient)
@@ -1695,11 +1696,13 @@ async def test_anonymous_access_has_a_credential_free_facade(monkeypatch: Any) -
         "https://runtime.example.test/",
         "app_1",
         "https://app.example.test",
+        "anonymous-exchange-1",
         visitor_token="visitor-1",
     )
     assert token.visitor_token == "visitor-2"
     assert calls[0][0:2] == ("app_1", "https://app.example.test")
-    assert calls[0][2].visitor_token == "visitor-1"
+    assert calls[0][2] == "anonymous-exchange-1"
+    assert calls[0][3].visitor_token == "visitor-1"
 
 
 def test_is_not_found_uses_the_authoritative_error_category() -> None:

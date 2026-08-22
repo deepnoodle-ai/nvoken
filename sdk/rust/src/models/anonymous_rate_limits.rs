@@ -12,37 +12,23 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AnonymousTokenResponse {
-    /// Short-lived bearer for browser-direct runtime requests.
-    #[serde(rename = "access_token")]
-    pub access_token: String,
-    /// Whole seconds until access-token expiry at issuance.
-    #[serde(rename = "access_token_expires_in_seconds")]
-    pub access_token_expires_in_seconds: u64,
-    /// Opaque replacement continuity bearer accepted only by this route.
-    #[serde(rename = "visitor_token")]
-    pub visitor_token: String,
-    #[serde(rename = "visitor_token_expires_at")]
-    pub visitor_token_expires_at: chrono::DateTime<chrono::FixedOffset>,
-    /// Canonical conversation for this visitor, or null before its first turn. Anonymous Invocations that omit Session selectors resume this Session automatically.
-    #[serde(rename = "session_id", deserialize_with = "Option::deserialize")]
-    pub session_id: Option<String>,
+pub struct AnonymousRateLimits {
+    /// Admission ceiling shared across all anonymous visitor subjects in this tenant.
+    #[serde(rename = "max_admissions_per_minute")]
+    pub max_admissions_per_minute: u64,
+    /// Replica-wide exchange ceiling for this App and canonical Origin bucket.
+    #[serde(rename = "max_token_exchanges_per_minute")]
+    pub max_token_exchanges_per_minute: u64,
 }
 
-impl AnonymousTokenResponse {
+impl AnonymousRateLimits {
     pub fn new(
-        access_token: String,
-        access_token_expires_in_seconds: u64,
-        visitor_token: String,
-        visitor_token_expires_at: chrono::DateTime<chrono::FixedOffset>,
-        session_id: Option<String>,
-    ) -> AnonymousTokenResponse {
-        AnonymousTokenResponse {
-            access_token,
-            access_token_expires_in_seconds,
-            visitor_token,
-            visitor_token_expires_at,
-            session_id,
+        max_admissions_per_minute: u64,
+        max_token_exchanges_per_minute: u64,
+    ) -> AnonymousRateLimits {
+        AnonymousRateLimits {
+            max_admissions_per_minute,
+            max_token_exchanges_per_minute,
         }
     }
 }

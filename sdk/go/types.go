@@ -1319,9 +1319,16 @@ func (a *AnonymousAccess) generated() (*generated.AnonymousAccess, error) {
 		}
 	}
 	return &generated.AnonymousAccess{
-		AgentID:                a.AgentID,
-		MaxAdmissionsPerMinute: a.MaxAdmissionsPerMinute,
-		VisitorAllowance:       a.VisitorAllowance,
+		AgentID:          a.AgentID,
+		VisitorAllowance: a.VisitorAllowance,
+		Limits: generated.AnonymousRateLimits{
+			MaxAdmissionsPerMinute:     a.Limits.MaxAdmissionsPerMinute,
+			MaxTokenExchangesPerMinute: a.Limits.MaxTokenExchangesPerMinute,
+		},
+		SessionRetention: generated.RetentionPolicy{
+			TTLSeconds: a.SessionRetention.TTLSeconds,
+		},
+		WebhookDelivery: generated.AnonymousAccessWebhookDelivery(a.WebhookDelivery),
 	}, nil
 }
 
@@ -1422,18 +1429,37 @@ const (
 	CreditPolicyRequired CreditPolicy = "required"
 )
 
-// AnonymousAccess lets nvoken mint short-lived grants for visitors with no
-// account, for one Agent and one spend allowance. Enabling it requires browser
-// access, finite App limits, and CreditPolicyRequired.
-type AnonymousAccess struct {
-	AgentID string
+// AnonymousWebhookDelivery controls whether anonymous turns inherit the App's
+// browser webhook.
+type AnonymousWebhookDelivery string
+
+const (
+	AnonymousWebhookDeliveryBrowserAccess AnonymousWebhookDelivery = "browser_access"
+	AnonymousWebhookDeliveryDisabled      AnonymousWebhookDelivery = "disabled"
+)
+
+// AnonymousRateLimits bound anonymous admissions and credential exchange.
+type AnonymousRateLimits struct {
 	// MaxAdmissionsPerMinute is shared across every anonymous visitor in the
 	// tenant rather than applied per visitor, because a visitor is not an
 	// account somebody can be held to.
 	MaxAdmissionsPerMinute int64
+	// MaxTokenExchangesPerMinute is shared across service replicas for this App
+	// and browser Origin.
+	MaxTokenExchangesPerMinute int64
+}
+
+// AnonymousAccess is the complete managed-anonymous configuration. Enabling
+// it requires browser access, finite App limits, CreditPolicyRequired, and a
+// memory-free Agent Definition.
+type AnonymousAccess struct {
+	AgentID string
 	// VisitorAllowance is what one visitor may spend before the grant stops
 	// admitting turns.
 	VisitorAllowance Money
+	Limits           AnonymousRateLimits
+	SessionRetention SessionRetention
+	WebhookDelivery  AnonymousWebhookDelivery
 }
 
 type ListAppsOptions struct {

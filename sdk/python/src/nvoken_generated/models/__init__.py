@@ -31,6 +31,7 @@ from nvoken_generated.models.agent_list import AgentList
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult
 from nvoken_generated.models.anonymous_access import AnonymousAccess
+from nvoken_generated.models.anonymous_rate_limits import AnonymousRateLimits
 from nvoken_generated.models.anonymous_token_request import AnonymousTokenRequest
 from nvoken_generated.models.anonymous_token_response import AnonymousTokenResponse
 from nvoken_generated.models.app import App

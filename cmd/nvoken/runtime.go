@@ -281,6 +281,7 @@ func registerRuntimeCommands(app *cli.App) {
 		AddArg(requiredArg("app-id", "App configured for managed anonymous access")).
 		Flags(
 			cli.String("origin").Required().Help("Exact browser origin configured on the App"),
+			cli.String("idempotency-key").Required().Help("Stable key to reuse when retrying this exchange"),
 			cli.String("visitor-token").Help("Previously returned visitor token; omit on a first visit"),
 		).
 		Run(runAppAnonymousToken)

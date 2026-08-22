@@ -3393,12 +3393,13 @@ pub async fn issue_anonymous_token(
     base_url: &str,
     app_id: &str,
     origin: &str,
+    idempotency_key: &str,
     visitor_token: Option<String>,
 ) -> Result<models::AnonymousTokenResponse, NvokenError> {
     let base_url = base_url.trim_end_matches('/');
-    if base_url.is_empty() || app_id.is_empty() || origin.is_empty() {
+    if base_url.is_empty() || app_id.is_empty() || origin.is_empty() || idempotency_key.is_empty() {
         return Err(NvokenError::validation(
-            "base URL, App ID, and origin are required",
+            "base URL, App ID, origin, and idempotency key are required",
         ));
     }
     let user_agent = format!("nvoken-rust/{}", crate::VERSION);
@@ -3415,7 +3416,7 @@ pub async fn issue_anonymous_token(
     };
     let mut request = models::AnonymousTokenRequest::new();
     request.visitor_token = visitor_token;
-    apis::apps_api::issue_anonymous_token(&configuration, app_id, origin, request)
+    apis::apps_api::issue_anonymous_token(&configuration, app_id, origin, idempotency_key, request)
         .await
         .map_err(normalize_generated_error)
 }

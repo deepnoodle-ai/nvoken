@@ -18,6 +18,7 @@ export * from './AgentList.js';
 export * from './AllocateCreditsRequest.js';
 export * from './AllocateCreditsResult.js';
 export * from './AnonymousAccess.js';
+export * from './AnonymousRateLimits.js';
 export * from './AnonymousTokenRequest.js';
 export * from './AnonymousTokenResponse.js';
 export * from './App.js';

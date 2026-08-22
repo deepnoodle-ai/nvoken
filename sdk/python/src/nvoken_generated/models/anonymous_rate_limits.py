@@ -17,24 +17,20 @@ import pprint
 import re  # noqa: F401
 import json
 
-from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class AnonymousTokenResponse(BaseModel):
+class AnonymousRateLimits(BaseModel):
     """
-    AnonymousTokenResponse
+    AnonymousRateLimits
     """ # noqa: E501
-    access_token: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Short-lived bearer for browser-direct runtime requests.")
-    access_token_expires_in_seconds: Annotated[int, Field(le=900, strict=True, ge=1)] = Field(description="Whole seconds until access-token expiry at issuance.")
-    visitor_token: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque replacement continuity bearer accepted only by this route.")
-    visitor_token_expires_at: datetime
-    session_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Canonical conversation for this visitor, or null before its first turn. Anonymous Invocations that omit Session selectors resume this Session automatically. ")
-    __properties: ClassVar[List[str]] = ["access_token", "access_token_expires_in_seconds", "visitor_token", "visitor_token_expires_at", "session_id"]
+    max_admissions_per_minute: Annotated[int, Field(strict=True, ge=1)] = Field(description="Admission ceiling shared across all anonymous visitor subjects in this tenant.")
+    max_token_exchanges_per_minute: Annotated[int, Field(strict=True, ge=1)] = Field(description="Replica-wide exchange ceiling for this App and canonical Origin bucket.")
+    __properties: ClassVar[List[str]] = ["max_admissions_per_minute", "max_token_exchanges_per_minute"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -54,7 +50,7 @@ class AnonymousTokenResponse(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of AnonymousTokenResponse from a JSON string"""
+        """Create an instance of AnonymousRateLimits from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -75,16 +71,11 @@ class AnonymousTokenResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if session_id (nullable) is None
-        # and model_fields_set contains the field
-        if self.session_id is None and "session_id" in self.model_fields_set:
-            _dict['session_id'] = None
-
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of AnonymousTokenResponse from a dict"""
+        """Create an instance of AnonymousRateLimits from a dict"""
         if obj is None:
             return None
 
@@ -92,10 +83,7 @@ class AnonymousTokenResponse(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "access_token": obj.get("access_token"),
-            "access_token_expires_in_seconds": obj.get("access_token_expires_in_seconds"),
-            "visitor_token": obj.get("visitor_token"),
-            "visitor_token_expires_at": obj.get("visitor_token_expires_at"),
-            "session_id": obj.get("session_id")
+            "max_admissions_per_minute": obj.get("max_admissions_per_minute"),
+            "max_token_exchanges_per_minute": obj.get("max_token_exchanges_per_minute")
         })
         return _obj

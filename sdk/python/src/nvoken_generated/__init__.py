@@ -61,6 +61,7 @@ __all__ = [
     "AllocateCreditsRequest",
     "AllocateCreditsResult",
     "AnonymousAccess",
+    "AnonymousRateLimits",
     "AnonymousTokenRequest",
     "AnonymousTokenResponse",
     "App",
@@ -334,6 +335,7 @@ from nvoken_generated.models.agent_list import AgentList as AgentList
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest as AllocateCreditsRequest
 from nvoken_generated.models.allocate_credits_result import AllocateCreditsResult as AllocateCreditsResult
 from nvoken_generated.models.anonymous_access import AnonymousAccess as AnonymousAccess
+from nvoken_generated.models.anonymous_rate_limits import AnonymousRateLimits as AnonymousRateLimits
 from nvoken_generated.models.anonymous_token_request import AnonymousTokenRequest as AnonymousTokenRequest
 from nvoken_generated.models.anonymous_token_response import AnonymousTokenResponse as AnonymousTokenResponse
 from nvoken_generated.models.app import App as App
