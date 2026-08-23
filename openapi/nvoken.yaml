@@ -750,17 +750,21 @@ paths:
       description: |
         Public, credential-free exchange for Apps that explicitly enable
         anonymous access. The request must carry exactly one canonical Origin
-        that appears in the App's browser allowlist. Omit `visitor_token` on a
-        first visit; persist the returned visitor token in browser storage and
-        present it on renewal to preserve the same opaque visitor partition,
-        tenant-scoped Agent, and canonical Session. The response returns that
-        Session ID once the visitor has completed a first turn, allowing the
-        page to load its transcript immediately.
+        that appears in the App's browser allowlist. Browser JavaScript does
+        not set this header; the user agent supplies the page's actual Origin.
+        Omit `visitor_token` on a first visit; persist every successful returned
+        visitor token as an opaque replacement and present it on renewal to
+        preserve the same visitor partition, tenant-scoped Agent, fixed
+        thirty-day expiry, allowance, and canonical Session. Never discard a
+        stored visitor token only because a network, `429`, or `5xx` response
+        occurred.
 
-        The access token lasts 15 minutes and is the bearer for browser-direct
-        runtime calls. The visitor token lasts at most one year and is accepted
-        only by this route. Responses are exact-origin CORS-enabled and use
-        `Cache-Control: no-store`. Neither token proves a human identity.
+        Reuse one `Idempotency-Key` while retrying the same logical exchange.
+        Exact retries recover the same visitor result without another rate
+        slot; changed input conflicts. The access token lasts at most 15
+        minutes and never beyond visitor expiry. Responses are exact-origin
+        CORS-enabled and use `Cache-Control: no-store`. Neither opaque token
+        proves a human identity or supports individual revocation.
       security: []
       parameters:
         - name: app_id
@@ -776,6 +780,7 @@ paths:
             minLength: 1
             maxLength: 2048
           description: One canonical browser origin configured on the App.
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -796,7 +801,13 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/AppArchived" }
+        "409":
+          description: The App is archived or this idempotency key was used with different input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/apps/{app_id}/client-keys:
@@ -3905,6 +3916,11 @@ paths:
         `not_found`. So if you lose the response and retry, you can safely
         treat `404` as "already deleted". Deleting requires the Runtime or
         Operator profile; a Viewer credential cannot erase a transcript.
+        A managed anonymous token may erase only its own fully constrained
+        Session. Host-minted browser tokens remain unable to call this route.
+        A still-live anonymous visitor token can subsequently start one empty
+        replacement Session; conversation erasure is not credential
+        revocation.
 
         **Deleting Sessions is not the same as deleting a user's account.**
         nvoken has no record that an account was deleted, so to honour a
@@ -4116,7 +4132,7 @@ paths:
     get:
       tags: [Sessions]
       operationId: getSessionTranscript
-      summary: Drain a fixed-cut incremental transcript snapshot
+      summary: Read an incremental or bounded-tail transcript snapshot
       description: |
         Returns the Session's stored messages plus a running log of turn state
         changes.
@@ -4126,15 +4142,49 @@ paths:
         Within one read, keep passing `page_token` until `has_more` is false —
         all pages come from the same consistent snapshot, so the transcript
         cannot shift under you mid-read.
+
+        To bootstrap a returning conversation, pass `tail=true` without
+        `cursor` or `page_token`. The response contains at most `limit` newest
+        messages in canonical ascending sequence order and at most one latest
+        lifecycle change for each distinct non-null `invocation_id` referenced
+        by those messages. Its `cursor` is the exact committed Session head
+        observed before message selection; use it with this endpoint or the
+        Session stream to receive everything committed afterward.
+
+        In tail mode, `has_more` and `next_page_token` refer only to older
+        message windows. Pass that opaque token without `tail` to fetch the
+        preceding window at the original fixed cut. Each older page remains in
+        canonical ascending order and carries the original resume cursor.
+        Lifecycle snapshots are current when each page is read, so a revision
+        may overlap a later stream update; fold lifecycle state by
+        `(invocation_id, revision)`.
+
+        `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+        request. A tail continuation token is distinct from an incremental
+        continuation token and cannot be used as the other kind.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: page_token
           in: query
-          description: Opaque fixed-cut continuation from `next_page_token`.
+          description: |
+            Opaque continuation from `next_page_token`. Incremental tokens
+            drain one fixed forward snapshot; tail tokens walk older message
+            windows while retaining the first tail read's cut and resume
+            cursor. Do not combine with `cursor` or `tail`.
           schema:
             type: string
             minLength: 1
         - $ref: "#/components/parameters/Limit"
+        - name: tail
+          in: query
+          description: |
+            When true, select the newest bounded message window and the latest
+            lifecycle state for each referenced Invocation. Valid only without
+            `cursor` or `page_token`; omit it when following a tail
+            `next_page_token`.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: One phase of a fixed-cut transcript snapshot.
@@ -5619,24 +5669,45 @@ components:
     AnonymousAccess:
       type: object
       additionalProperties: false
-      required: [agent_id, visitor_allowance, max_admissions_per_minute]
+      required: [agent_id, visitor_allowance, limits, session_retention, webhook_delivery]
       properties:
         agent_id:
           $ref: "#/components/schemas/AgentID"
         visitor_allowance:
           $ref: "#/components/schemas/Money"
+        limits:
+          $ref: "#/components/schemas/AnonymousRateLimits"
+        session_retention:
+          $ref: "#/components/schemas/RetentionPolicy"
+        webhook_delivery:
+          type: string
+          enum: [browser_access, disabled]
+          description: |
+            `browser_access` copies the App browser webhook onto anonymous
+            Invocations. `disabled` creates no webhook delivery and requires
+            every host-mode tool to be named in `client_interface`.
+      description: |
+        Complete managed-anonymous mode. The Agent and its Definition must be
+        live and App-owned; the Definition must be client-capable and have
+        memory disabled. The positive USD allowance is a fixed thirty-day
+        visitor-continuity cost ceiling. Clearing browser storage can create a
+        new subject, so anonymous limits, tenant Credits, and App admission
+        limits remain aggregate hard caps.
+    AnonymousRateLimits:
+      type: object
+      additionalProperties: false
+      required: [max_admissions_per_minute, max_token_exchanges_per_minute]
+      properties:
         max_admissions_per_minute:
           type: integer
           format: int64
           minimum: 1
           description: Admission ceiling shared across all anonymous visitor subjects in this tenant.
-      description: |
-        Complete managed-anonymous mode. The Agent and its Definition must be
-        live and App-owned; the Definition must be client-capable and either have no memory or explicitly use
-        user-scoped memory. The positive USD allowance is a lifetime retained-
-        cost ceiling for one opaque visitor subject. Clearing browser storage
-        can create a new subject, so the anonymous admission ceiling, tenant
-        Credits, and App admission limits remain aggregate hard caps.
+        max_token_exchanges_per_minute:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Replica-wide exchange ceiling for this App and canonical Origin bucket.
     AnonymousTokenRequest:
       type: object
       additionalProperties: false
@@ -5648,19 +5719,22 @@ components:
     AnonymousTokenResponse:
       type: object
       additionalProperties: false
-      required: [access_token, access_token_expires_at, visitor_token, visitor_token_expires_at, session_id]
+      required: [access_token, access_token_expires_in_seconds, visitor_token, visitor_token_expires_at, session_id]
       properties:
         access_token:
           type: string
           minLength: 1
           description: Short-lived bearer for browser-direct runtime requests.
-        access_token_expires_at:
-          type: string
-          format: date-time
+        access_token_expires_in_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 900
+          description: Whole seconds until access-token expiry at issuance.
         visitor_token:
           type: string
           minLength: 1
-          description: Renewable continuity bearer accepted only by this route.
+          description: Opaque replacement continuity bearer accepted only by this route.
         visitor_token_expires_at:
           type: string
           format: date-time
@@ -10068,19 +10142,39 @@ components:
       properties:
         messages:
           type: array
+          maxItems: 200
+          description: |
+            Canonical ascending message rows. A tail page contains at most the
+            requested `limit`; incremental pages share that budget with
+            `invocation_changes`.
           items:
             $ref: "#/components/schemas/SessionMessage"
         invocation_changes:
           type: array
+          maxItems: 200
+          description: |
+            In tail reads, at most one latest revision per distinct non-null
+            message `invocation_id`, ordered by revision. Incremental reads
+            retain their existing append-log behavior.
           items:
             $ref: "#/components/schemas/InvocationChange"
         has_more:
           type: boolean
+          description: |
+            Incremental reads have more records in the fixed forward snapshot;
+            tail reads have an older message window.
         cursor:
           type: string
           minLength: 1
-          description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
+          description: |
+            Your forward resume position. Store it and send it back as
+            `cursor`, or use it to open the Session stream. Every page of one
+            tail walk carries the exact Session head observed by its first
+            page, including an empty tail.
         next_page_token:
+          description: |
+            Continue the current fixed incremental snapshot or fetch the next
+            older tail window. Null when `has_more` is false.
           oneOf:
             - type: string
             - type: "null"

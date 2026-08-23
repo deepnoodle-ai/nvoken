@@ -1090,6 +1090,9 @@ func TestAnonymousTokenAndMemoryCommands(t *testing.T) {
 			if origin := request.Header.Get("Origin"); origin != "https://chat.example.test" {
 				t.Errorf("anonymous-token Origin = %q", origin)
 			}
+			if idempotencyKey := request.Header.Get("Idempotency-Key"); idempotencyKey != "anonymous-exchange-1" {
+				t.Errorf("anonymous-token Idempotency-Key = %q", idempotencyKey)
+			}
 			var body struct {
 				VisitorToken *string `json:"visitor_token"`
 			}
@@ -1099,7 +1102,7 @@ func TestAnonymousTokenAndMemoryCommands(t *testing.T) {
 				t.Errorf("visitor_token = %#v", body.VisitorToken)
 			}
 			response.WriteHeader(http.StatusCreated)
-			_, _ = response.Write([]byte(`{"access_token":"access-new","access_token_expires_at":"2026-08-12T12:15:00Z","visitor_token":"visitor-new","visitor_token_expires_at":"2027-08-12T12:00:00Z","session_id":null}`))
+			_, _ = response.Write([]byte(`{"access_token":"access-new","access_token_expires_in_seconds":900,"visitor_token":"visitor-new","visitor_token_expires_at":"2027-08-12T12:00:00Z","session_id":null}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/memories":
 			if authorization := request.Header.Get("Authorization"); authorization != "Bearer operator-key" {
 				t.Errorf("memory list Authorization = %q", authorization)
@@ -1130,6 +1133,7 @@ func TestAnonymousTokenAndMemoryCommands(t *testing.T) {
 		true,
 		"app", "anonymous-token", testAppID,
 		"--origin", "https://chat.example.test",
+		"--idempotency-key", "anonymous-exchange-1",
 		"--visitor-token", "visitor-old",
 	)
 	if err != nil || !strings.Contains(output, `"access_token":"access-new"`) ||

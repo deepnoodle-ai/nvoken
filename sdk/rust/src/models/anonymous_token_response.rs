@@ -16,9 +16,10 @@ pub struct AnonymousTokenResponse {
     /// Short-lived bearer for browser-direct runtime requests.
     #[serde(rename = "access_token")]
     pub access_token: String,
-    #[serde(rename = "access_token_expires_at")]
-    pub access_token_expires_at: chrono::DateTime<chrono::FixedOffset>,
-    /// Renewable continuity bearer accepted only by this route.
+    /// Whole seconds until access-token expiry at issuance.
+    #[serde(rename = "access_token_expires_in_seconds")]
+    pub access_token_expires_in_seconds: u64,
+    /// Opaque replacement continuity bearer accepted only by this route.
     #[serde(rename = "visitor_token")]
     pub visitor_token: String,
     #[serde(rename = "visitor_token_expires_at")]
@@ -31,14 +32,14 @@ pub struct AnonymousTokenResponse {
 impl AnonymousTokenResponse {
     pub fn new(
         access_token: String,
-        access_token_expires_at: chrono::DateTime<chrono::FixedOffset>,
+        access_token_expires_in_seconds: u64,
         visitor_token: String,
         visitor_token_expires_at: chrono::DateTime<chrono::FixedOffset>,
         session_id: Option<String>,
     ) -> AnonymousTokenResponse {
         AnonymousTokenResponse {
             access_token,
-            access_token_expires_at,
+            access_token_expires_in_seconds,
             visitor_token,
             visitor_token_expires_at,
             session_id,

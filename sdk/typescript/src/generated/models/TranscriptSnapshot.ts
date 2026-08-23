@@ -35,30 +35,44 @@ import {
  */
 export interface TranscriptSnapshot {
     /**
+     * Canonical ascending message rows. A tail page contains at most the
+     * requested `limit`; incremental pages share that budget with
+     * `invocation_changes`.
      *
      * @type {Array<SessionMessage>}
      * @memberof TranscriptSnapshot
      */
     messages: Array<SessionMessage>;
     /**
+     * In tail reads, at most one latest revision per distinct non-null
+     * message `invocation_id`, ordered by revision. Incremental reads
+     * retain their existing append-log behavior.
      *
      * @type {Array<InvocationChange>}
      * @memberof TranscriptSnapshot
      */
     invocationChanges: Array<InvocationChange>;
     /**
+     * Incremental reads have more records in the fixed forward snapshot;
+     * tail reads have an older message window.
      *
      * @type {boolean}
      * @memberof TranscriptSnapshot
      */
     hasMore: boolean;
     /**
-     * Your resume position. Store it and send it back as `cursor` to continue where you left off.
+     * Your forward resume position. Store it and send it back as
+     * `cursor`, or use it to open the Session stream. Every page of one
+     * tail walk carries the exact Session head observed by its first
+     * page, including an empty tail.
+     *
      * @type {string}
      * @memberof TranscriptSnapshot
      */
     cursor: string;
     /**
+     * Continue the current fixed incremental snapshot or fetch the next
+     * older tail window. Null when `has_more` is false.
      *
      * @type {string}
      * @memberof TranscriptSnapshot

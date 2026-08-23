@@ -116,6 +116,7 @@ export interface GetAppRequest {
 export interface IssueAnonymousTokenRequest {
     appId: string;
     origin: string;
+    idempotencyKey: string;
     anonymousTokenRequest: AnonymousTokenRequest;
 }
 
@@ -429,6 +430,13 @@ export class AppsApi extends runtime.BaseAPI {
             );
         }
 
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling issueAnonymousToken().'
+            );
+        }
+
         if (requestParameters['anonymousTokenRequest'] == null) {
             throw new runtime.RequiredError(
                 'anonymousTokenRequest',
@@ -446,6 +454,10 @@ export class AppsApi extends runtime.BaseAPI {
             headerParameters['Origin'] = String(requestParameters['origin']);
         }
 
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
 
         let urlPath = `/v1/apps/{app_id}/anonymous-tokens`;
         urlPath = urlPath.replace('{app_id}', encodeURIComponent(String(requestParameters['appId'])));
@@ -460,7 +472,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App\'s browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+     * Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App\'s browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page\'s actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
      * Mint anonymous browser access for one configured App
      */
     async issueAnonymousTokenRaw(requestParameters: IssueAnonymousTokenRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AnonymousTokenResponse>> {
@@ -471,7 +483,7 @@ export class AppsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App\'s browser allowlist. Omit `visitor_token` on a first visit; persist the returned visitor token in browser storage and present it on renewal to preserve the same opaque visitor partition, tenant-scoped Agent, and canonical Session. The response returns that Session ID once the visitor has completed a first turn, allowing the page to load its transcript immediately.  The access token lasts 15 minutes and is the bearer for browser-direct runtime calls. The visitor token lasts at most one year and is accepted only by this route. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither token proves a human identity.
+     * Public, credential-free exchange for Apps that explicitly enable anonymous access. The request must carry exactly one canonical Origin that appears in the App\'s browser allowlist. Browser JavaScript does not set this header; the user agent supplies the page\'s actual Origin. Omit `visitor_token` on a first visit; persist every successful returned visitor token as an opaque replacement and present it on renewal to preserve the same visitor partition, tenant-scoped Agent, fixed thirty-day expiry, allowance, and canonical Session. Never discard a stored visitor token only because a network, `429`, or `5xx` response occurred.  Reuse one `Idempotency-Key` while retrying the same logical exchange. Exact retries recover the same visitor result without another rate slot; changed input conflicts. The access token lasts at most 15 minutes and never beyond visitor expiry. Responses are exact-origin CORS-enabled and use `Cache-Control: no-store`. Neither opaque token proves a human identity or supports individual revocation.
      * Mint anonymous browser access for one configured App
      */
     async issueAnonymousToken(requestParameters: IssueAnonymousTokenRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AnonymousTokenResponse> {

@@ -204,7 +204,7 @@ pub async fn create_session(
     }
 }
 
-/// Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A Session holding a nonterminal Invocation is refused with `session_invocation_active` unless you pass `force=true`. Erasure skips settlement: a turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against — and no `invocation.ended` webhook fires for it. So if you bill or reconcile on settlement, cancel the turn and wait for its final state first, then delete. `force=true` is for erasing on an end user's behalf, where removing the transcript now outranks keeping a settled record of the turn.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
+/// Removes the Session, its Invocations, transcript messages, checkpoints, tool calls, provider artifacts, compactions, provider-key and MCP bindings, and undelivered webhooks. The erasure is immediate and irreversible; a subsequent read is `not_found`.  A Session holding a nonterminal Invocation is refused with `session_invocation_active` unless you pass `force=true`. Erasure skips settlement: a turn still running is stopped, but no cancellation is recorded — there is nothing left to record it against — and no `invocation.ended` webhook fires for it. So if you bill or reconcile on settlement, cancel the turn and wait for its final state first, then delete. `force=true` is for erasing on an end user's behalf, where removing the transcript now outranks keeping a settled record of the turn.  An unknown `session_id`, or one outside your scope, returns `not_found`. So if you lose the response and retry, you can safely treat `404` as \"already deleted\". Deleting requires the Runtime or Operator profile; a Viewer credential cannot erase a transcript. A managed anonymous token may erase only its own fully constrained Session. Host-minted browser tokens remain unable to call this route. A still-live anonymous visitor token can subsequently start one empty replacement Session; conversation erasure is not credential revocation.  **Deleting Sessions is not the same as deleting a user's account.** nvoken has no record that an account was deleted, so to honour a deletion request you must first stop starting new turns for that tenant, then page through `GET /v1/sessions` and delete until the list comes back empty. Otherwise a request arriving mid-sweep creates a new Session behind you.  Two consequences to plan for. Content-free Invocation, model-call, and tool-call facts remain for usage reporting, with the Invocation marked erased; prompts, responses, and tool payloads do not. The deleted turns' idempotency keys become reusable, since deduplication only holds while the original turn still exists.
 pub async fn delete_session(
     configuration: &configuration::Configuration,
     session_id: &str,
@@ -358,19 +358,21 @@ pub async fn get_session(
     }
 }
 
-/// Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
+/// Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.  To bootstrap a returning conversation, pass `tail=true` without `cursor` or `page_token`. The response contains at most `limit` newest messages in canonical ascending sequence order and at most one latest lifecycle change for each distinct non-null `invocation_id` referenced by those messages. Its `cursor` is the exact committed Session head observed before message selection; use it with this endpoint or the Session stream to receive everything committed afterward.  In tail mode, `has_more` and `next_page_token` refer only to older message windows. Pass that opaque token without `tail` to fetch the preceding window at the original fixed cut. Each older page remains in canonical ascending order and carries the original resume cursor. Lifecycle snapshots are current when each page is read, so a revision may overlap a later stream update; fold lifecycle state by `(invocation_id, revision)`.  `tail`, `cursor`, and `page_token` are mutually exclusive on the first request. A tail continuation token is distinct from an incremental continuation token and cannot be used as the other kind.
 pub async fn get_session_transcript(
     configuration: &configuration::Configuration,
     session_id: &str,
     cursor: Option<&str>,
     page_token: Option<&str>,
     limit: Option<u32>,
+    tail: Option<bool>,
 ) -> Result<models::TranscriptSnapshot, Error<GetSessionTranscriptError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_session_id = session_id;
     let p_query_cursor = cursor;
     let p_query_page_token = page_token;
     let p_query_limit = limit;
+    let p_query_tail = tail;
 
     let uri_str = format!(
         "{}/v1/sessions/{session_id}/transcript",
@@ -387,6 +389,9 @@ pub async fn get_session_transcript(
     }
     if let Some(ref param_value) = p_query_limit {
         req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_tail {
+        req_builder = req_builder.query(&[("tail", &param_value.to_string())]);
     }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());

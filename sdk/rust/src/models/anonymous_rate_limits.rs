@@ -12,38 +12,23 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TranscriptSnapshot {
-    /// Canonical ascending message rows. A tail page contains at most the requested `limit`; incremental pages share that budget with `invocation_changes`.
-    #[serde(rename = "messages")]
-    pub messages: Vec<models::SessionMessage>,
-    /// In tail reads, at most one latest revision per distinct non-null message `invocation_id`, ordered by revision. Incremental reads retain their existing append-log behavior.
-    #[serde(rename = "invocation_changes")]
-    pub invocation_changes: Vec<models::InvocationChange>,
-    /// Incremental reads have more records in the fixed forward snapshot; tail reads have an older message window.
-    #[serde(rename = "has_more")]
-    pub has_more: bool,
-    /// Your forward resume position. Store it and send it back as `cursor`, or use it to open the Session stream. Every page of one tail walk carries the exact Session head observed by its first page, including an empty tail.
-    #[serde(rename = "cursor")]
-    pub cursor: String,
-    /// Continue the current fixed incremental snapshot or fetch the next older tail window. Null when `has_more` is false.
-    #[serde(rename = "next_page_token", deserialize_with = "Option::deserialize")]
-    pub next_page_token: Option<String>,
+pub struct AnonymousRateLimits {
+    /// Admission ceiling shared across all anonymous visitor subjects in this tenant.
+    #[serde(rename = "max_admissions_per_minute")]
+    pub max_admissions_per_minute: u64,
+    /// Replica-wide exchange ceiling for this App and canonical Origin bucket.
+    #[serde(rename = "max_token_exchanges_per_minute")]
+    pub max_token_exchanges_per_minute: u64,
 }
 
-impl TranscriptSnapshot {
+impl AnonymousRateLimits {
     pub fn new(
-        messages: Vec<models::SessionMessage>,
-        invocation_changes: Vec<models::InvocationChange>,
-        has_more: bool,
-        cursor: String,
-        next_page_token: Option<String>,
-    ) -> TranscriptSnapshot {
-        TranscriptSnapshot {
-            messages,
-            invocation_changes,
-            has_more,
-            cursor,
-            next_page_token,
+        max_admissions_per_minute: u64,
+        max_token_exchanges_per_minute: u64,
+    ) -> AnonymousRateLimits {
+        AnonymousRateLimits {
+            max_admissions_per_minute,
+            max_token_exchanges_per_minute,
         }
     }
 }

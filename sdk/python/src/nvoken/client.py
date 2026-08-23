@@ -2157,6 +2157,7 @@ class Client:
         cursor: str | None = None,
         page_token: str | None = None,
         limit: int | None = None,
+        tail: bool | None = None,
     ) -> TranscriptSnapshot:
         return _machine_projection(
             await self._replay_safe(
@@ -2165,6 +2166,7 @@ class Client:
                     cursor=cursor,
                     page_token=page_token,
                     limit=limit,
+                    tail=tail,
                 )
             )
         )
@@ -2992,12 +2994,16 @@ async def issue_anonymous_token(
     base_url: str,
     app_id: str,
     origin: str,
+    idempotency_key: str,
     *,
     visitor_token: str | None = None,
 ) -> AnonymousTokenResponse:
     """Mint or renew credential-free browser access for one configured App."""
-    if not base_url:
-        raise NvokenError("validation", "base_url is required")
+    if not base_url or not app_id or not origin or not idempotency_key:
+        raise NvokenError(
+            "validation",
+            "base_url, app_id, origin, and idempotency_key are required",
+        )
     configuration = Configuration(host=base_url.rstrip("/"))
     configuration.discard_unknown_keys = False
     try:
@@ -3005,6 +3011,7 @@ async def issue_anonymous_token(
             return await AppsApi(api_client).issue_anonymous_token(
                 app_id,
                 origin,
+                idempotency_key,
                 AnonymousTokenRequest(visitor_token=visitor_token),
             )
     except ApiException as error:

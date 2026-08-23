@@ -34,6 +34,8 @@ pub mod allocate_credits_result;
 pub use self::allocate_credits_result::AllocateCreditsResult;
 pub mod anonymous_access;
 pub use self::anonymous_access::AnonymousAccess;
+pub mod anonymous_rate_limits;
+pub use self::anonymous_rate_limits::AnonymousRateLimits;
 pub mod anonymous_token_request;
 pub use self::anonymous_token_request::AnonymousTokenRequest;
 pub mod anonymous_token_response;
