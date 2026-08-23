@@ -1546,6 +1546,8 @@ export interface TranscriptPageOptions {
   cursor?: string;
   pageToken?: string;
   limit?: number;
+  /** Read the newest bounded window; omit when following its page token. */
+  tail?: boolean;
 }
 
 export interface TranscriptDrainOptions {

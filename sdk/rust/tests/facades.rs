@@ -216,6 +216,17 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
                 cursor: Some("stream-2".to_owned()),
                 page_token: Some("page-2".to_owned()),
                 limit: Some(100),
+                tail: None,
+            },
+        )
+        .await;
+    let _ = client
+        .get_session_transcript(
+            "sess_1",
+            TranscriptOptions {
+                tail: Some(true),
+                limit: Some(50),
+                ..TranscriptOptions::default()
             },
         )
         .await;
@@ -230,7 +241,7 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
     .await;
 
     let requests = sent.lock().unwrap().clone();
-    assert_eq!(requests.len(), 16);
+    assert_eq!(requests.len(), 17);
     assert_eq!(requests[0].path, "/v1/orgs");
     assert_eq!(requests[0].body["external_ref"], "org-acme");
     assert_eq!(requests[2].body["callback_timeout_seconds"], 20);
@@ -242,14 +253,15 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
     assert_eq!(requests[12].body["user_key"], "user-1");
     assert_eq!(requests[13].body["from_message"], 1);
     assert!(requests[14].path.contains("page_token=page-2"));
-    assert_eq!(requests[15].headers.get("authorization"), None);
-    assert_eq!(requests[15].headers["origin"], "https://app.example.test");
+    assert!(requests[15].path.contains("tail=true"));
+    assert_eq!(requests[16].headers.get("authorization"), None);
+    assert_eq!(requests[16].headers["origin"], "https://app.example.test");
     assert_eq!(
-        requests[15].headers["idempotency-key"],
+        requests[16].headers["idempotency-key"],
         "anonymous-exchange-1"
     );
-    assert_eq!(requests[15].body["visitor_token"], "visitor-1");
-    assert!(requests[..15]
+    assert_eq!(requests[16].body["visitor_token"], "visitor-1");
+    assert!(requests[..16]
         .iter()
         .all(|request| request.headers["authorization"] == "Bearer test-key"));
     assert_eq!(requests[0].method, "POST");

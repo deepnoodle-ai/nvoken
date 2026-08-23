@@ -2535,6 +2535,7 @@ func (c *Client) GetTranscript(ctx context.Context, sessionID string, options Tr
 		Cursor:    options.Cursor,
 		PageToken: options.PageToken,
 		Limit:     options.Limit,
+		Tail:      options.Tail,
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TranscriptSnapshot], error) {
 		response, err := c.raw.GetSessionTranscriptWithResponse(ctx, sessionID, params)

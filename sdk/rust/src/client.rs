@@ -1552,6 +1552,8 @@ pub struct TranscriptOptions {
     pub cursor: Option<String>,
     pub page_token: Option<String>,
     pub limit: Option<u32>,
+    /// Read the newest bounded window. Omit when following its page token.
+    pub tail: Option<bool>,
 }
 
 /// Sequence order for a message page.
@@ -3347,6 +3349,7 @@ impl Client {
             options.cursor.as_deref(),
             options.page_token.as_deref(),
             options.limit,
+            options.tail,
         )
         .await
         .map_err(|error| self.normalize_generated_error(error))

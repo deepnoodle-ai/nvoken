@@ -8,6 +8,9 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Transcript reads can start from a bounded recent tail.** Every SDK exposes
+  `tail` on its transcript-page facade, with generated types for the exact
+  resume cursor and opaque older-history pages returned by the service.
 - **Breaking: managed anonymous access now has its production contract.** App
   configuration includes exchange limits, Session retention, and webhook mode;
   token exchange requires a stable idempotency key and returns relative access

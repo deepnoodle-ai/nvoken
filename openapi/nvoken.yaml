@@ -4132,7 +4132,7 @@ paths:
     get:
       tags: [Sessions]
       operationId: getSessionTranscript
-      summary: Drain a fixed-cut incremental transcript snapshot
+      summary: Read an incremental or bounded-tail transcript snapshot
       description: |
         Returns the Session's stored messages plus a running log of turn state
         changes.
@@ -4142,15 +4142,49 @@ paths:
         Within one read, keep passing `page_token` until `has_more` is false —
         all pages come from the same consistent snapshot, so the transcript
         cannot shift under you mid-read.
+
+        To bootstrap a returning conversation, pass `tail=true` without
+        `cursor` or `page_token`. The response contains at most `limit` newest
+        messages in canonical ascending sequence order and at most one latest
+        lifecycle change for each distinct non-null `invocation_id` referenced
+        by those messages. Its `cursor` is the exact committed Session head
+        observed before message selection; use it with this endpoint or the
+        Session stream to receive everything committed afterward.
+
+        In tail mode, `has_more` and `next_page_token` refer only to older
+        message windows. Pass that opaque token without `tail` to fetch the
+        preceding window at the original fixed cut. Each older page remains in
+        canonical ascending order and carries the original resume cursor.
+        Lifecycle snapshots are current when each page is read, so a revision
+        may overlap a later stream update; fold lifecycle state by
+        `(invocation_id, revision)`.
+
+        `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+        request. A tail continuation token is distinct from an incremental
+        continuation token and cannot be used as the other kind.
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - name: page_token
           in: query
-          description: Opaque fixed-cut continuation from `next_page_token`.
+          description: |
+            Opaque continuation from `next_page_token`. Incremental tokens
+            drain one fixed forward snapshot; tail tokens walk older message
+            windows while retaining the first tail read's cut and resume
+            cursor. Do not combine with `cursor` or `tail`.
           schema:
             type: string
             minLength: 1
         - $ref: "#/components/parameters/Limit"
+        - name: tail
+          in: query
+          description: |
+            When true, select the newest bounded message window and the latest
+            lifecycle state for each referenced Invocation. Valid only without
+            `cursor` or `page_token`; omit it when following a tail
+            `next_page_token`.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: One phase of a fixed-cut transcript snapshot.
@@ -10108,19 +10142,39 @@ components:
       properties:
         messages:
           type: array
+          maxItems: 200
+          description: |
+            Canonical ascending message rows. A tail page contains at most the
+            requested `limit`; incremental pages share that budget with
+            `invocation_changes`.
           items:
             $ref: "#/components/schemas/SessionMessage"
         invocation_changes:
           type: array
+          maxItems: 200
+          description: |
+            In tail reads, at most one latest revision per distinct non-null
+            message `invocation_id`, ordered by revision. Incremental reads
+            retain their existing append-log behavior.
           items:
             $ref: "#/components/schemas/InvocationChange"
         has_more:
           type: boolean
+          description: |
+            Incremental reads have more records in the fixed forward snapshot;
+            tail reads have an older message window.
         cursor:
           type: string
           minLength: 1
-          description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
+          description: |
+            Your forward resume position. Store it and send it back as
+            `cursor`, or use it to open the Session stream. Every page of one
+            tail walk carries the exact Session head observed by its first
+            page, including an empty tail.
         next_page_token:
+          description: |
+            Continue the current fixed incremental snapshot or fetch the next
+            older tail window. Null when `has_more` is false.
           oneOf:
             - type: string
             - type: "null"
