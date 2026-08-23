@@ -1243,8 +1243,9 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`. ")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        tail: Annotated[Optional[StrictBool], Field(description="When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1258,18 +1259,20 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> TranscriptSnapshot:
-        """Drain a fixed-cut incremental transcript snapshot
+        """Read an incremental or bounded-tail transcript snapshot
 
-        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.  To bootstrap a returning conversation, pass `tail=true` without `cursor` or `page_token`. The response contains at most `limit` newest messages in canonical ascending sequence order and at most one latest lifecycle change for each distinct non-null `invocation_id` referenced by those messages. Its `cursor` is the exact committed Session head observed before message selection; use it with this endpoint or the Session stream to receive everything committed afterward.  In tail mode, `has_more` and `next_page_token` refer only to older message windows. Pass that opaque token without `tail` to fetch the preceding window at the original fixed cut. Each older page remains in canonical ascending order and carries the original resume cursor. Lifecycle snapshots are current when each page is read, so a revision may overlap a later stream update; fold lifecycle state by `(invocation_id, revision)`.  `tail`, `cursor`, and `page_token` are mutually exclusive on the first request. A tail continuation token is distinct from an incremental continuation token and cannot be used as the other kind.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param page_token: Opaque fixed-cut continuation from `next_page_token`.
+        :param page_token: Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`.
         :type page_token: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param tail: When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`.
+        :type tail: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1297,6 +1300,7 @@ class SessionsApi:
             cursor=cursor,
             page_token=page_token,
             limit=limit,
+            tail=tail,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1329,8 +1333,9 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`. ")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        tail: Annotated[Optional[StrictBool], Field(description="When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1344,18 +1349,20 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[TranscriptSnapshot]:
-        """Drain a fixed-cut incremental transcript snapshot
+        """Read an incremental or bounded-tail transcript snapshot
 
-        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.  To bootstrap a returning conversation, pass `tail=true` without `cursor` or `page_token`. The response contains at most `limit` newest messages in canonical ascending sequence order and at most one latest lifecycle change for each distinct non-null `invocation_id` referenced by those messages. Its `cursor` is the exact committed Session head observed before message selection; use it with this endpoint or the Session stream to receive everything committed afterward.  In tail mode, `has_more` and `next_page_token` refer only to older message windows. Pass that opaque token without `tail` to fetch the preceding window at the original fixed cut. Each older page remains in canonical ascending order and carries the original resume cursor. Lifecycle snapshots are current when each page is read, so a revision may overlap a later stream update; fold lifecycle state by `(invocation_id, revision)`.  `tail`, `cursor`, and `page_token` are mutually exclusive on the first request. A tail continuation token is distinct from an incremental continuation token and cannot be used as the other kind.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param page_token: Opaque fixed-cut continuation from `next_page_token`.
+        :param page_token: Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`.
         :type page_token: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param tail: When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`.
+        :type tail: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1383,6 +1390,7 @@ class SessionsApi:
             cursor=cursor,
             page_token=page_token,
             limit=limit,
+            tail=tail,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1415,8 +1423,9 @@ class SessionsApi:
         self,
         session_id: Annotated[str, Field(min_length=1, strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
-        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque fixed-cut continuation from `next_page_token`.")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`. ")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
+        tail: Annotated[Optional[StrictBool], Field(description="When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1430,18 +1439,20 @@ class SessionsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Drain a fixed-cut incremental transcript snapshot
+        """Read an incremental or bounded-tail transcript snapshot
 
-        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.
+        Returns the Session's stored messages plus a running log of turn state changes.  To catch up rather than re-read everything, pass a `cursor` you received earlier as `cursor` and you get only what is new since then. Within one read, keep passing `page_token` until `has_more` is false — all pages come from the same consistent snapshot, so the transcript cannot shift under you mid-read.  To bootstrap a returning conversation, pass `tail=true` without `cursor` or `page_token`. The response contains at most `limit` newest messages in canonical ascending sequence order and at most one latest lifecycle change for each distinct non-null `invocation_id` referenced by those messages. Its `cursor` is the exact committed Session head observed before message selection; use it with this endpoint or the Session stream to receive everything committed afterward.  In tail mode, `has_more` and `next_page_token` refer only to older message windows. Pass that opaque token without `tail` to fetch the preceding window at the original fixed cut. Each older page remains in canonical ascending order and carries the original resume cursor. Lifecycle snapshots are current when each page is read, so a revision may overlap a later stream update; fold lifecycle state by `(invocation_id, revision)`.  `tail`, `cursor`, and `page_token` are mutually exclusive on the first request. A tail continuation token is distinct from an incremental continuation token and cannot be used as the other kind.
 
         :param session_id: (required)
         :type session_id: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
-        :param page_token: Opaque fixed-cut continuation from `next_page_token`.
+        :param page_token: Opaque continuation from `next_page_token`. Incremental tokens drain one fixed forward snapshot; tail tokens walk older message windows while retaining the first tail read's cut and resume cursor. Do not combine with `cursor` or `tail`.
         :type page_token: str
         :param limit: Maximum items in this page. Defaults to 100.
         :type limit: int
+        :param tail: When true, select the newest bounded message window and the latest lifecycle state for each referenced Invocation. Valid only without `cursor` or `page_token`; omit it when following a tail `next_page_token`.
+        :type tail: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1469,6 +1480,7 @@ class SessionsApi:
             cursor=cursor,
             page_token=page_token,
             limit=limit,
+            tail=tail,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1498,6 +1510,7 @@ class SessionsApi:
         cursor,
         page_token,
         limit,
+        tail,
         _request_auth,
         _content_type,
         _headers,
@@ -1533,6 +1546,10 @@ class SessionsApi:
         if limit is not None:
 
             _query_params.append(('limit', limit))
+
+        if tail is not None:
+
+            _query_params.append(('tail', tail))
 
         # process the header parameters
         # process the form parameters

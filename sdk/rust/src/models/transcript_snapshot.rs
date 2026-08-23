@@ -13,15 +13,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptSnapshot {
+    /// Canonical ascending message rows. A tail page contains at most the requested `limit`; incremental pages share that budget with `invocation_changes`.
     #[serde(rename = "messages")]
     pub messages: Vec<models::SessionMessage>,
+    /// In tail reads, at most one latest revision per distinct non-null message `invocation_id`, ordered by revision. Incremental reads retain their existing append-log behavior.
     #[serde(rename = "invocation_changes")]
     pub invocation_changes: Vec<models::InvocationChange>,
+    /// Incremental reads have more records in the fixed forward snapshot; tail reads have an older message window.
     #[serde(rename = "has_more")]
     pub has_more: bool,
-    /// Your resume position. Store it and send it back as `cursor` to continue where you left off.
+    /// Your forward resume position. Store it and send it back as `cursor`, or use it to open the Session stream. Every page of one tail walk carries the exact Session head observed by its first page, including an empty tail.
     #[serde(rename = "cursor")]
     pub cursor: String,
+    /// Continue the current fixed incremental snapshot or fetch the next older tail window. Null when `has_more` is false.
     #[serde(rename = "next_page_token", deserialize_with = "Option::deserialize")]
     pub next_page_token: Option<String>,
 }

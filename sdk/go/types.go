@@ -1535,6 +1535,9 @@ type TranscriptOptions struct {
 	Cursor    *string
 	PageToken *string
 	Limit     *int
+	// Tail reads the newest bounded window. Leave it nil when following the
+	// returned older-history PageToken.
+	Tail *bool
 }
 
 type StreamOptions struct {

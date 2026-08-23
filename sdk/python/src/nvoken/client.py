@@ -2157,6 +2157,7 @@ class Client:
         cursor: str | None = None,
         page_token: str | None = None,
         limit: int | None = None,
+        tail: bool | None = None,
     ) -> TranscriptSnapshot:
         return _machine_projection(
             await self._replay_safe(
@@ -2165,6 +2166,7 @@ class Client:
                     cursor=cursor,
                     page_token=page_token,
                     limit=limit,
+                    tail=tail,
                 )
             )
         )

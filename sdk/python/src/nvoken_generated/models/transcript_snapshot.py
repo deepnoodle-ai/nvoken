@@ -30,11 +30,11 @@ class TranscriptSnapshot(BaseModel):
     """
     TranscriptSnapshot
     """ # noqa: E501
-    messages: List[SessionMessage]
-    invocation_changes: List[InvocationChange]
-    has_more: StrictBool
-    cursor: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Your resume position. Store it and send it back as `cursor` to continue where you left off.")
-    next_page_token: Optional[StrictStr]
+    messages: Annotated[List[SessionMessage], Field(max_length=200)] = Field(description="Canonical ascending message rows. A tail page contains at most the requested `limit`; incremental pages share that budget with `invocation_changes`. ")
+    invocation_changes: Annotated[List[InvocationChange], Field(max_length=200)] = Field(description="In tail reads, at most one latest revision per distinct non-null message `invocation_id`, ordered by revision. Incremental reads retain their existing append-log behavior. ")
+    has_more: StrictBool = Field(description="Incremental reads have more records in the fixed forward snapshot; tail reads have an older message window. ")
+    cursor: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Your forward resume position. Store it and send it back as `cursor`, or use it to open the Session stream. Every page of one tail walk carries the exact Session head observed by its first page, including an empty tail. ")
+    next_page_token: Optional[StrictStr] = Field(description="Continue the current fixed incremental snapshot or fetch the next older tail window. Null when `has_more` is false. ")
     __properties: ClassVar[List[str]] = ["messages", "invocation_changes", "has_more", "cursor", "next_page_token"]
 
     model_config = ConfigDict(

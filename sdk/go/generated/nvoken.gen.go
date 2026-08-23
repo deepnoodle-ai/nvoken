@@ -6976,12 +6976,29 @@ type TraceSummaryStatus string
 
 // TranscriptSnapshot defines model for TranscriptSnapshot.
 type TranscriptSnapshot struct {
-	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
-	Cursor            string             `json:"cursor"`
-	HasMore           bool               `json:"has_more"`
+	// Cursor Your forward resume position. Store it and send it back as
+	// `cursor`, or use it to open the Session stream. Every page of one
+	// tail walk carries the exact Session head observed by its first
+	// page, including an empty tail.
+	Cursor string `json:"cursor"`
+
+	// HasMore Incremental reads have more records in the fixed forward snapshot;
+	// tail reads have an older message window.
+	HasMore bool `json:"has_more"`
+
+	// InvocationChanges In tail reads, at most one latest revision per distinct non-null
+	// message `invocation_id`, ordered by revision. Incremental reads
+	// retain their existing append-log behavior.
 	InvocationChanges []InvocationChange `json:"invocation_changes"`
-	Messages          []SessionMessage   `json:"messages"`
-	NextPageToken     *string            `json:"next_page_token"`
+
+	// Messages Canonical ascending message rows. A tail page contains at most the
+	// requested `limit`; incremental pages share that budget with
+	// `invocation_changes`.
+	Messages []SessionMessage `json:"messages"`
+
+	// NextPageToken Continue the current fixed incremental snapshot or fetch the next
+	// older tail window. Null when `has_more` is false.
+	NextPageToken *string `json:"next_page_token"`
 }
 
 // TranscriptUpdateEvent The saved frame, and the only one. Messages append by `sequence` and
@@ -7736,11 +7753,20 @@ type GetSessionTranscriptParams struct {
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// PageToken Opaque fixed-cut continuation from `next_page_token`.
+	// PageToken Opaque continuation from `next_page_token`. Incremental tokens
+	// drain one fixed forward snapshot; tail tokens walk older message
+	// windows while retaining the first tail read's cut and resume
+	// cursor. Do not combine with `cursor` or `tail`.
 	PageToken *string `form:"page_token,omitempty" json:"page_token,omitempty"`
 
 	// Limit Maximum items in this page. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Tail When true, select the newest bounded message window and the latest
+	// lifecycle state for each referenced Invocation. Valid only without
+	// `cursor` or `page_token`; omit it when following a tail
+	// `next_page_token`.
+	Tail *bool `form:"tail,omitempty" json:"tail,omitempty"`
 }
 
 // ListTenantsParams defines parameters for ListTenants.
@@ -11123,7 +11149,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
 	StreamSession(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
+	// GetSessionTranscript Read an incremental or bounded-tail transcript snapshot
 	//
 	// Returns the Session's stored messages plus a running log of turn state
 	// changes.
@@ -11133,6 +11159,26 @@ type ClientInterface interface {
 	// Within one read, keep passing `page_token` until `has_more` is false —
 	// all pages come from the same consistent snapshot, so the transcript
 	// cannot shift under you mid-read.
+	//
+	// To bootstrap a returning conversation, pass `tail=true` without
+	// `cursor` or `page_token`. The response contains at most `limit` newest
+	// messages in canonical ascending sequence order and at most one latest
+	// lifecycle change for each distinct non-null `invocation_id` referenced
+	// by those messages. Its `cursor` is the exact committed Session head
+	// observed before message selection; use it with this endpoint or the
+	// Session stream to receive everything committed afterward.
+	//
+	// In tail mode, `has_more` and `next_page_token` refer only to older
+	// message windows. Pass that opaque token without `tail` to fetch the
+	// preceding window at the original fixed cut. Each older page remains in
+	// canonical ascending order and carries the original resume cursor.
+	// Lifecycle snapshots are current when each page is read, so a revision
+	// may overlap a later stream update; fold lifecycle state by
+	// `(invocation_id, revision)`.
+	//
+	// `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+	// request. A tail continuation token is distinct from an incremental
+	// continuation token and cannot be used as the other kind.
 	//
 	// Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 	GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -14112,7 +14158,7 @@ func (c *Client) StreamSession(ctx context.Context, sessionID SessionID, params 
 	return c.Client.Do(req)
 }
 
-// GetSessionTranscript Drain a fixed-cut incremental transcript snapshot
+// GetSessionTranscript Read an incremental or bounded-tail transcript snapshot
 //
 // Returns the Session's stored messages plus a running log of turn state
 // changes.
@@ -14122,6 +14168,26 @@ func (c *Client) StreamSession(ctx context.Context, sessionID SessionID, params 
 // Within one read, keep passing `page_token` until `has_more` is false —
 // all pages come from the same consistent snapshot, so the transcript
 // cannot shift under you mid-read.
+//
+// To bootstrap a returning conversation, pass `tail=true` without
+// `cursor` or `page_token`. The response contains at most `limit` newest
+// messages in canonical ascending sequence order and at most one latest
+// lifecycle change for each distinct non-null `invocation_id` referenced
+// by those messages. Its `cursor` is the exact committed Session head
+// observed before message selection; use it with this endpoint or the
+// Session stream to receive everything committed afterward.
+//
+// In tail mode, `has_more` and `next_page_token` refer only to older
+// message windows. Pass that opaque token without `tail` to fetch the
+// preceding window at the original fixed cut. Each older page remains in
+// canonical ascending order and carries the original resume cursor.
+// Lifecycle snapshots are current when each page is read, so a revision
+// may overlap a later stream update; fold lifecycle state by
+// `(invocation_id, revision)`.
+//
+// `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+// request. A tail continuation token is distinct from an incremental
+// continuation token and cannot be used as the other kind.
 //
 // Corresponds with GET /v1/sessions/{session_id}/transcript (the `GetSessionTranscript` operationId).
 func (c *Client) GetSessionTranscript(ctx context.Context, sessionID SessionID, params *GetSessionTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -18877,6 +18943,18 @@ func NewGetSessionTranscriptRequest(server string, sessionID SessionID, params *
 
 		}
 
+		if params.Tail != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tail", *params.Tail, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -21809,7 +21887,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/sessions/{session_id}/stream (the `StreamSession` operationId).
 	StreamSessionWithResponse(ctx context.Context, sessionID SessionID, params *StreamSessionParams, reqEditors ...RequestEditorFn) (*StreamSessionHTTPResponse, error)
 
-	// GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
+	// GetSessionTranscriptWithResponse Read an incremental or bounded-tail transcript snapshot
 	//
 	// Returns the Session's stored messages plus a running log of turn state
 	// changes.
@@ -21819,6 +21897,26 @@ type ClientWithResponsesInterface interface {
 	// Within one read, keep passing `page_token` until `has_more` is false —
 	// all pages come from the same consistent snapshot, so the transcript
 	// cannot shift under you mid-read.
+	//
+	// To bootstrap a returning conversation, pass `tail=true` without
+	// `cursor` or `page_token`. The response contains at most `limit` newest
+	// messages in canonical ascending sequence order and at most one latest
+	// lifecycle change for each distinct non-null `invocation_id` referenced
+	// by those messages. Its `cursor` is the exact committed Session head
+	// observed before message selection; use it with this endpoint or the
+	// Session stream to receive everything committed afterward.
+	//
+	// In tail mode, `has_more` and `next_page_token` refer only to older
+	// message windows. Pass that opaque token without `tail` to fetch the
+	// preceding window at the original fixed cut. Each older page remains in
+	// canonical ascending order and carries the original resume cursor.
+	// Lifecycle snapshots are current when each page is read, so a revision
+	// may overlap a later stream update; fold lifecycle state by
+	// `(invocation_id, revision)`.
+	//
+	// `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+	// request. A tail continuation token is distinct from an incremental
+	// continuation token and cannot be used as the other kind.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -32073,7 +32171,7 @@ func (c *ClientWithResponses) StreamSessionWithResponse(ctx context.Context, ses
 	return ParseStreamSessionHTTPResponse(rsp)
 }
 
-// GetSessionTranscriptWithResponse Drain a fixed-cut incremental transcript snapshot
+// GetSessionTranscriptWithResponse Read an incremental or bounded-tail transcript snapshot
 //
 // Returns the Session's stored messages plus a running log of turn state
 // changes.
@@ -32083,6 +32181,26 @@ func (c *ClientWithResponses) StreamSessionWithResponse(ctx context.Context, ses
 // Within one read, keep passing `page_token` until `has_more` is false —
 // all pages come from the same consistent snapshot, so the transcript
 // cannot shift under you mid-read.
+//
+// To bootstrap a returning conversation, pass `tail=true` without
+// `cursor` or `page_token`. The response contains at most `limit` newest
+// messages in canonical ascending sequence order and at most one latest
+// lifecycle change for each distinct non-null `invocation_id` referenced
+// by those messages. Its `cursor` is the exact committed Session head
+// observed before message selection; use it with this endpoint or the
+// Session stream to receive everything committed afterward.
+//
+// In tail mode, `has_more` and `next_page_token` refer only to older
+// message windows. Pass that opaque token without `tail` to fetch the
+// preceding window at the original fixed cut. Each older page remains in
+// canonical ascending order and carries the original resume cursor.
+// Lifecycle snapshots are current when each page is read, so a revision
+// may overlap a later stream update; fold lifecycle state by
+// `(invocation_id, revision)`.
+//
+// `tail`, `cursor`, and `page_token` are mutually exclusive on the first
+// request. A tail continuation token is distinct from an incremental
+// continuation token and cannot be used as the other kind.
 //
 // Returns a wrapper object for the known response body format(s).
 //
