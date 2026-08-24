@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>nvoken browser conversation fixture</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 3rem; color: #172018; }
+      main { max-width: 44rem; padding: 2rem; border: 1px solid #b8c4ba; border-radius: 1rem; }
+      [data-state="pass"] { color: #126329; }
+      [data-state="fail"] { color: #9f1d20; }
+      pre { white-space: pre-wrap; background: #f4f7f4; padding: 1rem; border-radius: .5rem; }
+    </style>
+  </head>
+  <body data-result="running">
+    <main>
+      <h1>Browser conversation controller</h1>
+      <p id="status" data-state="running">Running host and anonymous controllers…</p>
+      <pre id="details"></pre>
+    </main>
+    <script type="module">
+      import {
+        createAnonymousConversation,
+        createBrowserClient,
+        createConversation,
+      } from "/dist/browser.js";
+
+      const sessionId = "sess_browser_fixture";
+      const encoder = new TextEncoder();
+      const openStream = (signal) => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("retry: 1000\n\n"));
+          signal?.addEventListener("abort", () => controller.close(), { once: true });
+        },
+      }), { headers: { "content-type": "text/event-stream" } });
+      const tail = () => Response.json({
+        messages: [{
+          id: "msg_browser_fixture",
+          session_id: sessionId,
+          invocation_id: null,
+          sequence: 1,
+          role: "user",
+          content: [{ type: "text", text: "Browser fixture" }],
+          created_at: "2026-08-23T12:00:00Z",
+        }],
+        invocation_changes: [],
+        has_more: false,
+        cursor: "cursor-browser-fixture",
+        next_page_token: null,
+      });
+      const waitFor = (controller, predicate) => new Promise((resolve, reject) => {
+        const current = controller.getSnapshot();
+        if (predicate(current)) return resolve(current);
+        const timer = setTimeout(() => reject(new Error("controller timed out")), 2_000);
+        const unsubscribe = controller.subscribe(() => {
+          const snapshot = controller.getSnapshot();
+          if (!predicate(snapshot)) return;
+          clearTimeout(timer);
+          unsubscribe();
+          resolve(snapshot);
+        });
+      });
+
+      let host;
+      let anonymous;
+      try {
+        const client = createBrowserClient({
+          baseUrl: location.origin,
+          clientToken: "header.payload.signature",
+          fetch: async (input, init) => {
+            const url = new URL(typeof input === "string" ? input : input.url ?? input);
+            if (url.pathname.endsWith("/transcript")) return tail();
+            if (url.pathname.endsWith("/stream")) return openStream(init?.signal);
+            throw new Error(`unexpected host request ${url.pathname}`);
+          },
+        });
+        host = createConversation({ client, sessionId });
+        anonymous = createAnonymousConversation({
+          baseUrl: location.origin,
+          appId: "app_browser_fixture",
+          storage: "memory",
+          fetch: async (input) => {
+            const url = new URL(typeof input === "string" ? input : input.url ?? input);
+            if (!url.pathname.endsWith("/anonymous-tokens")) {
+              throw new Error(`unexpected anonymous request ${url.pathname}`);
+            }
+            return Response.json({
+              access_token: "opaque-access",
+              access_token_expires_in_seconds: 900,
+              visitor_token: "opaque-visitor",
+              visitor_token_expires_at: "2030-01-01T00:00:00Z",
+              session_id: null,
+            }, { status: 201 });
+          },
+        });
+        const [hostSnapshot, anonymousSnapshot] = await Promise.all([
+          waitFor(host, (snapshot) => snapshot.connection.status === "connected"),
+          waitFor(anonymous, (snapshot) => snapshot.authorization.status === "ready"),
+        ]);
+        if (hostSnapshot.messages.length !== 1 || hostSnapshot.mode !== "host") {
+          throw new Error("host controller did not load its resumable tail");
+        }
+        if (anonymousSnapshot.mode !== "anonymous" || anonymousSnapshot.sessionId !== null) {
+          throw new Error("anonymous controller did not authorize without inventing a Session");
+        }
+        if (!Object.isFrozen(hostSnapshot.messages[0].content)) {
+          throw new Error("snapshot content is mutable");
+        }
+        document.body.dataset.result = "pass";
+        document.querySelector("#status").dataset.state = "pass";
+        document.querySelector("#status").textContent = "PASS — both browser controllers are live.";
+        document.querySelector("#details").textContent = JSON.stringify({
+          host: {
+            mode: hostSnapshot.mode,
+            connection: hostSnapshot.connection.status,
+            messages: hostSnapshot.messages.length,
+          },
+          anonymous: {
+            mode: anonymousSnapshot.mode,
+            authorization: anonymousSnapshot.authorization.status,
+            sessionId: anonymousSnapshot.sessionId,
+          },
+        }, null, 2);
+      } catch (error) {
+        document.body.dataset.result = "fail";
+        document.querySelector("#status").dataset.state = "fail";
+        document.querySelector("#status").textContent = "FAIL";
+        document.querySelector("#details").textContent = error?.stack ?? String(error);
+      } finally {
+        host?.destroy();
+        anonymous?.destroy();
+      }
+    </script>
+  </body>
+</html>

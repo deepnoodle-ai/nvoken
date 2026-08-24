@@ -31,6 +31,11 @@ export interface StreamEvent {
 
 export interface StreamOptions {
   deltas?: boolean;
+  /**
+   * Reports transport health without treating a connected stream as active
+   * work. The callback is observational; throwing from it is ignored.
+   */
+  onConnectionChange?: (state: "connected" | "reconnecting") => void;
 }
 
 export interface ReducedSnapshot {
@@ -38,6 +43,19 @@ export interface ReducedSnapshot {
   invocationChanges: InvocationChange[];
   previews: StreamPreview[];
   cursor?: string;
+}
+
+export interface ReducerOptions {
+  /** Seed a bounded tail and its exact forward resume position. */
+  initial?: Partial<ReducedSnapshot>;
+  /** Retain only the highest lifecycle revision for each Invocation. */
+  latestChangesOnly?: boolean;
+  /** Bound durable messages. Live eviction removes terminal boundaries only. */
+  maxMessages?: number;
+  /** Bound simultaneously retained live content previews. */
+  maxPreviews?: number;
+  /** Bound each accumulated preview in UTF-8 bytes. */
+  maxPreviewBytes?: number;
 }
 
 /**
@@ -97,6 +115,44 @@ export class Reducer {
   private readonly latestAttempts = new Map<string, number>();
   private readonly terminalInvocations = new Set<string>();
   private cursor?: string;
+  private readonly latestChangesOnly: boolean;
+  private readonly maxMessages?: number;
+  private readonly maxPreviews?: number;
+  private readonly maxPreviewBytes?: number;
+
+  constructor(options: ReducerOptions = {}) {
+    this.latestChangesOnly = options.latestChangesOnly ?? false;
+    this.maxMessages = positiveBound(options.maxMessages, "maxMessages");
+    this.maxPreviews = positiveBound(options.maxPreviews, "maxPreviews");
+    this.maxPreviewBytes = positiveBound(options.maxPreviewBytes, "maxPreviewBytes");
+    const initial = options.initial;
+    if (initial) {
+      for (const message of initial.messages ?? []) {
+        this.messages.set(message.sequence, message);
+      }
+      for (const change of initial.invocationChanges ?? []) {
+        this.storeChange(change);
+      }
+      for (const preview of initial.previews ?? []) {
+        this.previews.set(`${preview.messageId}:${preview.contentIndex}`, { ...preview });
+      }
+      this.cursor = initial.cursor;
+      this.enforceBounds();
+    }
+  }
+
+  /**
+   * Merges a REST transcript page without changing the stream cursor. This is
+   * used when an already-live consumer explicitly prepends older history.
+   */
+  merge(snapshot: Pick<ReducedSnapshot, "messages" | "invocationChanges">): void {
+    for (const message of snapshot.messages) {
+      this.messages.set(message.sequence, message);
+    }
+    for (const change of snapshot.invocationChanges) {
+      this.storeChange(change);
+    }
+  }
 
   apply(event: StreamEvent): void {
     if (event.type === "message.delta") {
@@ -125,7 +181,7 @@ export class Reducer {
       }
     }
     for (const change of update.invocationChanges) {
-      this.changes.set(`${change.invocationId}:${change.revision}`, change);
+      this.storeChange(change);
       if (isTurnOver(change)) {
         this.terminalInvocations.add(change.invocationId);
         this.discardPreviews(change.invocationId);
@@ -133,6 +189,7 @@ export class Reducer {
     }
     const cursor = event.id || update.cursor;
     if (cursor) this.cursor = cursor;
+    this.enforceBounds();
   }
 
   /**
@@ -178,10 +235,17 @@ export class Reducer {
     };
     preview.attempt = delta.attempt;
     preview.kind = delta.kind;
-    preview.delta += delta.delta;
+    preview.delta = appendUTF8(preview.delta, delta.delta, this.maxPreviewBytes);
     if (delta.toolCallId) preview.toolCallId = delta.toolCallId;
     if (delta.name) preview.name = delta.name;
     this.previews.set(key, preview);
+    if (this.maxPreviews !== undefined) {
+      while (this.previews.size > this.maxPreviews) {
+        const oldest = this.previews.keys().next().value as string | undefined;
+        if (oldest === undefined) break;
+        this.previews.delete(oldest);
+      }
+    }
   }
 
   private discardPreviews(invocationId: string): void {
@@ -190,6 +254,61 @@ export class Reducer {
     }
     this.latestAttempts.delete(invocationId);
   }
+
+  private storeChange(change: InvocationChange): void {
+    if (!this.latestChangesOnly) {
+      this.changes.set(`${change.invocationId}:${change.revision}`, change);
+    } else {
+      const key = change.invocationId;
+      const current = this.changes.get(key);
+      if (!current || change.revision > current.revision) this.changes.set(key, change);
+    }
+    if (isTurnOver(change)) this.terminalInvocations.add(change.invocationId);
+  }
+
+  private enforceBounds(): void {
+    if (this.maxMessages === undefined) return;
+    while (this.messages.size > this.maxMessages) {
+      const ordered = [...this.messages.values()].sort((left, right) => left.sequence - right.sequence);
+      const oldest = ordered[0];
+      if (!oldest) return;
+      const boundary = oldest.invocationId;
+      if (boundary && !this.terminalInvocations.has(boundary)) return;
+      if (!boundary) {
+        this.messages.delete(oldest.sequence);
+        continue;
+      }
+      for (const message of ordered) {
+        if (message.invocationId === boundary) this.messages.delete(message.sequence);
+      }
+      this.changes.delete(boundary);
+      this.terminalInvocations.delete(boundary);
+    }
+  }
+}
+
+function positiveBound(value: number | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new NvokenError("validation", `${name} must be a positive integer`);
+  }
+  return value;
+}
+
+function appendUTF8(current: string, added: string, maximum?: number): string {
+  if (maximum === undefined) return current + added;
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(current + added);
+  if (bytes.length <= maximum) return current + added;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let end = maximum; end > 0; end -= 1) {
+    try {
+      return decoder.decode(bytes.slice(0, end));
+    } catch {
+      // Move to the prior code-point boundary.
+    }
+  }
+  return "";
 }
 
 /**
@@ -355,9 +474,11 @@ async function* readStream(
     let response: Response;
     try {
       response = await fetchStream(client, request, signal);
+      notifyConnection(options, "connected");
       failingSince = undefined;
       consecutiveFailures = 0;
     } catch (error) {
+      notifyConnection(options, "reconnecting");
       const normalized = await normalizeError(error);
       if (!streamRetryable(normalized)) throw normalized;
       // Reconnecting is otherwise unbounded, because the turn is already
@@ -396,7 +517,16 @@ async function* readStream(
       reducer.apply(event);
       yield { event, snapshot: reducer.snapshot() };
     }
+    notifyConnection(options, "reconnecting");
     await delay(retryMs, signal);
+  }
+}
+
+function notifyConnection(options: StreamOptions, state: "connected" | "reconnecting"): void {
+  try {
+    options.onConnectionChange?.(state);
+  } catch {
+    // Transport correctness cannot depend on an observational callback.
   }
 }
 

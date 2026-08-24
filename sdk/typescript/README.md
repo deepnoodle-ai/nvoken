@@ -1006,6 +1006,86 @@ in a page.
 so your backend never observes settlement any other way. See
 `examples/typescript-browser-direct` for both halves.
 
+### Headless conversation controller
+
+Use the controller when a page needs a complete conversation rather than one
+request. It loads the newest 50 transcript records, resumes the Session stream
+from that exact point, and owns retry and lifecycle reduction. It renders
+nothing and has no framework or runtime dependency.
+
+For a host-minted token:
+
+```ts
+import {
+  createBrowserClient,
+  createConversation,
+} from "@deepnoodle/nvoken/browser";
+
+const client = createBrowserClient({
+  baseUrl: "https://api.nvoken.example",
+  clientToken: () => hostSession.getNvokenClientToken(),
+});
+
+const conversation = createConversation({ client, sessionId: "sess_..." });
+```
+
+Omit `sessionId` for a new conversation. No transcript or stream request is
+made until the first send is durably admitted and returns its Session.
+
+Managed anonymous access uses the same controller and state machine. nvoken
+issues and renews the browser grant, while the SDK stores only the opaque
+visitor continuity token:
+
+```ts
+import { createAnonymousConversation } from "@deepnoodle/nvoken/browser";
+
+const conversation = createAnonymousConversation({
+  baseUrl: "https://api.nvoken.example",
+  appId: "app_...",
+  storage: "local", // "session", "memory", or an async adapter
+});
+```
+
+Renderers subscribe to immutable snapshots and read each action's capability
+instead of inferring authority or activity from connection health:
+
+```ts
+const unsubscribe = conversation.subscribe(() => {
+  const snapshot = conversation.getSnapshot();
+  draw({
+    messages: snapshot.messages,
+    activity: snapshot.activity,
+    canSend: snapshot.send.action.status === "enabled",
+    canStop: snapshot.interruption.action.status === "enabled",
+  });
+});
+
+const receipt = await conversation.send("How do I rotate an API key?");
+console.log(receipt.invocationId, receipt.sessionId);
+
+// A transport failure may leave admission uncertain. This reuses the exact
+// input and idempotency key; it never reads or clears the renderer's draft.
+if (conversation.getSnapshot().send.status === "uncertain") {
+  await conversation.retrySend();
+}
+
+unsubscribe();
+conversation.destroy();
+```
+
+`connection` reports only transport health. `activity` comes from durable
+Invocation state, so a healthy idle stream remains idle and an unknown future
+status remains explicit. History is intentionally bounded: `loadEarlier()` is
+manual and stops at 500 canonical messages rather than silently discarding a
+page the user requested.
+
+In host mode, token refresh remains the host callback's responsibility and
+`startOver()` and `erase()` are disabled. In anonymous mode, `startOver()`
+creates a new visitor whose old history does not follow; `erase()` deletes the
+current Session but retains visitor continuity for a new empty conversation.
+Authorization or reconnect exhaustion is visible in `recovery`; call
+`retryAuthorization()` or `reconnect()` only when its capability is enabled.
+
 ## Acting for one tenant or one end user
 
 An app-wide credential can reach every tenant in its App, so an id that arrives

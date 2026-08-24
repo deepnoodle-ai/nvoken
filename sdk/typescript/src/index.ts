@@ -4,11 +4,6 @@ export * from "./diagnostics.js";
 export * from "./stream.js";
 export * from "./callback.js";
 export * from "./client-token.js";
-// The browser entry belongs at the root, not only behind `/browser`. A page is
-// a first-class caller, and a surface reachable only by a subpath it has to
-// already know about is one that gets rebuilt by hand instead of imported.
-// `sideEffects: false` keeps this free for callers who never touch it.
-export * from "./browser.js";
 export * from "./signed-delivery.js";
 export * from "./webhook.js";
 export * from "./ask-user.js";

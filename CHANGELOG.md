@@ -8,6 +8,11 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Browser conversations now have one resumable headless controller.**
+  `@deepnoodle/nvoken/browser` adds host-minted and managed-anonymous
+  constructors with immutable capability snapshots, bounded transcript tails,
+  stable send retries, interruption, reconnection, token renewal, and explicit
+  recovery. Browser-only APIs now live only at the browser subpath.
 - **Transcript reads can start from a bounded recent tail.** Every SDK exposes
   `tail` on its transcript-page facade, with generated types for the exact
   resume cursor and opaque older-history pages returned by the service.
