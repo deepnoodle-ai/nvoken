@@ -40,7 +40,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 			var body map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode credential issuance: %v", err)
-			} else if body["app_id"] != "app_test" || body["profile"] != "runtime" || body["name"] != "support deploy" {
+			} else if body["app_id"] != "app_test" || body["type"] != "app" || body["name"] != "support deploy" {
 				t.Errorf("credential issuance = %#v", body)
 			}
 			response.WriteHeader(http.StatusCreated)
@@ -129,7 +129,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 	for _, assignment := range []string{
 		"NVOKEN_BASE_URL='" + server.URL + "'",
 		"NVOKEN_APP_ID='app_test'",
-		"NVOKEN_API_KEY='nvk_runtime.secret'",
+		"NVOKEN_API_KEY='nvk_app.secret'",
 		"NVOKEN_CALLBACK_KEY_ID='sign_callback'",
 		"NVOKEN_CALLBACK_KEY_VERSION='1'",
 		"NVOKEN_CALLBACK_SECRET='callback-secret'",
@@ -189,7 +189,7 @@ func TestAppInitWithoutBrowserReturnsStructuredEnvironment(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Stdout), &output); err != nil {
 		t.Fatalf("decode output: %v\n%s", err, result.Stdout)
 	}
-	if !output.Complete || output.CredentialSecret != "nvk_runtime.secret" || output.ClientKey != nil {
+	if !output.Complete || output.CredentialSecret != "nvk_app.secret" || output.ClientKey != nil {
 		t.Fatalf("structured result = %#v", output)
 	}
 	if strings.Contains(output.Environment, "NVOKEN_CLIENT_") {
@@ -306,15 +306,14 @@ const appInitCredentialFixture = `{
   "credential": {
     "id":"cred_test",
     "app_id":"app_test",
-    "name":"support runtime",
-    "prefix":"nvk_runtime",
-    "profile":"runtime",
+    "name":"support app",
+    "prefix":"nvk_app",
+    "type":"app",
     "status":"active",
-    "operations":[],
     "created_at":"2026-08-17T12:00:00Z",
     "updated_at":"2026-08-17T12:00:00Z"
   },
-  "secret":"nvk_runtime.secret",
+  "secret":"nvk_app.secret",
   "delivery_expires_at":"2026-08-17T12:10:00Z",
   "replayed":false
 }`

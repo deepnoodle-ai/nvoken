@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "code": {
     "request": {
       "label": "curtis-mbp"
@@ -74,8 +74,9 @@
       "body": {
         "secret": "nvk_example.secret",
         "credential_id": "cred_019b0a12-0000-7000-8000-000000000001",
-        "org_id": "org_019b0a12-0000-7000-8000-000000000001",
-        "org_display_name": "Acme Corp",
+        "app_id": "app_019b0a12-0000-7000-8000-000000000001",
+        "app_name": "Acme Support",
+        "credential_type": "app",
         "label": "curtis-mbp",
         "nvoken_base_url": "https://api.nvoken.com"
       }

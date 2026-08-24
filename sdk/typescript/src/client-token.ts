@@ -1,5 +1,3 @@
-import { Operation } from "./generated/models/Operation.js";
-
 /**
  * The longest a client token may live. nvoken refuses anything longer, so this
  * is a ceiling rather than a suggestion.
@@ -21,41 +19,6 @@ export const CLIENT_TOKEN_TYPE = "nvoken-client+jwt";
 
 const CLIENT_TOKEN_AUDIENCE = "nvoken";
 const MAX_CLIENT_CLAIM = 255;
-
-/**
- * The most a client token may ever carry: exactly the operations behind routes
- * a browser token can reach.
- *
- * Not a guess about server policy. The published client-token vector carries
- * the same list, derived on the server from its route table, and the
- * conformance suite holds this against it — so a route opened or closed to
- * browsers cannot leave this stale.
- */
-const BROWSER_OPERATION_CEILING: readonly Operation[] = [
-  Operation.CreateInvocation,
-  Operation.GetIdentity,
-  Operation.GetInvocation,
-  Operation.GetSession,
-  Operation.GetSessionTranscript,
-  Operation.InterruptInvocation,
-  Operation.ListInvocations,
-  Operation.ListSessionMessages,
-  Operation.ListSessions,
-  Operation.ManageInvocationNudges,
-  Operation.SubmitToolResults,
-];
-
-/**
- * Every operation a client token may carry.
- *
- * Reach for it when a browser genuinely drives the whole conversation. Prefer
- * naming the operations you use: a read-only transcript view has no business
- * holding `create_invocation`, and the token is the only thing between a
- * compromised page and the operations it names.
- */
-export function allBrowserOperations(): Operation[] {
-  return [...BROWSER_OPERATION_CEILING];
-}
 
 /**
  * What a host asserts when it lets a browser talk to nvoken directly.
@@ -92,13 +55,6 @@ export interface ClientTokenClaims {
    * session-list UI needs and a single-conversation UI does not.
    */
   sessionId?: string;
-  /**
-   * What the browser may do, and it is required. There is deliberately no
-   * default: nvoken reads an absent `ops` as the whole ceiling, and "I did not
-   * think about scope" must not be spelled the same way as "I want
-   * everything". Pass `allBrowserOperations()` to mean it.
-   */
-  operations: Operation[];
   /** Defaults to the current time. */
   issuedAt?: Date;
   /** Required, and at most CLIENT_TOKEN_LIFETIME_LIMIT_MS. */
@@ -142,8 +98,6 @@ export async function mintClientToken(
   if (claims.agentKey !== undefined) members.push(["agent_key", claims.agentKey]);
   if (claims.definitionRevision) members.push(["definition_revision", claims.definitionRevision]);
   if (claims.sessionId !== undefined) members.push(["session_id", claims.sessionId]);
-  members.push(["ops", claims.operations]);
-
   const signingInput = `${base64Url(header)}.${base64Url(orderedJson(members))}`;
   const signature = await sign(privateKey, new TextEncoder().encode(signingInput));
   return `${signingInput}.${base64Url(signature)}`;
@@ -181,27 +135,6 @@ function validateClaims(claims: ClientTokenClaims): void {
   if (!Number.isSafeInteger(claims.lifetimeMs) || claims.lifetimeMs <= 0 ||
       claims.lifetimeMs > CLIENT_TOKEN_LIFETIME_LIMIT_MS) {
     throw new Error(`nvoken: lifetimeMs must be positive and at most ${CLIENT_TOKEN_LIFETIME_LIMIT_MS}`);
-  }
-  validateOperations(claims.operations);
-}
-
-function validateOperations(operations: Operation[]): void {
-  if (!Array.isArray(operations) || operations.length === 0) {
-    throw new Error(
-      "nvoken: operations is required; name the operations the browser needs, " +
-        "or pass allBrowserOperations() to grant the whole ceiling deliberately",
-    );
-  }
-  const seen = new Set<Operation>();
-  for (const operation of operations) {
-    if (!BROWSER_OPERATION_CEILING.includes(operation)) {
-      throw new Error(
-        `nvoken: operation ${JSON.stringify(operation)} is not reachable by a browser token; ` +
-          `allowed: ${[...BROWSER_OPERATION_CEILING].sort().join(", ")}`,
-      );
-    }
-    if (seen.has(operation)) throw new Error(`nvoken: operation ${JSON.stringify(operation)} appears twice`);
-    seen.add(operation);
   }
 }
 

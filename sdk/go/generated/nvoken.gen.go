@@ -328,27 +328,6 @@ func (e CreateInvocationRequestOnBudgetExhausted) Valid() bool {
 	}
 }
 
-// Defines values for CredentialProfile.
-const (
-	CredentialProfileOperator CredentialProfile = "operator"
-	CredentialProfileRuntime  CredentialProfile = "runtime"
-	CredentialProfileViewer   CredentialProfile = "viewer"
-)
-
-// Valid indicates whether the value is a known member of the CredentialProfile enum.
-func (e CredentialProfile) Valid() bool {
-	switch e {
-	case CredentialProfileOperator:
-		return true
-	case CredentialProfileRuntime:
-		return true
-	case CredentialProfileViewer:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for CredentialStatus.
 const (
 	CredentialStatusActive  CredentialStatus = "active"
@@ -361,6 +340,27 @@ func (e CredentialStatus) Valid() bool {
 	case CredentialStatusActive:
 		return true
 	case CredentialStatusRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CredentialType.
+const (
+	CredentialTypeApp               CredentialType = "app"
+	CredentialTypeAppReadOnly       CredentialType = "app_read_only"
+	CredentialTypeInstallationAdmin CredentialType = "installation_admin"
+)
+
+// Valid indicates whether the value is a known member of the CredentialType enum.
+func (e CredentialType) Valid() bool {
+	switch e {
+	case CredentialTypeApp:
+		return true
+	case CredentialTypeAppReadOnly:
+		return true
+	case CredentialTypeInstallationAdmin:
 		return true
 	default:
 		return false
@@ -1315,171 +1315,6 @@ func (e ObservationStatus) Valid() bool {
 	case ObservationStatusAvailable:
 		return true
 	case ObservationStatusDisabled:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for Operation.
-const (
-	AllocateCredits            Operation = "allocate_credits"
-	ArchiveAgent               Operation = "archive_agent"
-	CancelInvocation           Operation = "cancel_invocation"
-	CreateAgent                Operation = "create_agent"
-	CreateAgentDefinition      Operation = "create_agent_definition"
-	CreateCredential           Operation = "create_credential"
-	CreateInvocation           Operation = "create_invocation"
-	CreateProviderKey          Operation = "create_provider_key"
-	CreateSession              Operation = "create_session"
-	DeleteMemory               Operation = "delete_memory"
-	DeleteSession              Operation = "delete_session"
-	DeleteTenant               Operation = "delete_tenant"
-	GetAgent                   Operation = "get_agent"
-	GetAgentDefinition         Operation = "get_agent_definition"
-	GetAgentDefinitionRevision Operation = "get_agent_definition_revision"
-	GetApp                     Operation = "get_app"
-	GetCredential              Operation = "get_credential"
-	GetIdentity                Operation = "get_identity"
-	GetInvocation              Operation = "get_invocation"
-	GetOrg                     Operation = "get_org"
-	GetProviderKey             Operation = "get_provider_key"
-	GetSession                 Operation = "get_session"
-	GetSessionTranscript       Operation = "get_session_transcript"
-	InterruptInvocation        Operation = "interrupt_invocation"
-	ListAgentDefinitions       Operation = "list_agent_definitions"
-	ListAgents                 Operation = "list_agents"
-	ListApps                   Operation = "list_apps"
-	ListCredentials            Operation = "list_credentials"
-	ListInvocations            Operation = "list_invocations"
-	ListOrgs                   Operation = "list_orgs"
-	ListProviderKeys           Operation = "list_provider_keys"
-	ListSessionMessages        Operation = "list_session_messages"
-	ListSessions               Operation = "list_sessions"
-	ManageInvocationNudges     Operation = "manage_invocation_nudges"
-	ReadCredits                Operation = "read_credits"
-	ReadMemories               Operation = "read_memories"
-	ReadUsage                  Operation = "read_usage"
-	RegisterApp                Operation = "register_app"
-	RegisterOrg                Operation = "register_org"
-	RestoreAgent               Operation = "restore_agent"
-	ResumeInvocation           Operation = "resume_invocation"
-	RevokeCredential           Operation = "revoke_credential"
-	RevokeProviderKey          Operation = "revoke_provider_key"
-	RotateCredential           Operation = "rotate_credential"
-	RotateProviderKey          Operation = "rotate_provider_key"
-	SubmitToolResults          Operation = "submit_tool_results"
-	UpdateAgent                Operation = "update_agent"
-	UpdateAgentDefinition      Operation = "update_agent_definition"
-	UpdateApp                  Operation = "update_app"
-	UpdateOrg                  Operation = "update_org"
-	UpdateSession              Operation = "update_session"
-)
-
-// Valid indicates whether the value is a known member of the Operation enum.
-func (e Operation) Valid() bool {
-	switch e {
-	case AllocateCredits:
-		return true
-	case ArchiveAgent:
-		return true
-	case CancelInvocation:
-		return true
-	case CreateAgent:
-		return true
-	case CreateAgentDefinition:
-		return true
-	case CreateCredential:
-		return true
-	case CreateInvocation:
-		return true
-	case CreateProviderKey:
-		return true
-	case CreateSession:
-		return true
-	case DeleteMemory:
-		return true
-	case DeleteSession:
-		return true
-	case DeleteTenant:
-		return true
-	case GetAgent:
-		return true
-	case GetAgentDefinition:
-		return true
-	case GetAgentDefinitionRevision:
-		return true
-	case GetApp:
-		return true
-	case GetCredential:
-		return true
-	case GetIdentity:
-		return true
-	case GetInvocation:
-		return true
-	case GetOrg:
-		return true
-	case GetProviderKey:
-		return true
-	case GetSession:
-		return true
-	case GetSessionTranscript:
-		return true
-	case InterruptInvocation:
-		return true
-	case ListAgentDefinitions:
-		return true
-	case ListAgents:
-		return true
-	case ListApps:
-		return true
-	case ListCredentials:
-		return true
-	case ListInvocations:
-		return true
-	case ListOrgs:
-		return true
-	case ListProviderKeys:
-		return true
-	case ListSessionMessages:
-		return true
-	case ListSessions:
-		return true
-	case ManageInvocationNudges:
-		return true
-	case ReadCredits:
-		return true
-	case ReadMemories:
-		return true
-	case ReadUsage:
-		return true
-	case RegisterApp:
-		return true
-	case RegisterOrg:
-		return true
-	case RestoreAgent:
-		return true
-	case ResumeInvocation:
-		return true
-	case RevokeCredential:
-		return true
-	case RevokeProviderKey:
-		return true
-	case RotateCredential:
-		return true
-	case RotateProviderKey:
-		return true
-	case SubmitToolResults:
-		return true
-	case UpdateAgent:
-		return true
-	case UpdateAgentDefinition:
-		return true
-	case UpdateApp:
-		return true
-	case UpdateOrg:
-		return true
-	case UpdateSession:
 		return true
 	default:
 		return false
@@ -3494,27 +3329,16 @@ type CreateClientKeyRequest struct {
 
 // CreateCredentialRequest defines model for CreateCredentialRequest.
 type CreateCredentialRequest struct {
-	// AppID Target App for an Org or installation Operator provisioning an App
-	// credential. Org callers may name only Apps contained by their Org.
-	// App callers may omit this field or repeat their own App ID.
-	AppID      *AppID       `json:"app_id,omitempty"`
-	ExpiresAt  *time.Time   `json:"expires_at,omitempty"`
-	Name       string       `json:"name"`
-	Operations *[]Operation `json:"operations,omitempty"`
+	// AppID Required for App and App-read-only credentials. Console Org callers
+	// may name only Apps contained by their Org. Installation admins may
+	// name any App. Full App keys cannot create a new key family.
+	AppID     *AppID     `json:"app_id,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Name      string     `json:"name"`
 
-	// OrgID Target Org for an installation Operator provisioning an Org
-	// credential. Installation issuer tokens require `admin: true`.
-	// Mutually exclusive with `app_id`. Org and App callers cannot mint
-	// Org credentials.
-	OrgID *OrgID `json:"org_id,omitempty"`
-
-	// Profile Fixed authorization profile. Runtime is meaningful for App-bound
-	// execution and cannot be selected for an Org credential.
-	Profile CredentialProfile `json:"profile"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID *SessionID `json:"session_id,omitempty"`
-	TenantKey *string    `json:"tenant_key,omitempty"`
+	// Type Durable trust boundary. App and App-read-only keys require `app_id`;
+	// installation-admin keys forbid an App or Org binding.
+	Type CredentialType `json:"type"`
 }
 
 // CreateInvocationRequest Names one deliberately created Agent and carries no reusable
@@ -3820,23 +3644,19 @@ type Credential struct {
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
 	// ID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
-	ID         CredentialID `json:"id"`
-	LastUsedAt *time.Time   `json:"last_used_at,omitempty"`
-	Name       string       `json:"name"`
-	Operations []Operation  `json:"operations"`
-	OrgID      *OrgID       `json:"org_id,omitempty"`
-	Prefix     string       `json:"prefix"`
+	ID                    CredentialID     `json:"id"`
+	LastUsedAt            *time.Time       `json:"last_used_at,omitempty"`
+	Name                  string           `json:"name"`
+	Prefix                string           `json:"prefix"`
+	RevokedAt             *time.Time       `json:"revoked_at,omitempty"`
+	RotatedFromID         *CredentialID    `json:"rotated_from_id,omitempty"`
+	RotationOverlapEndsAt *time.Time       `json:"rotation_overlap_ends_at,omitempty"`
+	Status                CredentialStatus `json:"status"`
 
-	// Profile Fixed authorization profile. Runtime is meaningful for App-bound
-	// execution and cannot be selected for an Org credential.
-	Profile               CredentialProfile `json:"profile"`
-	RevokedAt             *time.Time        `json:"revoked_at,omitempty"`
-	RotatedFromID         *CredentialID     `json:"rotated_from_id,omitempty"`
-	RotationOverlapEndsAt *time.Time        `json:"rotation_overlap_ends_at,omitempty"`
-	SessionID             *SessionID        `json:"session_id,omitempty"`
-	Status                CredentialStatus  `json:"status"`
-	TenantKey             *string           `json:"tenant_key,omitempty"`
-	UpdatedAt             time.Time         `json:"updated_at"`
+	// Type Durable trust boundary. App and App-read-only keys require `app_id`;
+	// installation-admin keys forbid an App or Org binding.
+	Type      CredentialType `json:"type"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
@@ -3857,12 +3677,12 @@ type CredentialList struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
-// CredentialProfile Fixed authorization profile. Runtime is meaningful for App-bound
-// execution and cannot be selected for an Org credential.
-type CredentialProfile string
-
 // CredentialStatus defines model for CredentialStatus.
 type CredentialStatus string
+
+// CredentialType Durable trust boundary. App and App-read-only keys require `app_id`;
+// installation-admin keys forbid an App or Org binding.
+type CredentialType string
 
 // CreditAccount One tenant's persistent, non-expiring spending capacity. These exact
 // USD counters are enforcement facts, not an invoice or payment record.
@@ -3934,12 +3754,11 @@ type CreditBlock struct {
 // nvoken's own provider key, credits are always required.
 type CreditPolicy string
 
-// CurrentIdentity Who nvoken thinks you are. `method` says how you authenticated, and it
-// is the only thing you need to read to know which of the optional fields
-// below are present: a machine credential carries `credential_id`,
-// `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
-// `agent_key`, and `definition_revision`, and is pinned to one
-// App and Agent.
+// CurrentIdentity Who nvoken thinks you are. `method` says how you authenticated. A
+// machine API key carries `credential_id` and `type`; a short-lived
+// console presentation may carry `org_id`; a browser grant carries its
+// fixed App, Agent, tenant, Definition revision, and optional Session
+// bindings.
 type CurrentIdentity struct {
 	Authentication struct {
 		// AgentID Browser grants only. The Agent this grant is pinned to.
@@ -3948,7 +3767,7 @@ type CurrentIdentity struct {
 		// AgentKey Browser grants only. The Agent this grant is pinned to.
 		AgentKey *string `json:"agent_key,omitempty"`
 
-		// AppID Null for installation- and Org-scoped machine credentials. A
+		// AppID Null for installation credentials and Org console presentations. A
 		// browser grant is always App-scoped, so this is never null for
 		// one.
 		AppID *AppID `json:"app_id"`
@@ -3959,16 +3778,12 @@ type CurrentIdentity struct {
 		// DefinitionRevision Browser grants only.
 		DefinitionRevision *int `json:"definition_revision,omitempty"`
 
-		// EffectiveProfile Machine credentials only.
-		EffectiveProfile *CredentialProfile `json:"effective_profile,omitempty"`
-
 		// Method How this caller authenticated. New values may be added; handle
 		// a value you do not recognize as an unknown caller rather than
 		// refusing the response.
-		Method     CurrentIdentityAuthenticationMethod `json:"method"`
-		Operations []Operation                         `json:"operations"`
+		Method CurrentIdentityAuthenticationMethod `json:"method"`
 
-		// OrgID Machine credentials only.
+		// OrgID Short-lived console presentations only.
 		OrgID     *OrgID     `json:"org_id,omitempty"`
 		SessionID *SessionID `json:"session_id,omitempty"`
 
@@ -3976,6 +3791,9 @@ type CurrentIdentity struct {
 		// browser grant is always tenant-pinned, so this is never null
 		// for one.
 		TenantKey *string `json:"tenant_key,omitempty"`
+
+		// Type Machine API keys only.
+		Type *CredentialType `json:"type,omitempty"`
 	} `json:"authentication"`
 }
 
@@ -5661,9 +5479,6 @@ type NudgeStatus string
 
 // ObservationStatus Whether this installation has a hosted observation store.
 type ObservationStatus string
-
-// Operation defines model for Operation.
-type Operation string
 
 // Org Thin customer ownership boundary. Membership, roles, invitations,
 // policy, and runtime state deliberately live elsewhere.
@@ -9625,9 +9440,9 @@ type ClientInterface interface {
 
 	// ListApps List registered apps
 	//
-	// Returns the Apps this credential can see. An App-scoped credential
-	// sees only that App, an Org-scoped credential sees the Apps contained
-	// by its Org, and an installation credential sees every registered App.
+	// Returns the Apps this caller can see. An App key sees only that App,
+	// an Org console presentation sees the Apps contained by its Org, and an
+	// installation-admin key sees every registered App.
 	// An exact `external_ref` filter narrows that visible set during the
 	// staged console migration. Archived Apps are excluded unless `status`
 	// asks for them.
@@ -9645,8 +9460,8 @@ type ClientInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration requires an Org or installation Operator credential; an
-	// App-scoped credential cannot mint siblings. Org callers always create
+	// Registration requires an Org console presentation or installation-admin
+	// key; an App key cannot mint siblings. Org callers always create
 	// Apps in their own Org and may omit `org_id`. Installation machine
 	// credentials may choose any registered Org or temporarily leave
 	// ownership unset during the staged console migration. An installation
@@ -9668,8 +9483,8 @@ type ClientInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration requires an Org or installation Operator credential; an
-	// App-scoped credential cannot mint siblings. Org callers always create
+	// Registration requires an Org console presentation or installation-admin
+	// key; an App key cannot mint siblings. Org callers always create
 	// Apps in their own Org and may omit `org_id`. Installation machine
 	// credentials may choose any registered Org or temporarily leave
 	// ownership unset during the staged console migration. An installation
@@ -9707,7 +9522,7 @@ type ClientInterface interface {
 
 	// GetApp Get one app
 	//
-	// Returns one registered App. App- and Org-scoped credentials receive
+	// Returns one registered App. App keys and Org console presentations receive
 	// `404` for Apps outside their durable containment boundary.
 	//
 	// Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
@@ -9796,7 +9611,7 @@ type ClientInterface interface {
 	// Lists the App's Ed25519 client-token verification-key records in creation
 	// order. Responses contain only the generated key ID, display name,
 	// SHA-256 fingerprint, and creation time; public-key bytes are never
-	// returned. This route requires the same non-client Operator authority
+	// returned. This route requires the same host App-write authority
 	// as updating the visible App. Cross-App targets return `404`.
 	//
 	// Corresponds with GET /v1/apps/{app_id}/client-keys (the `ListAppClientKeys` operationId).
@@ -10692,9 +10507,9 @@ type ClientInterface interface {
 
 	// ListOrgs List registered orgs
 	//
-	// Returns the Orgs visible to the caller. Installation machine
-	// credentials and admin issuer tokens see every Org; an Org-scoped
-	// credential sees only its own Org. App-scoped credentials and
+	// Returns the Orgs visible to the caller. Installation-admin keys and
+	// admin issuer tokens see every Org; an Org console presentation sees
+	// only its own Org. App keys and
 	// non-admin installation issuer tokens cannot list Orgs.
 	//
 	// Archived Orgs are excluded unless `status` asks for them.
@@ -10705,7 +10520,7 @@ type ClientInterface interface {
 	// RegisterOrgWithBody Register an org
 	//
 	// Registers a thin customer ownership boundary. This requires an
-	// installation Operator credential or an admin issuer token. When
+	// installation-admin key or an admin issuer token. When
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
@@ -10720,7 +10535,7 @@ type ClientInterface interface {
 	// RegisterOrg Register an org
 	//
 	// Registers a thin customer ownership boundary. This requires an
-	// installation Operator credential or an admin issuer token. When
+	// installation-admin key or an admin issuer token. When
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
@@ -10748,7 +10563,7 @@ type ClientInterface interface {
 
 	// GetOrg Get one org
 	//
-	// Returns one registered Org. An Org-scoped caller receives `404` for
+	// Returns one registered Org. An Org console presentation receives `404` for
 	// any other Org, so identifiers cannot be probed across the ownership
 	// boundary. Installation issuer tokens require `admin: true`.
 	//
@@ -10786,18 +10601,18 @@ type ClientInterface interface {
 
 	// ListProviderKeys List reusable provider key metadata
 	//
-	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+	// Full and read-only App keys may read metadata in their App; secret material is never readable.
 	//
 	// Corresponds with GET /v1/provider-keys (the `ListProviderKeys` operationId).
 	ListProviderKeys(ctx context.Context, params *ListProviderKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateProviderKeyWithBody Create one reusable provider key
 	//
-	// Creates encrypted app or tenant BYOK. App scope requires an
-	// unconstrained Operator credential inside the app; the credential is
-	// shared by every tenant of that app and by no other app. A
-	// tenant-constrained Runtime credential may manage only its exact tenant
-	// partition. The response contains metadata only.
+	// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+	// App key without request-level tenant narrowing and is shared by every
+	// tenant of that App and by no other App. A tenant-narrowed request may
+	// manage only that exact tenant partition. The response contains metadata
+	// only.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -10806,11 +10621,11 @@ type ClientInterface interface {
 
 	// CreateProviderKey Create one reusable provider key
 	//
-	// Creates encrypted app or tenant BYOK. App scope requires an
-	// unconstrained Operator credential inside the app; the credential is
-	// shared by every tenant of that app and by no other app. A
-	// tenant-constrained Runtime credential may manage only its exact tenant
-	// partition. The response contains metadata only.
+	// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+	// App key without request-level tenant narrowing and is shared by every
+	// tenant of that App and by no other App. A tenant-narrowed request may
+	// manage only that exact tenant partition. The response contains metadata
+	// only.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -10824,7 +10639,7 @@ type ClientInterface interface {
 
 	// GetProviderKey Read provider key metadata
 	//
-	// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+	// Full and read-only App keys may read secret-free metadata in their App.
 	//
 	// Corresponds with GET /v1/provider-keys/{provider_key_id} (the `GetProviderKey` operationId).
 	GetProviderKey(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -10920,8 +10735,8 @@ type ClientInterface interface {
 	//
 	// An unknown `session_id`, or one outside your scope, returns
 	// `not_found`. So if you lose the response and retry, you can safely
-	// treat `404` as "already deleted". Deleting requires the Runtime or
-	// Operator profile; a Viewer credential cannot erase a transcript.
+	// treat `404` as "already deleted". Deleting requires a full App key; a
+	// read-only App key cannot erase a transcript.
 	// A managed anonymous token may erase only its own fully constrained
 	// Session. Host-minted browser tokens remain unable to call this route.
 	// A still-live anonymous visitor token can subsequently start one empty
@@ -11256,9 +11071,10 @@ type ClientInterface interface {
 	// content-free facts. The half-open window totals use exact distinct
 	// counts and are not sums of bucket distincts. Grouping is bounded to ten
 	// selected series plus `other`. Session deletion does not rewrite history.
-	// An App credential is forced to its App, an Org credential to Apps
-	// currently owned by its Org, and only an installation-scoped admin
-	// issuer token can span every App.
+	// An App credential is forced to its App, an Org console presentation to
+	// Apps currently owned by its Org, and only an installation-scoped admin
+	// issuer token can span every App. Durable installation keys cannot read
+	// reporting data.
 	//
 	// Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 	GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -11784,9 +11600,9 @@ func (c *Client) RestoreAgent(ctx context.Context, agentID AgentID, reqEditors .
 
 // ListApps List registered apps
 //
-// Returns the Apps this credential can see. An App-scoped credential
-// sees only that App, an Org-scoped credential sees the Apps contained
-// by its Org, and an installation credential sees every registered App.
+// Returns the Apps this caller can see. An App key sees only that App,
+// an Org console presentation sees the Apps contained by its Org, and an
+// installation-admin key sees every registered App.
 // An exact `external_ref` filter narrows that visible set during the
 // staged console migration. Archived Apps are excluded unless `status`
 // asks for them.
@@ -11814,8 +11630,8 @@ func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditor
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration requires an Org or installation Operator credential; an
-// App-scoped credential cannot mint siblings. Org callers always create
+// Registration requires an Org console presentation or installation-admin
+// key; an App key cannot mint siblings. Org callers always create
 // Apps in their own Org and may omit `org_id`. Installation machine
 // credentials may choose any registered Org or temporarily leave
 // ownership unset during the staged console migration. An installation
@@ -11847,8 +11663,8 @@ func (c *Client) RegisterAppWithBody(ctx context.Context, contentType string, bo
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration requires an Org or installation Operator credential; an
-// App-scoped credential cannot mint siblings. Org callers always create
+// Registration requires an Org console presentation or installation-admin
+// key; an App key cannot mint siblings. Org callers always create
 // Apps in their own Org and may omit `org_id`. Installation machine
 // credentials may choose any registered Org or temporarily leave
 // ownership unset during the staged console migration. An installation
@@ -11906,7 +11722,7 @@ func (c *Client) ArchiveApp(ctx context.Context, appID AppID, reqEditors ...Requ
 
 // GetApp Get one app
 //
-// Returns one registered App. App- and Org-scoped credentials receive
+// Returns one registered App. App keys and Org console presentations receive
 // `404` for Apps outside their durable containment boundary.
 //
 // Corresponds with GET /v1/apps/{app_id} (the `GetApp` operationId).
@@ -12045,7 +11861,7 @@ func (c *Client) IssueAnonymousToken(ctx context.Context, appID AppID, params *I
 // Lists the App's Ed25519 client-token verification-key records in creation
 // order. Responses contain only the generated key ID, display name,
 // SHA-256 fingerprint, and creation time; public-key bytes are never
-// returned. This route requires the same non-client Operator authority
+// returned. This route requires the same host App-write authority
 // as updating the visible App. Cross-App targets return `404`.
 //
 // Corresponds with GET /v1/apps/{app_id}/client-keys (the `ListAppClientKeys` operationId).
@@ -13421,9 +13237,9 @@ func (c *Client) GetModel(ctx context.Context, provider ModelProvider, modelID s
 
 // ListOrgs List registered orgs
 //
-// Returns the Orgs visible to the caller. Installation machine
-// credentials and admin issuer tokens see every Org; an Org-scoped
-// credential sees only its own Org. App-scoped credentials and
+// Returns the Orgs visible to the caller. Installation-admin keys and
+// admin issuer tokens see every Org; an Org console presentation sees
+// only its own Org. App keys and
 // non-admin installation issuer tokens cannot list Orgs.
 //
 // Archived Orgs are excluded unless `status` asks for them.
@@ -13444,7 +13260,7 @@ func (c *Client) ListOrgs(ctx context.Context, params *ListOrgsParams, reqEditor
 // RegisterOrgWithBody Register an org
 //
 // Registers a thin customer ownership boundary. This requires an
-// installation Operator credential or an admin issuer token. When
+// installation-admin key or an admin issuer token. When
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
@@ -13469,7 +13285,7 @@ func (c *Client) RegisterOrgWithBody(ctx context.Context, contentType string, bo
 // RegisterOrg Register an org
 //
 // Registers a thin customer ownership boundary. This requires an
-// installation Operator credential or an admin issuer token. When
+// installation-admin key or an admin issuer token. When
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
@@ -13517,7 +13333,7 @@ func (c *Client) ArchiveOrg(ctx context.Context, orgID OrgID, reqEditors ...Requ
 
 // GetOrg Get one org
 //
-// Returns one registered Org. An Org-scoped caller receives `404` for
+// Returns one registered Org. An Org console presentation receives `404` for
 // any other Org, so identifiers cannot be probed across the ownership
 // boundary. Installation issuer tokens require `admin: true`.
 //
@@ -13595,7 +13411,7 @@ func (c *Client) RestoreOrg(ctx context.Context, orgID OrgID, reqEditors ...Requ
 
 // ListProviderKeys List reusable provider key metadata
 //
-// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+// Full and read-only App keys may read metadata in their App; secret material is never readable.
 //
 // Corresponds with GET /v1/provider-keys (the `ListProviderKeys` operationId).
 func (c *Client) ListProviderKeys(ctx context.Context, params *ListProviderKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -13612,11 +13428,11 @@ func (c *Client) ListProviderKeys(ctx context.Context, params *ListProviderKeysP
 
 // CreateProviderKeyWithBody Create one reusable provider key
 //
-// Creates encrypted app or tenant BYOK. App scope requires an
-// unconstrained Operator credential inside the app; the credential is
-// shared by every tenant of that app and by no other app. A
-// tenant-constrained Runtime credential may manage only its exact tenant
-// partition. The response contains metadata only.
+// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+// App key without request-level tenant narrowing and is shared by every
+// tenant of that App and by no other App. A tenant-narrowed request may
+// manage only that exact tenant partition. The response contains metadata
+// only.
 //
 // Takes any type of body and a specified content type.
 //
@@ -13635,11 +13451,11 @@ func (c *Client) CreateProviderKeyWithBody(ctx context.Context, contentType stri
 
 // CreateProviderKey Create one reusable provider key
 //
-// Creates encrypted app or tenant BYOK. App scope requires an
-// unconstrained Operator credential inside the app; the credential is
-// shared by every tenant of that app and by no other app. A
-// tenant-constrained Runtime credential may manage only its exact tenant
-// partition. The response contains metadata only.
+// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+// App key without request-level tenant narrowing and is shared by every
+// tenant of that App and by no other App. A tenant-narrowed request may
+// manage only that exact tenant partition. The response contains metadata
+// only.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13673,7 +13489,7 @@ func (c *Client) RevokeProviderKey(ctx context.Context, providerKeyID ProviderKe
 
 // GetProviderKey Read provider key metadata
 //
-// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+// Full and read-only App keys may read secret-free metadata in their App.
 //
 // Corresponds with GET /v1/provider-keys/{provider_key_id} (the `GetProviderKey` operationId).
 func (c *Client) GetProviderKey(ctx context.Context, providerKeyID ProviderKeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -13839,8 +13655,8 @@ func (c *Client) CreateSession(ctx context.Context, body CreateSessionJSONReques
 //
 // An unknown `session_id`, or one outside your scope, returns
 // `not_found`. So if you lose the response and retry, you can safely
-// treat `404` as "already deleted". Deleting requires the Runtime or
-// Operator profile; a Viewer credential cannot erase a transcript.
+// treat `404` as "already deleted". Deleting requires a full App key; a
+// read-only App key cannot erase a transcript.
 // A managed anonymous token may erase only its own fully constrained
 // Session. Host-minted browser tokens remain unable to call this route.
 // A still-live anonymous visitor token can subsequently start one empty
@@ -14325,9 +14141,10 @@ func (c *Client) ListUsageRecords(ctx context.Context, params *ListUsageRecordsP
 // content-free facts. The half-open window totals use exact distinct
 // counts and are not sums of bucket distincts. Grouping is bounded to ten
 // selected series plus `other`. Session deletion does not rewrite history.
-// An App credential is forced to its App, an Org credential to Apps
-// currently owned by its Org, and only an installation-scoped admin
-// issuer token can span every App.
+// An App credential is forced to its App, an Org console presentation to
+// Apps currently owned by its Org, and only an installation-scoped admin
+// issuer token can span every App. Durable installation keys cannot read
+// reporting data.
 //
 // Corresponds with GET /v1/usage/timeseries (the `GetUsageTimeseries` operationId).
 func (c *Client) GetUsageTimeseries(ctx context.Context, params *GetUsageTimeseriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -20273,9 +20090,9 @@ type ClientWithResponsesInterface interface {
 
 	// ListAppsWithResponse List registered apps
 	//
-	// Returns the Apps this credential can see. An App-scoped credential
-	// sees only that App, an Org-scoped credential sees the Apps contained
-	// by its Org, and an installation credential sees every registered App.
+	// Returns the Apps this caller can see. An App key sees only that App,
+	// an Org console presentation sees the Apps contained by its Org, and an
+	// installation-admin key sees every registered App.
 	// An exact `external_ref` filter narrows that visible set during the
 	// staged console migration. Archived Apps are excluded unless `status`
 	// asks for them.
@@ -20295,8 +20112,8 @@ type ClientWithResponsesInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration requires an Org or installation Operator credential; an
-	// App-scoped credential cannot mint siblings. Org callers always create
+	// Registration requires an Org console presentation or installation-admin
+	// key; an App key cannot mint siblings. Org callers always create
 	// Apps in their own Org and may omit `org_id`. Installation machine
 	// credentials may choose any registered Org or temporarily leave
 	// ownership unset during the staged console migration. An installation
@@ -20318,8 +20135,8 @@ type ClientWithResponsesInterface interface {
 	// scope of each delivery. Registration is unavailable when the service's
 	// encryption keyring is not configured.
 	//
-	// Registration requires an Org or installation Operator credential; an
-	// App-scoped credential cannot mint siblings. Org callers always create
+	// Registration requires an Org console presentation or installation-admin
+	// key; an App key cannot mint siblings. Org callers always create
 	// Apps in their own Org and may omit `org_id`. Installation machine
 	// credentials may choose any registered Org or temporarily leave
 	// ownership unset during the staged console migration. An installation
@@ -20359,7 +20176,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAppWithResponse Get one app
 	//
-	// Returns one registered App. App- and Org-scoped credentials receive
+	// Returns one registered App. App keys and Org console presentations receive
 	// `404` for Apps outside their durable containment boundary.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -20450,7 +20267,7 @@ type ClientWithResponsesInterface interface {
 	// Lists the App's Ed25519 client-token verification-key records in creation
 	// order. Responses contain only the generated key ID, display name,
 	// SHA-256 fingerprint, and creation time; public-key bytes are never
-	// returned. This route requires the same non-client Operator authority
+	// returned. This route requires the same host App-write authority
 	// as updating the visible App. Cross-App targets return `404`.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -21402,9 +21219,9 @@ type ClientWithResponsesInterface interface {
 
 	// ListOrgsWithResponse List registered orgs
 	//
-	// Returns the Orgs visible to the caller. Installation machine
-	// credentials and admin issuer tokens see every Org; an Org-scoped
-	// credential sees only its own Org. App-scoped credentials and
+	// Returns the Orgs visible to the caller. Installation-admin keys and
+	// admin issuer tokens see every Org; an Org console presentation sees
+	// only its own Org. App keys and
 	// non-admin installation issuer tokens cannot list Orgs.
 	//
 	// Archived Orgs are excluded unless `status` asks for them.
@@ -21417,7 +21234,7 @@ type ClientWithResponsesInterface interface {
 	// RegisterOrgWithBodyWithResponse Register an org
 	//
 	// Registers a thin customer ownership boundary. This requires an
-	// installation Operator credential or an admin issuer token. When
+	// installation-admin key or an admin issuer token. When
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
@@ -21432,7 +21249,7 @@ type ClientWithResponsesInterface interface {
 	// RegisterOrgWithResponse Register an org
 	//
 	// Registers a thin customer ownership boundary. This requires an
-	// installation Operator credential or an admin issuer token. When
+	// installation-admin key or an admin issuer token. When
 	// `external_ref` names an existing Org, the existing resource is
 	// returned unchanged so register-on-first-login is race-safe and
 	// idempotent.
@@ -21462,7 +21279,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetOrgWithResponse Get one org
 	//
-	// Returns one registered Org. An Org-scoped caller receives `404` for
+	// Returns one registered Org. An Org console presentation receives `404` for
 	// any other Org, so identifiers cannot be probed across the ownership
 	// boundary. Installation issuer tokens require `admin: true`.
 	//
@@ -21504,7 +21321,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListProviderKeysWithResponse List reusable provider key metadata
 	//
-	// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+	// Full and read-only App keys may read metadata in their App; secret material is never readable.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21513,11 +21330,11 @@ type ClientWithResponsesInterface interface {
 
 	// CreateProviderKeyWithBodyWithResponse Create one reusable provider key
 	//
-	// Creates encrypted app or tenant BYOK. App scope requires an
-	// unconstrained Operator credential inside the app; the credential is
-	// shared by every tenant of that app and by no other app. A
-	// tenant-constrained Runtime credential may manage only its exact tenant
-	// partition. The response contains metadata only.
+	// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+	// App key without request-level tenant narrowing and is shared by every
+	// tenant of that App and by no other App. A tenant-narrowed request may
+	// manage only that exact tenant partition. The response contains metadata
+	// only.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21526,11 +21343,11 @@ type ClientWithResponsesInterface interface {
 
 	// CreateProviderKeyWithResponse Create one reusable provider key
 	//
-	// Creates encrypted app or tenant BYOK. App scope requires an
-	// unconstrained Operator credential inside the app; the credential is
-	// shared by every tenant of that app and by no other app. A
-	// tenant-constrained Runtime credential may manage only its exact tenant
-	// partition. The response contains metadata only.
+	// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+	// App key without request-level tenant narrowing and is shared by every
+	// tenant of that App and by no other App. A tenant-narrowed request may
+	// manage only that exact tenant partition. The response contains metadata
+	// only.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21546,7 +21363,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetProviderKeyWithResponse Read provider key metadata
 	//
-	// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+	// Full and read-only App keys may read secret-free metadata in their App.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21648,8 +21465,8 @@ type ClientWithResponsesInterface interface {
 	//
 	// An unknown `session_id`, or one outside your scope, returns
 	// `not_found`. So if you lose the response and retry, you can safely
-	// treat `404` as "already deleted". Deleting requires the Runtime or
-	// Operator profile; a Viewer credential cannot erase a transcript.
+	// treat `404` as "already deleted". Deleting requires a full App key; a
+	// read-only App key cannot erase a transcript.
 	// A managed anonymous token may erase only its own fully constrained
 	// Session. Host-minted browser tokens remain unable to call this route.
 	// A still-live anonymous visitor token can subsequently start one empty
@@ -22006,9 +21823,10 @@ type ClientWithResponsesInterface interface {
 	// content-free facts. The half-open window totals use exact distinct
 	// counts and are not sums of bucket distincts. Grouping is bounded to ten
 	// selected series plus `other`. Session deletion does not rewrite history.
-	// An App credential is forced to its App, an Org credential to Apps
-	// currently owned by its Org, and only an installation-scoped admin
-	// issuer token can span every App.
+	// An App credential is forced to its App, an Org console presentation to
+	// Apps currently owned by its Org, and only an installation-scoped admin
+	// issuer token can span every App. Durable installation keys cannot read
+	// reporting data.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -30047,9 +29865,9 @@ func (c *ClientWithResponses) RestoreAgentWithResponse(ctx context.Context, agen
 
 // ListAppsWithResponse List registered apps
 //
-// Returns the Apps this credential can see. An App-scoped credential
-// sees only that App, an Org-scoped credential sees the Apps contained
-// by its Org, and an installation credential sees every registered App.
+// Returns the Apps this caller can see. An App key sees only that App,
+// an Org console presentation sees the Apps contained by its Org, and an
+// installation-admin key sees every registered App.
 // An exact `external_ref` filter narrows that visible set during the
 // staged console migration. Archived Apps are excluded unless `status`
 // asks for them.
@@ -30075,8 +29893,8 @@ func (c *ClientWithResponses) ListAppsWithResponse(ctx context.Context, params *
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration requires an Org or installation Operator credential; an
-// App-scoped credential cannot mint siblings. Org callers always create
+// Registration requires an Org console presentation or installation-admin
+// key; an App key cannot mint siblings. Org callers always create
 // Apps in their own Org and may omit `org_id`. Installation machine
 // credentials may choose any registered Org or temporarily leave
 // ownership unset during the staged console migration. An installation
@@ -30104,8 +29922,8 @@ func (c *ClientWithResponses) RegisterAppWithBodyWithResponse(ctx context.Contex
 // scope of each delivery. Registration is unavailable when the service's
 // encryption keyring is not configured.
 //
-// Registration requires an Org or installation Operator credential; an
-// App-scoped credential cannot mint siblings. Org callers always create
+// Registration requires an Org console presentation or installation-admin
+// key; an App key cannot mint siblings. Org callers always create
 // Apps in their own Org and may omit `org_id`. Installation machine
 // credentials may choose any registered Org or temporarily leave
 // ownership unset during the staged console migration. An installation
@@ -30157,7 +29975,7 @@ func (c *ClientWithResponses) ArchiveAppWithResponse(ctx context.Context, appID 
 
 // GetAppWithResponse Get one app
 //
-// Returns one registered App. App- and Org-scoped credentials receive
+// Returns one registered App. App keys and Org console presentations receive
 // `404` for Apps outside their durable containment boundary.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -30278,7 +30096,7 @@ func (c *ClientWithResponses) IssueAnonymousTokenWithResponse(ctx context.Contex
 // Lists the App's Ed25519 client-token verification-key records in creation
 // order. Responses contain only the generated key ID, display name,
 // SHA-256 fingerprint, and creation time; public-key bytes are never
-// returned. This route requires the same non-client Operator authority
+// returned. This route requires the same host App-write authority
 // as updating the visible App. Cross-App targets return `404`.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -31518,9 +31336,9 @@ func (c *ClientWithResponses) GetModelWithResponse(ctx context.Context, provider
 
 // ListOrgsWithResponse List registered orgs
 //
-// Returns the Orgs visible to the caller. Installation machine
-// credentials and admin issuer tokens see every Org; an Org-scoped
-// credential sees only its own Org. App-scoped credentials and
+// Returns the Orgs visible to the caller. Installation-admin keys and
+// admin issuer tokens see every Org; an Org console presentation sees
+// only its own Org. App keys and
 // non-admin installation issuer tokens cannot list Orgs.
 //
 // Archived Orgs are excluded unless `status` asks for them.
@@ -31539,7 +31357,7 @@ func (c *ClientWithResponses) ListOrgsWithResponse(ctx context.Context, params *
 // RegisterOrgWithBodyWithResponse Register an org
 //
 // Registers a thin customer ownership boundary. This requires an
-// installation Operator credential or an admin issuer token. When
+// installation-admin key or an admin issuer token. When
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
@@ -31560,7 +31378,7 @@ func (c *ClientWithResponses) RegisterOrgWithBodyWithResponse(ctx context.Contex
 // RegisterOrgWithResponse Register an org
 //
 // Registers a thin customer ownership boundary. This requires an
-// installation Operator credential or an admin issuer token. When
+// installation-admin key or an admin issuer token. When
 // `external_ref` names an existing Org, the existing resource is
 // returned unchanged so register-on-first-login is race-safe and
 // idempotent.
@@ -31602,7 +31420,7 @@ func (c *ClientWithResponses) ArchiveOrgWithResponse(ctx context.Context, orgID 
 
 // GetOrgWithResponse Get one org
 //
-// Returns one registered Org. An Org-scoped caller receives `404` for
+// Returns one registered Org. An Org console presentation receives `404` for
 // any other Org, so identifiers cannot be probed across the ownership
 // boundary. Installation issuer tokens require `admin: true`.
 //
@@ -31668,7 +31486,7 @@ func (c *ClientWithResponses) RestoreOrgWithResponse(ctx context.Context, orgID 
 
 // ListProviderKeysWithResponse List reusable provider key metadata
 //
-// Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+// Full and read-only App keys may read metadata in their App; secret material is never readable.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31683,11 +31501,11 @@ func (c *ClientWithResponses) ListProviderKeysWithResponse(ctx context.Context, 
 
 // CreateProviderKeyWithBodyWithResponse Create one reusable provider key
 //
-// Creates encrypted app or tenant BYOK. App scope requires an
-// unconstrained Operator credential inside the app; the credential is
-// shared by every tenant of that app and by no other app. A
-// tenant-constrained Runtime credential may manage only its exact tenant
-// partition. The response contains metadata only.
+// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+// App key without request-level tenant narrowing and is shared by every
+// tenant of that App and by no other App. A tenant-narrowed request may
+// manage only that exact tenant partition. The response contains metadata
+// only.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31702,11 +31520,11 @@ func (c *ClientWithResponses) CreateProviderKeyWithBodyWithResponse(ctx context.
 
 // CreateProviderKeyWithResponse Create one reusable provider key
 //
-// Creates encrypted app or tenant BYOK. App scope requires an
-// unconstrained Operator credential inside the app; the credential is
-// shared by every tenant of that app and by no other app. A
-// tenant-constrained Runtime credential may manage only its exact tenant
-// partition. The response contains metadata only.
+// Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+// App key without request-level tenant narrowing and is shared by every
+// tenant of that App and by no other App. A tenant-narrowed request may
+// manage only that exact tenant partition. The response contains metadata
+// only.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31734,7 +31552,7 @@ func (c *ClientWithResponses) RevokeProviderKeyWithResponse(ctx context.Context,
 
 // GetProviderKeyWithResponse Read provider key metadata
 //
-// Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+// Full and read-only App keys may read secret-free metadata in their App.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -31878,8 +31696,8 @@ func (c *ClientWithResponses) CreateSessionWithResponse(ctx context.Context, bod
 //
 // An unknown `session_id`, or one outside your scope, returns
 // `not_found`. So if you lose the response and retry, you can safely
-// treat `404` as "already deleted". Deleting requires the Runtime or
-// Operator profile; a Viewer credential cannot erase a transcript.
+// treat `404` as "already deleted". Deleting requires a full App key; a
+// read-only App key cannot erase a transcript.
 // A managed anonymous token may erase only its own fully constrained
 // Session. Host-minted browser tokens remain unable to call this route.
 // A still-live anonymous visitor token can subsequently start one empty
@@ -32326,9 +32144,10 @@ func (c *ClientWithResponses) ListUsageRecordsWithResponse(ctx context.Context, 
 // content-free facts. The half-open window totals use exact distinct
 // counts and are not sums of bucket distincts. Grouping is bounded to ten
 // selected series plus `other`. Session deletion does not rewrite history.
-// An App credential is forced to its App, an Org credential to Apps
-// currently owned by its Org, and only an installation-scoped admin
-// issuer token can span every App.
+// An App credential is forced to its App, an Org console presentation to
+// Apps currently owned by its Org, and only an installation-scoped admin
+// issuer token can span every App. Durable installation keys cannot read
+// reporting data.
 //
 // Returns a wrapper object for the known response body format(s).
 //

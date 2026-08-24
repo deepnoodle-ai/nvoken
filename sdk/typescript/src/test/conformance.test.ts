@@ -11,7 +11,6 @@ import {
 import { createBrowserClient, issueAnonymousToken } from "../browser.js";
 import {
   CLIENT_TOKEN_LIFETIME_LIMIT_MS,
-  allBrowserOperations,
   mintClientToken,
   type ClientTokenClaims,
 } from "../client-token.js";
@@ -70,7 +69,7 @@ import {
   type Credential,
   type CredentialIssuance,
   type CredentialList,
-  type CredentialProfile,
+  type CredentialType,
   type CurrentIdentity,
   type Invocation,
   type InvocationLogList,
@@ -522,7 +521,7 @@ type ExportedRuntimeNouns = [
   Credential,
   CredentialIssuance,
   CredentialList,
-  CredentialProfile,
+  CredentialType,
   CurrentIdentity,
 ];
 const exportedRuntimeNounsCompileCheck: ExportedRuntimeNouns | undefined = undefined;
@@ -667,8 +666,7 @@ test("identity facade covers the credential lifecycle", async () => {
     name: "worker",
     prefix: "nvk_public",
     status,
-    profile: "runtime",
-    operations: ["create_invocation"],
+    type: "app",
     created_at: "2026-08-08T12:00:00Z",
     updated_at: "2026-08-08T12:00:00Z",
   });
@@ -700,12 +698,11 @@ test("identity facade covers the credential lifecycle", async () => {
         return Response.json({
           authentication: {
             credential_id: credentialId,
-            effective_profile: "operator",
+            app_id: "app_test",
+            type: "app",
             tenant_key: null,
             session_id: null,
-            operations: ["get_identity"],
             method: "api_key",
-            assurance: "bearer",
           },
         });
       }
@@ -760,8 +757,7 @@ test("identity facade covers the credential lifecycle", async () => {
   });
   const created = await client.createCredential({
     name: "worker",
-    profile: "runtime",
-    operations: ["create_invocation"],
+    type: "app",
     idempotencyKey: "create-once",
   });
   const read = await client.getCredential(credentialId);
@@ -785,8 +781,7 @@ test("identity facade covers the credential lifecycle", async () => {
   assert.equal(requests[2]?.idempotencyKey, "create-once");
   assert.deepEqual(requests[2]?.body, {
     name: "worker",
-    profile: "runtime",
-    operations: ["create_invocation"],
+    type: "app",
   });
   assert.equal(requests[4]?.idempotencyKey, "rotate-once");
   assert.deepEqual(requests[4]?.body, { overlap_seconds: 300 });
@@ -3761,11 +3756,9 @@ interface ClientTokenVector {
     agent_key: string;
     definition_revision: number;
     session_id: string;
-    ops: string[];
   };
   token: string;
   maximum_lifetime_seconds: number;
-  browser_operation_ceiling: string[];
 }
 
 async function clientTokenVector(): Promise<ClientTokenVector> {
@@ -3784,7 +3777,6 @@ function vectorClaims(vector: ClientTokenVector): ClientTokenClaims {
     agentKey: vector.claims.agent_key,
     definitionRevision: vector.claims.definition_revision,
     sessionId: vector.claims.session_id,
-    operations: vector.claims.ops as ClientTokenClaims["operations"],
     issuedAt: new Date(vector.claims.iat * 1_000),
     lifetimeMs: (vector.claims.exp - vector.claims.iat) * 1_000,
   };
@@ -3800,15 +3792,8 @@ test("shared client token vector", async () => {
   assert.equal(await mintClientToken(seed, vectorClaims(vector)), vector.token);
 });
 
-// The vector's list is derived on the server from its route table, so this is
-// the one place this SDK's idea of what a browser may do meets the routes the
-// runtime actually opens to one.
-test("client token ceiling matches the published one", async () => {
+test("client token lifetime matches the published one", async () => {
   const vector = await clientTokenVector();
-  assert.deepEqual(
-    [...allBrowserOperations()].map(String).sort(),
-    [...vector.browser_operation_ceiling].sort(),
-  );
   assert.equal(CLIENT_TOKEN_LIFETIME_LIMIT_MS / 1_000, vector.maximum_lifetime_seconds);
 });
 
@@ -3830,11 +3815,6 @@ test("minting refuses what the runtime would refuse", async () => {
     ["negative revision", (claims) => { claims.definitionRevision = -1; }],
     ["zero lifetime", (claims) => { claims.lifetimeMs = 0; }],
     ["excessive lifetime", (claims) => { claims.lifetimeMs = CLIENT_TOKEN_LIFETIME_LIMIT_MS + 1_000; }],
-    ["unreachable op", (claims) => { claims.operations = ["delete_session"] as ClientTokenClaims["operations"]; }],
-    ["duplicate op", (claims) => {
-      claims.operations = ["get_session", "get_session"] as ClientTokenClaims["operations"];
-    }],
-    ["unscoped operations", (claims) => { claims.operations = []; }],
   ];
   for (const [name, mutate] of mutations) {
     const claims = vectorClaims(vector);
@@ -3842,19 +3822,6 @@ test("minting refuses what the runtime would refuse", async () => {
     await assert.rejects(() => mintClientToken(seed, claims), new RegExp("nvoken"), name);
   }
   await assert.rejects(() => mintClientToken(new Uint8Array(16), vectorClaims(vector)));
-});
-
-// nvoken reads an absent `ops` as the whole ceiling, which means the most
-// permissive token is also the one you get by not thinking about it. Here the
-// two are spelled differently, so breadth is something a host chose.
-test("minting makes breadth deliberate", async () => {
-  const vector = await clientTokenVector();
-  const seed = Uint8Array.from(Buffer.from(vector.signing_key.private_key_seed, "base64"));
-  const claims = vectorClaims(vector);
-  claims.operations = [];
-  await assert.rejects(() => mintClientToken(seed, claims), /allBrowserOperations/);
-  claims.operations = allBrowserOperations();
-  assert.ok(await mintClientToken(seed, claims));
 });
 
 // A machine API key in a page is readable by everyone who loads it, reaches

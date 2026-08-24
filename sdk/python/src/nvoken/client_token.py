@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 #: The longest a client token may live. nvoken refuses anything longer, so this
@@ -22,39 +22,6 @@ CLIENT_TOKEN_TYPE = "nvoken-client+jwt"
 
 _AUDIENCE = "nvoken"
 _MAX_CLAIM = 255
-
-#: The most a client token may ever carry: exactly the operations behind routes
-#: a browser token can reach.
-#:
-#: Not a guess about server policy. The published client-token vector carries
-#: the same list, derived on the server from its route table, and the
-#: conformance suite holds this against it — so a route opened or closed to
-#: browsers cannot leave this stale.
-_BROWSER_OPERATION_CEILING = (
-    "create_invocation",
-    "get_identity",
-    "get_invocation",
-    "get_session",
-    "get_session_transcript",
-    "interrupt_invocation",
-    "list_invocations",
-    "list_session_messages",
-    "list_sessions",
-    "manage_invocation_nudges",
-    "submit_tool_results",
-)
-
-
-def all_browser_operations() -> list[str]:
-    """Every operation a client token may carry.
-
-    Reach for it when a browser genuinely drives the whole conversation. Prefer
-    naming the operations you use: a read-only transcript view has no business
-    holding ``create_invocation``, and the token is the only thing between a
-    compromised page and the operations it names.
-    """
-    return list(_BROWSER_OPERATION_CEILING)
-
 
 @dataclass
 class ClientTokenClaims:
@@ -77,11 +44,6 @@ class ClientTokenClaims:
     subject: str
     #: Required, and at most CLIENT_TOKEN_LIFETIME_LIMIT.
     lifetime: timedelta
-    #: What the browser may do, and it is required. There is deliberately no
-    #: default: nvoken reads an absent ``ops`` as the whole ceiling, and "I did
-    #: not think about scope" must not be spelled the same way as "I want
-    #: everything". Pass ``all_browser_operations()`` to mean it.
-    operations: list[str] = field(default_factory=list)
     #: Scopes the token to one tenant. ``None`` means the App's default tenant.
     tenant_key: str | None = None
     #: Exactly one of ``agent_id`` or ``agent_key`` names the Agent.
@@ -134,8 +96,6 @@ def mint_client_token(private_key: bytes, claims: ClientTokenClaims) -> str:
         members.append(("definition_revision", claims.definition_revision))
     if claims.session_id is not None:
         members.append(("session_id", claims.session_id))
-    members.append(("ops", list(claims.operations)))
-
     signing_input = f"{_base64url(header)}.{_base64url(_ordered_json(members))}"
     return f"{signing_input}.{_base64url(sign(signing_input.encode()))}"
 
@@ -189,27 +149,6 @@ def _validate(claims: ClientTokenClaims) -> None:
         raise ValueError(
             f"nvoken: lifetime must be positive and at most {CLIENT_TOKEN_LIFETIME_LIMIT}"
         )
-    _validate_operations(claims.operations)
-
-
-def _validate_operations(operations: list[str]) -> None:
-    if not operations:
-        raise ValueError(
-            "nvoken: operations is required; name the operations the browser "
-            "needs, or pass all_browser_operations() to grant the whole ceiling "
-            "deliberately"
-        )
-    seen: set[str] = set()
-    for operation in operations:
-        if operation not in _BROWSER_OPERATION_CEILING:
-            allowed = ", ".join(sorted(_BROWSER_OPERATION_CEILING))
-            raise ValueError(
-                f"nvoken: operation {operation!r} is not reachable by a browser "
-                f"token; allowed: {allowed}"
-            )
-        if operation in seen:
-            raise ValueError(f"nvoken: operation {operation!r} appears twice")
-        seen.add(operation)
 
 
 def _canonical(value: str) -> bool:

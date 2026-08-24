@@ -62,16 +62,16 @@ func runAppInit(command *cli.Context) error {
 
 	credentialName := strings.TrimSpace(command.String("credential-name"))
 	if credentialName == "" {
-		credentialName = name + " runtime"
+		credentialName = name + " app"
 	}
 	appID := registered.App.ID
 	issued, err := client.CreateCredential(command.Context(), nvoken.CreateCredentialInput{
-		Name:    credentialName,
-		Profile: nvoken.CredentialProfileRuntime,
-		AppID:   &appID,
+		Name:  credentialName,
+		Type:  nvoken.CredentialTypeApp,
+		AppID: &appID,
 	})
 	if err != nil {
-		return appInitFailed(command, result, "runtime credential issuance", err)
+		return appInitFailed(command, result, "App credential issuance", err)
 	}
 	result.Credential = &issued.Credential
 	result.CredentialSecret = issued.Secret

@@ -109,18 +109,16 @@ import type {
   CredentialIssuance,
   CredentialList,
   CredentialStatus,
+  CredentialType,
   CurrentIdentity,
-  Operation as RuntimeOperation,
-  CredentialProfile,
 } from "./generated/models/index.js";
 export type {
   Credential,
   CredentialIssuance,
   CredentialList,
   CredentialStatus,
+  CredentialType,
   CurrentIdentity,
-  Operation as RuntimeOperation,
-  CredentialProfile,
 } from "./generated/models/index.js";
 import { Configuration, FetchError, ResponseError } from "./generated/runtime.js";
 import { invocationFailureMessage } from "./invocation-error.js";
@@ -1389,16 +1387,8 @@ export interface RotateProviderKeyOptions {
 
 export interface CreateCredentialOptions {
   name: string;
-  profile: CredentialProfile;
+  type: CredentialType;
   appId?: string;
-  /**
-   * Owning Org for an org-scoped credential. An org-scoped caller may omit it
-   * to use its own Org and cannot name another.
-   */
-  orgId?: string;
-  tenantKey?: string;
-  sessionId?: string;
-  operations?: RuntimeOperation[];
   expiresAt?: Date;
   idempotencyKey?: string;
 }
@@ -2004,8 +1994,8 @@ export class Client implements StreamClient {
     options: CreateCredentialOptions,
     signal?: AbortSignal,
   ): Promise<CredentialIssuance> {
-    if (!options.name || !options.profile) {
-      throw new NvokenError("validation", "credential name and profile are required");
+    if (!options.name || !options.type) {
+      throw new NvokenError("validation", "credential name and type are required");
     }
     const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
     return this.replaySafe(
@@ -2014,14 +2004,8 @@ export class Client implements StreamClient {
           idempotencyKey,
           createCredentialRequest: {
             name: options.name,
-            profile: options.profile,
+            type: options.type,
             appId: options.appId,
-            orgId: options.orgId,
-            tenantKey: options.tenantKey,
-            sessionId: options.sessionId,
-            operations: options.operations === undefined
-              ? undefined
-              : new Set(options.operations),
             expiresAt: options.expiresAt,
           },
         },

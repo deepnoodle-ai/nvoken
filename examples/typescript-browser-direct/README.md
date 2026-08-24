@@ -56,15 +56,10 @@ for a Definition that never declared one.
 
 ## What to copy and what to decide
 
-Copy the shape. Decide the scope.
+Copy the shape. Decide the resource scope.
 
-`CHAT_PAGE_OPERATIONS` names five operations because that is what this page
-does. `allBrowserOperations()` exists for a page that genuinely drives
-everything, and minting refuses an empty list precisely so that breadth is
-something you chose rather than something you got by not thinking about it — a
-read-only transcript view has no business holding `create_invocation`.
-
-The same goes for the lifetime and the Session pin. This example asks for ten
+The browser route ceiling is fixed by nvoken and cannot be selected in the
+token. The lifetime and Session pin remain host decisions. This example asks for ten
 minutes rather than the fifteen-minute maximum, because the page refreshes well
 before expiry and the extra five buy nothing. It leaves `sessionId` unset
 because the page lists conversations; a single-conversation UI should set it,

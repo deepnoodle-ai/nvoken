@@ -62,7 +62,7 @@ from nvoken_generated.models.create_client_key_request import CreateClientKeyReq
 from nvoken_generated.models.create_credential_request import CreateCredentialRequest
 from nvoken_generated.models.create_session_request import CreateSessionRequest
 from nvoken_generated.models.credential_issuance import CredentialIssuance
-from nvoken_generated.models.credential_profile import CredentialProfile
+from nvoken_generated.models.credential_type import CredentialType
 from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import (
     CompactionPolicyTriggerTokens,
@@ -133,7 +133,6 @@ from nvoken_generated.models.provider_key_list import ProviderKeyList
 from nvoken_generated.models.provider_key_scope import ProviderKeyScope
 from nvoken_generated.models.provider_key_usage import ProviderKeyUsage
 from nvoken_generated.models.provider_static_key import ProviderStaticKey
-from nvoken_generated.models.operation import Operation
 from nvoken_generated.models.org import Org
 from nvoken_generated.models.register_app_request import RegisterAppRequest
 from nvoken_generated.models.register_org_request import RegisterOrgRequest
@@ -784,10 +783,9 @@ class Client:
         self.identity = IdentityApi(self.api_client)
         self.memories = MemoriesApi(self.api_client)
         self.usage = UsageApi(self.api_client)
-        # Org-scoped control plane. These carry no hand-written wrapper because
-        # an App-scoped Runtime credential cannot reach them at all, but a
-        # caller holding an org credential should not have to reconstruct a
-        # generated client to use one.
+        # Installation and Console control plane. These carry no hand-written
+        # wrapper because an App key cannot reach them, but an authorized
+        # caller should not have to reconstruct a generated client to use one.
         self.apps = AppsApi(self.api_client)
         self.orgs = OrgsApi(self.api_client)
         self.tenants = TenantsApi(self.api_client)
@@ -1045,23 +1043,15 @@ class Client:
         self,
         *,
         name: str,
-        profile: CredentialProfile,
+        type: CredentialType,
         app_id: str | None = None,
-        org_id: str | None = None,
-        tenant_key: str | None = None,
-        session_id: str | None = None,
-        operations: Sequence[Operation] | None = None,
         expires_at: datetime | None = None,
         idempotency_key: str | None = None,
     ) -> CredentialIssuance:
         body = CreateCredentialRequest(
             name=name,
-            profile=profile,
+            type=type,
             app_id=app_id,
-            org_id=org_id,
-            tenant_key=tenant_key,
-            session_id=session_id,
-            operations=list(operations) if operations is not None else None,
             expires_at=expires_at,
         )
         key = idempotency_key or f"nvoken-{uuid.uuid4()}"

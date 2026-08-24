@@ -22,8 +22,9 @@ type Profile struct {
 	Endpoint       string `toml:"endpoint"`
 	Token          string `toml:"token"`
 	CredentialID   string `toml:"credential_id"`
-	OrgID          string `toml:"org_id,omitempty"`
-	OrgDisplayName string `toml:"org_display_name,omitempty"`
+	AppID          string `toml:"app_id,omitempty"`
+	AppName        string `toml:"app_name,omitempty"`
+	CredentialType string `toml:"credential_type,omitempty"`
 	Label          string `toml:"label,omitempty"`
 	CreatedAt      string `toml:"created_at"`
 	LastUsedAt     string `toml:"last_used_at,omitempty"`

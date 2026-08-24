@@ -319,14 +319,14 @@ iterator. Lifecycle retries reuse one generated idempotency key. Secret
 material appears only in create and rotate requests and never in returned
 metadata.
 
-Manage nvoken's own API credentials with an Operator key through the Identity
-surface:
+Manage nvoken's own API credentials from the console or with an
+installation-admin key through the Identity surface:
 
 ```ts
 const issued = await client.createCredential({
   name: "production worker",
-  profile: "runtime",
-  operations: ["create_invocation"],
+  type: "app",
+  appId,
 });
 const page = await client.listCredentials({ status: "active", limit: 100 });
 ```
@@ -513,8 +513,8 @@ const handle = await agent.invoke("Try that answer again.", {
 ```
 
 Omission or `"reject"` preserves the default conflict response. Supersession
-atomically cancels active work and admits the successor; the Runtime credential
-must also allow cancellation.
+atomically cancels active work and admits the successor; a full App key is
+required because read-only App keys cannot cancel work.
 
 `ifActive: "interrupt"` is the keep-the-work variant: the active Invocation
 stops at its next execution seam and settles `completed` with `stopReason`
@@ -961,7 +961,6 @@ const token = await mintClientToken(clientKeySeed, {
   subject: user.id,          // from your session, never from the request
   tenantKey: user.workspaceId,
   agentKey: "support",
-  operations: ["create_invocation", "get_session_transcript"],
   lifetimeMs: 10 * 60 * 1_000,
 });
 ```
@@ -994,13 +993,11 @@ const turn = await client.invoke({ input: "How do I rotate an API key?" });
 registers its public half in one step. The private seed is the App's browser
 authority, so it belongs in backend configuration and never in a bundle.
 
-Three things are worth deciding rather than defaulting. `operations` is
-required: nvoken reads an absent list as every operation a browser may perform,
-so this SDK refuses to spell "I did not think about scope" the same way as
-`allBrowserOperations()`. `sessionId` confines the token to one conversation,
-which a single-conversation UI should set. And a lifetime is capped at fifteen
-minutes, because short lifetimes are the whole safety story of a bearer token
-in a page.
+Two things are worth deciding rather than defaulting. `sessionId` confines the
+token to one conversation, which a single-conversation UI should set. A
+lifetime is capped at fifteen minutes, because short lifetimes are the whole
+safety story of a bearer token in a page. The browser route ceiling is fixed by
+nvoken; tokens cannot select or expand it.
 
 **Invocation webhooks stop being optional here.** The browser holds the stream,
 so your backend never observes settlement any other way. See

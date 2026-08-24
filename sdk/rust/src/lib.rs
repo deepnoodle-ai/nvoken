@@ -48,8 +48,8 @@ pub use client::{
     WebSearchTool, WebhookEvent, WebhookTarget, ANY_DEFINITION_REVISION,
 };
 pub use client_token::{
-    all_browser_operations, mint_client_token, ClientTokenClaims, ClientTokenError,
-    CLIENT_TOKEN_LIFETIME_LIMIT, CLIENT_TOKEN_TYPE,
+    mint_client_token, ClientTokenClaims, ClientTokenError, CLIENT_TOKEN_LIFETIME_LIMIT,
+    CLIENT_TOKEN_TYPE,
 };
 pub use invocation_status::{
     is_terminal_status, is_turn_over, ACTIVE_INVOCATION_STATUSES, ALL_INVOCATION_STATUSES,
@@ -62,11 +62,11 @@ pub use media_preflight::{
 pub use models::{
     AnonymousTokenRequest, AnonymousTokenResponse, App, AppRegistration, AppSigningKeySecret,
     ClientKey, CreateClientKeyRequest, CreateCredentialRequest, CreateProviderKeyRequest,
-    CreateSessionRequest, CredentialIssuance, CredentialProfile, ForkSessionRequest, Invocation,
+    CreateSessionRequest, CredentialIssuance, CredentialType, ForkSessionRequest, Invocation,
     InvocationChildCounts, InvocationLog, InvocationLogList, InvocationStatus, InvocationTrigger,
-    Memory, MemoryKind, MemoryList, MemorySearchMode, MintAppSigningKeyRequest, Operation, Org,
-    ProviderKey, RegisterAppRequest, RegisterOrgRequest, RotateCredentialRequest,
-    RotateProviderKeyRequest, Session, TranscriptSnapshot, UpdateAppRequest, UpdateOrgRequest,
+    Memory, MemoryKind, MemoryList, MemorySearchMode, MintAppSigningKeyRequest, Org, ProviderKey,
+    RegisterAppRequest, RegisterOrgRequest, RotateCredentialRequest, RotateProviderKeyRequest,
+    Session, TranscriptSnapshot, UpdateAppRequest, UpdateOrgRequest,
 };
 pub use schema_preflight::{preflight_output_schema, SchemaIssue};
 pub use signed_delivery::{

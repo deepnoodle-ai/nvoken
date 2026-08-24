@@ -7,7 +7,7 @@ use nvoken::models::{
 };
 use nvoken::{
     is_not_found, issue_anonymous_token, Client, CreateClientKeyRequest, CreateCredentialRequest,
-    CreateProviderKeyRequest, CreateSessionRequest, CredentialProfile, ErrorCategory,
+    CreateProviderKeyRequest, CreateSessionRequest, CredentialType, ErrorCategory,
     ForkSessionRequest, ListInvocationLogsOptions, ListMemoriesOptions, MemoryKind,
     MemorySearchMode, MintAppSigningKeyRequest, NvokenError, RegisterAppRequest,
     RegisterOrgRequest, RetryPolicy, RotateCredentialRequest, RotateProviderKeyRequest,
@@ -148,9 +148,8 @@ async fn facade_batch_reaches_every_operation_with_complete_inputs() {
         )
         .await;
 
-    let mut credential =
-        CreateCredentialRequest::new("operator".to_owned(), CredentialProfile::Operator);
-    credential.org_id = Some("org_1".to_owned());
+    let mut credential = CreateCredentialRequest::new("app".to_owned(), CredentialType::App);
+    credential.app_id = Some("app_1".to_owned());
     let _ = client
         .create_credential(credential, Some("credential-create"))
         .await;

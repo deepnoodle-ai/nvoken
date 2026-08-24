@@ -1,11 +1,8 @@
-use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};
-
-use crate::models::Operation;
 
 /// The longest a client token may live. nvoken refuses anything longer, so
 /// this is a ceiling rather than a suggestion.
@@ -24,37 +21,6 @@ pub const CLIENT_TOKEN_TYPE: &str = "nvoken-client+jwt";
 
 const AUDIENCE: &str = "nvoken";
 const MAX_CLAIM: usize = 255;
-
-/// The most a client token may ever carry: exactly the operations behind
-/// routes a browser token can reach.
-///
-/// Not a guess about server policy. The published client-token vector carries
-/// the same list, derived on the server from its route table, and the
-/// conformance suite holds this against it — so a route opened or closed to
-/// browsers cannot leave this stale.
-const BROWSER_OPERATION_CEILING: &[Operation] = &[
-    Operation::CreateInvocation,
-    Operation::GetIdentity,
-    Operation::GetInvocation,
-    Operation::GetSession,
-    Operation::GetSessionTranscript,
-    Operation::InterruptInvocation,
-    Operation::ListInvocations,
-    Operation::ListSessionMessages,
-    Operation::ListSessions,
-    Operation::ManageInvocationNudges,
-    Operation::SubmitToolResults,
-];
-
-/// Every operation a client token may carry.
-///
-/// Reach for it when a browser genuinely drives the whole conversation. Prefer
-/// naming the operations you use: a read-only transcript view has no business
-/// holding `create_invocation`, and the token is the only thing between a
-/// compromised page and the operations it names.
-pub fn all_browser_operations() -> Vec<Operation> {
-    BROWSER_OPERATION_CEILING.to_vec()
-}
 
 /// What can go wrong minting a client token.
 ///
@@ -79,15 +45,6 @@ pub enum ClientTokenError {
     NegativeDefinitionRevision,
     #[error("lifetime must be positive and at most {CLIENT_TOKEN_LIFETIME_LIMIT:?}")]
     InvalidLifetime,
-    #[error(
-        "operations is required; name the operations the browser needs, or pass \
-         all_browser_operations() to grant the whole ceiling deliberately"
-    )]
-    OperationsUnscoped,
-    #[error("operation {0:?} is not reachable by a browser token")]
-    OperationOutsideCeiling(String),
-    #[error("operation {0:?} appears twice")]
-    DuplicateOperation(String),
     #[error("system clock is before the Unix epoch")]
     ClockBeforeEpoch,
 }
@@ -120,11 +77,6 @@ pub struct ClientTokenClaims {
     /// Session belonging to this user and Agent, which is what a session-list
     /// UI needs and a single-conversation UI does not.
     pub session_id: Option<String>,
-    /// What the browser may do, and it is required. There is deliberately no
-    /// default: nvoken reads an absent `ops` as the whole ceiling, and "I did
-    /// not think about scope" must not be spelled the same way as "I want
-    /// everything". Pass [`all_browser_operations`] to mean it.
-    pub operations: Vec<Operation>,
     /// Defaults to the current time.
     pub issued_at: Option<SystemTime>,
     /// Required, and at most [`CLIENT_TOKEN_LIFETIME_LIMIT`].
@@ -185,8 +137,6 @@ pub fn mint_client_token(
     if let Some(session_id) = &claims.session_id {
         members.push(("session_id", Value::Owned(session_id.clone())));
     }
-    members.push(("ops", Value::Operations(claims.operations.clone())));
-
     let signing_input = format!(
         "{}.{}",
         URL_SAFE_NO_PAD.encode(header),
@@ -230,24 +180,6 @@ fn validate(claims: &ClientTokenClaims) -> Result<(), ClientTokenError> {
     if claims.lifetime.is_zero() || claims.lifetime > CLIENT_TOKEN_LIFETIME_LIMIT {
         return Err(ClientTokenError::InvalidLifetime);
     }
-    validate_operations(&claims.operations)
-}
-
-fn validate_operations(operations: &[Operation]) -> Result<(), ClientTokenError> {
-    if operations.is_empty() {
-        return Err(ClientTokenError::OperationsUnscoped);
-    }
-    let mut seen: HashSet<Operation> = HashSet::with_capacity(operations.len());
-    for operation in operations {
-        if !BROWSER_OPERATION_CEILING.contains(operation) {
-            return Err(ClientTokenError::OperationOutsideCeiling(
-                operation.to_string(),
-            ));
-        }
-        if !seen.insert(*operation) {
-            return Err(ClientTokenError::DuplicateOperation(operation.to_string()));
-        }
-    }
     Ok(())
 }
 
@@ -280,7 +212,6 @@ enum Value {
     Text(&'static str),
     Owned(String),
     Number(i64),
-    Operations(Vec<Operation>),
 }
 
 /// Writes members in the order given rather than any order a map would impose.
@@ -304,11 +235,6 @@ fn ordered_json(members: &[(&str, Value)]) -> Vec<u8> {
                 encoded.push_str(&serde_json::to_string(text).expect("text is encodable"))
             }
             Value::Number(number) => encoded.push_str(&number.to_string()),
-            // Serialized through serde, so the wire spelling comes from the
-            // generated enum's own rename attributes rather than a second list
-            // here that could disagree with it.
-            Value::Operations(operations) => encoded
-                .push_str(&serde_json::to_string(operations).expect("operations are encodable")),
         }
     }
     encoded.push('}');

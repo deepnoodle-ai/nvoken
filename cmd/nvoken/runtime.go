@@ -224,7 +224,7 @@ func registerRuntimeCommands(app *cli.App) {
 			cli.String("display-name").Help("Human-facing label; name stays the unique handle"),
 			cli.String("org-id").Help("Owning Org; Org-scoped callers may omit this to use their own"),
 			cli.Int("callback-timeout").Help("Callback HTTP reply deadline in seconds, 1 to 60; default 10"),
-			cli.String("credential-name").Help("Runtime credential name; defaults to '<App name> runtime'"),
+			cli.String("credential-name").Help("Full App key name; defaults to '<App name> app'"),
 			cli.Bool("browser").Help("Enable browser access and generate and register an Ed25519 client keypair"),
 			cli.Strings("origin").Help("Exact allowed browser origin; repeatable and required with --browser"),
 			cli.String("webhook-url").Help("HTTPS Invocation webhook URL; required with --browser"),

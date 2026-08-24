@@ -20,12 +20,8 @@ func registerCredentialCommands(app *cli.App) {
 	).Run(runCredentialList)
 	group.Command("create").Description("Create a machine credential").Use(requireAuth()).Flags(
 		cli.String("name", "").Required().Help("Human-facing credential name"),
-		cli.String("credential-profile", "").Default("runtime").Enum("runtime", "viewer", "operator").Help("Fixed authorization profile"),
-		cli.String("app-id", "").Help("Target App; mutually exclusive with --org-id"),
-		cli.String("org-id", "").Help("Target Organization; installation administrators only and mutually exclusive with --app-id"),
-		cli.String("tenant-ref", "").Help("Optional tenant constraint"),
-		cli.String("session-id", "").Help("Optional Session constraint"),
-		cli.Strings("operation", "").Help("Operation constraint; repeatable"),
+		cli.String("type", "").Required().Enum("installation_admin", "app", "app_read_only").Help("Credential trust boundary"),
+		cli.String("app-id", "").Help("Target App; required for App credential types"),
 		cli.String("expires-at", "").Help("Optional RFC3339 expiry"),
 		cli.String("idempotency-key", "").Help("Stable retry identity; generated when omitted"),
 	).Run(runCredentialCreate)
@@ -66,7 +62,7 @@ func runCredentialList(ctx *cli.Context) error {
 		return renderJSON(ctx, response.JSON200)
 	}
 	for _, credential := range response.JSON200.Items {
-		ctx.Printf("%s\t%s\t%s\t%s\n", credential.ID, credential.Profile, credential.Status, credential.Name)
+		ctx.Printf("%s\t%s\t%s\t%s\n", credential.ID, credential.Type, credential.Status, credential.Name)
 	}
 	return writeNextCursor(ctx.Stdout(), response.JSON200.NextCursor)
 }
@@ -80,28 +76,9 @@ func runCredentialCreate(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	body := generated.CreateCredentialRequest{Name: name, Profile: generated.CredentialProfile(ctx.String("credential-profile"))}
+	body := generated.CreateCredentialRequest{Name: name, Type: generated.CredentialType(ctx.String("type"))}
 	if value := strings.TrimSpace(ctx.String("app-id")); value != "" {
 		body.AppID = &value
-	}
-	if value := strings.TrimSpace(ctx.String("org-id")); value != "" {
-		body.OrgID = &value
-	}
-	if body.AppID != nil && body.OrgID != nil {
-		return errors.New("--app-id and --org-id are mutually exclusive")
-	}
-	if value := strings.TrimSpace(ctx.String("tenant-ref")); value != "" {
-		body.TenantKey = &value
-	}
-	if value := strings.TrimSpace(ctx.String("session-id")); value != "" {
-		body.SessionID = &value
-	}
-	if values := ctx.Strings("operation"); len(values) > 0 {
-		operations := make([]generated.Operation, len(values))
-		for i, value := range values {
-			operations[i] = generated.Operation(value)
-		}
-		body.Operations = &operations
 	}
 	if value := strings.TrimSpace(ctx.String("expires-at")); value != "" {
 		expiresAt, err := time.Parse(time.RFC3339, value)
@@ -142,7 +119,7 @@ func runCredentialGet(ctx *cli.Context) error {
 	if jsonOutput(ctx) {
 		return renderJSON(ctx, response.JSON200)
 	}
-	ctx.Printf("ID: %s\nProfile: %s\nName: %s\nPrefix: %s\nStatus: %s\n", response.JSON200.ID, response.JSON200.Profile, response.JSON200.Name, response.JSON200.Prefix, response.JSON200.Status)
+	ctx.Printf("ID: %s\nType: %s\nName: %s\nPrefix: %s\nStatus: %s\n", response.JSON200.ID, response.JSON200.Type, response.JSON200.Name, response.JSON200.Prefix, response.JSON200.Status)
 	return nil
 }
 

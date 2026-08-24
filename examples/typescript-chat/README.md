@@ -18,14 +18,14 @@ npm install
 npm run build
 ```
 
-Provide the daemon's Runtime credential and an exact model that your provider
+Provide the daemon's full App key and an exact model that your provider
 account can use:
 
 - [OpenAI model catalog](https://developers.openai.com/api/docs/models)
 - [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview)
 
 ```bash
-NVOKEN_API_KEY='<runtime-credential>' \
+NVOKEN_API_KEY='<app-key>' \
 NVOKEN_PROVIDER='openai' \
 NVOKEN_MODEL='<model-id>' \
 npm start

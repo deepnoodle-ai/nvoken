@@ -19,7 +19,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity":
-			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","effective_profile":"operator","tenant_key":null,"session_id":null,"operations":["get_identity"],"method":"api_key","assurance":"bearer"}}`))
+			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","app_id":"app_test","type":"app","tenant_key":null,"session_id":null,"method":"api_key"}}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity/credentials":
 			if request.URL.Query().Get("status") != "active" || request.URL.Query().Get("cursor") != "page-2" || request.URL.Query().Get("limit") != "10" {
 				t.Errorf("list query = %q", request.URL.RawQuery)
@@ -31,7 +31,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode create body: %v", err)
 			}
-			if body["name"] != "worker" || body["profile"] != "runtime" {
+			if body["name"] != "worker" || body["type"] != "app" {
 				t.Errorf("create body = %#v", body)
 			}
 			writer.WriteHeader(http.StatusCreated)
@@ -80,8 +80,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 	}
 	created, err := client.CreateCredential(context.Background(), CreateCredentialInput{
 		Name:           "worker",
-		Profile:        CredentialProfileRuntime,
-		Operations:     []RuntimeOperation{OperationCreateInvocation},
+		Type:           CredentialTypeApp,
 		IdempotencyKey: "create-once",
 	})
 	if err != nil || created.Secret != "nvk_one-time" || created.Replayed {
@@ -120,8 +119,7 @@ func credentialFixture(id, status string) string {
 		"name":       "worker",
 		"prefix":     "nvk_public",
 		"status":     status,
-		"profile":    "runtime",
-		"operations": []string{"create_invocation"},
+		"type":       "app",
 		"created_at": "2026-08-08T12:00:00Z",
 		"updated_at": "2026-08-08T12:00:00Z",
 	})

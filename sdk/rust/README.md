@@ -169,8 +169,8 @@ let request = InvokeRequest::new("support", "Try that answer again.")
 let handle = client.invoke(request).await?;
 ```
 
-Supersession atomically cancels active work and admits the successor; the
-Runtime credential must also allow cancellation.
+Supersession atomically cancels active work and admits the successor; a full
+App key is required because read-only App keys cannot cancel work.
 
 `IfActivePolicy::Interrupt` is the keep-the-work variant: the active Invocation
 stops at its next execution seam and settles `Completed` with `stop_reason`
@@ -619,7 +619,6 @@ let token = mint_client_token(&client_key_seed, &ClientTokenClaims {
     agent_key: Some("support".to_string()),
     definition_revision: None,
     session_id: None,
-    operations: vec![Operation::CreateInvocation, Operation::GetSessionTranscript],
     issued_at: None,
     lifetime: Duration::from_secs(600),
 })?;
@@ -630,13 +629,11 @@ registers its public half in one step. The private seed is the App's browser
 authority — whoever holds it can mint a grant for any end user — so it belongs
 in backend configuration and never in a bundle.
 
-Three things are worth deciding rather than defaulting. `operations` is
-required: nvoken reads an absent list as every operation a browser may perform,
-so this SDK refuses to spell "I did not think about scope" the same way as
-`all_browser_operations()`. `session_id` confines the token to one
-conversation, which a single-conversation UI should set. And a lifetime is
-capped at fifteen minutes, because short lifetimes are the whole safety story
-of a bearer token in a page.
+Two things are worth deciding rather than defaulting. `session_id` confines the
+token to one conversation, which a single-conversation UI should set. A
+lifetime is capped at fifteen minutes, because short lifetimes are the whole
+safety story of a bearer token in a page. The browser route ceiling is fixed by
+nvoken; tokens cannot select or expand it.
 
 **Invocation webhooks stop being optional here.** The browser holds the stream,
 so your backend never observes settlement any other way.

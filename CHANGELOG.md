@@ -8,6 +8,9 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: machine credentials now express trust boundaries, not permissions.**
+  SDKs and CLI create `installation_admin`, `app`, or `app_read_only` keys;
+  browser token minting uses a fixed route ceiling and no longer accepts operations.
 - **Transcript reads can start from a bounded recent tail.** Every SDK exposes
   `tail` on its transcript-page facade, with generated types for the exact
   resume cursor and opaque older-history pages returned by the service.

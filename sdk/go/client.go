@@ -1153,8 +1153,8 @@ func (c *Client) CreateCredential(
 	ctx context.Context,
 	input CreateCredentialInput,
 ) (*CredentialIssuance, error) {
-	if input.Name == "" || !input.Profile.Valid() {
-		return nil, &Error{Category: ErrorValidation, Message: "credential name and profile are required"}
+	if input.Name == "" || !input.Type.Valid() {
+		return nil, &Error{Category: ErrorValidation, Message: "credential name and type are required"}
 	}
 	// The contract requires a key here, so one is generated when the caller
 	// omits it. That protects this call's own retries; a caller that wants a
@@ -1166,14 +1166,7 @@ func (c *Client) CreateCredential(
 		AppID:     input.AppID,
 		ExpiresAt: input.ExpiresAt,
 		Name:      input.Name,
-		OrgID:     input.OrgID,
-		Profile:   input.Profile,
-		SessionID: input.SessionID,
-		TenantKey: input.TenantKey,
-	}
-	if input.Operations != nil {
-		operations := append([]RuntimeOperation(nil), input.Operations...)
-		body.Operations = &operations
+		Type:      input.Type,
 	}
 	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.CredentialIssuance], error) {
 		response, err := c.raw.CreateCredentialWithResponse(
@@ -1534,7 +1527,7 @@ func (c *Client) RevokeProviderKey(ctx context.Context, id string) (*ProviderKey
 }
 
 // RegisterApp registers one host application and returns its generated app_id.
-// It requires an Org-scoped or installation Operator credential.
+// It requires an installation-admin key or a trusted Console presentation.
 func (c *Client) RegisterApp(ctx context.Context, name string, options RegisterAppOptions) (*AppRegistration, error) {
 	body := generated.RegisterAppJSONRequestBody{
 		Name:                     name,
