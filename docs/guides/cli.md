@@ -21,9 +21,10 @@ nvoken auth login
 The CLI always prints the device code and approval URL, then opens the browser
 when possible. Use `--no-browser` for a remote or headless shell,
 `--console-url` (or `NVOKEN_CONSOLE_URL`) for a self-hosted console, and
-`--label` to choose the device name shown for approval. A successful login
-saves a 90-day Org/operator credential and prints the organization it belongs
-to. Existing saved profiles do not bypass a fresh interactive login.
+`--label` to choose the device name shown for approval. Approval selects an App
+and either a full or read-only App key. A successful login saves that 90-day
+App key and prints the App it belongs to. Existing saved profiles do not bypass
+a fresh interactive login.
 
 For CI or an installation without a console, pass `--api-key` or set
 `NVOKEN_API_KEY`; `auth login` then verifies and saves that credential without
@@ -97,7 +98,7 @@ turn and exits when that turn settles.
 
 ## Initialize an App
 
-`app init` registers an App, issues its App-bound Runtime credential, and
+`app init` registers an App, issues its full App key, and
 prints the App id, API key, and one-time callback and webhook signing keys as a
 ready `.env` block:
 

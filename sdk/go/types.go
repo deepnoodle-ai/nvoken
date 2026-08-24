@@ -114,10 +114,9 @@ type ToolCallStatus = generated.ToolCallStatus
 type CallbackDeliveryOutcome = generated.CallbackDeliveryOutcome
 type Credential = generated.Credential
 type CredentialList = generated.CredentialList
-type CredentialProfile = generated.CredentialProfile
+type CredentialType = generated.CredentialType
 type CredentialStatus = generated.CredentialStatus
 type CurrentIdentity = generated.CurrentIdentity
-type RuntimeOperation = generated.Operation
 type Memory = generated.Memory
 type MemoryList = generated.MemoryList
 type MemoryKind = generated.MemoryKind
@@ -135,116 +134,68 @@ type CredentialIssuance struct {
 }
 
 const (
-	InvocationQueued                                  = generated.InvocationStatusQueued
-	InvocationRunning                                 = generated.InvocationStatusRunning
-	InvocationWaiting                                 = generated.InvocationStatusWaiting
-	InvocationBudgetHold                              = generated.InvocationStatusBudgetHold
-	InvocationCompleted                               = generated.InvocationStatusCompleted
-	InvocationIncomplete                              = generated.InvocationStatusIncomplete
-	InvocationFailed                                  = generated.InvocationStatusFailed
-	InvocationCancelled                               = generated.InvocationStatusCancelled
-	StopReasonEndTurn                                 = generated.InvocationStopReasonEndTurn
-	StopReasonInterrupted                             = generated.InvocationStopReasonInterrupted
-	StopReasonMaxIterations                           = generated.InvocationStopReasonMaxIterations
-	StopReasonDeadline                                = generated.InvocationStopReasonDeadline
-	StopReasonMaxOutputTokens                         = generated.InvocationStopReasonMaxOutputTokens
-	StopReasonMaxEstimatedCost                        = generated.InvocationStopReasonMaxEstimatedCost
-	StopReasonInsufficientCredits                     = generated.InvocationStopReasonInsufficientCredits
-	MessagePhaseCommentary                            = generated.Commentary
-	MessagePhaseFinalAnswer                           = generated.FinalAnswer
-	SeedMessageRoleUser                               = generated.SeedMessageRoleUser
-	SeedMessageRoleAssistant                          = generated.SeedMessageRoleAssistant
-	AppSigningKeyPurposeCallback                      = generated.AppSigningKeyPurposeCallback
-	AppSigningKeyPurposeWebhook                       = generated.AppSigningKeyPurposeWebhook
-	ToolCallModeBuiltin                               = generated.ToolCallModeBuiltin
-	ToolCallModeCallback                              = generated.ToolCallModeCallback
-	ToolCallModeHost                                  = generated.ToolCallModeHost
-	ToolCallModeMCP                                   = generated.ToolCallModeMcp
-	ModelProviderAnthropic              ModelProvider = "anthropic"
-	ModelProviderOpenAI                 ModelProvider = "openai"
-	ModelProviderXAI                    ModelProvider = "xai"
-	ModelProviderGoogle                 ModelProvider = "google"
-	ProviderKeyScopeApp                               = generated.ProviderKeyScopeApp
-	ProviderKeyScopeTenant                            = generated.ProviderKeyScopeTenant
-	ProviderKeyStatusActive                           = generated.ProviderKeyStatusActive
-	ProviderKeyStatusRevoked                          = generated.ProviderKeyStatusRevoked
-	NudgePending                                      = generated.NudgeStatusPending
-	NudgeDrained                                      = generated.NudgeStatusDrained
-	NudgeExpired                                      = generated.NudgeStatusExpired
-	NudgeCancelled                                    = generated.NudgeStatusCancelled
-	UsageIntervalDay                                  = generated.Day
-	UsageIntervalWeek                                 = generated.Week
-	UsageIntervalMonth                                = generated.Month
-	CredentialProfileRuntime                          = generated.CredentialProfileRuntime
-	CredentialProfileViewer                           = generated.CredentialProfileViewer
-	CredentialProfileOperator                         = generated.CredentialProfileOperator
-	CredentialStatusActive                            = generated.CredentialStatusActive
-	CredentialStatusRevoked                           = generated.CredentialStatusRevoked
-	ArchiveStatusActive                               = generated.ArchiveStatusActive
-	ArchiveStatusAll                                  = generated.ArchiveStatusAll
-	ArchiveStatusArchived                             = generated.ArchiveStatusArchived
-	ListOrderAscending                                = generated.ListOrderAscending
-	ListOrderDescending                               = generated.ListOrderDescending
-	OperationCreateInvocation                         = generated.CreateInvocation
-	OperationCreateSession                            = generated.CreateSession
-	OperationGetAgent                                 = generated.GetAgent
-	OperationListAgents                               = generated.ListAgents
-	OperationGetInvocation                            = generated.GetInvocation
-	OperationSubmitToolResults                        = generated.SubmitToolResults
-	OperationCancelInvocation                         = generated.CancelInvocation
-	OperationInterruptInvocation                      = generated.InterruptInvocation
-	OperationManageInvocationNudges                   = generated.ManageInvocationNudges
-	OperationResumeInvocation                         = generated.ResumeInvocation
-	OperationListInvocations                          = generated.ListInvocations
-	OperationGetSession                               = generated.GetSession
-	OperationUpdateSession                            = generated.UpdateSession
-	OperationDeleteSession                            = generated.DeleteSession
-	OperationListSessions                             = generated.ListSessions
-	OperationListSessionMessages                      = generated.ListSessionMessages
-	OperationGetSessionTranscript                     = generated.GetSessionTranscript
-	OperationGetIdentity                              = generated.GetIdentity
-	OperationListCredentials                          = generated.ListCredentials
-	OperationCreateCredential                         = generated.CreateCredential
-	OperationGetCredential                            = generated.GetCredential
-	OperationRotateCredential                         = generated.RotateCredential
-	OperationRevokeCredential                         = generated.RevokeCredential
-	OperationListProviderKeys                         = generated.ListProviderKeys
-	OperationCreateProviderKey                        = generated.CreateProviderKey
-	OperationGetProviderKey                           = generated.GetProviderKey
-	OperationRotateProviderKey                        = generated.RotateProviderKey
-	OperationRevokeProviderKey                        = generated.RevokeProviderKey
-	OperationReadUsage                                = generated.ReadUsage
-	OperationReadCredits                              = generated.ReadCredits
-	OperationAllocateCredits                          = generated.AllocateCredits
-	OperationCreateAgentDefinition                    = generated.CreateAgentDefinition
-	OperationListAgentDefinitions                     = generated.ListAgentDefinitions
-	OperationGetAgentDefinition                       = generated.GetAgentDefinition
-	OperationGetAgentDefinitionRevision               = generated.GetAgentDefinitionRevision
-	OperationUpdateAgentDefinition                    = generated.UpdateAgentDefinition
-	OperationCreateAgent                              = generated.CreateAgent
-	OperationUpdateAgent                              = generated.UpdateAgent
-	OperationArchiveAgent                             = generated.ArchiveAgent
-	OperationRestoreAgent                             = generated.RestoreAgent
-	OperationRegisterApp                              = generated.RegisterApp
-	OperationListApps                                 = generated.ListApps
-	OperationGetApp                                   = generated.GetApp
-	OperationUpdateApp                                = generated.UpdateApp
-	OperationGetOrg                                   = generated.GetOrg
-	OperationListOrgs                                 = generated.ListOrgs
-	OperationRegisterOrg                              = generated.RegisterOrg
-	OperationUpdateOrg                                = generated.UpdateOrg
-	MemoryKindEpisode                                 = generated.Episode
-	MemoryKindFact                                    = generated.Fact
-	MemoryKindPreference                              = generated.Preference
-	MemoryKindSummary                                 = generated.Summary
-	MemorySearchModeHybrid                            = generated.Hybrid
-	MemorySearchModeKeyword                           = generated.Keyword
-	MemorySearchModeSemantic                          = generated.Semantic
-	MemoryConfigScopeTenant                           = generated.MemoryConfigScopeTenant
-	MemoryConfigScopeUser                             = generated.MemoryConfigScopeUser
-	MemoryContextModeFull                             = generated.MemoryContextModeFull
-	MemoryContextModeIndex                            = generated.MemoryContextModeIndex
-	MemoryContextModeOff                              = generated.MemoryContextModeOff
+	InvocationQueued                              = generated.InvocationStatusQueued
+	InvocationRunning                             = generated.InvocationStatusRunning
+	InvocationWaiting                             = generated.InvocationStatusWaiting
+	InvocationBudgetHold                          = generated.InvocationStatusBudgetHold
+	InvocationCompleted                           = generated.InvocationStatusCompleted
+	InvocationIncomplete                          = generated.InvocationStatusIncomplete
+	InvocationFailed                              = generated.InvocationStatusFailed
+	InvocationCancelled                           = generated.InvocationStatusCancelled
+	StopReasonEndTurn                             = generated.InvocationStopReasonEndTurn
+	StopReasonInterrupted                         = generated.InvocationStopReasonInterrupted
+	StopReasonMaxIterations                       = generated.InvocationStopReasonMaxIterations
+	StopReasonDeadline                            = generated.InvocationStopReasonDeadline
+	StopReasonMaxOutputTokens                     = generated.InvocationStopReasonMaxOutputTokens
+	StopReasonMaxEstimatedCost                    = generated.InvocationStopReasonMaxEstimatedCost
+	StopReasonInsufficientCredits                 = generated.InvocationStopReasonInsufficientCredits
+	MessagePhaseCommentary                        = generated.Commentary
+	MessagePhaseFinalAnswer                       = generated.FinalAnswer
+	SeedMessageRoleUser                           = generated.SeedMessageRoleUser
+	SeedMessageRoleAssistant                      = generated.SeedMessageRoleAssistant
+	AppSigningKeyPurposeCallback                  = generated.AppSigningKeyPurposeCallback
+	AppSigningKeyPurposeWebhook                   = generated.AppSigningKeyPurposeWebhook
+	ToolCallModeBuiltin                           = generated.ToolCallModeBuiltin
+	ToolCallModeCallback                          = generated.ToolCallModeCallback
+	ToolCallModeHost                              = generated.ToolCallModeHost
+	ToolCallModeMCP                               = generated.ToolCallModeMcp
+	ModelProviderAnthropic          ModelProvider = "anthropic"
+	ModelProviderOpenAI             ModelProvider = "openai"
+	ModelProviderXAI                ModelProvider = "xai"
+	ModelProviderGoogle             ModelProvider = "google"
+	ProviderKeyScopeApp                           = generated.ProviderKeyScopeApp
+	ProviderKeyScopeTenant                        = generated.ProviderKeyScopeTenant
+	ProviderKeyStatusActive                       = generated.ProviderKeyStatusActive
+	ProviderKeyStatusRevoked                      = generated.ProviderKeyStatusRevoked
+	NudgePending                                  = generated.NudgeStatusPending
+	NudgeDrained                                  = generated.NudgeStatusDrained
+	NudgeExpired                                  = generated.NudgeStatusExpired
+	NudgeCancelled                                = generated.NudgeStatusCancelled
+	UsageIntervalDay                              = generated.Day
+	UsageIntervalWeek                             = generated.Week
+	UsageIntervalMonth                            = generated.Month
+	CredentialTypeInstallationAdmin               = generated.CredentialTypeInstallationAdmin
+	CredentialTypeApp                             = generated.CredentialTypeApp
+	CredentialTypeAppReadOnly                     = generated.CredentialTypeAppReadOnly
+	CredentialStatusActive                        = generated.CredentialStatusActive
+	CredentialStatusRevoked                       = generated.CredentialStatusRevoked
+	ArchiveStatusActive                           = generated.ArchiveStatusActive
+	ArchiveStatusAll                              = generated.ArchiveStatusAll
+	ArchiveStatusArchived                         = generated.ArchiveStatusArchived
+	ListOrderAscending                            = generated.ListOrderAscending
+	ListOrderDescending                           = generated.ListOrderDescending
+	MemoryKindEpisode                             = generated.Episode
+	MemoryKindFact                                = generated.Fact
+	MemoryKindPreference                          = generated.Preference
+	MemoryKindSummary                             = generated.Summary
+	MemorySearchModeHybrid                        = generated.Hybrid
+	MemorySearchModeKeyword                       = generated.Keyword
+	MemorySearchModeSemantic                      = generated.Semantic
+	MemoryConfigScopeTenant                       = generated.MemoryConfigScopeTenant
+	MemoryConfigScopeUser                         = generated.MemoryConfigScopeUser
+	MemoryContextModeFull                         = generated.MemoryContextModeFull
+	MemoryContextModeIndex                        = generated.MemoryContextModeIndex
+	MemoryContextModeOff                          = generated.MemoryContextModeOff
 )
 
 type ModelList struct {
@@ -994,12 +945,8 @@ type ListCredentialsOptions struct {
 
 type CreateCredentialInput struct {
 	Name           string
-	Profile        CredentialProfile
+	Type           CredentialType
 	AppID          *string
-	OrgID          *string
-	TenantKey      *string
-	SessionID      *string
-	Operations     []RuntimeOperation
 	ExpiresAt      *time.Time
 	IdempotencyKey string
 }

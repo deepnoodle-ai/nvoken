@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -63,46 +62,10 @@ type ClientTokenClaims struct {
 	// browser reach every Session belonging to this user and Agent, which is
 	// what a session-list UI needs and a single-conversation UI does not.
 	SessionID string
-	// Operations is what the browser may do, and it is required. There is
-	// deliberately no default: nvoken reads an absent `ops` as the whole
-	// ceiling, and "I did not think about scope" must not be spelled the same
-	// way as "I want everything". Pass AllBrowserOperations() to mean it.
-	Operations []RuntimeOperation
 	// IssuedAt defaults to the current time.
 	IssuedAt time.Time
 	// Lifetime is required and may not exceed ClientTokenLifetimeLimit.
 	Lifetime time.Duration
-}
-
-// browserOperationCeiling is the most a client token may ever carry: exactly
-// the operations behind routes a browser token can reach.
-//
-// It is not a guess about the server's policy. The published client-token
-// vector carries the same list, derived on the server from its route table,
-// and TestSharedClientTokenVector holds this against it — so a route opened or
-// closed to browsers cannot silently leave this list stale.
-var browserOperationCeiling = []RuntimeOperation{
-	OperationCreateInvocation,
-	OperationGetIdentity,
-	OperationGetInvocation,
-	OperationGetSession,
-	OperationGetSessionTranscript,
-	OperationInterruptInvocation,
-	OperationListInvocations,
-	OperationListSessionMessages,
-	OperationListSessions,
-	OperationManageInvocationNudges,
-	OperationSubmitToolResults,
-}
-
-// AllBrowserOperations is every operation a client token may carry.
-//
-// Reach for it when a browser genuinely drives the whole conversation. Prefer
-// naming the operations you use: a read-only transcript view has no business
-// holding create_invocation, and the token is the only thing standing between
-// a compromised page and the operations it names.
-func AllBrowserOperations() []RuntimeOperation {
-	return append([]RuntimeOperation(nil), browserOperationCeiling...)
 }
 
 // MintClientToken signs a browser grant with the App's client key.
@@ -149,8 +112,6 @@ func MintClientToken(privateKey ed25519.PrivateKey, claims ClientTokenClaims) (s
 	if claims.SessionID != "" {
 		body = append(body, member{"session_id", claims.SessionID})
 	}
-	body = append(body, member{"ops", claims.Operations})
-
 	payload, err := orderedJSONError(body)
 	if err != nil {
 		return "", err
@@ -191,36 +152,6 @@ func (c ClientTokenClaims) validate() error {
 	}
 	if c.Lifetime <= 0 || c.Lifetime > ClientTokenLifetimeLimit {
 		return fmt.Errorf("nvoken: Lifetime must be positive and at most %s", ClientTokenLifetimeLimit)
-	}
-	return validateClientOperations(c.Operations)
-}
-
-func validateClientOperations(operations []RuntimeOperation) error {
-	if len(operations) == 0 {
-		return errors.New(
-			"nvoken: Operations is required; name the operations the browser needs, " +
-				"or pass AllBrowserOperations() to grant the whole ceiling deliberately")
-	}
-	ceiling := make(map[RuntimeOperation]struct{}, len(browserOperationCeiling))
-	for _, operation := range browserOperationCeiling {
-		ceiling[operation] = struct{}{}
-	}
-	seen := make(map[RuntimeOperation]struct{}, len(operations))
-	for _, operation := range operations {
-		if _, ok := ceiling[operation]; !ok {
-			allowed := make([]string, 0, len(browserOperationCeiling))
-			for _, permitted := range browserOperationCeiling {
-				allowed = append(allowed, string(permitted))
-			}
-			sort.Strings(allowed)
-			return fmt.Errorf(
-				"nvoken: operation %q is not reachable by a browser token; allowed: %s",
-				operation, strings.Join(allowed, ", "))
-		}
-		if _, duplicate := seen[operation]; duplicate {
-			return fmt.Errorf("nvoken: operation %q appears twice", operation)
-		}
-		seen[operation] = struct{}{}
 	}
 	return nil
 }

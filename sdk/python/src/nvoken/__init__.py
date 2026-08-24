@@ -17,7 +17,6 @@ from .client_token import (
     CLIENT_TOKEN_LIFETIME_LIMIT,
     CLIENT_TOKEN_TYPE,
     ClientTokenClaims,
-    all_browser_operations,
     mint_client_token,
 )
 from .signed_delivery import (
@@ -179,7 +178,7 @@ __all__ = [
     "CreateSessionRequest",
     "Credential",
     "CredentialIssuance",
-    "CredentialProfile",
+    "CredentialType",
     "IfActivePolicy",
     "InvocationHandle",
     "Invocation",
@@ -206,7 +205,6 @@ __all__ = [
     "MissingToolHandlerError",
     "Model",
     "NvokenError",
-    "Operation",
     "Org",
     "NoOutputTextError",
     "WebhookEvent",
@@ -256,7 +254,6 @@ __all__ = [
     "CLIENT_TOKEN_LIFETIME_LIMIT",
     "CLIENT_TOKEN_TYPE",
     "ClientTokenClaims",
-    "all_browser_operations",
     "mint_client_token",
     "SIGNATURE_TIMESTAMP_WINDOW",
     "CallbackDelivery",

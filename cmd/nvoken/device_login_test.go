@@ -46,7 +46,7 @@ func loadDeviceLoginContract(t *testing.T) deviceLoginContract {
 	if err := json.Unmarshal(deviceLoginContractJSON, &fixture); err != nil {
 		t.Fatalf("decode device login contract: %v", err)
 	}
-	if fixture.Version != 1 {
+	if fixture.Version != 2 {
 		t.Fatalf("device login contract version = %d", fixture.Version)
 	}
 	return fixture
@@ -165,10 +165,10 @@ func TestDeviceLoginUsesPinnedContractAndSavesOrgProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Endpoint != "https://api.nvoken.com" || profile.Token != "nvk_example.secret" || profile.CredentialID == "" || profile.OrgID == "" || profile.OrgDisplayName != "Acme Corp" || profile.Label != "curtis-mbp" || !profile.Default {
+	if profile.Endpoint != "https://api.nvoken.com" || profile.Token != "nvk_example.secret" || profile.CredentialID == "" || profile.AppID == "" || profile.AppName != "Acme Support" || profile.CredentialType != "app" || profile.Label != "curtis-mbp" || !profile.Default {
 		t.Fatalf("saved profile = %#v", profile)
 	}
-	if !strings.Contains(result.Stdout, "Authenticated to Acme Corp") {
+	if !strings.Contains(result.Stdout, "Authenticated to Acme Support with an app key") {
 		t.Fatalf("success output = %s", result.Stdout)
 	}
 }

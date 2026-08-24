@@ -63,15 +63,15 @@ info:
     inferred from the credential that fetched it. `GET /v1/identity` reports
     which kind of caller you are, under `authentication.method`.
 
-    - App-scoped Runtime credentials may call every Runtime operation and GET /v1/identity.
-    - App-scoped Viewer credentials may call Runtime reads and GET /v1/identity.
-    - App-scoped Operator credentials may call every Runtime operation, GET /v1/identity, and all credential lifecycle operations.
-    - Org-scoped Viewer and Operator credentials are management and reporting
-      identities only. They resolve no tenant and cannot perform Runtime
-      operations; Operators can register and manage Apps and their App
-      credentials, while Viewers have read-only access.
+    - Full App keys can read and mutate every resource owned by their App.
+    - Read-only App keys can read the same non-secret App and runtime data but
+      cannot mutate anything, including their own key lineage.
+    - Installation-admin keys manage Orgs, Apps, and App keys but resolve no
+      App data. Short-lived console presentations provide fixed Org or admin
+      control-plane and reporting access.
 
-    Tenant, Session, operation, and expiry constraints only narrow these grants.
+    Tenant and user assertion headers narrow individual requests. Durable API
+    keys carry no tenant, Session, profile, or operation constraints.
 
     ## Acting for one tenant or one end user
 
@@ -364,9 +364,9 @@ paths:
       operationId: listOrgs
       summary: List registered orgs
       description: |
-        Returns the Orgs visible to the caller. Installation machine
-        credentials and admin issuer tokens see every Org; an Org-scoped
-        credential sees only its own Org. App-scoped credentials and
+        Returns the Orgs visible to the caller. Installation-admin keys and
+        admin issuer tokens see every Org; an Org console presentation sees
+        only its own Org. App keys and
         non-admin installation issuer tokens cannot list Orgs.
 
         Archived Orgs are excluded unless `status` asks for them.
@@ -389,7 +389,7 @@ paths:
       summary: Register an org
       description: |
         Registers a thin customer ownership boundary. This requires an
-        installation Operator credential or an admin issuer token. When
+        installation-admin key or an admin issuer token. When
         `external_ref` names an existing Org, the existing resource is
         returned unchanged so register-on-first-login is race-safe and
         idempotent.
@@ -425,7 +425,7 @@ paths:
       operationId: getOrg
       summary: Get one org
       description: |
-        Returns one registered Org. An Org-scoped caller receives `404` for
+        Returns one registered Org. An Org console presentation receives `404` for
         any other Org, so identifiers cannot be probed across the ownership
         boundary. Installation issuer tokens require `admin: true`.
       parameters:
@@ -549,9 +549,9 @@ paths:
       operationId: listApps
       summary: List registered apps
       description: |
-        Returns the Apps this credential can see. An App-scoped credential
-        sees only that App, an Org-scoped credential sees the Apps contained
-        by its Org, and an installation credential sees every registered App.
+        Returns the Apps this caller can see. An App key sees only that App,
+        an Org console presentation sees the Apps contained by its Org, and an
+        installation-admin key sees every registered App.
         An exact `external_ref` filter narrows that visible set during the
         staged console migration. Archived Apps are excluded unless `status`
         asks for them.
@@ -589,8 +589,8 @@ paths:
         scope of each delivery. Registration is unavailable when the service's
         encryption keyring is not configured.
 
-        Registration requires an Org or installation Operator credential; an
-        App-scoped credential cannot mint siblings. Org callers always create
+        Registration requires an Org console presentation or installation-admin
+        key; an App key cannot mint siblings. Org callers always create
         Apps in their own Org and may omit `org_id`. Installation machine
         credentials may choose any registered Org or temporarily leave
         ownership unset during the staged console migration. An installation
@@ -623,7 +623,7 @@ paths:
       operationId: getApp
       summary: Get one app
       description: |
-        Returns one registered App. App- and Org-scoped credentials receive
+        Returns one registered App. App keys and Org console presentations receive
         `404` for Apps outside their durable containment boundary.
       parameters:
         - name: app_id
@@ -819,7 +819,7 @@ paths:
         Lists the App's Ed25519 client-token verification-key records in creation
         order. Responses contain only the generated key ID, display name,
         SHA-256 fingerprint, and creation time; public-key bytes are never
-        returned. This route requires the same non-client Operator authority
+        returned. This route requires the same host App-write authority
         as updating the visible App. Cross-App targets return `404`.
       parameters:
         - name: app_id
@@ -3224,7 +3224,7 @@ paths:
       tags: [Provider keys]
       operationId: listProviderKeys
       summary: List reusable provider key metadata
-      description: Viewer, Runtime, and Operator profiles may read metadata within their exact scope; secret material is never readable.
+      description: Full and read-only App keys may read metadata in their App; secret material is never readable.
       parameters:
         - name: provider
           in: query
@@ -3275,11 +3275,11 @@ paths:
       operationId: createProviderKey
       summary: Create one reusable provider key
       description: |
-        Creates encrypted app or tenant BYOK. App scope requires an
-        unconstrained Operator credential inside the app; the credential is
-        shared by every tenant of that app and by no other app. A
-        tenant-constrained Runtime credential may manage only its exact tenant
-        partition. The response contains metadata only.
+        Creates encrypted App- or tenant-scoped BYOK. App scope requires a full
+        App key without request-level tenant narrowing and is shared by every
+        tenant of that App and by no other App. A tenant-narrowed request may
+        manage only that exact tenant partition. The response contains metadata
+        only.
       requestBody:
         required: true
         content:
@@ -3314,7 +3314,7 @@ paths:
       tags: [Provider keys]
       operationId: getProviderKey
       summary: Read provider key metadata
-      description: Viewer, Runtime, and Operator profiles may read secret-free metadata within their exact scope.
+      description: Full and read-only App keys may read secret-free metadata in their App.
       responses:
         "200":
           description: Provider key metadata without secret material.
@@ -3413,9 +3413,10 @@ paths:
         content-free facts. The half-open window totals use exact distinct
         counts and are not sums of bucket distincts. Grouping is bounded to ten
         selected series plus `other`. Session deletion does not rewrite history.
-        An App credential is forced to its App, an Org credential to Apps
-        currently owned by its Org, and only an installation-scoped admin
-        issuer token can span every App.
+        An App credential is forced to its App, an Org console presentation to
+        Apps currently owned by its Org, and only an installation-scoped admin
+        issuer token can span every App. Durable installation keys cannot read
+        reporting data.
       parameters:
         - { $ref: "#/components/parameters/UsageStartAt" }
         - { $ref: "#/components/parameters/UsageEndAt" }
@@ -3914,8 +3915,8 @@ paths:
 
         An unknown `session_id`, or one outside your scope, returns
         `not_found`. So if you lose the response and retry, you can safely
-        treat `404` as "already deleted". Deleting requires the Runtime or
-        Operator profile; a Viewer credential cannot erase a transcript.
+        treat `404` as "already deleted". Deleting requires a full App key; a
+        read-only App key cannot erase a transcript.
         A managed anonymous token may erase only its own fully constrained
         Session. Host-minted browser tokens remain unable to call this route.
         A still-live anonymous visitor token can subsequently start one empty
@@ -4723,19 +4724,20 @@ components:
         Present either a machine API key or, when
         `CONSOLE_ISSUER_PUBLIC_KEYS` is configured, a JWT with `alg: EdDSA`,
         a known `kid`, `iss: nvoken-console`, `aud: nvoken`, and required
-        `iat`, `exp`, `scope`, `profile`, and `sub` claims. `scope` is `app`
+        `iat`, `exp`, `scope`, and `sub` claims. `scope` is `app`
         (with `app_id` and `org_id`), `org` (with `org_id`), or
-        `installation`; `profile` is `operator` or `viewer`; `exp - iat` may
+        `installation`; `exp - iat` may
         not exceed five minutes. The subject identifies the human for
         attribution only. App authorization compares the asserted `org_id`
-        with the App's durable owner; `admin: true` retains its bypass.
+        with the App's durable owner; `admin: true` retains its bypass. A
+        `profile` claim is rejected.
 
         Browser-direct calls use a separate App-signed Ed25519 JWT trust class:
         `typ` is `nvoken-client+jwt`, `iss` is the App ID, `kid` names one
         active registered client key, `aud` is `nvoken`, and `sub`, exactly one
         of `agent_id` or `agent_key` (with optional `tenant_key`), `iat`, and
-        `exp` are required. `definition_revision`, `session_id`, and `ops` are
-        optional. `typ` is required because you sign these with a keypair you
+        `exp` are required. `definition_revision` and `session_id` are
+        optional; any `ops` claim is rejected. `typ` is required because you sign these with a keypair you
         own and may sign other things with the same one; without it, `aud` is
         the only thing separating a browser grant from any other EdDSA JWT you
         mint. Lifetime is at most 15 minutes. Client tokens are
@@ -10613,21 +10615,19 @@ components:
         details:
           type: object
           additionalProperties: true
-    CredentialProfile:
+    CredentialType:
       type: string
-      enum: [runtime, viewer, operator]
+      enum: [installation_admin, app, app_read_only]
+      x-enum-varnames: [InstallationAdmin, App, AppReadOnly]
       description: |
-        Fixed authorization profile. Runtime is meaningful for App-bound
-        execution and cannot be selected for an Org credential.
-    Operation:
-      type: string
-      enum: [create_invocation, create_agent_definition, get_agent_definition, get_agent_definition_revision, list_agent_definitions, update_agent_definition, create_agent, get_agent, list_agents, update_agent, archive_agent, restore_agent, create_session, get_invocation, submit_tool_results, cancel_invocation, interrupt_invocation, manage_invocation_nudges, resume_invocation, list_invocations, get_session, update_session, delete_session, list_sessions, list_session_messages, get_session_transcript, read_memories, delete_memory, get_identity, list_credentials, create_credential, get_credential, rotate_credential, revoke_credential, list_provider_keys, create_provider_key, get_provider_key, rotate_provider_key, revoke_provider_key, read_usage, read_credits, allocate_credits, delete_tenant, register_app, list_apps, get_app, update_app, register_org, list_orgs, get_org, update_org]
+        Durable trust boundary. App and App-read-only keys require `app_id`;
+        installation-admin keys forbid an App or Org binding.
     CredentialStatus:
       type: string
       enum: [active, revoked]
     Credential:
       type: object
-      required: [id, name, prefix, status, profile, operations, created_at, updated_at]
+      required: [id, name, prefix, status, type, created_at, updated_at]
       properties:
         id:
           $ref: "#/components/schemas/CredentialID"
@@ -10637,15 +10637,11 @@ components:
           type: string
         status:
           $ref: "#/components/schemas/CredentialStatus"
-        profile:
-          $ref: "#/components/schemas/CredentialProfile"
+        type:
+          $ref: "#/components/schemas/CredentialType"
         app_id:
           oneOf:
             - $ref: "#/components/schemas/AppID"
-            - type: "null"
-        org_id:
-          oneOf:
-            - $ref: "#/components/schemas/OrgID"
             - type: "null"
         creator_credential_id:
           oneOf:
@@ -10654,16 +10650,6 @@ components:
         creator_subject:
           type: [string, "null"]
           description: Opaque issuer subject when the credential was created by an issuer token.
-        tenant_key:
-          type: [string, "null"]
-        session_id:
-          oneOf:
-            - $ref: "#/components/schemas/SessionID"
-            - type: "null"
-        operations:
-          type: array
-          items:
-            $ref: "#/components/schemas/Operation"
         expires_at:
           type: [string, "null"]
           format: date-time
@@ -10702,38 +10688,20 @@ components:
     CreateCredentialRequest:
       type: object
       additionalProperties: false
-      required: [name, profile]
+      required: [name, type]
       properties:
         name:
           type: string
           minLength: 1
           maxLength: 100
-        profile:
-          $ref: "#/components/schemas/CredentialProfile"
+        type:
+          $ref: "#/components/schemas/CredentialType"
         app_id:
           $ref: "#/components/schemas/AppID"
           description: |
-            Target App for an Org or installation Operator provisioning an App
-            credential. Org callers may name only Apps contained by their Org.
-            App callers may omit this field or repeat their own App ID.
-        org_id:
-          $ref: "#/components/schemas/OrgID"
-          description: |
-            Target Org for an installation Operator provisioning an Org
-            credential. Installation issuer tokens require `admin: true`.
-            Mutually exclusive with `app_id`. Org and App callers cannot mint
-            Org credentials.
-        tenant_key:
-          type: string
-          minLength: 1
-          maxLength: 255
-        session_id:
-          $ref: "#/components/schemas/SessionID"
-        operations:
-          type: array
-          uniqueItems: true
-          items:
-            $ref: "#/components/schemas/Operation"
+            Required for App and App-read-only credentials. Console Org callers
+            may name only Apps contained by their Org. Installation admins may
+            name any App. Full App keys cannot create a new key family.
         expires_at:
           type: string
           format: date-time
@@ -10753,18 +10721,17 @@ components:
           type: boolean
     CurrentIdentity:
       description: |
-        Who nvoken thinks you are. `method` says how you authenticated, and it
-        is the only thing you need to read to know which of the optional fields
-        below are present: a machine credential carries `credential_id`,
-        `org_id`, and `effective_profile`; a browser grant carries `agent_id`,
-        `agent_key`, and `definition_revision`, and is pinned to one
-        App and Agent.
+        Who nvoken thinks you are. `method` says how you authenticated. A
+        machine API key carries `credential_id` and `type`; a short-lived
+        console presentation may carry `org_id`; a browser grant carries its
+        fixed App, Agent, tenant, Definition revision, and optional Session
+        bindings.
       type: object
       required: [authentication]
       properties:
         authentication:
           type: object
-          required: [app_id, operations, method]
+          required: [app_id, method]
           properties:
             credential_id:
               $ref: "#/components/schemas/CredentialID"
@@ -10774,17 +10741,17 @@ components:
                 - $ref: "#/components/schemas/AppID"
                 - type: "null"
               description: |
-                Null for installation- and Org-scoped machine credentials. A
+                Null for installation credentials and Org console presentations. A
                 browser grant is always App-scoped, so this is never null for
                 one.
             org_id:
               oneOf:
                 - $ref: "#/components/schemas/OrgID"
                 - type: "null"
-              description: Machine credentials only.
-            effective_profile:
-              $ref: "#/components/schemas/CredentialProfile"
-              description: Machine credentials only.
+              description: Short-lived console presentations only.
+            type:
+              $ref: "#/components/schemas/CredentialType"
+              description: Machine API keys only.
             agent_key:
               type: string
               description: Browser grants only. The Agent this grant is pinned to.
@@ -10805,10 +10772,6 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/SessionID"
                 - type: "null"
-            operations:
-              type: array
-              items:
-                $ref: "#/components/schemas/Operation"
             method:
               type: string
               enum: [api_key, issuer_token, client_token, anonymous_token]

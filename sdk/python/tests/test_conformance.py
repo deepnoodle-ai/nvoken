@@ -61,7 +61,6 @@ from nvoken.media_preflight import (
 from nvoken.client_token import (
     CLIENT_TOKEN_LIFETIME_LIMIT,
     ClientTokenClaims,
-    all_browser_operations,
     mint_client_token,
 )
 
@@ -75,7 +74,7 @@ from nvoken import (
     Client,
     CreateClientKeyRequest,
     CreateSessionRequest,
-    CredentialProfile,
+    CredentialType,
     ClientInterface,
     InvocationTrigger,
     ContextCompaction,
@@ -93,7 +92,6 @@ from nvoken import (
     MemoryKind,
     MemorySearchMode,
     MintAppSigningKeyRequest,
-    Operation,
     ProviderKeySelection,
     RetryPolicy,
     RegisterAppRequest,
@@ -1591,12 +1589,8 @@ async def test_management_session_observation_and_memory_facades_forward_inputs(
         ) == "signing-key"
         assert await client.create_credential(
             name="deployer",
-            profile=CredentialProfile.OPERATOR,
+            type=CredentialType.App,
             app_id="app_1",
-            org_id=None,
-            tenant_key="acme",
-            session_id=SESSION_ID,
-            operations=[Operation.GET_APP],
             expires_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
             idempotency_key="credential-1",
         ) == "credential"
@@ -1632,9 +1626,8 @@ async def test_management_session_observation_and_memory_facades_forward_inputs(
     assert calls["mint_signing_key"] == ("app_1", signing_key_request)
     credential_key, credential_body = calls["create_credential"]
     assert credential_key == "credential-1"
-    assert credential_body.org_id is None
-    assert credential_body.profile is CredentialProfile.OPERATOR
-    assert credential_body.operations == [Operation.GET_APP]
+    assert credential_body.type is CredentialType.App
+    assert credential_body.app_id == "app_1"
     assert calls["list_logs"] == (
         INVOCATION_ID,
         {
@@ -2256,7 +2249,6 @@ def vector_claims(vector: dict[str, Any]) -> ClientTokenClaims:
         agent_key=claims["agent_key"],
         definition_revision=claims["definition_revision"],
         session_id=claims["session_id"],
-        operations=list(claims["ops"]),
         issued_at=datetime.fromtimestamp(claims["iat"], timezone.utc),
         lifetime=timedelta(seconds=claims["exp"] - claims["iat"]),
     )
@@ -2273,13 +2265,8 @@ def test_shared_client_token_vector() -> None:
     assert mint_client_token(seed, vector_claims(vector)) == vector["token"]
 
 
-def test_client_token_ceiling_matches_the_published_one() -> None:
-    """The vector's list is derived on the server from its route table, so this
-    is the one place this SDK's idea of what a browser may do meets the routes
-    the runtime actually opens to one.
-    """
+def test_client_token_lifetime_matches_the_published_one() -> None:
     vector = client_token_vector()
-    assert sorted(all_browser_operations()) == sorted(vector["browser_operation_ceiling"])
     assert CLIENT_TOKEN_LIFETIME_LIMIT.total_seconds() == vector["maximum_lifetime_seconds"]
 
 
@@ -2302,9 +2289,6 @@ def test_minting_refuses_what_the_runtime_would_refuse() -> None:
         "negative revision": {"definition_revision": -1},
         "zero lifetime": {"lifetime": timedelta(0)},
         "excessive lifetime": {"lifetime": CLIENT_TOKEN_LIFETIME_LIMIT + timedelta(seconds=1)},
-        "unreachable op": {"operations": ["delete_session"]},
-        "duplicate op": {"operations": ["get_session", "get_session"]},
-        "unscoped operations": {"operations": []},
     }
     for name, changes in mutations.items():
         claims = replace(vector_claims(vector), **changes)
@@ -2312,17 +2296,3 @@ def test_minting_refuses_what_the_runtime_would_refuse() -> None:
             mint_client_token(seed, claims)
     with pytest.raises(ValueError):
         mint_client_token(b"short", vector_claims(vector))
-
-
-def test_minting_makes_breadth_deliberate() -> None:
-    """nvoken reads an absent ``ops`` as the whole ceiling, which means the most
-    permissive token is also the one you get by not thinking about it. Here the
-    two are spelled differently, so breadth is something a host chose.
-    """
-    vector = client_token_vector()
-    seed = base64.b64decode(vector["signing_key"]["private_key_seed"])
-    with pytest.raises(ValueError, match="all_browser_operations"):
-        mint_client_token(seed, replace(vector_claims(vector), operations=[]))
-    assert mint_client_token(
-        seed, replace(vector_claims(vector), operations=all_browser_operations())
-    )

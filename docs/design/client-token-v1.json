@@ -1,5 +1,5 @@
 {
-  "note": "What a host signs to let its own browser talk to nvoken directly. The host is the identity provider; nvoken verifies the assertion and never learns who the subject is. Minting happens in host backend code and never in a browser — the private key is the App's browser authority, and a page that holds it can mint any grant the ceiling allows.",
+  "note": "What a host signs to let its own browser talk to nvoken directly. The host is the identity provider; nvoken verifies the assertion and never learns who the subject is. Minting happens in host backend code and never in a browser. Every accepted token receives the same code-owned browser authority; claims may narrow the tenant, user, agent, definition revision, or Session, but never expand or select operations.",
   "signing_key": {
     "key_id": "ckey_019b0a12-0000-7000-8000-000000000002",
     "private_key_seed": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -18,8 +18,7 @@
       "agent_id",
       "agent_key",
       "definition_revision",
-      "session_id",
-      "ops"
+      "session_id"
     ],
     "note": "Compact JSON with no insignificant whitespace, members in this order, absent members omitted. Ed25519 signatures are deterministic, so identical claims produce an identical token in every language — which is what makes `token` below a check rather than an illustration. A verifier parses JSON and does not care about order; this order exists so the four SDKs can be held to one byte-exact answer."
   },
@@ -37,34 +36,19 @@
     "tenant_key": "acme",
     "agent_key": "support",
     "definition_revision": 3,
-    "session_id": "sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311",
-    "ops": ["create_invocation", "get_invocation", "get_session_transcript"]
+    "session_id": "sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311"
   },
-  "token": "eyJhbGciOiJFZERTQSIsInR5cCI6Im52b2tlbi1jbGllbnQrand0Iiwia2lkIjoiY2tleV8wMTliMGExMi0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDIifQ.eyJpc3MiOiJhcHBfMDE5YjBhMTItMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic3ViIjoib3BhcXVlLXVzZXItNyIsImF1ZCI6Im52b2tlbiIsImlhdCI6MTc4NDYzNTIwMCwiZXhwIjoxNzg0NjM1ODAwLCJ0ZW5hbnRfa2V5IjoiYWNtZSIsImFnZW50X2tleSI6InN1cHBvcnQiLCJkZWZpbml0aW9uX3JldmlzaW9uIjozLCJzZXNzaW9uX2lkIjoic2Vzc18wMTliMGExMi03YzQxLTdlMjQtOGVkMi0wZTA3YzFiZGIzMTEiLCJvcHMiOlsiY3JlYXRlX2ludm9jYXRpb24iLCJnZXRfaW52b2NhdGlvbiIsImdldF9zZXNzaW9uX3RyYW5zY3JpcHQiXX0.r1ggEC7G4RKMstFsYjOpC0B6gCxKu0pLYWRPgue_6BWTWw70OCX5BjS9T2LzgTIi30WRV8uvN6SX4i24N56MAA",
+  "token": "eyJhbGciOiJFZERTQSIsInR5cCI6Im52b2tlbi1jbGllbnQrand0Iiwia2lkIjoiY2tleV8wMTliMGExMi0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDIifQ.eyJpc3MiOiJhcHBfMDE5YjBhMTItMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic3ViIjoib3BhcXVlLXVzZXItNyIsImF1ZCI6Im52b2tlbiIsImlhdCI6MTc4NDYzNTIwMCwiZXhwIjoxNzg0NjM1ODAwLCJ0ZW5hbnRfa2V5IjoiYWNtZSIsImFnZW50X2tleSI6InN1cHBvcnQiLCJkZWZpbml0aW9uX3JldmlzaW9uIjozLCJzZXNzaW9uX2lkIjoic2Vzc18wMTliMGExMi03YzQxLTdlMjQtOGVkMi0wZTA3YzFiZGIzMTEifQ.D3S6kfsCZHNsaL6oPh3eqtOwTaaQpZKCxK4ZvrUneqHE3jHvhjMYJ4uhKEaozxSGI7LCCTln3Abk_uTEmye6DA",
   "maximum_lifetime_seconds": 900,
-  "browser_operation_ceiling": [
-    "create_invocation",
-    "get_identity",
-    "get_invocation",
-    "get_session",
-    "get_session_transcript",
-    "interrupt_invocation",
-    "list_invocations",
-    "list_session_messages",
-    "list_sessions",
-    "manage_invocation_nudges",
-    "submit_tool_results"
-  ],
   "refusals": {
     "note": "A mint helper refuses these rather than producing a token the runtime will reject, so a bad grant fails in the host's own tests instead of in a browser.",
     "cases": [
       "blank or whitespace-padded sub, tenant_key, agent_key, or any claim over 255 characters",
       "neither agent_id nor agent_key, or both",
       "a lifetime of zero or less, or over maximum_lifetime_seconds",
-      "an ops entry outside browser_operation_ceiling, or a repeated entry",
+      "any ops claim, including an empty array",
       "a negative definition_revision",
-      "iss, kid, agent_id, or session_id that is not a well-formed id of its kind",
-      "ops omitted without an explicit request for the whole ceiling — not thinking about scope and wanting everything must not be the same request"
+      "iss, kid, agent_id, or session_id that is not a well-formed id of its kind"
     ]
   }
 }

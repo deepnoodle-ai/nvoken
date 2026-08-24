@@ -50,7 +50,7 @@ func newOnboardingState() *onboardingState {
 
 func (s *onboardingState) serve(response http.ResponseWriter, request *http.Request) {
 	if request.Header.Get("Authorization") != "Bearer test-key" {
-		writeError(response, http.StatusUnauthorized, "unauthenticated", "invalid Runtime credential")
+		writeError(response, http.StatusUnauthorized, "unauthenticated", "invalid App key")
 		return
 	}
 	switch {

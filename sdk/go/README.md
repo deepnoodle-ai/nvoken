@@ -222,13 +222,14 @@ request.ProviderKeys = []nvoken.ProviderKeySelection{{
 Use `ProviderKeyAppBYOK`, `ProviderKeyTenantBYOK`, or
 `ProviderKeyPlatform` for nonsecret stored selections.
 
-Manage nvoken API credentials with an Operator key through the same client:
+Manage nvoken API credentials from the console or with an installation-admin
+key through the same client:
 
 ```go
 issued, err := client.CreateCredential(ctx, nvoken.CreateCredentialInput{
     Name:           "production worker",
-    Profile:        nvoken.CredentialProfileRuntime,
-    Operations:     []nvoken.RuntimeOperation{nvoken.OperationCreateInvocation},
+    Type:           nvoken.CredentialTypeApp,
+    AppID:          &appID,
     IdempotencyKey: "production-worker-v1",
 })
 page, err := client.ListCredentials(ctx, nvoken.ListCredentialsOptions{})
@@ -623,10 +624,6 @@ token, err := nvoken.MintClientToken(clientKeySeed, nvoken.ClientTokenClaims{
 	Subject:    user.ID,          // from your session, never from the request
 	TenantKey:  user.WorkspaceID,
 	AgentKey:   "support",
-	Operations: []nvoken.RuntimeOperation{
-		nvoken.OperationCreateInvocation,
-		nvoken.OperationGetSessionTranscript,
-	},
 	Lifetime: 10 * time.Minute,
 })
 ```
@@ -636,13 +633,11 @@ registers its public half in one step. The private seed is the App's browser
 authority — whoever holds it can mint a grant for any end user — so it belongs
 in backend configuration and never in a bundle.
 
-Three things are worth deciding rather than defaulting. `Operations` is
-required: nvoken reads an absent list as every operation a browser may perform,
-so this SDK refuses to spell "I did not think about scope" the same way as
-`AllBrowserOperations()`. `SessionID` confines the token to one conversation,
-which a single-conversation UI should set. And a lifetime is capped at fifteen
-minutes, because short lifetimes are the whole safety story of a bearer token
-in a page.
+Two things are worth deciding rather than defaulting. `SessionID` confines the
+token to one conversation, which a single-conversation UI should set. A
+lifetime is capped at fifteen minutes, because short lifetimes are the whole
+safety story of a bearer token in a page. The browser route ceiling is fixed by
+nvoken; tokens cannot select or expand it.
 
 Minting refuses anything nvoken would refuse, so a bad grant fails in your
 tests rather than in a browser as an unexplained `invalid client token`.

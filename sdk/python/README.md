@@ -641,7 +641,6 @@ token = mint_client_token(
         subject=user.id,          # from your session, never from the request
         tenant_key=user.workspace_id,
         agent_key="support",
-        operations=["create_invocation", "get_session_transcript"],
         lifetime=timedelta(minutes=10),
     ),
 )
@@ -655,13 +654,11 @@ registers its public half in one step. The private seed is the App's browser
 authority — whoever holds it can mint a grant for any end user — so it belongs
 in backend configuration and never in a bundle.
 
-Three things are worth deciding rather than defaulting. `operations` is
-required: nvoken reads an absent list as every operation a browser may perform,
-so this SDK refuses to spell "I did not think about scope" the same way as
-`all_browser_operations()`. `session_id` confines the token to one
-conversation, which a single-conversation UI should set. And a lifetime is
-capped at fifteen minutes, because short lifetimes are the whole safety story
-of a bearer token in a page.
+Two things are worth deciding rather than defaulting. `session_id` confines the
+token to one conversation, which a single-conversation UI should set. A
+lifetime is capped at fifteen minutes, because short lifetimes are the whole
+safety story of a bearer token in a page. The browser route ceiling is fixed by
+nvoken; tokens cannot select or expand it.
 
 **Invocation webhooks stop being optional here.** The browser holds the stream,
 so your backend never observes settlement any other way.

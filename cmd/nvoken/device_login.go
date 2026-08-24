@@ -38,8 +38,9 @@ type deviceCodeResponse struct {
 type deviceTokenResponse struct {
 	Secret         string `json:"secret"`
 	CredentialID   string `json:"credential_id"`
-	OrgID          string `json:"org_id"`
-	OrgDisplayName string `json:"org_display_name"`
+	AppID          string `json:"app_id"`
+	AppName        string `json:"app_name"`
+	CredentialType string `json:"credential_type"`
 	Label          string `json:"label"`
 	NvokenBaseURL  string `json:"nvoken_base_url"`
 }
@@ -163,8 +164,9 @@ func runDeviceAuthLogin(ctx *cli.Context) error {
 		Endpoint:       endpoint,
 		Token:          grant.Secret,
 		CredentialID:   grant.CredentialID,
-		OrgID:          grant.OrgID,
-		OrgDisplayName: grant.OrgDisplayName,
+		AppID:          grant.AppID,
+		AppName:        grant.AppName,
+		CredentialType: grant.CredentialType,
 		Label:          grant.Label,
 		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
 	}
@@ -179,12 +181,13 @@ func runDeviceAuthLogin(ctx *cli.Context) error {
 			"profile":          name,
 			"endpoint":         profile.Endpoint,
 			"credential_id":    profile.CredentialID,
-			"org_id":           profile.OrgID,
-			"org_display_name": profile.OrgDisplayName,
+			"app_id":           profile.AppID,
+			"app_name":         profile.AppName,
+			"credential_type":  profile.CredentialType,
 			"credentials_file": path,
 		})
 	}
-	ctx.Success("Authenticated to %s. Profile %q saved to %s", grant.OrgDisplayName, name, path)
+	ctx.Success("Authenticated to %s with an %s key. Profile %q saved to %s", grant.AppName, grant.CredentialType, name, path)
 	return nil
 }
 
@@ -207,7 +210,9 @@ func pollForDeviceGrant(ctx context.Context, client *deviceLoginClient, code dev
 			if err := json.Unmarshal(body, &grant); err != nil {
 				return deviceTokenResponse{}, fmt.Errorf("decode device credential: %w", err)
 			}
-			if grant.Secret == "" || grant.CredentialID == "" || grant.OrgID == "" || grant.OrgDisplayName == "" || grant.Label == "" || grant.NvokenBaseURL == "" {
+			if grant.Secret == "" || grant.CredentialID == "" || grant.AppID == "" || grant.AppName == "" ||
+				(grant.CredentialType != "app" && grant.CredentialType != "app_read_only") ||
+				grant.Label == "" || grant.NvokenBaseURL == "" {
 				return deviceTokenResponse{}, errors.New("console returned an invalid device credential")
 			}
 			return grant, nil

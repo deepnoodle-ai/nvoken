@@ -54,10 +54,12 @@ func runAPIKeyAuthLogin(ctx *cli.Context, auth *resolvedAuth) error {
 	}
 	identity := *verified.JSON200
 	profile := authstore.Profile{
-		Endpoint:     auth.BaseURL,
-		Token:        auth.APIKey,
-		CredentialID: credentialIDOrEmpty(identity.Authentication.CredentialID),
-		CreatedAt:    time.Now().UTC().Format(time.RFC3339),
+		Endpoint:       auth.BaseURL,
+		Token:          auth.APIKey,
+		CredentialID:   credentialIDOrEmpty(identity.Authentication.CredentialID),
+		AppID:          appIDOrEmpty(identity.Authentication.AppID),
+		CredentialType: credentialTypeOrEmpty(identity.Authentication.Type),
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
 	}
 	name := profileName(ctx)
 	if err := authstore.PutProfile(name, profile, ctx.Bool("default")); err != nil {
@@ -70,11 +72,27 @@ func runAPIKeyAuthLogin(ctx *cli.Context, auth *resolvedAuth) error {
 			"profile":          name,
 			"endpoint":         profile.Endpoint,
 			"credential_id":    profile.CredentialID,
+			"app_id":           profile.AppID,
+			"credential_type":  profile.CredentialType,
 			"credentials_file": path,
 		})
 	}
 	ctx.Success("Verified API key. Profile %q saved to %s", name, path)
 	return nil
+}
+
+func appIDOrEmpty(value *generated.AppID) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
+}
+
+func credentialTypeOrEmpty(value *generated.CredentialType) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func runAuthStatus(ctx *cli.Context) error {
@@ -100,8 +118,8 @@ func runAuthStatus(ctx *cli.Context) error {
 	if id := credentialIDOrEmpty(identity.Authentication.CredentialID); id != "" {
 		ctx.Printf("Credential: %s\n", id)
 	}
-	if profile := identity.Authentication.EffectiveProfile; profile != nil {
-		ctx.Printf("Effective profile: %s\n", *profile)
+	if credentialType := identity.Authentication.Type; credentialType != nil {
+		ctx.Printf("Credential type: %s\n", *credentialType)
 	}
 	ctx.Printf("Endpoint: %s\n", auth.BaseURL)
 	if auth.Profile != nil {
@@ -124,7 +142,7 @@ func runAuthList(ctx *cli.Context) error {
 		profiles := make([]map[string]any, 0, len(names))
 		for _, name := range names {
 			profile := store.Profiles[name]
-			profiles = append(profiles, map[string]any{"name": name, "default": profile.Default, "endpoint": profile.Endpoint, "credential_id": profile.CredentialID, "org_id": profile.OrgID, "org_display_name": profile.OrgDisplayName, "label": profile.Label, "created_at": profile.CreatedAt, "last_used_at": profile.LastUsedAt})
+			profiles = append(profiles, map[string]any{"name": name, "default": profile.Default, "endpoint": profile.Endpoint, "credential_id": profile.CredentialID, "app_id": profile.AppID, "app_name": profile.AppName, "credential_type": profile.CredentialType, "label": profile.Label, "created_at": profile.CreatedAt, "last_used_at": profile.LastUsedAt})
 		}
 		return renderJSON(ctx, map[string]any{"profiles": profiles})
 	}
@@ -134,11 +152,11 @@ func runAuthList(ctx *cli.Context) error {
 		if profile.Default {
 			marker = "*"
 		}
-		organization := profile.OrgDisplayName
-		if organization == "" {
-			organization = "-"
+		appName := profile.AppName
+		if appName == "" {
+			appName = "-"
 		}
-		ctx.Printf("%s %s\t%s\t%s\t%s\n", marker, name, organization, profile.Endpoint, profile.CredentialID)
+		ctx.Printf("%s %s\t%s\t%s\t%s\t%s\n", marker, name, appName, profile.CredentialType, profile.Endpoint, profile.CredentialID)
 	}
 	return nil
 }

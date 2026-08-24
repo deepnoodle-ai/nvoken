@@ -947,7 +947,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 			response.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(response, `{
 				"credential":{"id":"cred_test","name":"reporter","prefix":"nvk_test","status":"active",
-				"profile":"operator","operations":[],"org_id":"org_test",
+				"type":"app","app_id":"app_test",
 				"created_at":"2026-08-16T12:00:00Z","updated_at":"2026-08-16T12:00:00Z"},
 				"secret":"nvk_test.secret","delivery_expires_at":"2026-08-16T12:05:00Z","replayed":false
 			}`)
@@ -970,8 +970,8 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 		},
 		{"model", "get", "--provider", "future_provider", "--model", "future-model"},
 		{
-			"credentials", "create", "--name", "reporter", "--credential-profile", "operator",
-			"--org-id", "org_test", "--idempotency-key", "credential-retry-key",
+			"credentials", "create", "--name", "reporter", "--type", "app",
+			"--app-id", "app_test", "--idempotency-key", "credential-retry-key",
 		},
 	}
 	for _, arguments := range commands {
@@ -1018,7 +1018,7 @@ func TestCLIMapsAllAddedFiltersAndExtensibleValues(t *testing.T) {
 			t.Errorf("usage query %s = %#v, want %q", key, usageQuery[key], expected)
 		}
 	}
-	if credentialIdempotency != "credential-retry-key" || credentialBody["org_id"] != "org_test" {
+	if credentialIdempotency != "credential-retry-key" || credentialBody["type"] != "app" || credentialBody["app_id"] != "app_test" {
 		t.Fatalf("credential request key=%q body=%#v", credentialIdempotency, credentialBody)
 	}
 	if recordsQuery := queries["GET /v1/usage/records"]; recordsQuery["format"][0] != "csv" {

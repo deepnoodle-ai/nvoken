@@ -85,8 +85,6 @@ export type {
   TranscriptSnapshot,
 } from "./generated/models/index.js";
 // The value, not only the type: enumerating the statuses is how a host keeps
-// its own classification honest, and a type alone cannot be iterated. Operation
-// is here for the same reason — minting a client token names operations, and a
-// host should reach for the enum rather than retyping the strings.
-export { InvocationStatus, Operation } from "./generated/models/index.js";
+// its own classification honest, and a type alone cannot be iterated.
+export { InvocationStatus } from "./generated/models/index.js";
 export * as raw from "./generated/index.js";

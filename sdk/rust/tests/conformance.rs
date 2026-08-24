@@ -7,21 +7,21 @@ use futures_util::StreamExt;
 use http::HeaderMap;
 use nvoken::models;
 use nvoken::{
-    accept_webhook, all_browser_operations, answerable_tool_calls, ask_user_input_schema,
-    ask_user_tool, ask_user_tool_with, fetch_tool, host_tool_calls, mint_client_token,
-    preflight_input_blocks, preflight_output_schema, retry_webhook, verify_callback,
-    verify_webhook, webhook_status_is_retried, AgentDefinition, AgentInvocationOptions,
-    AgentOptions, AskUserInput, AskUserKind, AskUserOutput, BudgetExhaustionBehavior,
-    CallbackOutcome, CallbackReceiver, CallbackReply, CallbackResultStore, Client, ClientInterface,
-    ClientTokenClaims, CompactionListOptions, ContextCompaction, ContextCompactionTrigger,
-    ContextItem, ContextTier, DeliveryError, DeliverySigningKey, ErrorCategory, IfActivePolicy,
-    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
-    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
-    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
-    RetryPolicy, SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview,
-    ToolCallListOptions, ToolChoice, ToolMode, ToolResult, VerifiedCallback, VerifiedWebhook,
-    WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookOutcome,
-    WebhookReceiver, WebhookTarget, ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
+    accept_webhook, answerable_tool_calls, ask_user_input_schema, ask_user_tool,
+    ask_user_tool_with, fetch_tool, host_tool_calls, mint_client_token, preflight_input_blocks,
+    preflight_output_schema, retry_webhook, verify_callback, verify_webhook,
+    webhook_status_is_retried, AgentDefinition, AgentInvocationOptions, AgentOptions, AskUserInput,
+    AskUserKind, AskUserOutput, BudgetExhaustionBehavior, CallbackOutcome, CallbackReceiver,
+    CallbackReply, CallbackResultStore, Client, ClientInterface, ClientTokenClaims,
+    CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
+    DeliveryError, DeliverySigningKey, ErrorCategory, IfActivePolicy, InvokeRequest, Limits,
+    ListAgentsOptions, ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer,
+    McpServerHeaders, MessageListOptions, Model, NvokenError, ProviderKeySelection,
+    ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer, RetryPolicy,
+    SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview, ToolCallListOptions,
+    ToolChoice, ToolMode, ToolResult, VerifiedCallback, VerifiedWebhook, WaitCondition,
+    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookOutcome, WebhookReceiver,
+    WebhookTarget, ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -2117,7 +2117,6 @@ struct ClientTokenVector {
     claims: ClientTokenVectorClaims,
     token: String,
     maximum_lifetime_seconds: u64,
-    browser_operation_ceiling: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -2136,7 +2135,6 @@ struct ClientTokenVectorClaims {
     agent_key: String,
     definition_revision: i64,
     session_id: String,
-    ops: Vec<models::Operation>,
 }
 
 fn client_token_vector() -> ClientTokenVector {
@@ -2163,7 +2161,6 @@ fn client_token_claims(vector: &ClientTokenVector) -> ClientTokenClaims {
         agent_key: Some(vector.claims.agent_key.clone()),
         definition_revision: Some(vector.claims.definition_revision),
         session_id: Some(vector.claims.session_id.clone()),
-        operations: vector.claims.ops.clone(),
         issued_at: Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(vector.claims.iat)),
         lifetime: std::time::Duration::from_secs(vector.claims.exp - vector.claims.iat),
     }
@@ -2181,20 +2178,9 @@ fn shared_client_token_vector() {
     assert_eq!(minted, vector.token);
 }
 
-/// The vector's list is derived on the server from its route table, so this is
-/// the one place this SDK's idea of what a browser may do meets the routes the
-/// runtime actually opens to one.
 #[test]
-fn client_token_ceiling_matches_the_published_one() {
+fn client_token_lifetime_matches_the_published_one() {
     let vector = client_token_vector();
-    let mut local: Vec<String> = all_browser_operations()
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    local.sort();
-    let mut published = vector.browser_operation_ceiling.clone();
-    published.sort();
-    assert_eq!(local, published);
     assert_eq!(
         CLIENT_TOKEN_LIFETIME_LIMIT.as_secs(),
         vector.maximum_lifetime_seconds
@@ -2236,15 +2222,6 @@ fn minting_refuses_what_the_runtime_would_refuse() {
         ("excessive lifetime", |claims| {
             claims.lifetime = CLIENT_TOKEN_LIFETIME_LIMIT + std::time::Duration::from_secs(1)
         }),
-        ("unreachable op", |claims| {
-            claims.operations = vec![models::Operation::DeleteSession]
-        }),
-        ("duplicate op", |claims| {
-            claims.operations = vec![models::Operation::GetSession, models::Operation::GetSession]
-        }),
-        ("unscoped operations", |claims| {
-            claims.operations = Vec::new()
-        }),
     ];
     for (name, mutate) in mutations {
         let mut claims = client_token_claims(&vector);
@@ -2255,21 +2232,4 @@ fn minting_refuses_what_the_runtime_would_refuse() {
         );
     }
     assert!(mint_client_token(b"short", &client_token_claims(&vector)).is_err());
-}
-
-/// nvoken reads an absent `ops` as the whole ceiling, which means the most
-/// permissive token is also the one you get by not thinking about it. Here the
-/// two are spelled differently, so breadth is something a host chose.
-#[test]
-fn minting_makes_breadth_deliberate() {
-    let vector = client_token_vector();
-    let seed = client_token_seed(&vector);
-
-    let mut claims = client_token_claims(&vector);
-    claims.operations = Vec::new();
-    let error = mint_client_token(&seed, &claims).expect_err("omitted operations");
-    assert!(error.to_string().contains("all_browser_operations"));
-
-    claims.operations = all_browser_operations();
-    assert!(mint_client_token(&seed, &claims).is_ok());
 }

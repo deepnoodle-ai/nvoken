@@ -12,12 +12,10 @@
  */
 import {
   acceptWebhook,
-  allBrowserOperations,
   mintClientToken,
   retryWebhook,
   verifyWebhook,
   webhookSupersedes,
-  type Operation,
 } from "@deepnoodle/nvoken";
 
 interface Environment {
@@ -30,21 +28,6 @@ interface Environment {
   /** The App's `webhook`-purpose signing secret. */
   NVOKEN_WEBHOOK_SECRET: string;
 }
-
-/**
- * What this product's page actually does.
- *
- * Named rather than defaulted. `allBrowserOperations()` exists for the case
- * where a browser genuinely drives everything, but a chat page that never
- * interrupts and never nudges has no reason to hold those.
- */
-const CHAT_PAGE_OPERATIONS: Operation[] = [
-  "create_invocation",
-  "get_invocation",
-  "get_session",
-  "get_session_transcript",
-  "list_session_messages",
-];
 
 export default {
   async fetch(request: Request, environment: Environment): Promise<Response> {
@@ -79,7 +62,6 @@ async function issueClientToken(request: Request, environment: Environment): Pro
       subject: user.id,
       tenantKey: user.workspaceId,
       agentKey: "support",
-      operations: CHAT_PAGE_OPERATIONS,
       // Ten minutes, not the fifteen-minute maximum: the page refreshes well
       // before expiry, so the extra five buy nothing and cost exposure.
       lifetimeMs: 10 * 60 * 1_000,
