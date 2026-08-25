@@ -64,6 +64,14 @@ SOURCES = {
 # generated clients on `Client.raw()` deliberately: they are reporting and
 # diagnostic surfaces with wide filter sets that a facade would only retype.
 RAW_ONLY = {
+    # Console device authorization is an integration protocol for the CLI and
+    # console host. The generated clients expose it; the product facades do not
+    # retype that handshake.
+    "approveConsoleDeviceAuthorization",
+    "createConsoleDeviceAuthorization",
+    "denyConsoleDeviceAuthorization",
+    "exchangeConsoleDeviceAuthorization",
+    "getConsoleDeviceAuthorization",
     "getUsageBreakdown",
     "getUsageTimeseries",
     "listUsageRecords",
