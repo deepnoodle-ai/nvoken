@@ -16,6 +16,9 @@ Read it before proposing a change to either.
 - [One home for each host-supplied fact](design/007-host-supplied-context.md),
   which retires the second write path to Session metadata, pins `user_key` to
   the Session, and gives callback authorization a field of its own
+- [TypeScript SDK ergonomics review](design/008-typescript-sdk-ergonomics.md),
+  a proposed Agent, Session, Invocation, result, timeout, and streaming facade
+  cleanup from a newcomer TypeScript developer's perspective
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [Receiving signed deliveries](reference/callback-receivers.md) — the key
