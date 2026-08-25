@@ -1041,7 +1041,7 @@ wire `code`, `requestId`, retry metadata, and safe structured `details`.
 Use generated APIs only when you need the one-to-one wire surface:
 
 ```ts
-const { invocations, sessions, modelPricing } = client.raw();
+const { invocations, sessions, models } = client.raw();
 ```
 
 The wire contract uses `agent_key`, `tenant_key`, `model.id`, `limits`,
