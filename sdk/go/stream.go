@@ -237,13 +237,7 @@ func (h *InvocationHandle) StreamWithOptions(
 	options StreamOptions,
 	consume func(StreamEvent) error,
 ) error {
-	if h.SessionID == "" {
-		if _, err := h.Refresh(ctx); err != nil {
-			return err
-		}
-	}
-	invocationID := generated.InvocationID(h.InvocationID)
-	return h.client.readStream(ctx, h.SessionID, &invocationID, options, func(event StreamEvent, reducer *Reducer) error {
+	return h.client.readStream(ctx, "", h.InvocationID, options, func(event StreamEvent, reducer *Reducer) error {
 		if consume != nil {
 			if err := consume(event); err != nil {
 				return err
@@ -270,14 +264,11 @@ func (c *Client) StreamSessionWithOptions(
 	options StreamOptions,
 	consume func(StreamEvent, ReducedSnapshot) error,
 ) error {
-	return c.readStream(ctx, sessionID, nil, options, func(event StreamEvent, reducer *Reducer) error {
+	return c.readStream(ctx, sessionID, "", options, func(event StreamEvent, reducer *Reducer) error {
 		if consume != nil {
 			if err := consume(event, reducer.Snapshot()); err != nil {
 				return err
 			}
-		}
-		if options.InvocationID != nil && reducer.Settled(*options.InvocationID) {
-			return ErrStopStream
 		}
 		return nil
 	})
@@ -289,28 +280,34 @@ func (c *Client) StreamSessionWithOptions(
 func (c *Client) readStream(
 	ctx context.Context,
 	sessionID string,
-	invocationID *generated.InvocationID,
+	invocationID string,
 	options StreamOptions,
 	consume func(StreamEvent, *Reducer) error,
 ) error {
 	reducer := NewReducer()
 	retryDelay := time.Second
-	if invocationID == nil && options.InvocationID != nil {
-		value := generated.InvocationID(*options.InvocationID)
-		invocationID = &value
-	}
 	for {
-		params := &generated.StreamSessionParams{
-			Deltas:       options.Deltas,
-			InvocationID: invocationID,
+		var response *http.Response
+		var err error
+		var cursor *generated.Cursor
+		lastEventID := reducer.Snapshot().Cursor
+		if lastEventID == "" && options.Cursor != nil {
+			value := generated.Cursor(*options.Cursor)
+			cursor = &value
 		}
-		if cursor := reducer.Snapshot().Cursor; cursor != "" {
-			params.LastEventID = &cursor
-		} else if options.Cursor != nil {
-			cursor := generated.Cursor(*options.Cursor)
-			params.Cursor = &cursor
+		if invocationID != "" {
+			params := &generated.StreamInvocationParams{Cursor: cursor, Deltas: options.Deltas}
+			if lastEventID != "" {
+				params.LastEventID = &lastEventID
+			}
+			response, err = c.raw.ClientInterface.StreamInvocation(ctx, generated.InvocationID(invocationID), params)
+		} else {
+			params := &generated.StreamSessionParams{Cursor: cursor, Deltas: options.Deltas}
+			if lastEventID != "" {
+				params.LastEventID = &lastEventID
+			}
+			response, err = c.raw.ClientInterface.StreamSession(ctx, generated.SessionID(sessionID), params)
 		}
-		response, err := c.raw.ClientInterface.StreamSession(ctx, generated.SessionID(sessionID), params)
 		if err != nil {
 			if err := waitForReconnect(ctx, retryDelay); err != nil {
 				return err

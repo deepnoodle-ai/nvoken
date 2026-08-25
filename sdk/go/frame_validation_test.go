@@ -12,6 +12,8 @@ import (
 func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	change := map[string]any{
 		"invocation_id":            "inv_1",
+		"session_id":               "sess_1",
+		"content_expires_at":       nil,
 		"revision":                 1,
 		"status":                   "completed",
 		"through_message_sequence": nil,
@@ -22,6 +24,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	data, err := json.Marshal(map[string]any{
 		"type":               "transcript.update",
 		"session_id":         "sess_1",
+		"content_expires_at": nil,
 		"messages":           []any{},
 		"invocation_changes": []any{change},
 		"cursor":             "cursor-1",
@@ -39,6 +42,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	data, err = json.Marshal(map[string]any{
 		"type":               "transcript.update",
 		"session_id":         "sess_1",
+		"content_expires_at": nil,
 		"messages":           []any{},
 		"invocation_changes": []any{change},
 		"cursor":             "cursor-1",
@@ -59,7 +63,7 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 // check must be about the member existing, not about what it holds.
 func TestRequiredMemberHoldingNullIsPresent(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sess_1","reason":null}`,
+		`{"type":"stream.resync","session_id":"sess_1","content_expires_at":null,"reason":null}`,
 	)); err != nil {
 		t.Fatalf("null-valued required member rejected: %v", err)
 	}
@@ -68,7 +72,7 @@ func TestRequiredMemberHoldingNullIsPresent(t *testing.T) {
 // Frames gain fields over time and a reader must keep going.
 func TestUnknownMembersAreIgnored(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sess_1","reason":"live_delivery_gap","added_later":1}`,
+		`{"type":"stream.resync","session_id":"sess_1","content_expires_at":null,"reason":"live_delivery_gap","added_later":1}`,
 	)); err != nil {
 		t.Fatalf("unknown member rejected: %v", err)
 	}

@@ -277,11 +277,10 @@ export async function* streamSessionByID(
  */
 export async function* streamInvocationByID<TOutput extends object>(
   client: StreamClient,
-  sessionId: string,
   invocationId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<SessionStreamEvent<TOutput>> {
-  yield* streamInvocationByIDWithOptions(client, sessionId, invocationId, {}, signal);
+  yield* streamInvocationByIDWithOptions(client, invocationId, {}, signal);
 }
 
 /**
@@ -292,13 +291,12 @@ export async function* streamInvocationByID<TOutput extends object>(
  */
 export async function* streamInvocationByIDWithOptions<TOutput extends object>(
   client: StreamClient,
-  sessionId: string,
   invocationId: string,
   options: StreamOptions,
   signal?: AbortSignal,
 ): AsyncGenerator<SessionStreamEvent<TOutput>> {
   const reducer = new Reducer();
-  for await (const update of readStream(client, sessionId, invocationId, reducer, options, signal)) {
+  for await (const update of readStream(client, undefined, invocationId, reducer, options, signal)) {
     // Frame types may appear that this SDK version does not know. Handle the
     // ones you know and ignore the rest, which is the rule the contract sets
     // and the only way an added frame is not a breaking change.
@@ -314,6 +312,17 @@ export async function* streamInvocationByIDWithOptions<TOutput extends object>(
   }
 }
 
+/** Follow one turn while folding its frames into a renderable snapshot. */
+export async function* streamInvocationReducedByID(
+  client: StreamClient,
+  invocationId: string,
+  reducer: Reducer,
+  options: StreamOptions = {},
+  signal?: AbortSignal,
+): AsyncGenerator<StreamUpdate> {
+  yield* readStream(client, undefined, invocationId, reducer, options, signal);
+}
+
 /**
  * The one read loop. It reconnects from its last durable cursor on any
  * connection end. A `connection.closing` frame says only that, and a silent
@@ -325,7 +334,7 @@ export async function* streamInvocationByIDWithOptions<TOutput extends object>(
  */
 async function* readStream(
   client: StreamClient,
-  sessionId: string,
+  sessionId: string | undefined,
   invocationId: string | undefined,
   reducer: Reducer,
   options: StreamOptions,
@@ -338,9 +347,7 @@ async function* readStream(
   let failingSince: number | undefined;
   let consecutiveFailures = 0;
   for (;;) {
-    const request = await client.sessions.streamSessionRequestOpts({
-      sessionId,
-      invocationId,
+    const streamOptions = {
       deltas: options.deltas,
       // The query parameter, not the `Last-Event-ID` header. Both carry the
       // same value and the contract says this one wins, but a header on a
@@ -349,7 +356,16 @@ async function* readStream(
       // allowing it. This SDK reads the stream with `fetch` rather than
       // `EventSource`, so nothing here is obliged to speak SSE's mechanics.
       cursor: reducer.snapshot().cursor,
-    });
+    };
+    const request = invocationId === undefined
+      ? await client.sessions.streamSessionRequestOpts({
+          sessionId: sessionId!,
+          ...streamOptions,
+        })
+      : await client.invocations.streamInvocationRequestOpts({
+          invocationId,
+          ...streamOptions,
+        });
     request.headers = { ...request.headers, Accept: "text/event-stream" };
 
     let response: Response;

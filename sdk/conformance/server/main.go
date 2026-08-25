@@ -525,8 +525,10 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 		AgentID        string `json:"agent_id"`
 		AgentKey       string `json:"agent_key"`
 		IdempotencyKey string `json:"idempotency_key"`
-		IfActive       string `json:"if_active"`
-		ProviderKeys   []struct {
+		Session        *struct {
+			IfActive string `json:"if_active"`
+		} `json:"session"`
+		ProviderKeys []struct {
 			Provider string `json:"provider"`
 			Source   string `json:"source"`
 			Key      struct {
@@ -542,7 +544,7 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 	}
 	provesSupersession := strings.Contains(body.IdempotencyKey, "lost-ack") ||
 		body.IdempotencyKey == "cli-answer"
-	if provesSupersession && body.IfActive != "supersede" {
+	if provesSupersession && (body.Session == nil || body.Session.IfActive != "supersede") {
 		writeError(response, http.StatusBadRequest, "invalid_request", "if_active did not round-trip")
 		return
 	}
@@ -603,6 +605,10 @@ func (s *state) listInvocations(response http.ResponseWriter, request *http.Requ
 
 func (s *state) invocation(response http.ResponseWriter, request *http.Request) {
 	remainder := strings.TrimPrefix(request.URL.Path, "/v1/invocations/")
+	if strings.HasSuffix(remainder, "/stream") && request.Method == http.MethodGet {
+		s.stream(response, request)
+		return
+	}
 	if strings.HasSuffix(remainder, "/tool-calls") && request.Method == http.MethodGet {
 		writeJSON(response, http.StatusOK, toolCallRecords())
 		return
@@ -616,9 +622,10 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 			return
 		}
 		writeJSON(response, http.StatusAccepted, map[string]any{
-			"invocation_id": invocationID,
-			"session_id":    sessionID,
-			"status":        "queued",
+			"invocation_id":      invocationID,
+			"session_id":         sessionID,
+			"content_expires_at": nil,
+			"status":             "queued",
 			"results": []any{map[string]any{
 				"tool_call_id": toolCallID,
 				"status":       "completed",
@@ -690,18 +697,21 @@ func toolCallRecords() map[string]any {
 	return map[string]any{
 		"items": []any{
 			map[string]any{
+				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 				"result_origin": "builtin",
 			},
 			map[string]any{
+				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 				"result_origin": nil,
 			},
 			map[string]any{
+				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
@@ -709,6 +719,7 @@ func toolCallRecords() map[string]any {
 				"delivery":      map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
 			},
 			map[string]any{
+				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
@@ -718,6 +729,7 @@ func toolCallRecords() map[string]any {
 			// and the result arrived later through tool-results, so the origin
 			// is host even though the mode is callback.
 			map[string]any{
+				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
 				"name": "run_migration", "status": "completed", "iteration": 3,
 				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
@@ -816,6 +828,12 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	}
 	s.lastDeltas = request.URL.Query().Get("deltas")
 	s.lastInvocationFilter = request.URL.Query().Get("invocation_id")
+	if strings.HasPrefix(request.URL.Path, "/v1/invocations/") {
+		s.lastInvocationFilter = strings.TrimSuffix(
+			strings.TrimPrefix(request.URL.Path, "/v1/invocations/"),
+			"/stream",
+		)
+	}
 	deltas := s.lastDeltas
 	s.mu.Unlock()
 	response.Header().Set("Content-Type", "text/event-stream")
@@ -833,9 +851,10 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	writeSSE(response, "cursor-1", "transcript.update", firstTranscriptUpdate())
 	if attempt == 2 {
 		writeSSE(response, "", "connection.closing", map[string]any{
-			"type":       "connection.closing",
-			"session_id": sessionID,
-			"reason":     "rotate",
+			"type":               "connection.closing",
+			"session_id":         sessionID,
+			"content_expires_at": nil,
+			"reason":             "rotate",
 		})
 		flusher.Flush()
 		return
@@ -848,9 +867,10 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	// being reclaimed, which means reconnect when you next need to read; a
 	// filtered one already left on the terminal change above.
 	writeSSE(response, "", "connection.closing", map[string]any{
-		"type":       "connection.closing",
-		"session_id": sessionID,
-		"reason":     "idle",
+		"type":               "connection.closing",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"reason":             "idle",
 	})
 	flusher.Flush()
 }
@@ -894,6 +914,7 @@ func invocationWithID(id string, status string) map[string]any {
 		"agent_id":                     agentID,
 		"agent_key":                    "support",
 		"session_id":                   sessionID,
+		"content_expires_at":           nil,
 		"user_key":                     nil,
 		"definition_id":                definitionID,
 		"definition_revision":          1,
@@ -1023,15 +1044,16 @@ func validAgentFilter(query url.Values) bool {
 
 func firstMessage() map[string]any {
 	return map[string]any{
-		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-		"session_id":    sessionID,
-		"agent_id":      agentID,
-		"invocation_id": invocationID,
-		"user_key":      nil,
-		"sequence":      1,
-		"role":          "user",
-		"content":       []any{map[string]any{"type": "text", "text": "hello"}},
-		"created_at":    "2026-07-21T12:00:00Z",
+		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"agent_id":           agentID,
+		"invocation_id":      invocationID,
+		"user_key":           nil,
+		"sequence":           1,
+		"role":               "user",
+		"content":            []any{map[string]any{"type": "text", "text": "hello"}},
+		"created_at":         "2026-07-21T12:00:00Z",
 	}
 }
 
@@ -1042,27 +1064,29 @@ const secondMessageID = "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
 
 func secondMessage() map[string]any {
 	return map[string]any{
-		"id":            secondMessageID,
-		"session_id":    sessionID,
-		"agent_id":      agentID,
-		"invocation_id": invocationID,
-		"user_key":      nil,
-		"sequence":      2,
-		"role":          "assistant",
-		"content":       []any{map[string]any{"type": "text", "text": "world"}},
-		"created_at":    "2026-07-21T12:00:02Z",
+		"id":                 secondMessageID,
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"agent_id":           agentID,
+		"invocation_id":      invocationID,
+		"user_key":           nil,
+		"sequence":           2,
+		"role":               "assistant",
+		"content":            []any{map[string]any{"type": "text", "text": "world"}},
+		"created_at":         "2026-07-21T12:00:02Z",
 	}
 }
 
 func firstResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-		"session_id":    sessionID,
-		"agent_id":      agentID,
-		"invocation_id": invocationID,
-		"user_key":      nil,
-		"sequence":      2,
-		"role":          "assistant",
+		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"agent_id":           agentID,
+		"invocation_id":      invocationID,
+		"user_key":           nil,
+		"sequence":           2,
+		"role":               "assistant",
 		"content": []any{
 			map[string]any{"type": "text", "text": "The charge was"},
 			map[string]any{"type": "tool_use", "id": "call_fixture", "name": "lookup", "input": map[string]any{}},
@@ -1074,15 +1098,16 @@ func firstResultAssistantMessage() map[string]any {
 
 func secondResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":            "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
-		"session_id":    sessionID,
-		"agent_id":      agentID,
-		"invocation_id": invocationID,
-		"user_key":      nil,
-		"sequence":      3,
-		"role":          "assistant",
-		"content":       []any{map[string]any{"type": "text", "text": "A refund is queued."}},
-		"created_at":    "2026-07-21T12:00:03Z",
+		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"agent_id":           agentID,
+		"invocation_id":      invocationID,
+		"user_key":           nil,
+		"sequence":           3,
+		"role":               "assistant",
+		"content":            []any{map[string]any{"type": "text", "text": "A refund is queued."}},
+		"created_at":         "2026-07-21T12:00:03Z",
 	}
 }
 
@@ -1109,6 +1134,8 @@ func terminalStatus(status string) bool {
 func change(revision int, status string, sequence int, occurredAt string) map[string]any {
 	return map[string]any{
 		"invocation_id":                invocationID,
+		"session_id":                   sessionID,
+		"content_expires_at":           nil,
 		"revision":                     revision,
 		"status":                       status,
 		"terminal":                     terminalStatus(status),
@@ -1136,6 +1163,7 @@ func firstTranscriptUpdate() map[string]any {
 	return map[string]any{
 		"type":               "transcript.update",
 		"session_id":         sessionID,
+		"content_expires_at": nil,
 		"messages":           []any{firstMessage()},
 		"invocation_changes": []any{firstChange()},
 		"cursor":             "cursor-1",
@@ -1156,6 +1184,7 @@ func secondTranscriptUpdate() map[string]any {
 	return map[string]any{
 		"type":               "transcript.update",
 		"session_id":         sessionID,
+		"content_expires_at": nil,
 		"messages":           []any{firstMessage(), secondMessage()},
 		"invocation_changes": []any{firstChange(), secondChange()},
 		"cursor":             "cursor-2",
@@ -1166,15 +1195,16 @@ func secondTranscriptUpdate() map[string]any {
 // `delta` carries it, for every kind.
 func messageDelta() map[string]any {
 	return map[string]any{
-		"type":          "message.delta",
-		"session_id":    sessionID,
-		"invocation_id": invocationID,
-		"attempt":       1,
-		"message_id":    secondMessageID,
-		"content_index": 0,
-		"kind":          "text",
-		"delta":         "streamed answer",
-		"emitted_at":    "2026-07-21T12:00:02Z",
+		"type":               "message.delta",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"invocation_id":      invocationID,
+		"attempt":            1,
+		"message_id":         secondMessageID,
+		"content_index":      0,
+		"kind":               "text",
+		"delta":              "streamed answer",
+		"emitted_at":         "2026-07-21T12:00:02Z",
 	}
 }
 

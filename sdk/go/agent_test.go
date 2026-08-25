@@ -50,18 +50,14 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handle, err := agent.Invoke(
+	handle, err := agent.Start(
 		context.Background(),
 		"invoke",
-		AgentInvocationOptions{IfActive: IfActiveSupersede},
+		AgentInvocationOptions{},
 	)
 	if err != nil || handle.InvocationID == "" {
 		t.Fatalf("invoke: handle=%#v err=%v", handle, err)
 	}
-	if runtime.lastIfActive() != IfActiveSupersede {
-		t.Fatalf("Agent if-active policy = %q", runtime.lastIfActive())
-	}
-
 	var streamed []string
 	_, err = agent.Stream(
 		context.Background(),
@@ -113,20 +109,23 @@ func TestAgentFiveVerbsDispatchAndStructuredOutput(t *testing.T) {
 		t.Fatalf("text=%q err=%v", text, err)
 	}
 
-	bound, err := agent.Session(SessionBinding{SessionKey: "customer-123"})
+	bound, err := agent.BindSession(SessionBinding{SessionKey: "customer-123"}, SessionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text, err = bound.Text(
 		context.Background(),
 		"bound",
-		AgentInvocationOptions{},
+		AgentInvocationOptions{IfActive: IfActiveSupersede},
 	)
 	if err != nil || text != "hello" {
 		t.Fatalf("bound text=%q err=%v", text, err)
 	}
 	if runtime.lastSessionKey() != "customer-123" {
 		t.Fatalf("bound Session key = %q", runtime.lastSessionKey())
+	}
+	if runtime.lastIfActive() != IfActiveSupersede {
+		t.Fatalf("bound Session if-active policy = %q", runtime.lastIfActive())
 	}
 }
 
@@ -212,7 +211,7 @@ func TestBoundSessionSerializesAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bound, err := agent.Session(SessionBinding{SessionID: agentTestSessionID})
+	bound, err := agent.BindSession(SessionBinding{SessionID: agentTestSessionID}, SessionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +276,7 @@ func TestWaitOptionsOverallTimeoutAndCondition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	admitted, err := handle.Invoke(
+	admitted, err := handle.Start(
 		context.Background(),
 		"missing",
 		AgentInvocationOptions{},
@@ -309,6 +308,7 @@ type agentTestInvocation struct {
 	submitted  bool
 	cancelled  bool
 	sessionKey string
+	sessionID  *string
 	ifActive   IfActivePolicy
 }
 
@@ -337,12 +337,6 @@ func (r *agentTestRuntime) ServeHTTP(
 		r.create(response, request)
 		return
 	}
-	// One stream, filtered to one turn by query parameter.
-	if request.URL.Path == "/v1/sessions/"+agentTestSessionID+"/stream" &&
-		request.Method == http.MethodGet {
-		r.stream(response, request.Context(), request.URL.Query().Get("invocation_id"))
-		return
-	}
 	const prefix = "/v1/invocations/"
 	if !strings.HasPrefix(request.URL.Path, prefix) {
 		http.NotFound(response, request)
@@ -350,6 +344,8 @@ func (r *agentTestRuntime) ServeHTTP(
 	}
 	path := strings.TrimPrefix(request.URL.Path, prefix)
 	switch {
+	case strings.HasSuffix(path, "/stream") && request.Method == http.MethodGet:
+		r.stream(response, request.Context(), strings.TrimSuffix(path, "/stream"))
 	case strings.HasSuffix(path, "/tool-results") &&
 		request.Method == http.MethodPost:
 		r.submit(response, strings.TrimSuffix(path, "/tool-results"))
@@ -369,9 +365,13 @@ func (r *agentTestRuntime) create(
 	request *http.Request,
 ) {
 	var body struct {
-		Input      string `json:"input"`
-		SessionKey string `json:"session_key"`
-		IfActive   string `json:"if_active"`
+		Input   string `json:"input"`
+		Session *struct {
+			Mode     string  `json:"mode"`
+			ID       *string `json:"id"`
+			Key      *string `json:"key"`
+			IfActive string  `json:"if_active"`
+		} `json:"session"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 		http.Error(response, err.Error(), http.StatusBadRequest)
@@ -383,13 +383,21 @@ func (r *agentTestRuntime) create(
 		"inv_019b0a12-8d51-7f34-aed2-%012x",
 		r.nextID,
 	)
-	r.invocations[id] = &agentTestInvocation{
-		input:      body.Input,
-		sessionKey: body.SessionKey,
-		ifActive:   IfActivePolicy(body.IfActive),
+	state := &agentTestInvocation{input: body.Input}
+	if body.Session != nil {
+		state.sessionID = body.Session.ID
+		if state.sessionID == nil {
+			sessionID := agentTestSessionID
+			state.sessionID = &sessionID
+		}
+		if body.Session.Key != nil {
+			state.sessionKey = *body.Session.Key
+		}
+		state.ifActive = IfActivePolicy(body.Session.IfActive)
 	}
+	r.invocations[id] = state
 	r.mu.Unlock()
-	invocation := agentTestInvocationPayload(id, "queued")
+	invocation := agentTestInvocationPayload(id, "queued", state.sessionID)
 	invocation["deduplicated"] = false
 	writeAgentTestJSON(response, http.StatusAccepted, invocation)
 }
@@ -406,7 +414,7 @@ func (r *agentTestRuntime) get(response http.ResponseWriter, id string) {
 	writeAgentTestJSON(
 		response,
 		http.StatusOK,
-		agentTestInvocationPayload(id, status),
+		agentTestInvocationPayload(id, status, state.sessionID),
 	)
 }
 
@@ -423,7 +431,7 @@ func (r *agentTestRuntime) stream(
 		fmt.Fprintf(
 			response,
 			"id: cursor-waiting\nevent: transcript.update\ndata: %s\n\n",
-			agentTestChange(id, "waiting", "cursor-waiting"),
+			agentTestChange(id, state.sessionID, "waiting", "cursor-waiting"),
 		)
 		flusher.Flush()
 		deadline := time.Now().Add(time.Second)
@@ -449,20 +457,23 @@ func (r *agentTestRuntime) stream(
 	fmt.Fprintf(
 		response,
 		"id: cursor-settled\nevent: transcript.update\ndata: %s\n\n",
-		agentTestChange(id, "completed", "cursor-settled"),
+		agentTestChange(id, state.sessionID, "completed", "cursor-settled"),
 	)
 	flusher.Flush()
 }
 
 // agentTestChange writes the one durable frame, carrying one lifecycle change
 // for the turn being followed.
-func agentTestChange(invocationID, status, cursor string) string {
+func agentTestChange(invocationID string, sessionID *string, status, cursor string) string {
 	frame, err := json.Marshal(map[string]any{
-		"type":       "transcript.update",
-		"session_id": agentTestSessionID,
-		"messages":   []any{},
+		"type":               "transcript.update",
+		"session_id":         sessionID,
+		"content_expires_at": nil,
+		"messages":           []any{},
 		"invocation_changes": []any{map[string]any{
 			"invocation_id":            invocationID,
+			"session_id":               sessionID,
+			"content_expires_at":       nil,
 			"revision":                 1,
 			"status":                   status,
 			"terminal":                 IsTerminalStatus(InvocationStatus(status)),
@@ -487,7 +498,7 @@ func (r *agentTestRuntime) submit(response http.ResponseWriter, id string) {
 	r.mu.Unlock()
 	writeAgentTestJSON(response, http.StatusAccepted, map[string]any{
 		"invocation_id": id,
-		"session_id":    agentTestSessionID,
+		"session_id":    state.sessionID,
 		"status":        "queued",
 		"results": []any{map[string]any{
 			"tool_call_id": agentTestToolID,
@@ -507,13 +518,13 @@ func (r *agentTestRuntime) cancel(response http.ResponseWriter, id string) {
 	writeAgentTestJSON(
 		response,
 		http.StatusOK,
-		agentTestInvocationPayload(id, "cancelled"),
+		agentTestInvocationPayload(id, "cancelled", state.sessionID),
 	)
 }
 
 func (r *agentTestRuntime) result(response http.ResponseWriter, id string) {
 	state := r.state(id)
-	invocation := agentTestInvocationPayload(id, "completed")
+	invocation := agentTestInvocationPayload(id, "completed", state.sessionID)
 	if strings.Contains(state.input, "structured") {
 		invocation["structured_output"] = map[string]any{"answer": "world"}
 	}
@@ -597,7 +608,7 @@ func needsTool(input string) bool {
 	return input == "tool structured" || strings.Contains(input, "missing")
 }
 
-func agentTestInvocationPayload(id, status string) map[string]any {
+func agentTestInvocationPayload(id, status string, sessionID *string) map[string]any {
 	var endedAt any
 	if status == "completed" || status == "cancelled" {
 		endedAt = "2026-07-21T12:00:03Z"
@@ -605,7 +616,8 @@ func agentTestInvocationPayload(id, status string) map[string]any {
 	value := map[string]any{
 		"id":                           id,
 		"agent_id":                     agentTestAgentID,
-		"session_id":                   agentTestSessionID,
+		"session_id":                   sessionID,
+		"content_expires_at":           nil,
 		"status":                       status,
 		"stop_reason":                  agentTestStopReason(status),
 		"attempt":                      1,
@@ -686,7 +698,7 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 				})
 			case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
 				admissions = append(admissions, body)
-				writeAgentTestJSON(response, http.StatusAccepted, agentTestInvocationPayload("inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322", "queued"))
+				writeAgentTestJSON(response, http.StatusAccepted, agentTestInvocationPayload("inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322", "queued", nil))
 			default:
 				t.Errorf("unexpected request %s %s", request.Method, request.URL.Path)
 				response.WriteHeader(http.StatusNotFound)
@@ -711,7 +723,7 @@ func TestDeclaredAgentCreatesItsRecordOnFirstUse(t *testing.T) {
 	}
 
 	for _, input := range []string{"first", "second"} {
-		if _, err := agent.Invoke(
+		if _, err := agent.Start(
 			context.Background(),
 			input,
 			AgentInvocationOptions{IdempotencyKey: input},

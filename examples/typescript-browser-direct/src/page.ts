@@ -39,7 +39,7 @@ export async function send(sessionId: string, text: string): Promise<void> {
   // user, and the Definition revision, so there is nothing for the page to
   // choose and nothing for it to get wrong.
   const turn = await client.invoke({
-    sessionId,
+    session: { mode: "continue", id: sessionId },
     input: text,
   });
 

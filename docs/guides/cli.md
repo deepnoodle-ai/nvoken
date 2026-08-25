@@ -93,8 +93,9 @@ provider string advertised by `nvoken model list`; the server is authoritative
 about which providers are installed.
 
 Both stream commands accept `--cursor` to resume after the last durable frame.
-`session stream --invocation-id inv_...` narrows a Session subscription to one
-turn and exits when that turn settles.
+`invocation stream inv_...` follows one standalone or Session-bound turn and
+exits when it settles; `session stream sess_...` remains the whole-conversation
+subscription.
 
 ## Initialize an App
 

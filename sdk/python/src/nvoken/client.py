@@ -67,7 +67,12 @@ from nvoken_generated.models.compaction_policy import CompactionPolicy
 from nvoken_generated.models.compaction_policy_trigger_tokens import (
     CompactionPolicyTriggerTokens,
 )
-from nvoken_generated.models.session_options import SessionOptions as GeneratedSessionOptions
+from nvoken_generated.models.invocation_session import (
+    InvocationSession as GeneratedInvocationSession,
+)
+from nvoken_generated.models.invocation_session_options import (
+    InvocationSessionOptions as GeneratedInvocationSessionOptions,
+)
 from nvoken_generated.models.retention_policy import (
     RetentionPolicy as GeneratedRetentionPolicy,
 )
@@ -237,6 +242,30 @@ class NvokenError(Exception):
         self.details = details
 
 
+class InvocationErasedError(NvokenError):
+    """A retained standalone Invocation whose private content has expired."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        invocation_id: str | None = None,
+        erased_at: datetime | None = None,
+        request_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            "not_found",
+            message,
+            status=410,
+            code="invocation_erased",
+            request_id=request_id,
+            details=details,
+        )
+        self.invocation_id = invocation_id
+        self.erased_at = erased_at
+
+
 def preflight_input(value: str | tuple[InputBlock, ...]) -> None:
     """Reject locally checkable input problems with the Runtime's vocabulary."""
     if isinstance(value, str):
@@ -392,6 +421,21 @@ class SessionOptions:
     pinned_revision: int | None = None
     # What this request asserts about a Session that already exists.
     on_conflict: SessionOptionsConflict | None = None
+
+
+@dataclass(frozen=True)
+class InvocationSessionOptions:
+    pinned_revision: int | None = None
+    on_conflict: SessionOptionsConflict | None = None
+
+
+@dataclass(frozen=True)
+class InvocationSession:
+    mode: Literal["new", "continue", "continue_or_create"]
+    id: str | None = None
+    key: str | None = None
+    if_active: IfActivePolicy | None = None
+    options: InvocationSessionOptions | None = None
 
 
 @dataclass(frozen=True)
@@ -667,7 +711,6 @@ class InvokeRequest:
     mcp_server_headers: tuple[MCPServerHeaders, ...] = ()
     """Per-turn secret headers, keyed to MCP server names in the definition."""
     idempotency_key: str | None = None
-    if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
     tenant_key: str | None = None
     # Who this turn is for. The first request that opens a Session fixes its
@@ -680,9 +723,10 @@ class InvokeRequest:
     # model can recall — so it is required on the turn that opens a Session for
     # such an Agent.
     user_key: str | None = None
-    session_id: str | None = None
-    session_key: str | None = None
-    session_options: SessionOptions | None = None
+    session: InvocationSession | None = None
+    retention: SessionRetention | None = None
+    compaction: ContextCompaction | None = None
+    authorization_context: dict[str, str] | None = None
     triggered_by: InvocationTrigger | None = None
     """Verified parent Invocation and ToolCall that caused this turn."""
     provider_keys: tuple[ProviderKeySelection, ...] = ()
@@ -809,6 +853,7 @@ class Client:
             self.stream_client
         )
         self.stream_sessions = SessionsApi(self.stream_api_client)
+        self.stream_invocations = InvocationsApi(self.stream_api_client)
 
     def scoped(self, scope: Scope) -> Client:
         """Return a Client that stamps this scope on every request it makes.
@@ -1074,6 +1119,7 @@ class Client:
             status=invocation.status,
             deduplicated=bool(invocation.deduplicated),
             deadline_at=invocation.deadline_at,
+            content_expires_at=invocation.content_expires_at,
         )
 
     def _agent_definition_body(
@@ -1328,11 +1374,7 @@ class Client:
                 "supply exactly one of agent_id and agent_key",
             )
         preflight_input(request.input)
-        if request.if_active not in (None, "reject", "supersede", "interrupt"):
-            raise NvokenError(
-                "validation",
-                "if_active must be reject, supersede, or interrupt",
-            )
+        session = _generated_invocation_session(request.session)
         if request.on_budget_exhausted not in (None, "stop", "hold"):
             raise NvokenError(
                 "validation",
@@ -1344,13 +1386,19 @@ class Client:
             agent_key=request.agent_key,
             tenant_key=request.tenant_key,
             user_key=request.user_key,
-            session_id=request.session_id,
-            session_key=request.session_key,
-            session_options=_generated_session_options(request.session_options),
+            session=session,
+            retention=GeneratedRetentionPolicy(
+                ttl_seconds=request.retention.ttl_seconds
+            ) if request.retention is not None else None,
+            compaction=_generated_compaction(request.compaction),
+            authorization_context=(
+                dict(request.authorization_context)
+                if request.authorization_context is not None
+                else None
+            ),
             triggered_by=request.triggered_by,
             metadata=dict(request.metadata) if request.metadata else None,
             idempotency_key=idempotency_key,
-            if_active=request.if_active,
             on_budget_exhausted=request.on_budget_exhausted,
             input=InvocationInput(
                 request.input
@@ -1611,6 +1659,10 @@ class Client:
         return _machine_projection(
             await self._replay_safe(lambda: self.invocations.get_invocation(invocation_id))
         )
+
+    async def delete_invocation(self, invocation_id: str) -> None:
+        """Erase the private content of a terminal standalone Invocation."""
+        await self._call_once(lambda: self.invocations.delete_invocation(invocation_id))
 
     async def get_invocation_result(self, invocation_id: str) -> InvocationResult:
         return _machine_projection(
@@ -2587,40 +2639,59 @@ def _scope_headers(scope: Scope | None) -> dict[str, str]:
     return headers
 
 
-def _generated_session_options(
-    options: SessionOptions | None,
-) -> GeneratedSessionOptions | None:
-    if options is None:
+def _generated_compaction(
+    compaction: ContextCompaction | None,
+) -> CompactionPolicy | None:
+    if compaction is None:
         return None
-    if (
-        options.compaction is None
-        and options.retention is None
-        and not options.authorization_context
-        and options.pinned_revision is None
-        and options.on_conflict is None
-    ):
-        raise NvokenError("validation", "session_options requires at least one member")
-    if options.on_conflict is not None and options.on_conflict not in ("refuse", "join"):
+    return CompactionPolicy(
+        trigger_tokens=CompactionPolicyTriggerTokens(compaction.trigger_tokens),
+        model=GeneratedModel(
+            provider=compaction.model.provider,
+            id=compaction.model.id,
+        ) if compaction.model is not None else None,
+    )
+
+
+def _generated_invocation_session(
+    session: InvocationSession | None,
+) -> GeneratedInvocationSession | None:
+    if session is None:
+        return None
+    if session.mode == "new":
+        if session.id is not None or session.key is not None or session.if_active is not None:
+            raise NvokenError(
+                "validation", "session mode new accepts neither id, key, nor if_active"
+            )
+    elif session.mode == "continue":
+        if not session.id or session.key is not None:
+            raise NvokenError("validation", "session mode continue requires only id")
+    elif session.mode == "continue_or_create":
+        if not session.key or session.id is not None:
+            raise NvokenError(
+                "validation", "session mode continue_or_create requires only key"
+            )
+    else:
+        raise NvokenError("validation", "session mode is invalid")
+    if session.if_active not in (None, "reject", "supersede", "interrupt"):
         raise NvokenError(
-            "validation", "session_options on_conflict must be refuse or join"
+            "validation",
+            "session if_active must be reject, supersede, or interrupt",
         )
-    compaction = options.compaction
-    return GeneratedSessionOptions(
-        compaction=CompactionPolicy(
-            trigger_tokens=CompactionPolicyTriggerTokens(compaction.trigger_tokens),
-            model=GeneratedModel(
-                provider=compaction.model.provider,
-                id=compaction.model.id,
-            ) if compaction.model is not None else None,
-        ) if compaction is not None else None,
-        retention=GeneratedRetentionPolicy(ttl_seconds=options.retention.ttl_seconds)
-        if options.retention is not None
-        else None,
-        authorization_context=dict(options.authorization_context)
-        if options.authorization_context
-        else None,
-        pinned_revision=options.pinned_revision,
-        on_conflict=options.on_conflict,
+    options = session.options
+    if options is not None and options.on_conflict not in (None, "refuse", "join"):
+        raise NvokenError(
+            "validation", "session options on_conflict must be refuse or join"
+        )
+    return GeneratedInvocationSession(
+        mode=session.mode,
+        id=session.id,
+        key=session.key,
+        if_active=session.if_active,
+        options=GeneratedInvocationSessionOptions(
+            pinned_revision=options.pinned_revision,
+            on_conflict=options.on_conflict,
+        ) if options is not None else None,
     )
 
 
@@ -2709,6 +2780,7 @@ class InvocationHandle:
     status: InvocationStatus | None = None
     deduplicated: bool | None = None
     deadline_at: datetime | None = None
+    content_expires_at: datetime | None = None
 
     async def refresh(self) -> Invocation:
         invocation = await self.client.get_invocation(self.invocation_id)
@@ -2716,6 +2788,7 @@ class InvocationHandle:
         self.agent_id = invocation.agent_id
         self.status = invocation.status
         self.deadline_at = invocation.deadline_at
+        self.content_expires_at = invocation.content_expires_at
         return invocation
 
     async def require_session_id(self) -> str:
@@ -2772,6 +2845,7 @@ class InvocationHandle:
         self.session_id = result.invocation.session_id
         self.agent_id = result.invocation.agent_id
         self.status = result.invocation.status
+        self.content_expires_at = result.invocation.content_expires_at
         return result
 
     async def list_messages(self) -> list[SessionMessage]:
@@ -2806,6 +2880,7 @@ class InvocationHandle:
         self.session_id = invocation.session_id
         self.agent_id = invocation.agent_id
         self.status = invocation.status
+        self.content_expires_at = invocation.content_expires_at
         return invocation
 
     async def interrupt(self) -> Invocation:
@@ -2813,6 +2888,7 @@ class InvocationHandle:
         self.session_id = invocation.session_id
         self.agent_id = invocation.agent_id
         self.status = invocation.status
+        self.content_expires_at = invocation.content_expires_at
         return invocation
 
     async def nudge(
@@ -2953,11 +3029,32 @@ def normalize_error(error: ApiException | httpx.HTTPError) -> NvokenError:
             body = json.loads(error.body)
         except json.JSONDecodeError:
             pass
+    if status == 410 and body.get("code") == "invocation_erased":
+        details = body.get("details") or {}
+        erased_at: datetime | None = None
+        if isinstance(details.get("erased_at"), str):
+            try:
+                erased_at = datetime.fromisoformat(
+                    details["erased_at"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                pass
+        return InvocationErasedError(
+            body.get("message") or "The Invocation content has been erased.",
+            invocation_id=(
+                details.get("invocation_id")
+                if isinstance(details.get("invocation_id"), str)
+                else None
+            ),
+            erased_at=erased_at,
+            request_id=body.get("request_id"),
+            details=details,
+        )
     category: ErrorCategory = (
         "authentication" if status == 401
         else "permission" if status == 403
         else "validation" if status in {400, 422}
-        else "not_found" if status == 404
+        else "not_found" if status in {404, 410}
         else "conflict" if status == 409
         else "rate_limit" if status == 429
         else "server" if status >= 500

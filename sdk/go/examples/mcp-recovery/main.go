@@ -165,9 +165,8 @@ func run(ctx context.Context) error {
 			return fmt.Errorf("admit MCP Invocation: %w", err)
 		}
 		log.Printf(
-			"admitted invocation_id=%s session_id=%s; export NVOKEN_INVOCATION_ID=%s to resume",
+			"admitted standalone invocation_id=%s; export NVOKEN_INVOCATION_ID=%s to resume",
 			handle.InvocationID,
-			handle.SessionID,
 			handle.InvocationID,
 		)
 	} else {
@@ -175,7 +174,7 @@ func run(ctx context.Context) error {
 		log.Printf("resuming invocation_id=%s", invocationID)
 	}
 
-	invocation, err := handle.Wait(ctx, nvoken.WaitOptions{Until: nvoken.WaitUntilTerminal})
+	_, err = handle.Wait(ctx, nvoken.WaitOptions{Until: nvoken.WaitUntilTerminal})
 	if err != nil {
 		return fmt.Errorf("wait for invocation to end: %w", err)
 	}
@@ -183,22 +182,10 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read authoritative result: %w", err)
 	}
-	transcriptLimit := 100
-	transcript, err := client.DrainTranscript(
-		ctx,
-		invocation.SessionID,
-		nil,
-		&transcriptLimit,
-	)
-	if err != nil {
-		return fmt.Errorf("drain fixed-cut transcript: %w", err)
-	}
 	evidence := map[string]any{
-		"invocation":        result.Invocation,
-		"messages":          result.Messages,
-		"output_text":       result.OutputText,
-		"transcript_cursor": transcript.Cursor,
-		"transcript_count":  len(transcript.Messages),
+		"invocation":  result.Invocation,
+		"messages":    result.Messages,
+		"output_text": result.OutputText,
 	}
 	encoded, err := json.MarshalIndent(evidence, "", "  ")
 	if err != nil {

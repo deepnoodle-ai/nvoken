@@ -5,6 +5,8 @@ import { Reducer } from "../stream.js";
 
 const CHANGE = {
   invocation_id: "inv_1",
+  session_id: "sess_1",
+  content_expires_at: null,
   revision: 1,
   status: "completed",
   terminal: true,

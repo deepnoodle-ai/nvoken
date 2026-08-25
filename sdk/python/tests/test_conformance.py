@@ -80,6 +80,8 @@ from nvoken import (
     ContextCompaction,
     ContextItem,
     InvocationHandle,
+    InvocationSession,
+    InvocationSessionOptions,
     InvokeRequest,
     MCPServer,
     MCPServerHeaders,
@@ -190,8 +192,8 @@ def test_shared_session_lifecycle_fixture() -> None:
     retention = body(InvokeRequest(
         agent_key="support",
         input="hello",
-        session_key="conformance",
-        session_options=SessionOptions(retention=SessionRetention(ttl_seconds=86400)),
+        session=InvocationSession(mode="continue_or_create", key="conformance"),
+        retention=SessionRetention(ttl_seconds=86400),
         triggered_by=InvocationTrigger(
             type="tool_call",
             parent_invocation_id=INVOCATION_ID,
@@ -199,7 +201,11 @@ def test_shared_session_lifecycle_fixture() -> None:
         ),
         metadata=fixture["invocation_metadata"],
     ))
-    assert retention["session_options"] == fixture["session_options"]["retention_only"]
+    assert retention["session"] == {
+        "mode": "continue_or_create",
+        "key": "conformance",
+    }
+    assert retention["retention"] == fixture["session_options"]["retention_only"]["retention"]
     assert retention["metadata"] == fixture["invocation_metadata"]
     assert retention["triggered_by"] == {
         "type": "tool_call",
@@ -221,16 +227,22 @@ def test_shared_session_lifecycle_fixture() -> None:
     every = body(InvokeRequest(
         agent_key="support",
         input="hello",
-        session_key="conformance",
-        session_options=SessionOptions(
-            compaction=ContextCompaction(trigger_tokens=32768),
-            retention=SessionRetention(ttl_seconds=3600),
-            authorization_context={"surface": "web"},
+        session=InvocationSession(
+            mode="continue_or_create",
+            key="conformance",
+            options=InvocationSessionOptions(
             pinned_revision=4,
             on_conflict="join",
+            ),
         ),
+        compaction=ContextCompaction(trigger_tokens=32768),
+        retention=SessionRetention(ttl_seconds=3600),
+        authorization_context={"surface": "web"},
     ))
-    assert every["session_options"] == fixture["session_options"]["every_member"]
+    assert every["compaction"] == fixture["session_options"]["every_member"]["compaction"]
+    assert every["retention"] == fixture["session_options"]["every_member"]["retention"]
+    assert every["authorization_context"] == fixture["session_options"]["every_member"]["authorization_context"]
+    assert every["session"]["options"] == {"pinned_revision": 4, "on_conflict": "join"}
     configured_definition = client._agent_definition_body(
         AgentDefinition(
             name="Support",
@@ -259,8 +271,7 @@ def test_shared_session_lifecycle_fixture() -> None:
         body(InvokeRequest(
             agent_key="support",
             input="hello",
-            session_key="conformance",
-            session_options=SessionOptions(),
+            session=InvocationSession(mode="continue", id=""),
         ))
 
 
@@ -284,9 +295,7 @@ def test_shared_agent_request_fixture() -> None:
         idempotency_key="conformance",
         on_budget_exhausted="hold",
         metadata={"board": "brand-2026", "surface": "web"},
-        session_options=SessionOptions(
-            retention=SessionRetention(ttl_seconds=86400),
-        ),
+        retention=SessionRetention(ttl_seconds=86400),
     )
     assert client._invocation_body(agent._request("hello", options)).to_dict() == expected
 
@@ -294,11 +303,11 @@ def test_shared_agent_request_fixture() -> None:
     # reconciliation instead of rejecting the pairing in the SDK.
     body = client._invocation_body(agent._request("hello", InvocationOptions(
         idempotency_key="conformance",
-        session_id=SESSION_ID,
-        session_options=SessionOptions(retention=SessionRetention(ttl_seconds=86400)),
+        session=InvocationSession(mode="continue", id=SESSION_ID),
+        retention=SessionRetention(ttl_seconds=86400),
     )))
-    assert body.session_id == SESSION_ID
-    assert body.session_options.retention.ttl_seconds == 86400
+    assert body.session.id == SESSION_ID
+    assert body.retention.ttl_seconds == 86400
 
 
 def test_shared_fetch_builtin_fixture_is_expressible() -> None:
@@ -673,7 +682,11 @@ async def test_shared_fault_server_semantics() -> None:
         handle = await client.invoke(InvokeRequest(
             agent_key="support",
             idempotency_key="python-lost-ack",
-            if_active="supersede",
+            session=InvocationSession(
+                mode="continue",
+                id=SESSION_ID,
+                if_active="supersede",
+            ),
             input="hello",
             provider_keys=(
                 ProviderKeySelection(
@@ -1214,14 +1227,12 @@ async def test_session_stream_uses_public_operation_and_follows_later_turns() ->
             self,
             session_id: str,
             *,
-            invocation_id: str | None,
             cursor: str | None,
             deltas: bool,
             last_event_id: str | None,
         ) -> httpx.Response:
             assert cursor is None
             assert deltas is True
-            assert invocation_id is None
             self.calls.append((session_id, last_event_id))
             return self.responses.pop(0)
 
@@ -1268,6 +1279,7 @@ async def test_invoke_maps_ephemeral_and_stored_provider_keys() -> None:
                 "status": "queued",
                 "deduplicated": False,
                 "deadline_at": None,
+                "content_expires_at": None,
             })()
 
         client.invocations.create_invocation = create
@@ -1716,6 +1728,7 @@ async def test_wait_controls_support_actionable_statuses_and_local_timeout() -> 
                 agent_id="agent_test",
                 status=status,
                 deadline_at=None,
+                content_expires_at=None,
             )
 
     actionable = InvocationHandle(
@@ -1885,7 +1898,10 @@ def test_shared_recorded_context_fixture_is_expressible() -> None:
     accepted = fixture["accepted"]["request"]
     body = client._invocation_body(InvokeRequest(
         agent_key=accepted["agent_key"],
-        session_key=accepted["session_key"],
+        session=InvocationSession(
+            mode="continue_or_create",
+            key=accepted["session_key"],
+        ),
         idempotency_key=accepted["idempotency_key"],
         input=accepted["input"],
         context=tuple(ContextItem(**item) for item in accepted["context"]),

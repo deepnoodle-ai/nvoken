@@ -12,6 +12,7 @@
             "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
             "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "content_expires_at": null,
             "user_key": null,
             "sequence": 1,
             "role": "user",
@@ -36,10 +37,13 @@
             "provenance": null,
             "structured_output": null,
             "structured_output_provenance": null,
-            "occurred_at": "2026-07-21T12:00:01Z"
+            "occurred_at": "2026-07-21T12:00:01Z",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "content_expires_at": null
           }
         ],
-        "cursor": "cursor-1"
+        "cursor": "cursor-1",
+        "content_expires_at": null
       }
     },
     {
@@ -54,6 +58,7 @@
             "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
             "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "content_expires_at": null,
             "user_key": null,
             "sequence": 1,
             "role": "user",
@@ -70,6 +75,7 @@
             "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
             "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "content_expires_at": null,
             "user_key": null,
             "sequence": 2,
             "role": "assistant",
@@ -94,7 +100,9 @@
             "provenance": null,
             "structured_output": null,
             "structured_output_provenance": null,
-            "occurred_at": "2026-07-21T12:00:01Z"
+            "occurred_at": "2026-07-21T12:00:01Z",
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "content_expires_at": null
           },
           {
             "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
@@ -117,10 +125,13 @@
                 "status": "completed",
                 "updated_at": "2026-07-21T12:00:02Z"
               }
-            ]
+            ],
+            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "content_expires_at": null
           }
         ],
-        "cursor": "cursor-2"
+        "cursor": "cursor-2",
+        "content_expires_at": null
       }
     },
     {
@@ -131,7 +142,8 @@
         "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [],
         "invocation_changes": [],
-        "cursor": "cursor-2"
+        "cursor": "cursor-2",
+        "content_expires_at": null
       }
     },
     {
@@ -146,7 +158,8 @@
         "content_index": 0,
         "kind": "text",
         "delta": "ephemeral",
-        "emitted_at": "2026-07-21T12:00:02Z"
+        "emitted_at": "2026-07-21T12:00:02Z",
+        "content_expires_at": null
       }
     }
   ],
@@ -166,7 +179,8 @@
             "content_index": 1,
             "kind": "text",
             "delta": "Hel",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -181,7 +195,8 @@
             "content_index": 0,
             "kind": "thinking",
             "delta": "plan",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -196,7 +211,8 @@
             "content_index": 1,
             "kind": "text",
             "delta": "lo",
-            "emitted_at": "2026-07-21T12:00:02Z"
+            "emitted_at": "2026-07-21T12:00:02Z",
+            "content_expires_at": null
           }
         }
       ],
@@ -236,7 +252,8 @@
             "delta": "{\"order_id\"",
             "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
             "name": "lookup_order",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -253,7 +270,8 @@
             "delta": ":\"A-1\"}",
             "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
             "name": "lookup_order",
-            "emitted_at": "2026-07-21T12:00:02Z"
+            "emitted_at": "2026-07-21T12:00:02Z",
+            "content_expires_at": null
           }
         }
       ],
@@ -285,7 +303,8 @@
             "content_index": 0,
             "kind": "text",
             "delta": "old",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -300,7 +319,8 @@
             "content_index": 1,
             "kind": "thinking",
             "delta": "old thought",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -315,7 +335,8 @@
             "content_index": 0,
             "kind": "text",
             "delta": "new",
-            "emitted_at": "2026-07-21T12:00:03Z"
+            "emitted_at": "2026-07-21T12:00:03Z",
+            "content_expires_at": null
           }
         }
       ],
@@ -345,7 +366,8 @@
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -355,7 +377,8 @@
             "type": "stream.resync",
             "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-            "reason": "live_delivery_gap"
+            "reason": "live_delivery_gap",
+            "content_expires_at": null
           }
         }
       ],
@@ -376,7 +399,8 @@
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -385,7 +409,8 @@
           "data": {
             "type": "stream.resync",
             "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "reason": "live_delivery_gap"
+            "reason": "live_delivery_gap",
+            "content_expires_at": null
           }
         }
       ],
@@ -406,7 +431,8 @@
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z"
+            "emitted_at": "2026-07-21T12:00:01Z",
+            "content_expires_at": null
           }
         },
         {
@@ -421,6 +447,7 @@
                 "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
                 "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
                 "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+                "content_expires_at": null,
                 "user_key": null,
                 "sequence": 2,
                 "role": "assistant",
@@ -434,7 +461,8 @@
               }
             ],
             "invocation_changes": [],
-            "cursor": "cursor-2"
+            "cursor": "cursor-2",
+            "content_expires_at": null
           }
         }
       ],

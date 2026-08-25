@@ -1,5 +1,5 @@
 //! A high-level Agent binding on top of the low-level `Client` verbs:
-//! `text`/`run`/`invoke`/`stream`/`session`, a host-tool dispatch loop, and
+//! `text`/`run`/`start`/`stream`/`bind_session`, a host-tool dispatch loop, and
 //! structured-output access. Parity target with the Go and Python bindings.
 
 use std::collections::{HashMap, HashSet};
@@ -14,9 +14,10 @@ use futures_util::{pin_mut, StreamExt};
 use serde_json::{json, Value};
 
 use crate::client::{
-    AgentDefinitionOverrides, BudgetExhaustionBehavior, Client, ContextItem, CreateAgentInput,
-    ErrorCategory, IfActivePolicy, InvocationHandle, InvokeRequest, McpServerHeaders, NvokenError,
-    ProviderKeySelection, SessionOptions, Tool, ToolMode, ToolResult, WaitCondition, WaitOptions,
+    AgentDefinitionOverrides, BudgetExhaustionBehavior, Client, ContextCompaction, ContextItem,
+    CreateAgentInput, ErrorCategory, IfActivePolicy, InvocationHandle, InvocationSession,
+    InvocationSessionOptions, InvokeRequest, McpServerHeaders, NvokenError, ProviderKeySelection,
+    SessionOptions, SessionRetention, Tool, ToolMode, ToolResult, WaitCondition, WaitOptions,
     WebhookTarget,
 };
 use crate::models;
@@ -136,9 +137,10 @@ impl AgentOptions {
 #[derive(Clone, Default)]
 pub struct AgentInvocationOptions {
     pub idempotency_key: Option<String>,
-    pub session_id: Option<String>,
-    pub session_key: Option<String>,
-    pub session_options: Option<SessionOptions>,
+    pub session: Option<InvocationSession>,
+    pub retention: Option<SessionRetention>,
+    pub compaction: Option<ContextCompaction>,
+    pub authorization_context: Option<HashMap<String, String>>,
     /// Who this turn is for. Per-call rather than per-Agent, because one Agent
     /// serves many end users; the first turn on a Session fixes it and later
     /// turns inherit it. See [`InvokeRequest::user_key`].
@@ -286,8 +288,8 @@ fn verify_declaration(options: &AgentOptions, record: &models::Agent) -> Result<
     ))
 }
 
-/// A high-level binding for one Agent identity: `text`/`run`/`invoke`/
-/// `stream`/`session` on top of the low-level `Client::invoke` verb, with a
+/// A high-level binding for one Agent identity: `text`/`run`/`start`/
+/// `stream`/`bind_session` on top of the low-level `Client::invoke` verb, with a
 /// host-tool dispatch loop and structured-output access built in. Cheap to
 /// clone; every clone shares the same underlying definition and host tools.
 #[derive(Clone)]
@@ -409,7 +411,7 @@ impl Agent {
     }
 
     /// Composes this Agent's identity and execution controls with one call's overrides into
-    /// the request `invoke` admits. It is the single place a per-call option
+    /// the request `Client::invoke` admits. It is the single place a per-call option
     /// reaches the wire, so the conformance suite can pin the whole admitted
     /// body without a server.
     pub fn request(&self, input: String, options: &AgentInvocationOptions) -> InvokeRequest {
@@ -434,12 +436,17 @@ impl Agent {
             agent_key,
             tenant_key: agent_options.tenant_key.clone(),
             user_key: options.user_key.clone(),
-            session_id: options.session_id.clone(),
-            session_key: options.session_key.clone(),
-            session_options: options.session_options.clone(),
+            session: options.session.clone().map(|mut session| {
+                if options.if_active.is_some() {
+                    session.if_active = options.if_active;
+                }
+                session
+            }),
+            retention: options.retention,
+            compaction: options.compaction.clone(),
+            authorization_context: options.authorization_context.clone(),
             triggered_by: options.triggered_by.clone(),
             idempotency_key: options.idempotency_key.clone(),
-            if_active: options.if_active,
             on_budget_exhausted: options
                 .on_budget_exhausted
                 .or(agent_options.on_budget_exhausted),
@@ -460,7 +467,7 @@ impl Agent {
         }
     }
 
-    pub async fn invoke(
+    pub async fn start(
         &self,
         input: impl Into<String>,
         options: AgentInvocationOptions,
@@ -483,7 +490,7 @@ impl Agent {
         input: impl Into<String>,
         options: AgentInvocationOptions,
     ) -> (Option<InvocationHandle>, Result<AgentResult, NvokenError>) {
-        let mut handle = match self.invoke(input, options.clone()).await {
+        let mut handle = match self.start(input, options.clone()).await {
             Ok(handle) => handle,
             Err(error) => return (None, Err(error)),
         };
@@ -529,7 +536,7 @@ impl Agent {
         options: AgentInvocationOptions,
     ) -> Result<(InvocationHandle, AgentEventStream), NvokenError> {
         let leave_waiting = options.leave_waiting_on_missing_handler;
-        let handle = self.invoke(input, options).await?;
+        let handle = self.start(input, options).await?;
         let agent = self.clone();
         let events_handle = handle.clone();
         let raw_source = handle.clone();
@@ -565,7 +572,11 @@ impl Agent {
     /// Binds this Agent to one Session; every call through the returned
     /// `AgentSession` serializes so a Session never admits two concurrent
     /// Invocations from this process.
-    pub fn session(&self, binding: SessionBinding) -> Result<AgentSession, NvokenError> {
+    pub fn bind_session(
+        &self,
+        binding: SessionBinding,
+        options: SessionOptions,
+    ) -> Result<BoundSession, NvokenError> {
         if binding.session_id.is_none() == binding.session_key.is_none() {
             return Err(NvokenError::validation(
                 "exactly one of session_id or session_key is required",
@@ -584,11 +595,12 @@ impl Agent {
             ),
         };
         let lock = self.client.session_lock(&key);
-        Ok(AgentSession {
+        Ok(BoundSession {
             agent: self.clone(),
             lock,
             session_id: binding.session_id,
             session_key: binding.session_key,
+            options,
         })
     }
 
@@ -912,33 +924,50 @@ impl SessionBinding {
 /// Session bound this way never admits two concurrent Invocations from this
 /// process regardless of how many `AgentSession` handles reference it.
 #[derive(Clone)]
-pub struct AgentSession {
+pub struct BoundSession {
     agent: Agent,
     lock: Arc<tokio::sync::Mutex<()>>,
     session_id: Option<String>,
     session_key: Option<String>,
+    options: SessionOptions,
 }
 
-impl AgentSession {
+impl BoundSession {
     fn bind(&self, options: &mut AgentInvocationOptions) -> Result<(), NvokenError> {
-        if options.session_id.is_some() || options.session_key.is_some() {
+        if options.session.is_some() {
             return Err(NvokenError::validation(
                 "bound Session calls cannot override their Session",
             ));
         }
-        options.session_id = self.session_id.clone();
-        options.session_key = self.session_key.clone();
+        let session_options = InvocationSessionOptions {
+            pinned_revision: self.options.pinned_revision,
+            on_conflict: self.options.on_conflict,
+        };
+        let mut session = match &self.session_id {
+            Some(session_id) => InvocationSession::continue_by_id(session_id.clone()),
+            None => {
+                InvocationSession::continue_or_create(self.session_key.clone().unwrap_or_default())
+            }
+        };
+        session.if_active = options.if_active;
+        if session_options.pinned_revision.is_some() || session_options.on_conflict.is_some() {
+            session.options = Some(session_options);
+        }
+        options.session = Some(session);
+        options.retention = self.options.retention;
+        options.compaction = self.options.compaction.clone();
+        options.authorization_context = self.options.authorization_context.clone();
         Ok(())
     }
 
-    pub async fn invoke(
+    pub async fn start(
         &self,
         input: impl Into<String>,
         mut options: AgentInvocationOptions,
     ) -> Result<InvocationHandle, NvokenError> {
         self.bind(&mut options)?;
         let guard = self.lock.clone().lock_owned().await;
-        match self.agent.invoke(input, options.clone()).await {
+        match self.agent.start(input, options.clone()).await {
             Ok(handle) => {
                 self.spawn_release(handle.clone(), options.wait, guard);
                 Ok(handle)

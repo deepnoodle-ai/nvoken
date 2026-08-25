@@ -94,8 +94,9 @@ nvoken invoke --agent-key researcher \
 nvoken invocation list --parent-invocation-id null # top-level only
 ```
 
-The child still owns a normal Session. Set `session_options.retention` in an
-SDK request or a complete CLI request file when that Session should expire.
+The child is standalone when no Session selector is supplied. Set top-level
+`retention` in an SDK request or a complete CLI request file when its private
+content needs a longer window.
 
 ## Repository layout
 

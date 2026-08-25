@@ -640,6 +640,28 @@ func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invoc
 	})
 }
 
+// DeleteInvocation erases the private content of a terminal standalone
+// Invocation. Conversation-bound Invocations must be erased with their whole
+// Session, and nonterminal standalone work must settle first.
+func (c *Client) DeleteInvocation(ctx context.Context, invocationID string) error {
+	_, err := callReplaySafe(ctx, c.retry, false, func() (callResult[struct{}], error) {
+		response, callErr := c.raw.DeleteInvocationWithResponse(ctx, invocationID)
+		if callErr != nil {
+			return callResult[struct{}]{}, callErr
+		}
+		result := callResult[struct{}]{
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}
+		if result.Status == http.StatusNoContent {
+			result.Value = &struct{}{}
+		}
+		return result, nil
+	})
+	return err
+}
+
 func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
 	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationResult], error) {
 		response, err := c.raw.GetInvocationResultWithResponse(ctx, invocationID)
@@ -2743,20 +2765,22 @@ func (c *Client) EachProviderKey(
 }
 
 type InvocationHandle struct {
-	client         *Client
-	InvocationID   string           `json:"invocation_id"`
-	IdempotencyKey string           `json:"idempotency_key,omitempty"`
-	SessionID      string           `json:"session_id,omitempty"`
-	AgentID        string           `json:"agent_id,omitempty"`
-	Status         InvocationStatus `json:"status,omitempty"`
-	Deduplicated   *bool            `json:"deduplicated,omitempty"`
-	DeadlineAt     *time.Time       `json:"deadline_at,omitempty"`
+	client           *Client
+	InvocationID     string           `json:"invocation_id"`
+	IdempotencyKey   string           `json:"idempotency_key,omitempty"`
+	SessionID        *string          `json:"session_id"`
+	ContentExpiresAt *time.Time       `json:"content_expires_at,omitempty"`
+	AgentID          string           `json:"agent_id,omitempty"`
+	Status           InvocationStatus `json:"status,omitempty"`
+	Deduplicated     *bool            `json:"deduplicated,omitempty"`
+	DeadlineAt       *time.Time       `json:"deadline_at,omitempty"`
 }
 
 func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.GetInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
+		h.ContentExpiresAt = invocation.ContentExpiresAt
 		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 		h.DeadlineAt = invocation.DeadlineAt
@@ -2813,6 +2837,7 @@ func (h *InvocationHandle) Result(ctx context.Context) (*InvocationResult, error
 	result, err := h.client.GetInvocationResult(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = result.Invocation.SessionID
+		h.ContentExpiresAt = result.Invocation.ContentExpiresAt
 		h.AgentID = agentIDOrEmpty(result.Invocation.AgentID)
 		h.Status = result.Invocation.Status
 	}
@@ -2860,6 +2885,7 @@ func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.CancelInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
+		h.ContentExpiresAt = invocation.ContentExpiresAt
 		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 	}
@@ -2870,6 +2896,7 @@ func (h *InvocationHandle) Interrupt(ctx context.Context) (*Invocation, error) {
 	invocation, err := h.client.InterruptInvocation(ctx, h.InvocationID)
 	if err == nil {
 		h.SessionID = invocation.SessionID
+		h.ContentExpiresAt = invocation.ContentExpiresAt
 		h.AgentID = agentIDOrEmpty(invocation.AgentID)
 		h.Status = invocation.Status
 	}

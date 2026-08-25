@@ -205,12 +205,10 @@ pub fn stream_handle_with_options(
     options: StreamOptions,
 ) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
     try_stream! {
-        let session_id = handle.require_session_id().await?;
         let mut reducer = Reducer::default();
         let inner = read_stream(
             handle,
-            session_id,
-            Some(handle.invocation_id.clone()),
+            handle.invocation_id.clone(),
             options,
         );
         pin_mut!(inner);
@@ -232,17 +230,16 @@ pub fn stream_handle_with_options(
 /// a turn started later appears on it.
 pub fn read_stream(
     handle: &InvocationHandle,
-    session_id: String,
-    invocation_id: Option<String>,
+    invocation_id: String,
     options: StreamOptions,
 ) -> impl futures_core::Stream<Item = Result<StreamEvent, NvokenError>> + '_ {
     try_stream! {
         let mut cursor: Option<String> = None;
         let mut retry = Duration::from_secs(1);
         loop {
-            let path = routes::STREAM_SESSION.replace(
-                "{session_id}",
-                &crate::apis::urlencode(&session_id),
+            let path = routes::STREAM_INVOCATION.replace(
+                "{invocation_id}",
+                &crate::apis::urlencode(&invocation_id),
             );
             let url = format!("{}{}", handle.client.configuration.base_path, path);
             let mut request = handle
@@ -255,9 +252,6 @@ pub fn read_stream(
             }
             if let Some(cursor) = &cursor {
                 request = request.header(HeaderName::from_static("last-event-id"), cursor);
-            }
-            if let Some(invocation_id) = &invocation_id {
-                request = request.query(&[("invocation_id", invocation_id)]);
             }
             if let Some(deltas) = options.deltas {
                 request = request.query(&[("deltas", deltas)]);

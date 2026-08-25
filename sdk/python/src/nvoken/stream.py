@@ -185,10 +185,9 @@ async def iter_invocation(
     deltas: bool = True,
 ) -> AsyncIterator[StreamEvent]:
     """Follow one turn, ending once a change for it carries a terminal status."""
-    session_id = await handle.require_session_id()
     reducer = Reducer()
     async for event in _read_stream(
-        client, session_id, handle.invocation_id, reducer, deltas=deltas
+        client, None, handle.invocation_id, reducer, deltas=deltas
     ):
         yield event
         if reducer.settled(handle.invocation_id):
@@ -197,7 +196,7 @@ async def iter_invocation(
 
 async def _read_stream(
     client: Client,
-    session_id: str,
+    session_id: str | None,
     invocation_id: str | None,
     reducer: Reducer,
     *,
@@ -211,13 +210,21 @@ async def _read_stream(
     """
     retry = 1.0
     while True:
-        response = await client.stream_sessions.stream_session_without_preload_content(
-            session_id,
-            invocation_id=invocation_id,
-            cursor=None,
-            deltas=deltas,
-            last_event_id=reducer.snapshot().cursor,
-        )
+        if invocation_id is None:
+            assert session_id is not None
+            response = await client.stream_sessions.stream_session_without_preload_content(
+                session_id,
+                cursor=None,
+                deltas=deltas,
+                last_event_id=reducer.snapshot().cursor,
+            )
+        else:
+            response = await client.stream_invocations.stream_invocation_without_preload_content(
+                invocation_id,
+                cursor=None,
+                deltas=deltas,
+                last_event_id=reducer.snapshot().cursor,
+            )
         try:
             if response.is_error:
                 from .client import normalize_httpx_response

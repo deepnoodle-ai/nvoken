@@ -2,7 +2,10 @@
   "tool_calls": {
     "items": [
       {
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+        "content_expires_at": null,
         "mode": "builtin",
         "name": "nvoken_fetch",
         "status": "completed",
@@ -13,7 +16,10 @@
         "result_origin": "builtin"
       },
       {
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+        "content_expires_at": null,
         "mode": "host",
         "name": "ask_user",
         "status": "running",
@@ -24,7 +30,10 @@
         "result_origin": null
       },
       {
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+        "content_expires_at": null,
         "mode": "callback",
         "name": "create_ticket",
         "status": "completed",
@@ -40,7 +49,10 @@
         "result_origin": "callback"
       },
       {
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+        "content_expires_at": null,
         "mode": "mcp",
         "name": "support__lookup",
         "status": "failed",
@@ -51,7 +63,10 @@
         "result_origin": "mcp"
       },
       {
+        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a",
+        "content_expires_at": null,
         "mode": "callback",
         "name": "run_migration",
         "status": "completed",

@@ -4,6 +4,7 @@ export * from './AdmissionsApi.js';
 export * from './AgentDefinitionsApi.js';
 export * from './AgentsApi.js';
 export * from './AppsApi.js';
+export * from './ConsoleIntegrationApi.js';
 export * from './CreditsApi.js';
 export * from './IdentityApi.js';
 export * from './InvocationsApi.js';

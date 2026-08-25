@@ -6,7 +6,7 @@ Definition; a Session is one conversation with that Agent.
 
 The package has three deliberate levels:
 
-- `Agent` is the ordinary workflow facade: `text`, `run`, `invoke`, `stream`,
+- `Agent` is the ordinary workflow facade: `text`, `run`, `start`, `stream`,
   and locally serialized bound Sessions.
 - `Client` and `InvocationHandle` expose durable operations, transcript
   drains, collection iterators, configurable waits, and resumable streams.
@@ -217,12 +217,11 @@ console.log(result.agentId, result.sessionId, result.deduplicated);
 Install restart-stable compaction on a new or existing Session:
 
 ```ts
-const handle = await agent.invoke("hello", {
-  sessionKey: "support:123",
-  sessionOptions: {
-    compaction: { triggerTokens: "auto" as const },
-  },
-});
+const chat = agent.bindSession(
+  { sessionKey: "support:123" },
+  { compaction: { triggerTokens: "auto" as const } },
+);
+const handle = await chat.start("hello");
 ```
 
 An exact integer trigger and optional same-provider summary model are also
@@ -237,7 +236,7 @@ diagnostics with `client.listSessionCompactions(sessionId)`.
 Correlate a turn with your own records using per-call `metadata`:
 
 ```ts
-const handle = await agent.invoke("Summarize this issue.", {
+const handle = await agent.start("Summarize this issue.", {
   metadata: { board: "brand-2026", traceId: "018f-4a" },
 });
 ```
@@ -246,12 +245,18 @@ It is part of the admitted input, so it is immutable and material to
 idempotency: a replay carrying different metadata conflicts rather than
 updating it. That is why it is per-call rather than an Agent-level default.
 
-`agent.invoke()` admits the turn and immediately returns its durable handle:
+`agent.start()` admits a standalone turn and immediately returns its durable
+handle:
 
 ```ts
-const handle = await agent.invoke("Summarize this issue.");
+const handle = await agent.start("Summarize this issue.");
 const result = await handle.waitForResult();
 ```
+
+Standalone work creates no reusable conversation, so `handle.sessionId` is
+`null`. Its private content is retained for at least an hour after settlement;
+read `handle.contentExpiresAt` for the scheduled boundary. Bind a Session only
+when later turns should reuse conversation history.
 
 Use a lazy handle to recover work in another process. Creating it performs no
 request:
@@ -355,9 +360,7 @@ const support = client.agent({
   definitionKey: resource.definitionKey,
 });
 
-const handle = await support.invoke("Why was I charged twice?", {
-  sessionKey: "ticket-483",
-});
+const handle = await support.start("Why was I charged twice?");
 ```
 
 `AgentDefinition` is flat and matches the wire, and a read gives back the same
@@ -415,8 +418,8 @@ const support = client.agent({
   agentKey: "support",
 });
 
-const answer = await support.text("Can I refund the duplicate charge?", {
-  sessionKey: "ticket-483",
+const conversation = support.bindSession({ sessionKey: "ticket-483" });
+const answer = await conversation.text("Can I refund the duplicate charge?", {
   context: [
     { name: "customer", tier: "contextual", content: "plan: pro" },
     { name: "refund-policy", tier: "operator", content: "Self-serve refunds cap at 50 USD" },
@@ -481,7 +484,7 @@ that every named server exists, before the request leaves the process.
 Bind a Session once and use it like a chat:
 
 ```ts
-const chat = support.session({ sessionKey: "ticket-483" });
+const chat = support.bindSession({ sessionKey: "ticket-483" });
 
 await chat.text("Remember that my code is ORCHID-724.");
 console.log(await chat.text("What is my code?"));
@@ -490,14 +493,15 @@ console.log(await chat.text("What is my code?"));
 You can also bind a durable Session ID:
 
 ```ts
-const chat = agent.session({ sessionId: "sess_..." });
+const chat = agent.bindSession({ sessionId: "sess_..." });
 ```
 
 Every turn admitted through the same binding is serialized locally, including
-`invoke()` and `stream()`, matching nvoken's
-one-nonterminal-Invocation-per-Session rule. `invoke()` still returns as soon as
+`start()` and `stream()`, matching nvoken's
+one-nonterminal-Invocation-per-Session rule. `start()` still returns as soon as
 its turn is admitted, while the binding keeps that Session reserved until the
-Invocation ends. Use `agent.invoke()` directly for application-managed
+Invocation ends. Use an explicit `session` selector on `agent.start()` for
+application-managed
 concurrency. A race from another binding or process throws `SessionBusyError`
 with the active Invocation ID and status.
 
@@ -505,8 +509,8 @@ For an intentional replace/regenerate action, bypass the bound Session queue
 with a new idempotency key and the typed policy:
 
 ```ts
-const handle = await agent.invoke("Try that answer again.", {
-  sessionKey: "ticket-483",
+const handle = await agent.start("Try that answer again.", {
+  session: { mode: "continue_or_create", key: "ticket-483" },
   idempotencyKey: "ticket-483:regenerate-2",
   ifActive: "supersede",
 });
@@ -900,8 +904,8 @@ Invocation usage as a convenience estimate rather than a billing ledger.
 
 ### Child Invocations
 
-Record the exact ToolCall that caused another turn, and use normal Session
-retention when the child's transcript is temporary:
+Record the exact ToolCall that caused another turn. A one-off child can stay
+standalone and expire automatically:
 
 ```ts
 const child = await client.invoke({
@@ -912,7 +916,7 @@ const child = await client.invoke({
     parentInvocationId: parent.id,
     toolCallId: call.id,
   },
-  sessionOptions: { retention: { ttlSeconds: 3600 } },
+  retention: { ttlSeconds: 3600 },
 });
 ```
 

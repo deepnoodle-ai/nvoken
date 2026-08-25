@@ -12,6 +12,11 @@
       "path": "/v1/credits/allocations"
     },
     {
+      "operation_id": "approveConsoleDeviceAuthorization",
+      "method": "POST",
+      "path": "/v1/console/device-authorizations/{user_code}/approve"
+    },
+    {
       "operation_id": "archiveAgent",
       "method": "DELETE",
       "path": "/v1/agents/{agent_id}"
@@ -57,6 +62,11 @@
       "path": "/v1/apps/{app_id}/client-keys"
     },
     {
+      "operation_id": "createConsoleDeviceAuthorization",
+      "method": "POST",
+      "path": "/v1/console/device-authorizations"
+    },
+    {
       "operation_id": "createCredential",
       "method": "POST",
       "path": "/v1/identity/credentials"
@@ -82,6 +92,11 @@
       "path": "/v1/sessions"
     },
     {
+      "operation_id": "deleteInvocation",
+      "method": "DELETE",
+      "path": "/v1/invocations/{invocation_id}"
+    },
+    {
       "operation_id": "deleteMemory",
       "method": "DELETE",
       "path": "/v1/memories/{memory_id}"
@@ -95,6 +110,16 @@
       "operation_id": "deleteTenant",
       "method": "DELETE",
       "path": "/v1/tenants/{tenant_id}"
+    },
+    {
+      "operation_id": "denyConsoleDeviceAuthorization",
+      "method": "POST",
+      "path": "/v1/console/device-authorizations/{user_code}/deny"
+    },
+    {
+      "operation_id": "exchangeConsoleDeviceAuthorization",
+      "method": "POST",
+      "path": "/v1/console/device-authorizations/{device_code}/exchange"
     },
     {
       "operation_id": "forkSession",
@@ -120,6 +145,11 @@
       "operation_id": "getApp",
       "method": "GET",
       "path": "/v1/apps/{app_id}"
+    },
+    {
+      "operation_id": "getConsoleDeviceAuthorization",
+      "method": "GET",
+      "path": "/v1/console/device-authorizations/{user_code}"
     },
     {
       "operation_id": "getCredential",
@@ -405,6 +435,11 @@
       "operation_id": "rotateProviderKey",
       "method": "POST",
       "path": "/v1/provider-keys/{provider_key_id}/rotate"
+    },
+    {
+      "operation_id": "streamInvocation",
+      "method": "GET",
+      "path": "/v1/invocations/{invocation_id}/stream"
     },
     {
       "operation_id": "streamSession",

@@ -27,40 +27,47 @@ func main() {
 		log.Fatal(err)
 	}
 	sessionKey := "context-compaction-example"
-	first, err := agent.Run(
-		ctx,
-		strings.Repeat("Remember this durable context. ", 800),
-		nvoken.AgentInvocationOptions{
-			SessionKey: &sessionKey,
-			SessionOptions: &nvoken.SessionOptions{
-				Compaction: &nvoken.ContextCompaction{
-					TriggerTokens: nvoken.ContextCompactionAt(4096),
-				},
+	conversation, err := agent.BindSession(
+		nvoken.SessionBinding{SessionKey: sessionKey},
+		nvoken.SessionOptions{
+			Compaction: &nvoken.ContextCompaction{
+				TriggerTokens: nvoken.ContextCompactionAt(4096),
 			},
 		},
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+	first, err := conversation.Run(
+		ctx,
+		strings.Repeat("Remember this durable context. ", 800),
+		nvoken.AgentInvocationOptions{},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if first.Handle.SessionID == nil {
+		log.Fatal("conversation turn returned no Session ID")
+	}
 	before, err := client.ListSessionMessages(
 		ctx,
-		first.Handle.SessionID,
+		*first.Handle.SessionID,
 		nvoken.MessageListOptions{},
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	second, err := agent.Run(
+	second, err := conversation.Run(
 		ctx,
 		"What context did I ask you to remember?",
-		nvoken.AgentInvocationOptions{SessionID: &first.Handle.SessionID},
+		nvoken.AgentInvocationOptions{},
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	after, err := client.ListSessionMessages(
 		ctx,
-		first.Handle.SessionID,
+		*first.Handle.SessionID,
 		nvoken.MessageListOptions{},
 	)
 	if err != nil {
@@ -73,7 +80,7 @@ func main() {
 	}
 	fmt.Printf(
 		"Session %s kept %d canonical messages; second Invocation %s completed.\n",
-		first.Handle.SessionID,
+		*first.Handle.SessionID,
 		len(after.Items),
 		second.Handle.InvocationID,
 	)

@@ -11,6 +11,7 @@ from nvoken import (
     TERMINAL_INVOCATION_STATUSES,
     Agent,
     AgentOptions,
+    InvocationSession,
     InvocationOptions,
     MissingToolHandlerError,
     NoOutputTextError,
@@ -176,12 +177,15 @@ async def test_agent_five_verbs_dispatch_and_typed_structured_output() -> None:
     client = FakeClient(handles)
     agent = Agent(client, agent_options(tool))  # type: ignore[arg-type]
 
-    handle = await agent.invoke(
+    handle = await agent.start(
         "invoke",
-        options=InvocationOptions(if_active="supersede"),
+        options=InvocationOptions(
+            session=InvocationSession(mode="continue", id=SESSION_ID),
+            if_active="supersede",
+        ),
     )
     assert handle.invocation_id == INVOCATION_ID
-    assert client.invocations[0].if_active == "supersede"
+    assert client.invocations[0].session.if_active == "supersede"
 
     streamed = [
         item.event.type
@@ -195,9 +199,9 @@ async def test_agent_five_verbs_dispatch_and_typed_structured_output() -> None:
     assert result.structured_output == Answer(answer="warm")
 
     assert await agent.text("text") == "hello"
-    bound = agent.session(session_key="customer-123")
+    bound = agent.bind_session(session_key="customer-123")
     assert await bound.text("bound") == "hello"
-    assert client.invocations[-1].session_key == "customer-123"
+    assert client.invocations[-1].session.key == "customer-123"
     assert handler_calls == [{"city": "Paris"}] * 4
 
 
@@ -218,7 +222,7 @@ async def test_bound_session_serializes_admission() -> None:
         return "done"
 
     agent.run = delayed_run  # type: ignore[method-assign]
-    bound = agent.session(session_id=SESSION_ID)
+    bound = agent.bind_session(session_id=SESSION_ID)
     first = asyncio.create_task(bound.run("first"))
     second = asyncio.create_task(bound.run("second"))
     await asyncio.sleep(0)
@@ -341,8 +345,8 @@ async def test_declared_agent_creates_its_record_on_first_use() -> None:
     )
     assert agent.id is None and agent.resource is None
 
-    await agent.invoke("first")
-    await agent.invoke("second")
+    await agent.start("first")
+    await agent.start("second")
 
     assert len(client.creates) == 1
     assert client.creates[0]["definition_key"] == "support"
