@@ -15,9 +15,12 @@ from .client import (
     BuiltinTool,
     BudgetExhaustionBehavior,
     Client,
+    ContextCompaction,
     ContextItem,
     IfActivePolicy,
     InvocationHandle,
+    InvocationSession,
+    InvocationSessionOptions,
     InvocationTrigger,
     InvokeRequest,
     MCPServerHeaders,
@@ -25,6 +28,7 @@ from .client import (
     NvokenError,
     ProviderKeySelection,
     SessionOptions,
+    SessionRetention,
     Tool,
     ToolResult,
     ended_message,
@@ -116,9 +120,10 @@ class InvocationOptions:
     overrides: AgentDefinitionOverrides | None = None
     if_active: IfActivePolicy | None = None
     on_budget_exhausted: BudgetExhaustionBehavior | None = None
-    session_id: str | None = None
-    session_key: str | None = None
-    session_options: SessionOptions | None = None
+    session: InvocationSession | None = None
+    retention: SessionRetention | None = None
+    compaction: ContextCompaction | None = None
+    authorization_context: dict[str, str] | None = None
     # Who this turn is for. Per-call rather than per-Agent, because one Agent
     # serves many end users; the first turn on a Session fixes it and later
     # turns inherit it. See `InvokeRequest.user_key`.
@@ -319,7 +324,7 @@ class Agent(Generic[StructuredT]):
         """
         return call.mode == "host"
 
-    async def invoke(
+    async def start(
         self,
         input: str,
         *,
@@ -378,7 +383,7 @@ class Agent(Generic[StructuredT]):
         options: InvocationOptions | None = None,
     ) -> AsyncIterator[AgentStreamEvent]:
         call = options or InvocationOptions()
-        handle = await self.invoke(input, options=call)
+        handle = await self.start(input, options=call)
         submitted: set[str] = set()
         iterator = handle.events().__aiter__()
         deadline = _deadline(call.timeout)
@@ -477,11 +482,12 @@ class Agent(Generic[StructuredT]):
         await handle.submit_tool_results(results)
         return len(results)
 
-    def session(
+    def bind_session(
         self,
         *,
         session_id: str | None = None,
         session_key: str | None = None,
+        options: SessionOptions | None = None,
     ) -> BoundSession[StructuredT]:
         if (session_id is None) == (session_key is None):
             raise NvokenError(
@@ -499,6 +505,7 @@ class Agent(Generic[StructuredT]):
             lock,
             session_id=session_id,
             session_key=session_key,
+            options=options or SessionOptions(),
         )
 
     def _request(self, input: str, options: InvocationOptions) -> InvokeRequest:
@@ -516,16 +523,20 @@ class Agent(Generic[StructuredT]):
             overrides=options.overrides,
             mcp_server_headers=self.options.mcp_server_headers,
             idempotency_key=options.idempotency_key,
-            if_active=options.if_active,
             on_budget_exhausted=(
                 options.on_budget_exhausted or self.options.on_budget_exhausted
             ),
             tenant_key=self.options.tenant_key,
             user_key=options.user_key,
             triggered_by=options.triggered_by,
-            session_id=options.session_id,
-            session_key=options.session_key,
-            session_options=options.session_options,
+            session=(
+                replace(options.session, if_active=options.if_active)
+                if options.session is not None and options.if_active is not None
+                else options.session
+            ),
+            retention=options.retention,
+            compaction=options.compaction,
+            authorization_context=options.authorization_context,
             provider_keys=self.options.provider_keys,
             # A per-call target overrides the agent default so one Agent can
             # webhook different endpoints without a second Agent.
@@ -637,13 +648,15 @@ class BoundSession(Generic[StructuredT]):
         *,
         session_id: str | None,
         session_key: str | None,
+        options: SessionOptions,
     ) -> None:
         self.agent = agent
         self._lock = lock
         self.session_id = session_id
         self.session_key = session_key
+        self.options = options
 
-    async def invoke(
+    async def start(
         self,
         input: str,
         *,
@@ -651,7 +664,7 @@ class BoundSession(Generic[StructuredT]):
     ) -> InvocationHandle:
         await self._lock.acquire()
         try:
-            handle = await self.agent.invoke(input, options=self._options(options))
+            handle = await self.agent.start(input, options=self._options(options))
         except BaseException:
             self._lock.release()
             raise
@@ -693,15 +706,33 @@ class BoundSession(Generic[StructuredT]):
 
     def _options(self, options: InvocationOptions | None) -> InvocationOptions:
         call = options or InvocationOptions()
-        if call.session_id is not None or call.session_key is not None:
+        if call.session is not None:
             raise NvokenError(
                 "validation",
                 "bound Session calls cannot override their Session",
             )
+        invocation_session_options = InvocationSessionOptions(
+            pinned_revision=self.options.pinned_revision,
+            on_conflict=self.options.on_conflict,
+        )
+        session = InvocationSession(
+            mode="continue" if self.session_id is not None else "continue_or_create",
+            id=self.session_id,
+            key=self.session_key,
+            if_active=call.if_active,
+            options=(
+                invocation_session_options
+                if invocation_session_options.pinned_revision is not None
+                or invocation_session_options.on_conflict is not None
+                else None
+            ),
+        )
         return replace(
             call,
-            session_id=self.session_id,
-            session_key=self.session_key,
+            session=session,
+            retention=self.options.retention,
+            compaction=self.options.compaction,
+            authorization_context=self.options.authorization_context,
         )
 
     async def _release_when_terminal(

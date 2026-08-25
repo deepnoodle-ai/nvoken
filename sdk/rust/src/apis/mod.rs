@@ -126,6 +126,7 @@ pub mod admissions_api;
 pub mod agent_definitions_api;
 pub mod agents_api;
 pub mod apps_api;
+pub mod console_integration_api;
 pub mod credits_api;
 pub mod identity_api;
 pub mod invocations_api;

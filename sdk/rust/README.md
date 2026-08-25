@@ -113,11 +113,11 @@ Invocation usage as a convenience estimate rather than a billing ledger.
 
 ### Child Invocations
 
-Record the exact ToolCall that caused another turn, and use normal Session
-retention when the child's transcript is temporary:
+Record the exact ToolCall that caused another turn. A one-off child can stay
+standalone and expire automatically:
 
 ```rust
-use nvoken::{models, InvokeRequest, SessionOptions};
+use nvoken::{models, InvokeRequest};
 
 let mut child = InvokeRequest::new("researcher", "Investigate this branch");
 child.triggered_by = Some(models::InvocationTrigger::new(
@@ -125,7 +125,7 @@ child.triggered_by = Some(models::InvocationTrigger::new(
     parent.id,
     call.id,
 ));
-child.session_options = Some(SessionOptions::default().retention(3600));
+child.retention = Some(nvoken::SessionRetention { ttl_seconds: 3600 });
 ```
 
 Set `parent_invocation_id` on `ListInvocationsOptions` to an Invocation ID for
@@ -137,13 +137,10 @@ Install restart-stable compaction on a new or existing Session:
 
 ```rust
 let request = InvokeRequest::new("support", "hello")
-    .session_key("support:123")
-    .session_options(SessionOptions {
-        compaction: ContextCompaction {
-            trigger_tokens: ContextCompactionTrigger::Auto,
-            model: None,
-        },
-        ..Default::default()
+    .session(InvocationSession::continue_or_create("support:123"))
+    .compaction(ContextCompaction {
+        trigger_tokens: ContextCompactionTrigger::Auto,
+        model: None,
     });
 ```
 
@@ -163,9 +160,11 @@ idempotency key and the typed builder:
 
 ```rust
 let request = InvokeRequest::new("support", "Try that answer again.")
-    .session_key("customer-123")
-    .idempotency_key("customer-123:regenerate-2")
-    .if_active(IfActivePolicy::Supersede);
+    .session(
+        InvocationSession::continue_or_create("customer-123")
+            .if_active(IfActivePolicy::Supersede),
+    )
+    .idempotency_key("customer-123:regenerate-2");
 let handle = client.invoke(request).await?;
 ```
 
@@ -206,11 +205,20 @@ holds the decoded value, and `AgentResult::raw` keeps the full
 A bound Session serializes admission only within the local client:
 
 ```rust
-let session = agent.session(SessionBinding::by_key("customer-123"))?;
+let session = agent.bind_session(
+    SessionBinding::by_key("customer-123"),
+    SessionOptions::default(),
+)?;
 let answer = session
     .text("What should I do next?", AgentInvocationOptions::default())
     .await?;
 ```
+
+Unbound `start`, `run`, and `text` calls are standalone: they create no
+reusable conversation and return `session_id: None`. Their private content is
+retained for at least an hour after settlement; read `content_expires_at` for
+the scheduled boundary. Bind a Session only when later turns should reuse
+conversation history.
 
 For anything the Agent facade does not cover, Session SSE, transcript
 draining, and provider-key lifecycle operations remain available
@@ -294,7 +302,7 @@ let resource = client
 
 let agent = client.agent(AgentOptions::declared("support", resource.definition_key))?;
 let handle = agent
-    .invoke("Why was I charged twice?", AgentInvocationOptions::default())
+    .start("Why was I charged twice?", AgentInvocationOptions::default())
     .await?;
 ```
 
@@ -354,11 +362,14 @@ Keep `instructions` static. Product state that changes between turns — a board
 snapshot, customer facts, the current policy — belongs in `context`:
 
 ```rust
-let answer = agent
+let conversation = agent.bind_session(
+    SessionBinding::by_key("ticket-483"),
+    SessionOptions::default(),
+)?;
+let answer = conversation
     .text(
         "Can I refund the duplicate charge?",
         AgentInvocationOptions {
-            session_key: Some("ticket-483".to_owned()),
             context: vec![
                 ContextItem::new("customer", ContextTier::Contextual, "plan: pro"),
                 ContextItem::new(

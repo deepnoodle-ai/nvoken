@@ -79,6 +79,8 @@ mod tests {
     fn change(status: models::InvocationStatus, terminal: bool) -> models::InvocationChange {
         models::InvocationChange::new(
             "inv_1".to_string(),
+            None,
+            None,
             1,
             status,
             terminal,

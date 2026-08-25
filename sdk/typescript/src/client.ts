@@ -78,7 +78,6 @@ import type {
   InputBlock as GeneratedInputBlock,
   SessionMessage,
   SessionMessageList,
-  SessionOptions as GeneratedSessionOptions,
   SubmitHostToolResultsResponse,
   ToolCallList,
   TranscriptSnapshot,
@@ -136,6 +135,7 @@ import {
   Reducer,
   streamInvocationByID,
   streamInvocationByIDWithOptions,
+  streamInvocationReducedByID,
   streamSessionByID,
   type SessionStreamEvent,
   type StreamOptions,
@@ -172,6 +172,30 @@ export class NvokenError extends Error {
   ) {
     super(message, options);
     this.name = "NvokenError";
+  }
+}
+
+/** A retained standalone Invocation whose private content has expired. */
+export class InvocationErasedError extends NvokenError {
+  constructor(
+    message: string,
+    public readonly invocationId?: string,
+    public readonly erasedAt?: Date,
+    requestId?: string,
+    details?: Record<string, unknown>,
+    options?: ErrorOptions,
+  ) {
+    super(
+      "not_found",
+      message,
+      410,
+      "invocation_erased",
+      requestId,
+      undefined,
+      details,
+      options,
+    );
+    this.name = "InvocationErasedError";
   }
 }
 
@@ -261,7 +285,7 @@ export class SessionBusyError extends NvokenError {
 
 export class InvocationError<TOutput extends object = JsonObject> extends NvokenError {
   readonly invocationId: string;
-  readonly sessionId: string;
+  readonly sessionId: string | null;
   readonly terminalStatus: InvocationStatus;
   readonly failureCode?: string;
 
@@ -540,7 +564,7 @@ export type OutputSchema<TOutput extends object = JsonObject> =
 
 export interface ToolHandlerContext<TOutput extends object = object> {
   invocationId: string;
-  sessionId: string;
+  sessionId: string | null;
   toolCallId: string;
   handle: InvocationHandle<TOutput>;
 }
@@ -973,7 +997,6 @@ interface InvokeRequestBase {
   /** Safe per-turn replacements that cannot expand Agent authority. */
   overrides?: AgentDefinitionOverrides;
   idempotencyKey?: string;
-  ifActive?: IfActivePolicy;
   onBudgetExhausted?: BudgetExhaustionBehavior;
   input: InvokeInput;
   webhook?: WebhookTarget;
@@ -1013,10 +1036,23 @@ type AgentIdentityRequest =
   | { agentId: string; agentKey?: never }
   | { agentKey: string; agentId?: never };
 
-type SessionTargetRequest =
-  | { sessionId: string; sessionKey?: never; sessionOptions?: SessionOptions }
-  | { sessionKey: string; sessionId?: never; sessionOptions?: SessionOptions }
-  | { sessionId?: never; sessionKey?: never; sessionOptions?: SessionOptions };
+export type InvocationSession =
+  | { mode: "new"; id?: never; key?: never; ifActive?: never; options?: InvocationSessionOptions }
+  | { mode: "continue"; id: string; key?: never; ifActive?: IfActivePolicy; options?: InvocationSessionOptions }
+  | { mode: "continue_or_create"; key: string; id?: never; ifActive?: IfActivePolicy; options?: InvocationSessionOptions };
+
+export interface InvocationSessionOptions {
+  pinnedRevision?: number;
+  onConflict?: "refuse" | "join";
+}
+
+type SessionTargetRequest = {
+  /** Omit for a standalone Invocation. */
+  session?: InvocationSession;
+  retention?: SessionRetention;
+  compaction?: ContextCompaction;
+  authorizationContext?: Metadata;
+};
 
 export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase
   & AgentIdentityRequest & SessionTargetRequest;
@@ -1027,8 +1063,8 @@ export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBa
  * A browser token names the Agent, the Definition revision, the tenant, and
  * the end user, so none of them appear here — there is nothing for a page to
  * choose and nothing for it to get wrong. The fields a browser token is not
- * allowed to send are absent for the same reason: `sessionKey`,
- * `sessionOptions`, `triggeredBy`, `providerKeys`, `mcpServerHeaders`, and
+ * allowed to send are absent for the same reason: keyed Session creation,
+ * Session options, `triggeredBy`, `providerKeys`, `mcpServerHeaders`, and
  * `webhook` are the host's authority, and the service refuses them here rather
  * than ignoring them.
  *
@@ -1039,10 +1075,10 @@ export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBa
 export interface BrowserInvokeRequest {
   input: InvokeInput;
   idempotencyKey?: string;
-  /** Continue this Session. Omit it under an anonymous grant. */
-  sessionId?: string;
-  /** `supersede` is the host's authority and is refused from a browser token. */
-  ifActive?: Exclude<IfActivePolicy, "supersede">;
+  /** Omit for standalone; managed anonymous grants must omit this too. */
+  session?:
+    | { mode: "new" }
+    | { mode: "continue"; id: string; ifActive?: Exclude<IfActivePolicy, "supersede"> };
   /** `hold` is the host's authority and is refused from a browser token. */
   onBudgetExhausted?: Exclude<BudgetExhaustionBehavior, "hold">;
   /** Safe per-turn replacements that cannot expand Agent authority. */
@@ -1187,9 +1223,10 @@ export type AgentOptions<TOutput extends object = JsonObject> =
   };
 
 export interface InvocationOptions {
-  sessionId?: string;
-  sessionKey?: string;
-  sessionOptions?: SessionOptions;
+  session?: InvocationSession;
+  retention?: SessionRetention;
+  compaction?: ContextCompaction;
+  authorizationContext?: Metadata;
   /**
    * Who this turn is for. Per-call rather than per-Agent, because one Agent
    * serves many end users; the first turn on a Session fixes it and later
@@ -1232,7 +1269,10 @@ export interface SessionBindingByKey {
 }
 
 export type SessionBinding = SessionBindingByID | SessionBindingByKey;
-export type BoundInvocationOptions = Omit<InvocationOptions, "sessionId" | "sessionKey">;
+export type BoundInvocationOptions = Omit<
+  InvocationOptions,
+  "session" | "retention" | "compaction" | "authorizationContext"
+>;
 
 export interface AgentResult<TOutput extends object = JsonObject> {
   handle: EndedInvocationHandle<TOutput>;
@@ -1242,7 +1282,7 @@ export interface AgentResult<TOutput extends object = JsonObject> {
   structuredOutput: TOutput | null;
   idempotencyKey: string;
   agentId: string;
-  sessionId: string;
+  sessionId: string | null;
   deduplicated: boolean;
 }
 
@@ -1250,7 +1290,7 @@ export type EndedInvocationHandle<TOutput extends object = JsonObject> =
   InvocationHandle<TOutput> & {
     readonly idempotencyKey: string;
     readonly deduplicated: boolean;
-    sessionId: string;
+    sessionId: string | null;
     agentId: string;
     /**
      * The two endings that carry work. `incomplete` is a turn that ran out of
@@ -1575,6 +1615,7 @@ export interface WaitOptions {
  */
 export interface StreamClient {
   readonly sessions: SessionsApi;
+  readonly invocations: InvocationsApi;
   readonly configuration: Configuration;
   readonly retry: Required<RetryPolicy>;
   readonly fetch: typeof globalThis.fetch;
@@ -2247,21 +2288,7 @@ export class Client implements StreamClient {
         "supply exactly one of agentId and agentKey",
       );
     }
-    if (request.sessionId && request.sessionKey) {
-      throw new NvokenError(
-        "validation",
-        "sessionId and sessionKey are mutually exclusive",
-      );
-    }
-    if (request.ifActive !== undefined
-      && request.ifActive !== "reject"
-      && request.ifActive !== "supersede"
-      && request.ifActive !== "interrupt") {
-      throw new NvokenError(
-        "validation",
-        "ifActive must be reject, supersede, or interrupt",
-      );
-    }
+    validateInvocationSession(request.session);
     if (request.onBudgetExhausted !== undefined
       && request.onBudgetExhausted !== "stop"
       && request.onBudgetExhausted !== "hold") {
@@ -2291,6 +2318,7 @@ export class Client implements StreamClient {
       ack.deduplicated,
       ack.deadlineAt,
       undefined,
+      ack.contentExpiresAt,
     );
   }
 
@@ -2594,6 +2622,13 @@ export class Client implements StreamClient {
       () => this.invocations.getInvocation({ invocationId }, { signal }),
       signal,
     ) as Promise<TypedInvocation<TOutput>>;
+  }
+
+  /** Erases the private content of a terminal standalone Invocation. */
+  deleteInvocation(invocationId: string, signal?: AbortSignal): Promise<void> {
+    return this.callOnce(
+      () => this.invocations.deleteInvocation({ invocationId }, { signal }),
+    );
   }
 
   getInvocationResult<TOutput extends object = JsonObject>(
@@ -3168,7 +3203,8 @@ export type EnsuredAgent<TOutput extends object = JsonObject> =
  *   definitionKey: "support",
  *   tools: [lookupOrderTool],
  * });
- * await support.run("Where is order 4821?", { sessionKey: "ticket-483" });
+ * const ticket = support.bindSession({ sessionKey: "ticket-483" });
+ * await ticket.run("Where is order 4821?");
  * ```
  */
 export class Agent<TOutput extends object = JsonObject> {
@@ -3425,11 +3461,14 @@ export class Agent<TOutput extends object = JsonObject> {
     return !this.callbackTools.has(call.name);
   }
 
-  session(binding: SessionBinding): AgentSession<TOutput> {
-    return new AgentSession(this, binding);
+  bindSession(
+    binding: SessionBinding,
+    options: SessionOptions = {},
+  ): BoundSession<TOutput> {
+    return new BoundSession(this, binding, options);
   }
 
-  async invoke(
+  async start(
     input: InvokeInput,
     options: InvocationOptions = {},
   ): Promise<InvocationHandle<TOutput>> {
@@ -3468,7 +3507,6 @@ export class Agent<TOutput extends object = JsonObject> {
       idempotencyKey,
       definitionRevision: options.definitionRevision,
       overrides: options.overrides,
-      ifActive: options.ifActive,
       onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
       input,
       mcpServerHeaders: this.options.mcpServerHeaders,
@@ -3479,21 +3517,20 @@ export class Agent<TOutput extends object = JsonObject> {
       context: options.context,
       metadata: options.metadata,
     };
-    if (options.sessionId) {
-      return {
-        ...request,
-        sessionId: options.sessionId,
-        sessionOptions: options.sessionOptions,
-      };
+    let session = options.session;
+    if (session !== undefined && options.ifActive !== undefined) {
+      if (session.mode === "new") {
+        throw new NvokenError("validation", "ifActive cannot be used with session mode new");
+      }
+      session = { ...session, ifActive: options.ifActive };
     }
-    if (options.sessionKey) {
-      return {
-        ...request,
-        sessionKey: options.sessionKey,
-        sessionOptions: options.sessionOptions,
-      };
-    }
-    return { ...request, sessionOptions: options.sessionOptions };
+    return {
+      ...request,
+      session,
+      retention: options.retention,
+      compaction: options.compaction,
+      authorizationContext: options.authorizationContext,
+    };
   }
 
   /**
@@ -3548,7 +3585,7 @@ export class Agent<TOutput extends object = JsonObject> {
     signal?: AbortSignal,
   ): Promise<InvocationHandle<TOutput>> {
     const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.invoke(input, { ...options, idempotencyKey, signal });
+    return this.start(input, { ...options, idempotencyKey, signal });
   }
 
   private async *streamLoop(
@@ -3763,12 +3800,13 @@ export class Agent<TOutput extends object = JsonObject> {
   }
 }
 
-export class AgentSession<TOutput extends object = JsonObject> {
+export class BoundSession<TOutput extends object = JsonObject> {
   private serial: Promise<void> = Promise.resolve();
 
   constructor(
     readonly agent: Agent<TOutput>,
     readonly binding: SessionBinding,
+    readonly options: SessionOptions = {},
   ) {
     if ("sessionId" in binding && !binding.sessionId) {
       throw new NvokenError("validation", "sessionId is required");
@@ -3778,7 +3816,7 @@ export class AgentSession<TOutput extends object = JsonObject> {
     }
   }
 
-  invoke(
+  start(
     input: InvokeInput,
     options: BoundInvocationOptions = {},
   ): Promise<InvocationHandle<TOutput>> {
@@ -3790,7 +3828,7 @@ export class AgentSession<TOutput extends object = JsonObject> {
     this.serial = prior.then(() => active, () => active);
     return prior.then(async () => {
       try {
-        const handle = await this.agent.invoke(input, { ...this.binding, ...options });
+        const handle = await this.agent.start(input, this.invocationOptions(options));
         // Keep the bound Session reserved until the Invocation is terminal,
         // even if the caller stops waiting for it.
         void handle.wait().then(release, release);
@@ -3803,7 +3841,7 @@ export class AgentSession<TOutput extends object = JsonObject> {
   }
 
   run(input: InvokeInput, options: BoundInvocationOptions = {}): Promise<AgentResult<TOutput>> {
-    return this.serialize(() => this.agent.run(input, { ...this.binding, ...options }));
+    return this.serialize(() => this.agent.run(input, this.invocationOptions(options)));
   }
 
   async text(input: InvokeInput, options: BoundInvocationOptions = {}): Promise<string> {
@@ -3822,7 +3860,7 @@ export class AgentSession<TOutput extends object = JsonObject> {
     this.serial = prior.then(() => active, () => active);
     await prior;
     try {
-      yield* this.agent.stream(input, { ...this.binding, ...options });
+      yield* this.agent.stream(input, this.invocationOptions(options));
     } finally {
       release();
     }
@@ -3833,6 +3871,33 @@ export class AgentSession<TOutput extends object = JsonObject> {
     this.serial = result.then(() => undefined, () => undefined);
     return result;
   }
+
+  private invocationOptions(options: BoundInvocationOptions): InvocationOptions {
+    const sessionOptions: InvocationSessionOptions = {
+      pinnedRevision: this.options.pinnedRevision,
+      onConflict: this.options.onConflict,
+    };
+    const session = this.binding.sessionId !== undefined
+      ? {
+          mode: "continue" as const,
+          id: this.binding.sessionId,
+          ifActive: options.ifActive,
+          options: hasInvocationSessionOptions(sessionOptions) ? sessionOptions : undefined,
+        }
+      : {
+          mode: "continue_or_create" as const,
+          key: this.binding.sessionKey,
+          ifActive: options.ifActive,
+          options: hasInvocationSessionOptions(sessionOptions) ? sessionOptions : undefined,
+        };
+    return {
+      ...options,
+      session,
+      retention: this.options.retention,
+      compaction: this.options.compaction,
+      authorizationContext: this.options.authorizationContext,
+    };
+  }
 }
 
 export class InvocationHandle<TOutput extends object = JsonObject> {
@@ -3840,12 +3905,13 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     private readonly client: Client,
     public readonly invocationId: string,
     public readonly idempotencyKey?: string,
-    public sessionId?: string,
+    public sessionId?: string | null,
     public agentId?: string,
     public status?: InvocationStatus,
     public readonly deduplicated?: boolean,
     public deadlineAt?: Date | null,
     public modelProvider?: ModelProvider,
+    public contentExpiresAt?: Date | null,
   ) {}
 
   applyInvocation(invocation: TypedInvocation<TOutput>): void {
@@ -3853,6 +3919,7 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     this.agentId = invocation.agentId;
     this.status = invocation.status;
     this.deadlineAt = invocation.deadlineAt;
+    this.contentExpiresAt = invocation.contentExpiresAt;
     // Provider identity is an open string: record whatever the Runtime reported
     // so a provider added after this SDK version still reaches diagnostics.
     if (!this.modelProvider && invocation.provenance?.provider) {
@@ -4023,10 +4090,8 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     options: StreamOptions,
     signal?: AbortSignal,
   ): AsyncGenerator<SessionStreamEvent<TOutput>> {
-    const sessionId = await this.requireSessionId(signal);
     yield* streamInvocationByIDWithOptions<TOutput>(
       this.client,
-      sessionId,
       this.invocationId,
       options,
       signal,
@@ -4059,11 +4124,10 @@ export class InvocationHandle<TOutput extends object = JsonObject> {
     options: StreamOptions,
     signal?: AbortSignal,
   ): AsyncGenerator<StreamUpdate> {
-    const sessionId = await this.requireSessionId(signal);
     const reducer = new Reducer();
-    for await (const update of streamSessionByID(
+    for await (const update of streamInvocationReducedByID(
       this.client,
-      sessionId,
+      this.invocationId,
       reducer,
       options,
       signal,
@@ -4134,31 +4198,37 @@ function scopeHeaders(scope: Scope | undefined): Record<string, string> {
   };
 }
 
-function sessionOptionsToWire(
-  options: SessionOptions | undefined,
-): GeneratedSessionOptions | undefined {
-  if (options === undefined) return undefined;
-  if (options.compaction === undefined && options.retention === undefined
-    && options.authorizationContext === undefined && options.pinnedRevision === undefined
-    && options.onConflict === undefined) {
-    throw new NvokenError("validation", "sessionOptions requires at least one member");
+function hasInvocationSessionOptions(options: InvocationSessionOptions): boolean {
+  return options.pinnedRevision !== undefined || options.onConflict !== undefined;
+}
+
+function validateInvocationSession(session: InvocationSession | undefined): void {
+  if (session === undefined) return;
+  if (session.ifActive !== undefined
+    && session.ifActive !== "reject"
+    && session.ifActive !== "supersede"
+    && session.ifActive !== "interrupt") {
+    throw new NvokenError("validation", "session.ifActive must be reject, supersede, or interrupt");
   }
-  return {
-    compaction: options.compaction === undefined ? undefined : {
-      triggerTokens: options.compaction.triggerTokens,
-      model: options.compaction.model === undefined
-        ? undefined
-        : normalizeModel(options.compaction.model),
-    },
-    retention: options.retention === undefined
-      ? undefined
-      : { ttlSeconds: options.retention.ttlSeconds },
-    authorizationContext: options.authorizationContext === undefined
-      ? undefined
-      : { ...options.authorizationContext },
-    pinnedRevision: options.pinnedRevision,
-    onConflict: options.onConflict,
-  };
+  if (session.mode === "new") {
+    if ("id" in session || "key" in session || session.ifActive !== undefined) {
+      throw new NvokenError("validation", "session mode new accepts neither id, key, nor ifActive");
+    }
+    return;
+  }
+  if (session.mode === "continue") {
+    if (!session.id || "key" in session) {
+      throw new NvokenError("validation", "session mode continue requires only id");
+    }
+    return;
+  }
+  if (session.mode === "continue_or_create") {
+    if (!session.key || "id" in session) {
+      throw new NvokenError("validation", "session mode continue_or_create requires only key");
+    }
+    return;
+  }
+  throw new NvokenError("validation", "session mode is invalid");
 }
 
 /**
@@ -4289,12 +4359,23 @@ function invocationRequestToWire<TOutput extends object>(
     overrides: request.overrides === undefined
       ? undefined
       : agentDefinitionOverridesToWire(request.overrides),
-    sessionId: request.sessionId,
-    sessionKey: request.sessionKey,
-    sessionOptions: sessionOptionsToWire(request.sessionOptions),
+    session: request.session,
+    retention: request.retention === undefined
+      ? undefined
+      : { ttlSeconds: request.retention.ttlSeconds },
+    compaction: request.compaction === undefined
+      ? undefined
+      : {
+          triggerTokens: request.compaction.triggerTokens,
+          model: request.compaction.model === undefined
+            ? undefined
+            : normalizeModel(request.compaction.model),
+        },
+    authorizationContext: request.authorizationContext === undefined
+      ? undefined
+      : { ...request.authorizationContext },
     metadata: request.metadata === undefined ? undefined : { ...request.metadata },
     idempotencyKey,
-    ifActive: request.ifActive,
     onBudgetExhausted: request.onBudgetExhausted,
     input: typeof request.input === "string"
       ? request.input
@@ -4489,7 +4570,6 @@ function asEndedHandle<TOutput extends object>(
 ): EndedInvocationHandle<TOutput> {
   if (
     !handle.idempotencyKey
-    || !handle.sessionId
     || !handle.agentId
     || handle.deduplicated === undefined
     || !isOutcomeStatus(handle.status ?? "")
@@ -4709,6 +4789,21 @@ export async function normalizeError(error: unknown): Promise<NvokenError> {
       // Status and response headers still produce an actionable error.
     }
     const requestId = body.request_id ?? response.headers.get("x-request-id") ?? undefined;
+    if (response.status === 410 && body.code === "invocation_erased") {
+      const erasedAt = typeof body.details?.erased_at === "string"
+        ? new Date(body.details.erased_at)
+        : undefined;
+      return new InvocationErasedError(
+        body.message ?? "The Invocation content has been erased.",
+        typeof body.details?.invocation_id === "string"
+          ? body.details.invocation_id
+          : undefined,
+        erasedAt !== undefined && !Number.isNaN(erasedAt.getTime()) ? erasedAt : undefined,
+        requestId,
+        body.details,
+        { cause: error },
+      );
+    }
     if (body.code === "session_invocation_active") {
       return new SessionBusyError(
         body.message ?? "This Session already has a nonterminal Invocation.",

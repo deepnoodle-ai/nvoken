@@ -35,6 +35,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		"invoke",
 		"hello",
 		"--agent-key", "support",
+		"--session-key", "ticket-A-42",
 		"--idempotency-key", "cli-lost-ack",
 		"--if-active", "supersede",
 		"--provider", "openai",
@@ -58,6 +59,7 @@ func TestRuntimeWorkflowsAndOutputModes(t *testing.T) {
 		"invoke",
 		"hello again",
 		"--agent-key", "support",
+		"--session-key", "ticket-A-42",
 		"--idempotency-key", "cli-answer",
 		"--if-active", "supersede",
 		"--provider", "openai",
@@ -413,21 +415,6 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 	var admission map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
-		// The stream is Session-scoped, so a bare Invocation ID resolves the
-		// Session it belongs to before the stream opens.
-		case "/v1/invocations/" + testInvocationID:
-			response.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(response, `{
-				"id":"`+testInvocationID+`",
-				"session_id":"`+testSessionID+`",
-				"definition_id":"def_019b0a12-8d51-7f34-aed2-0e07c1bdb330",
-				"definition_revision":1,
-				"status":"completed",
-				"attempt":1,
-				"active_execution_ms":0,
-				"created_at":"2026-07-21T12:00:00Z",
-				"updated_at":"2026-07-21T12:00:03Z"
-			}`)
 		case "/v1/invocations":
 			admission = nil
 			if err := json.NewDecoder(request.Body).Decode(&admission); err != nil {
@@ -462,7 +449,7 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 				"updated_at":"2026-07-21T12:00:00Z",
 				"ended_at":null
 			}`)
-		case "/v1/sessions/" + testSessionID + "/stream":
+		case "/v1/invocations/" + testInvocationID + "/stream":
 			response.Header().Set("Content-Type", "text/event-stream")
 			// Complete frames, as the service sends them. The reader refuses a
 			// payload missing a member the contract requires, so a fixture that
@@ -471,14 +458,15 @@ func TestAgentAdmissionAndDeltaRendering(t *testing.T) {
 			_, _ = io.WriteString(response, `data: {"type":"message.delta","session_id":"`+testSessionID+`",`+
 				`"invocation_id":"`+testInvocationID+`","attempt":1,"message_id":"pmsg_1",`+
 				`"content_index":0,"kind":"text","delta":"streamed answer",`+
-				`"emitted_at":"2026-07-21T12:00:02Z"}`+"\n\n")
+				`"emitted_at":"2026-07-21T12:00:02Z","content_expires_at":null}`+"\n\n")
 			_, _ = io.WriteString(response, "id: cursor-2\n")
 			_, _ = io.WriteString(response, "event: transcript.update\n")
 			_, _ = io.WriteString(response, `data: {"type":"transcript.update","session_id":"`+testSessionID+`",`+
 				`"messages":[],"invocation_changes":[`+
 				`{"invocation_id":"`+testInvocationID+`","revision":1,"status":"completed","terminal":true,`+
 				`"through_message_sequence":null,"error":null,"structured_output":null,`+
-				`"occurred_at":"2026-07-21T12:00:03Z"}],"cursor":"cursor-2"}`+"\n\n")
+				`"occurred_at":"2026-07-21T12:00:03Z","session_id":"`+testSessionID+`",`+
+				`"content_expires_at":null}],"cursor":"cursor-2","content_expires_at":null}`+"\n\n")
 		default:
 			http.NotFound(response, request)
 		}

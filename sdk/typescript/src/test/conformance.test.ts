@@ -845,6 +845,7 @@ function wireInvocation(
     id: invocationId,
     agent_id: agentId,
     session_id: sessionId,
+    content_expires_at: null,
     definition_id: "def_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
     definition: null,
     status,
@@ -1029,7 +1030,7 @@ test("session options, metadata and provider tools match the shared fixture", as
     new URL("../../../conformance/fixtures/session-lifecycle-v1.json", import.meta.url),
     "utf8",
   )) as {
-    session_options: Record<string, unknown>;
+    session_options: Record<string, any>;
     invocation_metadata: Record<string, string>;
     provider_tools: Record<string, unknown[]>;
   };
@@ -1051,41 +1052,54 @@ test("session options, metadata and provider tools match the shared fixture", as
   });
   await client.invoke({
     agentKey: "support",
-    sessionKey: "conformance",
-    sessionOptions: { retention: { ttlSeconds: 86400 } },
+    session: { mode: "continue_or_create", key: "conformance" },
+    retention: { ttlSeconds: 86400 },
     metadata: fixture.invocation_metadata,
     input: "hello",
   });
   const wire = body as Record<string, any>;
-  assert.deepEqual(wire.session_options, fixture.session_options.retention_only);
+  assert.deepEqual(wire.session, { mode: "continue_or_create", key: "conformance" });
+  assert.deepEqual(wire.retention, fixture.session_options.retention_only.retention);
   assert.deepEqual(wire.metadata, fixture.invocation_metadata);
 	assert.equal(wire.agent_key, "support");
 
   await client.invoke({
-	agentKey: "support",
-    sessionKey: "conformance",
-    sessionOptions: {
-      compaction: { triggerTokens: 32768 },
-      retention: { ttlSeconds: 3600 },
-      authorizationContext: { surface: "web" },
+    agentKey: "support",
+    session: {
+      mode: "continue_or_create",
+      key: "conformance",
+      options: {
       pinnedRevision: 4,
       onConflict: "join",
+      },
     },
+    compaction: { triggerTokens: 32768 },
+    retention: { ttlSeconds: 3600 },
+    authorizationContext: { surface: "web" },
     input: "hello",
   });
   const configured = body as Record<string, any>;
-  assert.deepEqual(configured.session_options, fixture.session_options.every_member);
-	assert.equal(configured.agent_key, "support");
+  assert.deepEqual(configured.session, {
+    mode: "continue_or_create",
+    key: "conformance",
+    options: { pinned_revision: 4, on_conflict: "join" },
+  });
+  assert.deepEqual(configured.compaction, fixture.session_options.every_member.compaction);
+  assert.deepEqual(configured.retention, fixture.session_options.every_member.retention);
+  assert.deepEqual(
+    configured.authorization_context,
+    fixture.session_options.every_member.authorization_context,
+  );
+  assert.equal(configured.agent_key, "support");
 
   // Session options with no members would serialize to `{}`, which the Runtime
   // rejects for minProperties — catching it locally names the field.
   await assert.rejects(
-	client.invoke({
-	  agentKey: "support",
-      sessionKey: "conformance",
-      sessionOptions: {},
+    client.invoke({
+      agentKey: "support",
+      session: { mode: "continue", id: "" },
       input: "hello",
-    }),
+    } as any),
     (error: unknown) => error instanceof NvokenError && error.category === "validation",
   );
 });
@@ -1112,15 +1126,13 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   });
   await client.agent({
 	agentKey: "support",
-  }).invoke("hello", {
+  }).start("hello", {
     idempotencyKey: "conformance",
     onBudgetExhausted: "hold",
     metadata: { board: "brand-2026", surface: "web" },
     // Durable options apply on a new anonymous Session too, which is where a
     // short retention window matters most.
-	sessionOptions: {
-	  retention: { ttlSeconds: 86400 },
-	},
+    retention: { ttlSeconds: 86400 },
   });
   assert.deepEqual(body, expected);
 
@@ -1128,12 +1140,12 @@ test("agent-issued requests carry every field the shared fixture pins", async ()
   // reconciliation instead of rejecting the pairing in the SDK.
   await client.agent({
 	agentKey: "support",
-  }).invoke("hello", {
-    sessionId,
-    sessionOptions: { retention: { ttlSeconds: 86400 } },
+  }).start("hello", {
+    session: { mode: "continue", id: sessionId },
+    retention: { ttlSeconds: 86400 },
   });
-  assert.equal(body.session_id, sessionId);
-  assert.deepEqual(body.session_options, { retention: { ttl_seconds: 86400 } });
+  assert.deepEqual(body.session, { mode: "continue", id: sessionId });
+  assert.deepEqual(body.retention, { ttl_seconds: 86400 });
 });
 
 test("Agent Definition creation preflights converted output schemas once before transport", async () => {
@@ -1282,6 +1294,7 @@ test("InvocationError is actionable without a formatter", () => {
     },
     activeExecutionMs: 20,
     deadlineAt: new Date("2026-07-21T12:05:00Z"),
+    contentExpiresAt: null,
     createdAt: new Date("2026-07-21T12:00:00Z"),
     updatedAt: new Date("2026-07-21T12:00:01Z"),
     endedAt: new Date("2026-07-21T12:00:01Z"),
@@ -1355,7 +1368,7 @@ test("shared fault server semantics", async (context) => {
   const handle = await client.invoke({
     agentKey: "support",
     idempotencyKey: "typescript-lost-ack",
-    ifActive: "supersede",
+    session: { mode: "continue", id: sessionId, ifActive: "supersede" },
     input: "hello",
     providerKeys: [{
       provider: "openai",
@@ -1701,6 +1714,8 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   // acknowledgement is the POST and the result is a read.
   const change = (revision: number, status: string) => ({
     invocation_id: invocationId,
+    session_id: sessionId,
+    content_expires_at: null,
     revision,
     status,
     terminal: isTerminalStatus(status),
@@ -1741,7 +1756,7 @@ test("agent run converts standard schemas, retries one admission, and dispatches
         deduplicated: true,
       });
     }
-    if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+    if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
       return new Response(streamBody, {
         status: 200,
         headers: { "content-type": "text/event-stream" },
@@ -1752,8 +1767,10 @@ test("agent run converts standard schemas, retries one admission, and dispatches
       return json(202, {
         invocation_id: invocationId,
         session_id: sessionId,
+        content_expires_at: null,
         status: "queued",
         results: [{ tool_call_id: toolCallId, status: "completed", deduplicated: false }],
+        tool_calls: [],
       });
     }
     if (url.pathname.endsWith("/result")) {
@@ -1784,7 +1801,10 @@ test("agent run converts standard schemas, retries one admission, and dispatches
   const result = await client.agent({
 	agentKey: "support",
 	tools: [lookup],
-  }).run("Where is my order?", { ifActive: "supersede" });
+  }).run("Where is my order?", {
+    session: { mode: "continue", id: sessionId },
+    ifActive: "supersede",
+  });
 
   assert.equal(result.text, "ready");
   assert.deepEqual(result.structuredOutput, { answer: "ready" });
@@ -1795,7 +1815,10 @@ test("agent run converts standard schemas, retries one admission, and dispatches
     admissionBodies[1]?.idempotency_key,
   );
   assert.match(String(admissionBodies[0]?.idempotency_key), /^nvoken-/);
-  assert.equal(admissionBodies[0]?.if_active, "supersede");
+  assert.equal(
+    (admissionBodies[0]?.session as Record<string, unknown> | undefined)?.if_active,
+    "supersede",
+  );
 	assert.equal(admissionBodies[0]?.agent_key, "support");
 	assert.equal(admissionBodies[0]?.definition_id, undefined);
 });
@@ -1813,7 +1836,7 @@ test("agent run falls back from a broken stream to authoritative reads", async (
       if (url.pathname === "/v1/invocations" && init?.method === "POST") {
         return admissionResponse();
       }
-      if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+      if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
         // A stream this client cannot use at all, and one no reconnect would
         // fix. The run falls back to authoritative reads rather than failing.
         return Response.json(
@@ -1866,6 +1889,8 @@ test("missing handlers cancel by default and support explicit handoff", async ()
         messages: [],
         invocation_changes: [{
           invocation_id: invocationId,
+          session_id: sessionId,
+          content_expires_at: null,
           revision: 1,
           status: "waiting",
           terminal: isTerminalStatus("waiting"),
@@ -1947,6 +1972,8 @@ test("text reports structured-only completion and stream timeout distinctly", as
         messages: [],
         invocation_changes: [{
           invocation_id: invocationId,
+          session_id: sessionId,
+          content_expires_at: null,
           revision: 1,
           status: "completed",
           terminal: isTerminalStatus("completed"),
@@ -2249,6 +2276,8 @@ test("agent stream exposes the two-frame consumer without a reducer", async () =
         messages: [],
         invocation_changes: [{
           invocation_id: invocationId,
+          session_id: sessionId,
+          content_expires_at: null,
           revision: 2,
           status: "completed",
           terminal: isTerminalStatus("completed"),
@@ -2317,7 +2346,7 @@ test("agent stream exposes the two-frame consumer without a reducer", async () =
   assert.equal(requestBodies[0], requestBodies[1]);
   assert.equal((JSON.parse(requestBodies[0]!) as { input: string }).input, "hello");
   assert.deepEqual(streamRequests, [
-    `GET /v1/sessions/${sessionId}/stream?invocation_id=${invocationId}`,
+    `GET /v1/invocations/${invocationId}/stream?`,
   ]);
   assert.deepEqual(observed, ["message.delta", "transcript.update"]);
 });
@@ -2380,10 +2409,10 @@ test("bound session serializes invoke admission until the prior turn ends", asyn
       throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
     },
   });
-	const chat = client.agent({ agentKey: "support" }).session({ sessionKey: "ticket-42" });
+  const chat = client.agent({ agentKey: "support" }).bindSession({ sessionKey: "ticket-42" });
 
-  const first = await chat.invoke("first");
-  const secondPromise = chat.invoke("second");
+  const first = await chat.start("first");
+  const secondPromise = chat.start("second");
   await new Promise((resolvePromise) => setTimeout(resolvePromise, 0));
   assert.equal(admissions, 1);
 
@@ -3014,7 +3043,7 @@ test("shared recorded-context fixture is expressible", async () => {
   const accepted = fixture.accepted.request;
   await client.invoke({
     agentKey: accepted.agent_key,
-    sessionKey: accepted.session_key,
+    session: { mode: "continue_or_create", key: accepted.session_key },
     idempotencyKey: accepted.idempotency_key,
     input: accepted.input,
     context: accepted.context,
@@ -3078,7 +3107,7 @@ test("run() returns a budget-stopped turn instead of throwing", async () => {
       if (url.pathname === "/v1/invocations" && init?.method === "POST") {
         return admissionResponse();
       }
-      if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+      if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
         return Response.json(
           { code: "invalid_request", message: "cursor is invalid.", request_id: "req_broken" },
           { status: 400 },
@@ -3117,7 +3146,7 @@ test("run() still throws for the endings that carry no work", async () => {
         if (url.pathname === "/v1/invocations" && init?.method === "POST") {
           return admissionResponse();
         }
-        if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+        if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
           return Response.json(
             { code: "invalid_request", message: "cursor is invalid.", request_id: "req_broken" },
             { status: 400 },
@@ -3233,7 +3262,7 @@ test("a declared Agent creates its record on first use", async () => {
   assert.equal(support.id, undefined);
   assert.equal(creates.length, 0);
 
-  await support.invoke("hello", { idempotencyKey: "first" });
+  await support.start("hello", { idempotencyKey: "first" });
   assert.deepEqual(creates[0], {
     tenant_key: "customer-482",
     agent_key: "support",
@@ -3246,7 +3275,7 @@ test("a declared Agent creates its record on first use", async () => {
   assert.equal(JSON.stringify(support), JSON.stringify(support.resource));
 
   // A second turn neither re-creates the record nor re-resolves the key.
-  await support.invoke("again", { idempotencyKey: "second" });
+  await support.start("again", { idempotencyKey: "second" });
   assert.equal(creates.length, 1);
   assert.equal(admissions[0]?.agent_id, agentId);
   assert.equal(admissions[0]?.agent_key, undefined);
@@ -3279,7 +3308,7 @@ test("one Agent type, whether declared or read back", async () => {
   // and the object is otherwise the same Agent.
   const runnable = fetched.withTools([]);
   assert.equal(runnable.id, agentId);
-  const handle = await runnable.invoke("hello", { idempotencyKey: "hydrated" });
+  const handle = await runnable.start("hello", { idempotencyKey: "hydrated" });
   assert.equal(handle.invocationId, invocationId);
 
   // ensure() on an Agent that already knows its record is not a request.
@@ -3389,7 +3418,7 @@ test("a stream that can never connect stops retrying and says so", async () => {
       if (url.pathname === "/v1/invocations" && init?.method === "POST") {
         return admissionResponse();
       }
-      if (url.pathname === `/v1/sessions/${sessionId}/stream`) {
+      if (url.pathname === `/v1/invocations/${invocationId}/stream`) {
         attempts += 1;
         // What an unbound fetch throws on workerd, and what every later
         // attempt would throw too.
@@ -3905,6 +3934,8 @@ test("a browser client streams the Session it just started", async () => {
           messages: [],
           invocation_changes: [{
             invocation_id: invocationId,
+            session_id: sessionId,
+            content_expires_at: null,
             revision: 1,
             status: "completed",
             terminal: isTerminalStatus("completed"),

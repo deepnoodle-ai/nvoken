@@ -5,6 +5,7 @@ from nvoken_generated.api.admissions_api import AdmissionsApi
 from nvoken_generated.api.agent_definitions_api import AgentDefinitionsApi
 from nvoken_generated.api.agents_api import AgentsApi
 from nvoken_generated.api.apps_api import AppsApi
+from nvoken_generated.api.console_integration_api import ConsoleIntegrationApi
 from nvoken_generated.api.credits_api import CreditsApi
 from nvoken_generated.api.identity_api import IdentityApi
 from nvoken_generated.api.invocations_api import InvocationsApi

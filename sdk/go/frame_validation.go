@@ -20,19 +20,19 @@ import (
 // generated `instanceOf` guards in TypeScript — so this is Go catching up to
 // them rather than a rule of its own.
 var requiredFrameKeys = map[string][]string{
-	"TranscriptUpdateEvent": {"type", "session_id", "messages", "invocation_changes", "cursor"},
+	"TranscriptUpdateEvent": {"type", "session_id", "content_expires_at", "messages", "invocation_changes", "cursor"},
 	"MessageDeltaEvent": {
 		"type", "session_id", "invocation_id", "attempt", "message_id",
-		"content_index", "kind", "delta", "emitted_at",
+		"content_index", "kind", "delta", "emitted_at", "content_expires_at",
 	},
-	"StreamResyncEvent": {"type", "session_id", "reason"},
+	"StreamResyncEvent": {"type", "session_id", "content_expires_at", "reason"},
 	// No ConnectionClosingEvent: this SDK never decodes one. The read loop
 	// reconnects from its own cursor without reading the frame.
 	"InvocationChange": {
 		"invocation_id", "revision", "status", "terminal",
-		"through_message_sequence", "error", "structured_output", "occurred_at",
+		"session_id", "content_expires_at", "through_message_sequence", "error", "structured_output", "occurred_at",
 	},
-	"SessionMessage": {"id", "session_id", "invocation_id", "sequence", "role", "content", "created_at"},
+	"SessionMessage": {"id", "session_id", "content_expires_at", "invocation_id", "sequence", "role", "content", "created_at"},
 }
 
 // requireFrameKeys reports whether one payload carries every member the contract

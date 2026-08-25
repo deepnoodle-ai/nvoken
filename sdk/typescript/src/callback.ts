@@ -19,7 +19,7 @@ export interface CallbackEnvelope {
      */
     tool_name: string;
     invocation_id: string;
-    session_id: string;
+    session_id: string | null;
     agent_key: string;
     tenant_key?: string;
   };
@@ -270,4 +270,3 @@ export function createCallbackReceiver(options: CallbackReceiverOptions): Callba
 function settledOrAcknowledged(reply: CallbackReply): "settled" | "acknowledged" {
   return reply.status === 202 ? "acknowledged" : "settled";
 }
-

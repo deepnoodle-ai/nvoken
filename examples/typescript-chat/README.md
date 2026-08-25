@@ -5,7 +5,7 @@ creates one durable Session, sends each line as a new Invocation, waits for the
 turn to finish, and reads the assistant reply from the composed Invocation
 result. Waiting before the next line preserves nvoken's one-nonterminal-turn
 default. A product-level regenerate button should use an application-managed
-`agent.invoke(..., { ifActive: "supersede" })` call with a new idempotency key;
+`chat.start(..., { ifActive: "supersede" })` call with a new idempotency key;
 that explicitly cancels active work and admits its replacement atomically.
 
 For the complete hosted first-time path, use the

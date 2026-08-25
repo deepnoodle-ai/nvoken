@@ -31,7 +31,7 @@ export interface WebhookEnvelope {
      */
     sequence: number;
     invocation_id: string;
-    session_id: string;
+    session_id: string | null;
     agent_key: string;
     tenant_key?: string;
   };
@@ -71,7 +71,7 @@ export interface VerifiedWebhook {
   event: WebhookEvent;
   sequence: number;
   invocationId: string;
-  sessionId: string;
+  sessionId: string | null;
   keyId: string;
   keyVersion: number;
   timestamp: Date;

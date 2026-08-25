@@ -19,7 +19,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub use agent::{
     answerable_tool_calls, host_tool_calls, Agent, AgentEventStream, AgentInvocationOptions,
-    AgentOptions, AgentResult, AgentSession, AgentStreamEvent, AnswerToolCallsOptions,
+    AgentOptions, AgentResult, AgentStreamEvent, AnswerToolCallsOptions, BoundSession,
     SessionBinding, ToolCallClaim,
 };
 pub use ask_user::{
@@ -36,7 +36,8 @@ pub use client::{
     BudgetExhaustionBehavior, Client, ClientInterface, CompactionListOptions, ContextCompaction,
     ContextCompactionTrigger, ContextItem, ContextTier, CreateAgentDefinitionOptions,
     CreateAgentInput, DefinitionSync, DefinitionSyncOutcome, DeleteSessionOptions, ErrorCategory,
-    HostToolHandler, IfActivePolicy, InvocationHandle, InvokeRequest, Limits,
+    HostToolHandler, IfActivePolicy, InvocationErasedError, InvocationHandle, InvocationSession,
+    InvocationSessionMode, InvocationSessionOptions, InvokeRequest, Limits,
     ListAgentDefinitionsOptions, ListAgentsOptions, ListInvocationLogsOptions,
     ListInvocationsOptions, ListMemoriesOptions, ListModelsOptions, ListOrder, ListSessionsOptions,
     McpServer, McpServerHeaders, McpTimeouts, MemoryConfig, MemoryContextConfig, MemoryContextMode,

@@ -8,6 +8,20 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: one-shot Invocations are standalone unless a Session is selected.**
+  Invocation requests replace `session_id`, `session_key`, `session_options`,
+  and `if_active` with an optional `session` object; omitting it creates no
+  public Session. `retention`, `compaction`, and `authorization_context` move
+  to the request root, and every projection carries nullable `session_id` and
+  `content_expires_at`.
+- **Breaking: the high-level Agent makes continuity explicit.** `start()`
+  admits a standalone turn and `bindSession()` / `bind_session()` creates the
+  locally serialized conversation facade. The low-level `Client.invoke`
+  operation remains the direct wire call.
+- **One turn has one stream and one erasure unit.** Invocation handles follow
+  `/v1/invocations/{id}/stream`; Session streams remain conversation
+  subscriptions. Every SDK and the CLI can erase terminal standalone content,
+  and expose the retained `invocation_erased` details returned afterward.
 - **Breaking: machine credentials now express trust boundaries, not permissions.**
   SDKs and CLI create `installation_admin`, `app`, or `app_read_only` keys;
   browser token minting uses a fixed route ceiling and no longer accepts operations.

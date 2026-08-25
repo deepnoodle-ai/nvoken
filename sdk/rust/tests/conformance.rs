@@ -14,14 +14,15 @@ use nvoken::{
     AskUserKind, AskUserOutput, BudgetExhaustionBehavior, CallbackOutcome, CallbackReceiver,
     CallbackReply, CallbackResultStore, Client, ClientInterface, ClientTokenClaims,
     CompactionListOptions, ContextCompaction, ContextCompactionTrigger, ContextItem, ContextTier,
-    DeliveryError, DeliverySigningKey, ErrorCategory, IfActivePolicy, InvokeRequest, Limits,
-    ListAgentsOptions, ListInvocationsOptions, ListModelsOptions, ListSessionsOptions, McpServer,
-    McpServerHeaders, MessageListOptions, Model, NvokenError, ProviderKeySelection,
-    ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer, RetryPolicy,
-    SessionOptions, SessionOptionsConflict, StreamEvent, StreamPreview, ToolCallListOptions,
-    ToolChoice, ToolMode, ToolResult, VerifiedCallback, VerifiedWebhook, WaitCondition,
-    WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent, WebhookOutcome, WebhookReceiver,
-    WebhookTarget, ASK_USER_TOOL_NAME, CLIENT_TOKEN_LIFETIME_LIMIT,
+    DeliveryError, DeliverySigningKey, ErrorCategory, IfActivePolicy, InvocationSession,
+    InvokeRequest, Limits, ListAgentsOptions, ListInvocationsOptions, ListModelsOptions,
+    ListSessionsOptions, McpServer, McpServerHeaders, MessageListOptions, Model, NvokenError,
+    ProviderKeySelection, ProviderKeySource, ProviderTool, Reasoning, ReasoningEffort, Reducer,
+    RetryPolicy, SessionOptions, SessionOptionsConflict, SessionRetention, StreamEvent,
+    StreamPreview, ToolCallListOptions, ToolChoice, ToolMode, ToolResult, VerifiedCallback,
+    VerifiedWebhook, WaitCondition, WaitOptions, WebSearchLocation, WebSearchTool, WebhookEvent,
+    WebhookOutcome, WebhookReceiver, WebhookTarget, ASK_USER_TOOL_NAME,
+    CLIENT_TOKEN_LIFETIME_LIMIT,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -179,7 +180,7 @@ fn shared_agent_request_fixture_is_expressible() {
             .into_iter()
             .collect(),
         ),
-        session_options: Some(SessionOptions::default().retention(86400)),
+        retention: Some(SessionRetention { ttl_seconds: 86400 }),
         ..AgentInvocationOptions::default()
     };
     let body = client
@@ -190,14 +191,19 @@ fn shared_agent_request_fixture_is_expressible() {
     // Existing Session admissions carry options for equal-or-conflict
     // reconciliation instead of rejecting the pairing in the SDK.
     let bound = AgentInvocationOptions {
-        session_id: Some(SESSION_ID.to_owned()),
+        session: Some(InvocationSession::continue_by_id(SESSION_ID)),
         ..options
     };
     let body = client
         .invocation_body(agent.request("hello".to_owned(), &bound))
         .unwrap();
-    assert_eq!(body.session_id.as_deref(), Some(SESSION_ID));
-    assert!(body.session_options.is_some());
+    assert_eq!(
+        body.session
+            .as_ref()
+            .and_then(|session| session.id.as_deref()),
+        Some(SESSION_ID)
+    );
+    assert!(body.retention.is_some());
 }
 
 #[test]
@@ -570,7 +576,7 @@ fn request_builders_cover_core_admission_types() {
         })
         .output_schema(output_schema)
         .tenant_key("acme")
-        .session_key("ticket-42")
+        .session(InvocationSession::continue_or_create("ticket-42"))
         .idempotency_key("request-key")
         .provider_key(ProviderKeySelection {
             provider: "openai".to_owned(),
@@ -580,8 +586,13 @@ fn request_builders_cover_core_admission_types() {
     let overrides = request.overrides.as_ref().unwrap();
     assert_eq!(overrides.model.as_ref().unwrap().id, "gpt-test");
     assert_eq!(overrides.limits.as_ref().unwrap().max_iterations, Some(4));
-    assert_eq!(request.session_key.as_deref(), Some("ticket-42"));
-    assert_eq!(request.session_id, None);
+    assert_eq!(
+        request
+            .session
+            .as_ref()
+            .and_then(|session| session.key.as_deref()),
+        Some("ticket-42")
+    );
     assert_eq!(request.provider_keys.len(), 1);
 }
 
@@ -769,12 +780,14 @@ async fn shared_fault_server_semantics() {
             agent_key: Some("support".to_owned()),
             tenant_key: None,
             user_key: None,
-            session_id: None,
-            session_key: None,
-            session_options: None,
+            session: Some(
+                InvocationSession::continue_by_id(SESSION_ID).if_active(IfActivePolicy::Supersede),
+            ),
+            retention: None,
+            compaction: None,
+            authorization_context: None,
             triggered_by: None,
             idempotency_key: Some("rust-lost-ack".to_owned()),
-            if_active: Some(IfActivePolicy::Supersede),
             on_budget_exhausted: None,
             metadata: None,
             input: "hello".to_owned(),
@@ -1902,7 +1915,9 @@ fn shared_recorded_context_fixture_is_expressible() {
         accepted["agent_key"].as_str().unwrap(),
         accepted["input"].as_str().unwrap(),
     )
-    .session_key(accepted["session_key"].as_str().unwrap())
+    .session(InvocationSession::continue_or_create(
+        accepted["session_key"].as_str().unwrap(),
+    ))
     .idempotency_key(accepted["idempotency_key"].as_str().unwrap());
     for item in accepted["context"].as_array().unwrap() {
         request = request.context(fixture_context_item(item));

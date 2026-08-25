@@ -227,8 +227,11 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		AgentKey:       "support",
 		IdempotencyKey: "conformance",
 		Input:          "hello",
-		SessionKey:     &sessionKey,
-		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
+		Session: &InvocationSession{
+			Mode: InvocationSessionContinueOrCreate,
+			Key:  &sessionKey,
+		},
+		Retention: &SessionRetention{TTLSeconds: 86400},
 		TriggeredBy: &InvocationTrigger{
 			Type:               "tool_call",
 			ParentInvocationID: conformanceInvocationID,
@@ -244,7 +247,7 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		t.Fatalf("decode request: %v", err)
 	}
 	assertEncodesTo(t, wire["metadata"], mustEncode(t, fixture.InvocationMetadata))
-	assertEncodesTo(t, wire["session_options"], fixture.SessionOptions.RetentionOnly)
+	assertEncodesTo(t, wire["retention"], json.RawMessage(`{"ttl_seconds":86400}`))
 	assertEncodesTo(t, wire["triggered_by"], mustEncode(t, map[string]any{
 		"type":                 "tool_call",
 		"parent_invocation_id": conformanceInvocationID,
@@ -260,8 +263,11 @@ func TestSharedSessionLifecycleFixture(t *testing.T) {
 		AgentKey:       "support",
 		IdempotencyKey: "conformance",
 		Input:          "hello",
-		SessionKey:     &sessionKey,
-		SessionOptions: &SessionOptions{},
+		Session: &InvocationSession{
+			Mode:    InvocationSessionContinueOrCreate,
+			Key:     &sessionKey,
+			Options: &InvocationSessionOptions{},
+		},
 	}).encoded(); err == nil {
 		t.Fatal("empty session options were admitted")
 	}
@@ -294,25 +300,21 @@ func TestSharedAgentRequestFixture(t *testing.T) {
 		IdempotencyKey:    "conformance",
 		OnBudgetExhausted: BudgetExhaustionHold,
 		Metadata:          map[string]string{"board": "brand-2026", "surface": "web"},
-		SessionOptions: &SessionOptions{
-			Retention: &SessionRetention{TTLSeconds: 86400},
-		},
+		Retention:         &SessionRetention{TTLSeconds: 86400},
 	}).encoded()
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
 	assertEncodesTo(t, json.RawMessage(body), fixture.AgentRequest.WebSearchMetadataUnbound)
 
-	// A later admission may install compaction or compare existing options even
-	// when the caller names the Session directly.
-	sessionID := conformanceSessionID
+	// A new conversation carries its retention policy at the top level.
 	body, err = agent.request("hello", AgentInvocationOptions{
 		IdempotencyKey: "conformance",
-		SessionID:      &sessionID,
-		SessionOptions: &SessionOptions{Retention: &SessionRetention{TTLSeconds: 86400}},
+		Session:        &InvocationSession{Mode: InvocationSessionNew},
+		Retention:      &SessionRetention{TTLSeconds: 86400},
 	}).encoded()
-	if err != nil || !bytes.Contains(body, []byte(`"session_options":{"retention":{"ttl_seconds":86400}}`)) {
-		t.Fatalf("session options with session id = %s, %v", body, err)
+	if err != nil || !bytes.Contains(body, []byte(`"retention":{"ttl_seconds":86400}`)) {
+		t.Fatalf("new conversation retention = %s, %v", body, err)
 	}
 }
 
@@ -718,11 +720,16 @@ func TestConformance(t *testing.T) {
 	if err != nil || len(allocations.Items) != 1 || allocations.Items[0].Amount.Amount != "25.000000" {
 		t.Fatalf("list Credit allocations: %#v err=%v", allocations, err)
 	}
+	sessionKey := "conformance"
 	request := InvokeRequest{
 		AgentKey:       "support",
 		IdempotencyKey: "conformance-lost-ack",
-		IfActive:       IfActiveSupersede,
-		Input:          "hello",
+		Session: &InvocationSession{
+			Mode:     InvocationSessionContinueOrCreate,
+			Key:      &sessionKey,
+			IfActive: IfActiveSupersede,
+		},
+		Input: "hello",
 		MCPServerHeaders: []MCPServerHeaders{{
 			Name:    "support",
 			Headers: map[string]string{"Authorization": "Bearer conformance-mcp-secret"},
@@ -737,7 +744,8 @@ func TestConformance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lost-ack admission retry: %v", err)
 	}
-	if handle.InvocationID != conformanceInvocationID || handle.SessionID != conformanceSessionID {
+	if handle.InvocationID != conformanceInvocationID || handle.SessionID == nil ||
+		*handle.SessionID != conformanceSessionID {
 		t.Fatalf("unexpected durable handle: %#v", handle)
 	}
 	toolCallLimit := 4
@@ -1258,8 +1266,8 @@ func TestSharedWebhookVector(t *testing.T) {
 		t.Fatalf("verified event = %q/%d, want %q/%d",
 			verified.Event, verified.Sequence, vector.Event, vector.Sequence)
 	}
-	if verified.InvocationID != conformanceInvocationID || verified.SessionID != conformanceSessionID {
-		t.Fatalf("verified invocation = %q session = %q", verified.InvocationID, verified.SessionID)
+	if verified.InvocationID != conformanceInvocationID || verified.SessionID == nil || *verified.SessionID != conformanceSessionID {
+		t.Fatalf("verified invocation = %q session = %v", verified.InvocationID, verified.SessionID)
 	}
 	for name, mutate := range tamperings {
 		t.Run(name, func(t *testing.T) {
@@ -1940,8 +1948,11 @@ func TestSharedRecordedContextFixtureIsExpressible(t *testing.T) {
 
 	accepted := fixture.Accepted.Request
 	encoded, err := (InvokeRequest{
-		AgentKey:       accepted.AgentKey,
-		SessionKey:     &accepted.SessionKey,
+		AgentKey: accepted.AgentKey,
+		Session: &InvocationSession{
+			Mode: InvocationSessionContinueOrCreate,
+			Key:  &accepted.SessionKey,
+		},
 		IdempotencyKey: accepted.IdempotencyKey,
 		Input:          accepted.Input,
 		Context:        accepted.Context,

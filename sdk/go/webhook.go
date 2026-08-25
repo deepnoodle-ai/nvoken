@@ -26,7 +26,7 @@ type WebhookContext struct {
 	// VerifiedWebhook.Supersedes for what a receiver does with it.
 	Sequence     int64   `json:"sequence"`
 	InvocationID string  `json:"invocation_id"`
-	SessionID    string  `json:"session_id"`
+	SessionID    *string `json:"session_id"`
 	AgentKey     string  `json:"agent_key"`
 	TenantKey    *string `json:"tenant_key,omitempty"`
 }
@@ -59,7 +59,7 @@ type VerifiedWebhook struct {
 	Event        WebhookEvent
 	Sequence     int64
 	InvocationID string
-	SessionID    string
+	SessionID    *string
 	KeyID        string
 	KeyVersion   int64
 	Timestamp    time.Time

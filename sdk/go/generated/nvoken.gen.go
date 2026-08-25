@@ -100,6 +100,24 @@ func (e AppSigningKeyPurpose) Valid() bool {
 	}
 }
 
+// Defines values for ApproveConsoleDeviceAuthorizationRequestCredentialType.
+const (
+	ApproveConsoleDeviceAuthorizationRequestCredentialTypeApp         ApproveConsoleDeviceAuthorizationRequestCredentialType = "app"
+	ApproveConsoleDeviceAuthorizationRequestCredentialTypeAppReadOnly ApproveConsoleDeviceAuthorizationRequestCredentialType = "app_read_only"
+)
+
+// Valid indicates whether the value is a known member of the ApproveConsoleDeviceAuthorizationRequestCredentialType enum.
+func (e ApproveConsoleDeviceAuthorizationRequestCredentialType) Valid() bool {
+	switch e {
+	case ApproveConsoleDeviceAuthorizationRequestCredentialTypeApp:
+		return true
+	case ApproveConsoleDeviceAuthorizationRequestCredentialTypeAppReadOnly:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuthenticationMethod.
 const (
 	AuthenticationMethodAPIKey         AuthenticationMethod = "api_key"
@@ -265,6 +283,132 @@ func (e ConnectionClosingReason) Valid() bool {
 	}
 }
 
+// Defines values for ConsoleDeviceAuthorizationApprovalCredentialType.
+const (
+	ConsoleDeviceAuthorizationApprovalCredentialTypeApp         ConsoleDeviceAuthorizationApprovalCredentialType = "app"
+	ConsoleDeviceAuthorizationApprovalCredentialTypeAppReadOnly ConsoleDeviceAuthorizationApprovalCredentialType = "app_read_only"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationApprovalCredentialType enum.
+func (e ConsoleDeviceAuthorizationApprovalCredentialType) Valid() bool {
+	switch e {
+	case ConsoleDeviceAuthorizationApprovalCredentialTypeApp:
+		return true
+	case ConsoleDeviceAuthorizationApprovalCredentialTypeAppReadOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationClaimCredentialType.
+const (
+	ConsoleDeviceAuthorizationClaimCredentialTypeApp         ConsoleDeviceAuthorizationClaimCredentialType = "app"
+	ConsoleDeviceAuthorizationClaimCredentialTypeAppReadOnly ConsoleDeviceAuthorizationClaimCredentialType = "app_read_only"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationClaimCredentialType enum.
+func (e ConsoleDeviceAuthorizationClaimCredentialType) Valid() bool {
+	switch e {
+	case ConsoleDeviceAuthorizationClaimCredentialTypeApp:
+		return true
+	case ConsoleDeviceAuthorizationClaimCredentialTypeAppReadOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationClaimStatus.
+const (
+	ConsoleDeviceAuthorizationClaimStatusApproved ConsoleDeviceAuthorizationClaimStatus = "approved"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationClaimStatus enum.
+func (e ConsoleDeviceAuthorizationClaimStatus) Valid() bool {
+	switch e {
+	case ConsoleDeviceAuthorizationClaimStatusApproved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationExchangeStateStatus.
+const (
+	AccessDenied         ConsoleDeviceAuthorizationExchangeStateStatus = "access_denied"
+	AuthorizationPending ConsoleDeviceAuthorizationExchangeStateStatus = "authorization_pending"
+	ExpiredToken         ConsoleDeviceAuthorizationExchangeStateStatus = "expired_token"
+	SlowDown             ConsoleDeviceAuthorizationExchangeStateStatus = "slow_down"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationExchangeStateStatus enum.
+func (e ConsoleDeviceAuthorizationExchangeStateStatus) Valid() bool {
+	switch e {
+	case AccessDenied:
+		return true
+	case AuthorizationPending:
+		return true
+	case ExpiredToken:
+		return true
+	case SlowDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationGrantExpiresIn.
+const (
+	N600 ConsoleDeviceAuthorizationGrantExpiresIn = 600
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationGrantExpiresIn enum.
+func (e ConsoleDeviceAuthorizationGrantExpiresIn) Valid() bool {
+	switch e {
+	case N600:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationGrantInterval.
+const (
+	N5 ConsoleDeviceAuthorizationGrantInterval = 5
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationGrantInterval enum.
+func (e ConsoleDeviceAuthorizationGrantInterval) Valid() bool {
+	switch e {
+	case N5:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConsoleDeviceAuthorizationStatus.
+const (
+	ConsoleDeviceAuthorizationStatusApproved ConsoleDeviceAuthorizationStatus = "approved"
+	ConsoleDeviceAuthorizationStatusDenied   ConsoleDeviceAuthorizationStatus = "denied"
+	ConsoleDeviceAuthorizationStatusPending  ConsoleDeviceAuthorizationStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ConsoleDeviceAuthorizationStatus enum.
+func (e ConsoleDeviceAuthorizationStatus) Valid() bool {
+	switch e {
+	case ConsoleDeviceAuthorizationStatusApproved:
+		return true
+	case ConsoleDeviceAuthorizationStatusDenied:
+		return true
+	case ConsoleDeviceAuthorizationStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CostMetricsCostCoverage.
 const (
 	CostMetricsCostCoverageComplete      CostMetricsCostCoverage = "complete"
@@ -283,27 +427,6 @@ func (e CostMetricsCostCoverage) Valid() bool {
 	case CostMetricsCostCoverageNotApplicable:
 		return true
 	case CostMetricsCostCoveragePartial:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CreateInvocationRequestIfActive.
-const (
-	Interrupt CreateInvocationRequestIfActive = "interrupt"
-	Reject    CreateInvocationRequestIfActive = "reject"
-	Supersede CreateInvocationRequestIfActive = "supersede"
-)
-
-// Valid indicates whether the value is a known member of the CreateInvocationRequestIfActive enum.
-func (e CreateInvocationRequestIfActive) Valid() bool {
-	switch e {
-	case Interrupt:
-		return true
-	case Reject:
-		return true
-	case Supersede:
 		return true
 	default:
 		return false
@@ -487,8 +610,11 @@ const (
 	ErrorCodeInsufficientCredits             ErrorCode = "insufficient_credits"
 	ErrorCodeInternal                        ErrorCode = "internal"
 	ErrorCodeInvalidRequest                  ErrorCode = "invalid_request"
+	ErrorCodeInvocationActive                ErrorCode = "invocation_active"
+	ErrorCodeInvocationErased                ErrorCode = "invocation_erased"
 	ErrorCodeInvocationNotBudgetHold         ErrorCode = "invocation_not_budget_hold"
 	ErrorCodeInvocationNotWaiting            ErrorCode = "invocation_not_waiting"
+	ErrorCodeInvocationSessionBound          ErrorCode = "invocation_session_bound"
 	ErrorCodeMcpDiscoveryFailed              ErrorCode = "mcp_discovery_failed"
 	ErrorCodeMediaFetchFailed                ErrorCode = "media_fetch_failed"
 	ErrorCodeMemoryContextOverflow           ErrorCode = "memory_context_overflow"
@@ -545,9 +671,15 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeInvalidRequest:
 		return true
+	case ErrorCodeInvocationActive:
+		return true
+	case ErrorCodeInvocationErased:
+		return true
 	case ErrorCodeInvocationNotBudgetHold:
 		return true
 	case ErrorCodeInvocationNotWaiting:
+		return true
+	case ErrorCodeInvocationSessionBound:
 		return true
 	case ErrorCodeMcpDiscoveryFailed:
 		return true
@@ -757,6 +889,66 @@ func (e InvocationFailureCode) Valid() bool {
 	case InvocationFailureCodeProviderKeyUnavailable:
 		return true
 	case InvocationFailureCodeStructuredOutputUnsatisfied:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationSessionIfActive.
+const (
+	Interrupt InvocationSessionIfActive = "interrupt"
+	Reject    InvocationSessionIfActive = "reject"
+	Supersede InvocationSessionIfActive = "supersede"
+)
+
+// Valid indicates whether the value is a known member of the InvocationSessionIfActive enum.
+func (e InvocationSessionIfActive) Valid() bool {
+	switch e {
+	case Interrupt:
+		return true
+	case Reject:
+		return true
+	case Supersede:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationSessionMode.
+const (
+	Continue         InvocationSessionMode = "continue"
+	ContinueOrCreate InvocationSessionMode = "continue_or_create"
+	New              InvocationSessionMode = "new"
+)
+
+// Valid indicates whether the value is a known member of the InvocationSessionMode enum.
+func (e InvocationSessionMode) Valid() bool {
+	switch e {
+	case Continue:
+		return true
+	case ContinueOrCreate:
+		return true
+	case New:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvocationSessionOptionsOnConflict.
+const (
+	InvocationSessionOptionsOnConflictJoin   InvocationSessionOptionsOnConflict = "join"
+	InvocationSessionOptionsOnConflictRefuse InvocationSessionOptionsOnConflict = "refuse"
+)
+
+// Valid indicates whether the value is a known member of the InvocationSessionOptionsOnConflict enum.
+func (e InvocationSessionOptionsOnConflict) Valid() bool {
+	switch e {
+	case InvocationSessionOptionsOnConflictJoin:
+		return true
+	case InvocationSessionOptionsOnConflictRefuse:
 		return true
 	default:
 		return false
@@ -1650,16 +1842,16 @@ func (e SessionMessageRole) Valid() bool {
 
 // Defines values for SessionOptionsOnConflict.
 const (
-	Join   SessionOptionsOnConflict = "join"
-	Refuse SessionOptionsOnConflict = "refuse"
+	SessionOptionsOnConflictJoin   SessionOptionsOnConflict = "join"
+	SessionOptionsOnConflictRefuse SessionOptionsOnConflict = "refuse"
 )
 
 // Valid indicates whether the value is a known member of the SessionOptionsOnConflict enum.
 func (e SessionOptionsOnConflict) Valid() bool {
 	switch e {
-	case Join:
+	case SessionOptionsOnConflictJoin:
 		return true
-	case Refuse:
+	case SessionOptionsOnConflictRefuse:
 		return true
 	default:
 		return false
@@ -2420,7 +2612,7 @@ type Agent struct {
 // AgentDefinition Immutable Agent Definition fields admitted by one Invocation. Detailed
 // Invocation reads nest these fields under `agent_definition`; the stable
 // resource ID and admitted revision remain top-level.
-// Identity, session selection, input, idempotency, `if_active`, `webhook`,
+// Identity, session selection, input, idempotency, `session.if_active`, `webhook`,
 // metadata, and provider key selection are durable elsewhere and
 // never appear here. Invocation admission for callback declarations
 // requires App callback-signing configuration. Remote MCP authentication
@@ -3003,10 +3195,18 @@ type AppSigningKeySecret struct {
 	Version int64 `json:"version"`
 }
 
+// ApproveConsoleDeviceAuthorizationRequest defines model for ApproveConsoleDeviceAuthorizationRequest.
+type ApproveConsoleDeviceAuthorizationRequest struct {
+	CredentialType ApproveConsoleDeviceAuthorizationRequestCredentialType `json:"credential_type"`
+}
+
+// ApproveConsoleDeviceAuthorizationRequestCredentialType defines model for ApproveConsoleDeviceAuthorizationRequest.CredentialType.
+type ApproveConsoleDeviceAuthorizationRequestCredentialType string
+
 // AuthenticationMethod defines model for AuthenticationMethod.
 type AuthenticationMethod string
 
-// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+// AuthorizationContext What this conversation or standalone turn is bound to, in your own terms. If your authorization
 // boundary is finer than a tenant — a board, a workspace, a document —
 // this is where you say so, and nvoken carries it to your callback
 // receiver inside the signed body so authorizing a delivery costs no
@@ -3014,12 +3214,12 @@ type AuthenticationMethod string
 //
 // Four properties, all guaranteed rather than incidental:
 //
-//   - **Written at creation only.** Set by the request that brings the
-//     Session into existence, whether that is `POST /v1/sessions`, a fork,
-//     or the admission that creates it. There is no patch path and there
-//     will not be one. A later turn that sends a different value is refused
-//     with `session_options_conflict`; one that sends a value on a Session
-//     created without one is refused rather than installing it.
+//   - **Written at creation only.** Set by the request that creates the
+//     conversation or standalone turn. There is no patch path and there
+//     will not be one. A later turn that sends a different value for an
+//     existing Session is refused with `session_options_conflict`; one that
+//     sends a value on a Session created without one is refused rather than
+//     installing it.
 //   - **Never interpreted.** nvoken does not read it, route on it, or index
 //     it.
 //   - **Never model-visible.** It is not rendered into context and no tool
@@ -3253,6 +3453,10 @@ type CompactionPolicy_TriggerTokens struct {
 // anything, and a field that repeats what you must hold anyway is a
 // second spelling of it.
 type ConnectionClosingEvent struct {
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// Reason Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
 	// with your last `cursor`. `idle` means no turn is running and the
 	// server is reclaiming the connection, so reconnect when you next need
@@ -3263,10 +3467,8 @@ type ConnectionClosingEvent struct {
 	// Expect new values here over time. Treat a value you do not recognize
 	// as `rotate` and reconnect with your last `cursor`. Reconnecting is
 	// always safe.
-	Reason ConnectionClosingReason `json:"reason"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                  `json:"session_id"`
+	Reason    ConnectionClosingReason    `json:"reason"`
+	SessionID *SessionID                 `json:"session_id"`
 	Type      ConnectionClosingEventType `json:"type"`
 }
 
@@ -3284,6 +3486,66 @@ type ConnectionClosingEventType string
 // as `rotate` and reconnect with your last `cursor`. Reconnecting is
 // always safe.
 type ConnectionClosingReason string
+
+// ConsoleDeviceAuthorizationApproval defines model for ConsoleDeviceAuthorizationApproval.
+type ConsoleDeviceAuthorizationApproval struct {
+	AppName        *string                                           `json:"app_name,omitempty"`
+	CredentialType *ConsoleDeviceAuthorizationApprovalCredentialType `json:"credential_type,omitempty"`
+	Label          string                                            `json:"label"`
+	Status         ConsoleDeviceAuthorizationStatus                  `json:"status"`
+}
+
+// ConsoleDeviceAuthorizationApprovalCredentialType defines model for ConsoleDeviceAuthorizationApproval.CredentialType.
+type ConsoleDeviceAuthorizationApprovalCredentialType string
+
+// ConsoleDeviceAuthorizationClaim defines model for ConsoleDeviceAuthorizationClaim.
+type ConsoleDeviceAuthorizationClaim struct {
+	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	AppID          AppID                                         `json:"app_id"`
+	AppName        string                                        `json:"app_name"`
+	CredentialType ConsoleDeviceAuthorizationClaimCredentialType `json:"credential_type"`
+	DeviceCode     string                                        `json:"device_code"`
+
+	// IssuerToken Five-minute App issuer bearer, returned only to the authenticated console Worker.
+	IssuerToken string                                `json:"issuer_token"`
+	Label       string                                `json:"label"`
+	Status      ConsoleDeviceAuthorizationClaimStatus `json:"status"`
+}
+
+// ConsoleDeviceAuthorizationClaimCredentialType defines model for ConsoleDeviceAuthorizationClaim.CredentialType.
+type ConsoleDeviceAuthorizationClaimCredentialType string
+
+// ConsoleDeviceAuthorizationClaimStatus defines model for ConsoleDeviceAuthorizationClaim.Status.
+type ConsoleDeviceAuthorizationClaimStatus string
+
+// ConsoleDeviceAuthorizationExchangeState defines model for ConsoleDeviceAuthorizationExchangeState.
+type ConsoleDeviceAuthorizationExchangeState struct {
+	Status ConsoleDeviceAuthorizationExchangeStateStatus `json:"status"`
+}
+
+// ConsoleDeviceAuthorizationExchangeStateStatus defines model for ConsoleDeviceAuthorizationExchangeState.Status.
+type ConsoleDeviceAuthorizationExchangeStateStatus string
+
+// ConsoleDeviceAuthorizationGrant defines model for ConsoleDeviceAuthorizationGrant.
+type ConsoleDeviceAuthorizationGrant struct {
+	DeviceCode string                                   `json:"device_code"`
+	ExpiresIn  ConsoleDeviceAuthorizationGrantExpiresIn `json:"expires_in"`
+	Interval   ConsoleDeviceAuthorizationGrantInterval  `json:"interval"`
+	UserCode   string                                   `json:"user_code"`
+}
+
+// ConsoleDeviceAuthorizationGrantExpiresIn defines model for ConsoleDeviceAuthorizationGrant.ExpiresIn.
+type ConsoleDeviceAuthorizationGrantExpiresIn int
+
+// ConsoleDeviceAuthorizationGrantInterval defines model for ConsoleDeviceAuthorizationGrant.Interval.
+type ConsoleDeviceAuthorizationGrantInterval int
+
+// ConsoleDeviceAuthorizationStatus defines model for ConsoleDeviceAuthorizationStatus.
+type ConsoleDeviceAuthorizationStatus string
+
+// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+// Null while it is nonterminal and for conversation-bound work.
+type ContentExpiresAt = time.Time
 
 // CostMetrics defines model for CostMetrics.
 type CostMetrics struct {
@@ -3327,6 +3589,11 @@ type CreateClientKeyRequest struct {
 	PublicKey []byte `json:"public_key"`
 }
 
+// CreateConsoleDeviceAuthorizationRequest defines model for CreateConsoleDeviceAuthorizationRequest.
+type CreateConsoleDeviceAuthorizationRequest struct {
+	Label string `json:"label"`
+}
+
 // CreateCredentialRequest defines model for CreateCredentialRequest.
 type CreateCredentialRequest struct {
 	// AppID Required for App and App-read-only credentials. Console Org callers
@@ -3362,6 +3629,12 @@ type CreateInvocationRequest struct {
 	// tenant. Mutually exclusive with `agent_id`.
 	AgentKey *string `json:"agent_key,omitempty"`
 
+	// AuthorizationContext Host authorization binding recorded on a newly created conversation.
+	AuthorizationContext *AuthorizationContext `json:"authorization_context,omitempty"`
+
+	// Compaction Conversation compaction policy. Invalid for standalone turns.
+	Compaction *CompactionPolicy `json:"compaction,omitempty"`
+
 	// Context Ordered application-owned state snapshots to record before this
 	// turn's input. Send a name again to supersede its prior value. An
 	// unchanged latest value is deduplicated from the transcript, while
@@ -3384,24 +3657,10 @@ type CreateInvocationRequest struct {
 	//
 	// Keys are scoped to the tenant and resolved Agent, so the same key
 	// under a different tenant or Agent is a different request.
-	// Deduplication lasts as long as the original turn still exists.
+	// Deduplication survives private-content erasure. An equal retry of
+	// an erased turn returns `410 invocation_erased` with the original
+	// Invocation ID; a changed retry still conflicts.
 	IdempotencyKey string `json:"idempotency_key"`
-
-	// IfActive What to do when the Session already has a turn running. A Session
-	// runs one turn at a time.
-	//
-	// - `reject` (the default) refuses this request with
-	//   `session_invocation_active` and leaves the running turn alone.
-	// - `supersede` cancels the running turn and starts this one in its
-	//   place. The cancelled turn's work is discarded and does not carry
-	//   forward — "discard and redo".
-	// - `interrupt` asks the running turn to stop cleanly and starts
-	//   this one only once it has, so this turn builds on what the
-	//   stopped one produced — "stop and redo".
-	//
-	// Omitting the field and sending `reject` are the same request for
-	// idempotency purposes.
-	IfActive *CreateInvocationRequestIfActive `json:"if_active,omitempty"`
 
 	// Input A plain string is shorthand for one text block; an array is ordered
 	// multi-block input mixing text, images, and documents. Both normalize
@@ -3454,30 +3713,15 @@ type CreateInvocationRequest struct {
 	// bill cannot move once work has begun.
 	ProviderKeys *[]ProviderKeySelection `json:"provider_keys,omitempty"`
 
-	// SessionID Existing Session to continue. Mutually exclusive with session_key.
-	SessionID *SessionID `json:"session_id,omitempty"`
+	// Retention Retention for a newly created conversation or a standalone turn.
+	// Standalone turns default to one hour. Invalid when continuing an
+	// existing Session.
+	Retention *RetentionPolicy `json:"retention,omitempty"`
 
-	// SessionKey Caller key resolved within (effective tenant partition,
-	// Agent, session_key). Mutually exclusive with session_id.
-	SessionKey *string `json:"session_key,omitempty"`
-
-	// SessionOptions Settings stored on the Session itself, rather than on this turn.
-	//
-	// On a new Session these are saved. On a Session that already exists
-	// they are checked rather than applied: matching values are fine, and
-	// a different value returns `session_options_conflict` telling you
-	// which paths disagreed. This keeps two callers from silently
-	// reconfiguring each other's conversation. Send
-	// `on_conflict: "join"` when you mean "reach whatever Session is
-	// there" rather than "it should be configured like this".
-	//
-	// If no compaction policy is stored yet, this turn can install one,
-	// because the policy needs a model to validate against and only a turn
-	// supplies that.
-	//
-	// A Session's title and other descriptive labels are not here. They
-	// are `metadata`, written with `PATCH /v1/sessions/{session_id}`.
-	SessionOptions *SessionOptions `json:"session_options,omitempty"`
+	// Session Conversation intent. Omit this object for a standalone Invocation;
+	// nvoken still uses an expiring internal carrier, but it is not a
+	// public Session and every response reports `session_id: null`.
+	Session *InvocationSession `json:"session,omitempty"`
 
 	// TenantKey Optional tenant partition. For Session-key resolution or a new
 	// Session, precedence is credential constraint, this explicit value,
@@ -3524,22 +3768,6 @@ type CreateInvocationRequest struct {
 	// delivering it.
 	Webhook *WebhookTarget `json:"webhook,omitempty"`
 }
-
-// CreateInvocationRequestIfActive What to do when the Session already has a turn running. A Session
-// runs one turn at a time.
-//
-//   - `reject` (the default) refuses this request with
-//     `session_invocation_active` and leaves the running turn alone.
-//   - `supersede` cancels the running turn and starts this one in its
-//     place. The cancelled turn's work is discarded and does not carry
-//     forward — "discard and redo".
-//   - `interrupt` asks the running turn to stop cleanly and starts
-//     this one only once it has, so this turn builds on what the
-//     stopped one produced — "stop and redo".
-//
-// Omitting the field and sending `reject` are the same request for
-// idempotency purposes.
-type CreateInvocationRequestIfActive string
 
 // CreateInvocationRequestOnBudgetExhausted What to do when the turn runs out of one of its consumption
 // limits. `stop` ends it as `incomplete`. `hold` leaves it as
@@ -3885,7 +4113,7 @@ type ErrorResponse struct {
 // authorization context — a fork is a creation moment, so supply what the
 // child is bound to rather than letting it carry over.
 type ForkSessionOptions struct {
-	// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+	// AuthorizationContext What this conversation or standalone turn is bound to, in your own terms. If your authorization
 	// boundary is finer than a tenant — a board, a workspace, a document —
 	// this is where you say so, and nvoken carries it to your callback
 	// receiver inside the signed body so authorizing a delivery costs no
@@ -3893,12 +4121,12 @@ type ForkSessionOptions struct {
 	//
 	// Four properties, all guaranteed rather than incidental:
 	//
-	// - **Written at creation only.** Set by the request that brings the
-	//   Session into existence, whether that is `POST /v1/sessions`, a fork,
-	//   or the admission that creates it. There is no patch path and there
-	//   will not be one. A later turn that sends a different value is refused
-	//   with `session_options_conflict`; one that sends a value on a Session
-	//   created without one is refused rather than installing it.
+	// - **Written at creation only.** Set by the request that creates the
+	//   conversation or standalone turn. There is no patch path and there
+	//   will not be one. A later turn that sends a different value for an
+	//   existing Session is refused with `session_options_conflict`; one that
+	//   sends a value on a Session created without one is refused rather than
+	//   installing it.
 	// - **Never interpreted.** nvoken does not read it, route on it, or index
 	//   it.
 	// - **Never model-visible.** It is not rendered into context and no tool
@@ -4105,6 +4333,10 @@ type Invocation struct {
 	// audience only; omitted from browser projections.
 	ChildInvocationCounts *InvocationChildCounts `json:"child_invocation_counts,omitempty"`
 
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// Context The ordered context payload accepted with this turn, before
 	// transcript deduplication. Null when omitted and in Invocation list
 	// items. Present on admission, point reads, results, and stream
@@ -4140,9 +4372,12 @@ type Invocation struct {
 	DefinitionID AgentDefinitionID `json:"definition_id"`
 
 	// DefinitionRevision Immutable Agent Definition revision admitted for this turn.
-	DefinitionRevision int64              `json:"definition_revision"`
-	EndedAt            *time.Time         `json:"ended_at"`
-	Error              *InvocationFailure `json:"error"`
+	DefinitionRevision int64      `json:"definition_revision"`
+	EndedAt            *time.Time `json:"ended_at"`
+
+	// ErasedAt Present on minimal fact-backed lineage rows after erasure.
+	ErasedAt *time.Time         `json:"erased_at,omitempty"`
+	Error    *InvocationFailure `json:"error"`
 
 	// ID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	ID     InvocationID    `json:"id"`
@@ -4153,8 +4388,8 @@ type Invocation struct {
 	Metadata   *Metadata        `json:"metadata,omitempty"`
 	Provenance *ModelProvenance `json:"provenance,omitempty"`
 
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	// SessionID Conversation identity, or null for a standalone Invocation.
+	SessionID *SessionID `json:"session_id"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again. Do not encode that
@@ -4240,6 +4475,10 @@ type Invocation struct {
 // waiting for you to run them. You never need a second request to find
 // out why a turn is not moving.
 type InvocationChange struct {
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// CreditBlock Present while the turn is on budget hold for spending capacity.
 	CreditBlock *CreditBlock       `json:"credit_block,omitempty"`
 	Error       *InvocationFailure `json:"error"`
@@ -4249,6 +4488,7 @@ type InvocationChange struct {
 	OccurredAt   time.Time        `json:"occurred_at"`
 	Provenance   *ModelProvenance `json:"provenance,omitempty"`
 	Revision     int64            `json:"revision"`
+	SessionID    *SessionID       `json:"session_id"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again. Do not encode that
@@ -4453,8 +4693,15 @@ type InvocationLog struct {
 
 // InvocationLogList defines model for InvocationLogList.
 type InvocationLogList struct {
-	Items      []InvocationLog `json:"items"`
-	NextCursor *string         `json:"next_cursor"`
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID    `json:"invocation_id"`
+	Items        []InvocationLog `json:"items"`
+	NextCursor   *string         `json:"next_cursor"`
+	SessionID    *SessionID      `json:"session_id"`
 
 	// Status Whether this installation has a hosted observation store.
 	Status ObservationStatus `json:"status"`
@@ -4487,6 +4734,46 @@ type InvocationResult struct {
 	// produced, so read the messages directly if you need those.
 	OutputText *string `json:"output_text"`
 }
+
+// InvocationSession defines model for InvocationSession.
+type InvocationSession struct {
+	// ID Existing conversation ID. Valid only with `continue`.
+	ID *SessionID `json:"id,omitempty"`
+
+	// IfActive Policy for an existing conversation's nonterminal turn. Valid only
+	// when the mode can continue a Session.
+	IfActive *InvocationSessionIfActive `json:"if_active,omitempty"`
+
+	// Key Caller key for `continue_or_create`.
+	Key *string `json:"key,omitempty"`
+
+	// Mode `new` creates a conversation, `continue` requires an existing
+	// conversation selected by `id`, and
+	// `continue_or_create` resolves or creates a keyed conversation.
+	Mode    InvocationSessionMode     `json:"mode"`
+	Options *InvocationSessionOptions `json:"options,omitempty"`
+}
+
+// InvocationSessionIfActive Policy for an existing conversation's nonterminal turn. Valid only
+// when the mode can continue a Session.
+type InvocationSessionIfActive string
+
+// InvocationSessionMode `new` creates a conversation, `continue` requires an existing
+// conversation selected by `id`, and
+// `continue_or_create` resolves or creates a keyed conversation.
+type InvocationSessionMode string
+
+// InvocationSessionOptions defines model for InvocationSessionOptions.
+type InvocationSessionOptions struct {
+	// OnConflict With `continue_or_create`, `join` accepts the stored conversation
+	// policies; `refuse` reports mismatches.
+	OnConflict     *InvocationSessionOptionsOnConflict `json:"on_conflict,omitempty"`
+	PinnedRevision *int64                              `json:"pinned_revision,omitempty"`
+}
+
+// InvocationSessionOptionsOnConflict With `continue_or_create`, `join` accepts the stored conversation
+// policies; `refuse` reports mismatches.
+type InvocationSessionOptionsOnConflict string
 
 // InvocationStatus `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 // turn reaches one of them it never changes again. Do not encode that
@@ -4550,17 +4837,19 @@ type InvocationTimeline struct {
 	AgentID AgentID `json:"agent_id"`
 
 	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
-	AppID        AppID      `json:"app_id"`
-	AttemptCount int        `json:"attempt_count"`
-	EndedAt      *time.Time `json:"ended_at"`
-	ErasedAt     *time.Time `json:"erased_at"`
-	FailureCode  *string    `json:"failure_code"`
+	AppID        AppID `json:"app_id"`
+	AttemptCount int   `json:"attempt_count"`
+
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+	EndedAt          *time.Time        `json:"ended_at"`
+	ErasedAt         *time.Time        `json:"erased_at"`
+	FailureCode      *string           `json:"failure_code"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
-	InvocationID InvocationID `json:"invocation_id"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID          SessionID                `json:"session_id"`
+	InvocationID       InvocationID             `json:"invocation_id"`
+	SessionID          *SessionID               `json:"session_id"`
 	Status             *string                  `json:"status"`
 	Steps              []InvocationTimelineStep `json:"steps"`
 	StopReason         *string                  `json:"stop_reason"`
@@ -4619,6 +4908,10 @@ type InvocationTriggerType string
 type InvocationWebhookContext struct {
 	AgentKey string `json:"agent_key"`
 
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
 	// both are the same durable record and carry the same `dlvr_` prefix.
 	// Treat it as opaque; it appears in the signed payload and identifies the
@@ -4646,10 +4939,8 @@ type InvocationWebhookContext struct {
 	// arrive out of order, so a receiver folding state keeps the highest
 	// sequence it has seen for that Invocation and discards anything
 	// lower rather than applying whichever arrived last.
-	Sequence int64 `json:"sequence"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	Sequence  int64      `json:"sequence"`
+	SessionID *SessionID `json:"session_id"`
 
 	// TenantKey Absent for the app's default tenant.
 	TenantKey *string `json:"tenant_key,omitempty"`
@@ -4971,8 +5262,12 @@ type MemorySearchResult struct {
 type MessageDeltaEvent struct {
 	// Attempt Execution attempt that emitted this preview. Discard provisional
 	// output from earlier attempts when this value increases.
-	Attempt      int64 `json:"attempt"`
-	ContentIndex int   `json:"content_index"`
+	Attempt int64 `json:"attempt"`
+
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+	ContentIndex     int               `json:"content_index"`
 
 	// Delta The fragment, for every kind. One accumulator handles all of them.
 	Delta     string    `json:"delta"`
@@ -5003,10 +5298,8 @@ type MessageDeltaEvent struct {
 
 	// Name The tool being called, alongside `tool_call_id` and on the same
 	// terms.
-	Name *string `json:"name,omitempty"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	Name      *string    `json:"name,omitempty"`
+	SessionID *SessionID `json:"session_id"`
 
 	// ToolCallID The tool call these arguments belong to. Present on every
 	// `tool_arguments` frame, denormalized so a lost frame cannot orphan
@@ -5051,7 +5344,9 @@ type MessagePhase string
 //
 // Metadata is correlation data, not an authorization anchor. If a value
 // decides what a callback receiver is allowed to touch, put it in
-// `session_options.authorization_context` instead.
+// `authorization_context` on Invocation admission, or
+// `session_options.authorization_context` on direct Session creation,
+// instead.
 type Metadata map[string]string
 
 // MintAppSigningKeyRequest defines model for MintAppSigningKeyRequest.
@@ -5087,17 +5382,21 @@ type ModelCallRecord struct {
 	AgentID *string `json:"agent_id"`
 
 	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
-	AppID                    AppID                       `json:"app_id"`
-	AuthenticationMethod     *AuthenticationMethod       `json:"authentication_method"`
-	CacheCreationInputTokens *int                        `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     *int                        `json:"cache_read_input_tokens"`
-	CallKind                 ModelCallKind               `json:"call_kind"`
-	CallOrdinal              int                         `json:"call_ordinal"`
-	CostCoverage             ModelCallRecordCostCoverage `json:"cost_coverage"`
-	CreatedAt                time.Time                   `json:"created_at"`
-	CredentialFamilyID       *string                     `json:"credential_family_id"`
-	FailureClass             *string                     `json:"failure_class"`
-	FirstOutputAt            *time.Time                  `json:"first_output_at"`
+	AppID                    AppID                 `json:"app_id"`
+	AuthenticationMethod     *AuthenticationMethod `json:"authentication_method"`
+	CacheCreationInputTokens *int                  `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     *int                  `json:"cache_read_input_tokens"`
+	CallKind                 ModelCallKind         `json:"call_kind"`
+	CallOrdinal              int                   `json:"call_ordinal"`
+
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt   *ContentExpiresAt           `json:"content_expires_at"`
+	CostCoverage       ModelCallRecordCostCoverage `json:"cost_coverage"`
+	CreatedAt          time.Time                   `json:"created_at"`
+	CredentialFamilyID *string                     `json:"credential_family_id"`
+	FailureClass       *string                     `json:"failure_class"`
+	FirstOutputAt      *time.Time                  `json:"first_output_at"`
 
 	// ID Opaque model-call fact ID with the mcall_ prefix.
 	ID                     string                  `json:"id"`
@@ -6086,6 +6385,10 @@ type SessionMessage struct {
 	AgentID *AgentID              `json:"agent_id,omitempty"`
 	Content []SessionContentBlock `json:"content"`
 
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// CopiedFromMessageID Present only on a fork copy; names its source message.
 	CopiedFromMessageID *SessionMessageID `json:"copied_from_message_id,omitempty"`
 	CreatedAt           time.Time         `json:"created_at"`
@@ -6116,12 +6419,10 @@ type SessionMessage struct {
 	// a final answer only once it settled `completed` with stop reason
 	// `end_turn`, and that answer is the turn's last assistant message.
 	// That is the same rule nvoken applies.
-	Phase    *MessagePhase      `json:"phase,omitempty"`
-	Role     SessionMessageRole `json:"role"`
-	Sequence int64              `json:"sequence"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	Phase     *MessagePhase      `json:"phase,omitempty"`
+	Role      SessionMessageRole `json:"role"`
+	Sequence  int64              `json:"sequence"`
+	SessionID *SessionID         `json:"session_id"`
 
 	// UserKey Per-turn host end-user attribution. Copied rows preserve it;
 	// seeded history may omit it.
@@ -6162,7 +6463,7 @@ type SessionMessageRole string
 // the policy is validated against a turn's model and so needs a turn to
 // install it.
 type SessionOptions struct {
-	// AuthorizationContext What this Session is bound to, in your own terms. If your authorization
+	// AuthorizationContext What this conversation or standalone turn is bound to, in your own terms. If your authorization
 	// boundary is finer than a tenant — a board, a workspace, a document —
 	// this is where you say so, and nvoken carries it to your callback
 	// receiver inside the signed body so authorizing a delivery costs no
@@ -6170,12 +6471,12 @@ type SessionOptions struct {
 	//
 	// Four properties, all guaranteed rather than incidental:
 	//
-	// - **Written at creation only.** Set by the request that brings the
-	//   Session into existence, whether that is `POST /v1/sessions`, a fork,
-	//   or the admission that creates it. There is no patch path and there
-	//   will not be one. A later turn that sends a different value is refused
-	//   with `session_options_conflict`; one that sends a value on a Session
-	//   created without one is refused rather than installing it.
+	// - **Written at creation only.** Set by the request that creates the
+	//   conversation or standalone turn. There is no patch path and there
+	//   will not be one. A later turn that sends a different value for an
+	//   existing Session is refused with `session_options_conflict`; one that
+	//   sends a value on a Session created without one is refused rather than
+	//   installing it.
 	// - **Never interpreted.** nvoken does not read it, route on it, or index
 	//   it.
 	// - **Never model-visible.** It is not rendered into context and no tool
@@ -6261,6 +6562,10 @@ type SessionStreamEvent struct {
 
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// InvocationID The Invocation whose previews are void. Absent means every
 	// Invocation in the Session: an absent field is scope, where a null
 	// identifier would be scope wearing an identifier's name.
@@ -6272,10 +6577,8 @@ type StreamResyncEvent struct {
 	//
 	// Expect new values here over time. Treat a value you do not recognize
 	// the same way you treat `live_delivery_gap`.
-	Reason StreamResyncReason `json:"reason"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID             `json:"session_id"`
+	Reason    StreamResyncReason    `json:"reason"`
+	SessionID *SessionID            `json:"session_id"`
 	Type      StreamResyncEventType `json:"type"`
 }
 
@@ -6328,12 +6631,14 @@ type SubmitHostToolResultsRequest struct {
 
 // SubmitHostToolResultsResponse defines model for SubmitHostToolResultsResponse.
 type SubmitHostToolResultsResponse struct {
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID               `json:"invocation_id"`
 	Results      []HostToolResultAcceptance `json:"results"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	SessionID    *SessionID                 `json:"session_id"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again. Do not encode that
@@ -6437,8 +6742,12 @@ type TextInputBlockType string
 // ToolCall defines model for ToolCall.
 type ToolCall struct {
 	// Attempts Number of runtime execution attempts for this ToolCall.
-	Attempts  int       `json:"attempts"`
-	CreatedAt time.Time `json:"created_at"`
+	Attempts int `json:"attempts"`
+
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+	CreatedAt        time.Time         `json:"created_at"`
 
 	// Delivery Present only when mode is callback.
 	Delivery *ToolCallDelivery `json:"delivery,omitempty"`
@@ -6448,13 +6757,17 @@ type ToolCall struct {
 	// transcript `tool_use` block or from a turn's `tool_calls`, and pass it
 	// back verbatim as `tool_call_id` when submitting results. The same value
 	// is the `Idempotency-Key` on a callback delivery.
-	ID        ToolCallID   `json:"id"`
-	Iteration int          `json:"iteration"`
-	Mode      ToolCallMode `json:"mode"`
-	Name      string       `json:"name"`
+	ID ToolCallID `json:"id"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID `json:"invocation_id"`
+	Iteration    int          `json:"iteration"`
+	Mode         ToolCallMode `json:"mode"`
+	Name         string       `json:"name"`
 
 	// ResultOrigin Null until a ToolCall has a committed result.
 	ResultOrigin *ToolCallResultOrigin `json:"result_origin"`
+	SessionID    *SessionID            `json:"session_id"`
 
 	// Status Where one tool call stands. `pending` means the model asked for it and
 	// nothing has started it yet; `running` means it is executing or, for a
@@ -6562,6 +6875,10 @@ type ToolCallSummary struct {
 type ToolCallbackContext struct {
 	AgentKey string `json:"agent_key"`
 
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
 	// DeliveryID Identifies one delivery nvoken sent you, callback or webhook alike —
 	// both are the same durable record and carry the same `dlvr_` prefix.
 	// Treat it as opaque; it appears in the signed payload and identifies the
@@ -6571,9 +6888,7 @@ type ToolCallbackContext struct {
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID  InvocationID                     `json:"invocation_id"`
 	SchemaVersion ToolCallbackContextSchemaVersion `json:"schema_version"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID `json:"session_id"`
+	SessionID     *SessionID                       `json:"session_id"`
 
 	// TenantKey Absent for the app's default tenant.
 	TenantKey *string `json:"tenant_key,omitempty"`
@@ -6597,8 +6912,8 @@ type ToolCallbackContextSchemaVersion int
 
 // ToolCallbackRequest defines model for ToolCallbackRequest.
 type ToolCallbackRequest struct {
-	// AuthorizationContext The Session's `authorization_context`, absent when the Session was
-	// created without one.
+	// AuthorizationContext The conversation or standalone turn's `authorization_context`,
+	// absent when admission did not set one.
 	//
 	// It sits beside `nvoken` rather than inside it on purpose.
 	// Everything in `nvoken` is a fact nvoken minted or resolved; this is
@@ -6678,25 +6993,27 @@ type ToolUseBlockType string
 // Trace defines model for Trace.
 type Trace struct {
 	// Attempt Durable Invocation lease attempt associated with this trace.
-	Attempt    *int       `json:"attempt,omitempty"`
-	DurationMs *int       `json:"duration_ms,omitempty"`
-	EndedAt    *time.Time `json:"ended_at,omitempty"`
-	ErrorCount int        `json:"error_count"`
+	Attempt *int `json:"attempt,omitempty"`
+
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+	DurationMs       *int              `json:"duration_ms,omitempty"`
+	EndedAt          *time.Time        `json:"ended_at,omitempty"`
+	ErrorCount       int               `json:"error_count"`
 
 	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
 	InvocationID InvocationID `json:"invocation_id"`
 
 	// IsPartial True when this response contains only a bounded or rootless partial trace.
-	IsPartial  bool   `json:"is_partial"`
-	Name       string `json:"name"`
-	RootSpanID string `json:"root_span_id"`
-
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID   `json:"session_id"`
-	SpanCount int         `json:"span_count"`
-	Spans     []TraceSpan `json:"spans"`
-	StartedAt time.Time   `json:"started_at"`
-	Status    TraceStatus `json:"status"`
+	IsPartial  bool        `json:"is_partial"`
+	Name       string      `json:"name"`
+	RootSpanID string      `json:"root_span_id"`
+	SessionID  *SessionID  `json:"session_id"`
+	SpanCount  int         `json:"span_count"`
+	Spans      []TraceSpan `json:"spans"`
+	StartedAt  time.Time   `json:"started_at"`
+	Status     TraceStatus `json:"status"`
 
 	// TraceID Lowercase W3C trace ID. Possession does not grant access.
 	TraceID TraceID `json:"trace_id"`
@@ -6710,8 +7027,15 @@ type TraceID = string
 
 // TraceList defines model for TraceList.
 type TraceList struct {
-	Items      []TraceSummary `json:"items"`
-	NextCursor *string        `json:"next_cursor"`
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
+
+	// InvocationID Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+	InvocationID InvocationID   `json:"invocation_id"`
+	Items        []TraceSummary `json:"items"`
+	NextCursor   *string        `json:"next_cursor"`
+	SessionID    *SessionID     `json:"session_id"`
 
 	// Status Whether this installation has a hosted observation store.
 	Status ObservationStatus `json:"status"`
@@ -6822,14 +7146,16 @@ type TranscriptSnapshot struct {
 // state. Within one frame apply messages before changes, so a turn is
 // never marked settled before its final message exists.
 type TranscriptUpdateEvent struct {
-	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
-	Cursor            string             `json:"cursor"`
-	InvocationChanges []InvocationChange `json:"invocation_changes"`
-	Messages          []SessionMessage   `json:"messages"`
+	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Invocation.
+	// Null while it is nonterminal and for conversation-bound work.
+	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
 
-	// SessionID Opaque identifier with the public `sess_` prefix. Treat the body as opaque.
-	SessionID SessionID                 `json:"session_id"`
-	Type      TranscriptUpdateEventType `json:"type"`
+	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
+	Cursor            string                    `json:"cursor"`
+	InvocationChanges []InvocationChange        `json:"invocation_changes"`
+	Messages          []SessionMessage          `json:"messages"`
+	SessionID         *SessionID                `json:"session_id"`
+	Type              TranscriptUpdateEventType `json:"type"`
 }
 
 // TranscriptUpdateEventType defines model for TranscriptUpdateEvent.Type.
@@ -7054,6 +7380,12 @@ type AgentKeyFilter = string
 // ArchiveStatus defines model for ArchiveStatus.
 type ArchiveStatus string
 
+// ConsoleDeviceCode defines model for ConsoleDeviceCode.
+type ConsoleDeviceCode = string
+
+// ConsoleDeviceUserCode defines model for ConsoleDeviceUserCode.
+type ConsoleDeviceUserCode = string
+
 // CredentialLimit defines model for CredentialLimit.
 type CredentialLimit = int
 
@@ -7135,6 +7467,9 @@ type Internal = ErrorResponse
 
 // InvalidRequest defines model for InvalidRequest.
 type InvalidRequest = ErrorResponse
+
+// InvocationErased defines model for InvocationErased.
+type InvocationErased = ErrorResponse
 
 // MCPDiscoveryFailed defines model for MCPDiscoveryFailed.
 type MCPDiscoveryFailed = ErrorResponse
@@ -7272,6 +7607,11 @@ type IssueAnonymousTokenParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 }
 
+// ExchangeConsoleDeviceAuthorization403JSONResponseBody defines parameters for ExchangeConsoleDeviceAuthorization.
+type ExchangeConsoleDeviceAuthorization403JSONResponseBody struct {
+	union json.RawMessage
+}
+
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
 type ListCreditAccountsParams struct {
 	// TenantKey Exact non-default tenant partition reference.
@@ -7406,6 +7746,18 @@ type ListNudgesParams struct {
 
 	// Limit Maximum items in this page. Defaults to 20.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// StreamInvocationParams defines parameters for StreamInvocation.
+type StreamInvocationParams struct {
+	// Cursor Opaque cursor returned by the same operation and filter set.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Deltas Include id-less preview frames. Defaults to true.
+	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
+
+	// LastEventID Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
 // ListToolCallsParams defines parameters for ListToolCalls.
@@ -7550,9 +7902,6 @@ type ListSessionMessagesParamsOrder string
 
 // StreamSessionParams defines parameters for StreamSession.
 type StreamSessionParams struct {
-	// InvocationID Narrow every frame to one turn, and close once it settles.
-	InvocationID *InvocationID `form:"invocation_id,omitempty" json:"invocation_id,omitempty"`
-
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
@@ -7780,6 +8129,12 @@ type CreateAppClientKeyJSONRequestBody = CreateClientKeyRequest
 
 // MintAppSigningKeyJSONRequestBody defines body for MintAppSigningKey for application/json ContentType.
 type MintAppSigningKeyJSONRequestBody = MintAppSigningKeyRequest
+
+// CreateConsoleDeviceAuthorizationJSONRequestBody defines body for CreateConsoleDeviceAuthorization for application/json ContentType.
+type CreateConsoleDeviceAuthorizationJSONRequestBody = CreateConsoleDeviceAuthorizationRequest
+
+// ApproveConsoleDeviceAuthorizationJSONRequestBody defines body for ApproveConsoleDeviceAuthorization for application/json ContentType.
+type ApproveConsoleDeviceAuthorizationJSONRequestBody = ApproveConsoleDeviceAuthorizationRequest
 
 // AllocateCreditsJSONRequestBody defines body for AllocateCredits for application/json ContentType.
 type AllocateCreditsJSONRequestBody = AllocateCreditsRequest
@@ -9056,6 +9411,68 @@ func (t *ToolDeclaration) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsConsoleDeviceAuthorizationExchangeState returns the union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody as a ConsoleDeviceAuthorizationExchangeState
+func (t ExchangeConsoleDeviceAuthorization403JSONResponseBody) AsConsoleDeviceAuthorizationExchangeState() (ConsoleDeviceAuthorizationExchangeState, error) {
+	var body ConsoleDeviceAuthorizationExchangeState
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConsoleDeviceAuthorizationExchangeState overwrites any union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody as the provided ConsoleDeviceAuthorizationExchangeState
+func (t *ExchangeConsoleDeviceAuthorization403JSONResponseBody) FromConsoleDeviceAuthorizationExchangeState(v ConsoleDeviceAuthorizationExchangeState) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeConsoleDeviceAuthorizationExchangeState performs a merge with any union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody, using the provided ConsoleDeviceAuthorizationExchangeState
+func (t *ExchangeConsoleDeviceAuthorization403JSONResponseBody) MergeConsoleDeviceAuthorizationExchangeState(v ConsoleDeviceAuthorizationExchangeState) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsErrorResponse returns the union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody as a ErrorResponse
+func (t ExchangeConsoleDeviceAuthorization403JSONResponseBody) AsErrorResponse() (ErrorResponse, error) {
+	var body ErrorResponse
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromErrorResponse overwrites any union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody as the provided ErrorResponse
+func (t *ExchangeConsoleDeviceAuthorization403JSONResponseBody) FromErrorResponse(v ErrorResponse) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeErrorResponse performs a merge with any union data inside the ExchangeConsoleDeviceAuthorization403JSONResponseBody, using the provided ErrorResponse
+func (t *ExchangeConsoleDeviceAuthorization403JSONResponseBody) MergeErrorResponse(v ErrorResponse) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ExchangeConsoleDeviceAuthorization403JSONResponseBody) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ExchangeConsoleDeviceAuthorization403JSONResponseBody) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
 
@@ -9760,6 +10177,63 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
 	ActivateAppSigningKey(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateConsoleDeviceAuthorizationWithBody Create a short-lived console CLI authorization
+	//
+	// Allocates the opaque code pair for one console-mediated CLI login.
+	// This operation is server-to-server and requires an installation-admin
+	// console issuer token.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+	CreateConsoleDeviceAuthorizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateConsoleDeviceAuthorization Create a short-lived console CLI authorization
+	//
+	// Allocates the opaque code pair for one console-mediated CLI login.
+	// This operation is server-to-server and requires an installation-admin
+	// console issuer token.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+	CreateConsoleDeviceAuthorization(ctx context.Context, body CreateConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeConsoleDeviceAuthorization Poll or claim a console CLI authorization
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{device_code}/exchange (the `ExchangeConsoleDeviceAuthorization` operationId).
+	ExchangeConsoleDeviceAuthorization(ctx context.Context, deviceCode ConsoleDeviceCode, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetConsoleDeviceAuthorization Inspect a live console CLI authorization
+	//
+	// Corresponds with GET /v1/console/device-authorizations/{user_code} (the `GetConsoleDeviceAuthorization` operationId).
+	GetConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApproveConsoleDeviceAuthorizationWithBody Approve a console CLI authorization for one App
+	//
+	// Requires the App-scoped issuer bearer that will mint the eventual App
+	// credential. Durable API keys cannot approve this flow.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+	ApproveConsoleDeviceAuthorizationWithBody(ctx context.Context, userCode ConsoleDeviceUserCode, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApproveConsoleDeviceAuthorization Approve a console CLI authorization for one App
+	//
+	// Requires the App-scoped issuer bearer that will mint the eventual App
+	// credential. Durable API keys cannot approve this flow.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+	ApproveConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, body ApproveConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DenyConsoleDeviceAuthorization Deny a pending console CLI authorization
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/deny (the `DenyConsoleDeviceAuthorization` operationId).
+	DenyConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListCreditAccounts List tenant credit accounts
 	//
 	// Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -9909,18 +10383,21 @@ type ClientInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
-	// its Agent Definition revision, finds or creates the Session, appends
-	// your input as one message, and queues the turn. Admission never creates
-	// an Agent or reusable configuration. You get a
+	// its Agent Definition revision, creates the turn's durable transcript,
+	// appends your input as one message, and queues the turn. Admission never
+	// creates an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
 	// you follow it with the stream or by polling.
 	//
-	// Pick the Session with either `session_id` or `session_key`, not both.
-	// A Session ID must belong to the Agent you named, or to a Session
-	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An App credential without a tenant constraint may omit
+	// Omit `session` for a standalone turn. Its private transcript is kept on
+	// a hidden one-turn carrier and expires after the accepted retention
+	// window; no Session is exposed. Send `session.mode: new` to create a
+	// reusable conversation, `continue` with an `id` to append to one, or
+	// `continue_or_create` with a host `key` for an atomic keyed upsert.
+	// A continued Session must belong to the Agent you named. An App
+	// credential without a tenant constraint may omit
 	// `tenant_key` and use whichever tenant the Session already belongs to.
 	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
@@ -9933,9 +10410,9 @@ type ClientInterface interface {
 	// and does not add your input again, even if that turn has already
 	// finished. Keys are scoped to the tenant and Agent.
 	//
-	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// A repeat counts as the same request only if Session selection and
+	// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+	// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 	// admitted revision is returned even if its Definition has advanced.
 	// Values are compared as sent, so omitting an override is not the same as
 	// supplying one that happens to equal the Definition. Key order inside
@@ -9949,7 +10426,7 @@ type ClientInterface interface {
 	//
 	// ## When the Session is already busy
 	//
-	// A Session runs one turn at a time, and `if_active` decides what
+	// A Session runs one turn at a time, and `session.if_active` decides what
 	// happens when you start another. The default, `reject`, returns
 	// `session_invocation_active`.
 	//
@@ -9992,7 +10469,7 @@ type ClientInterface interface {
 	//
 	// This response is the acknowledgment. Once you hold the returned
 	// `id`, follow the turn with
-	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 	// streaming are separate requests on purpose: a dropped stream costs you
 	// nothing, because the turn already exists and no reconnect can create a
 	// second one.
@@ -10006,18 +10483,21 @@ type ClientInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
-	// its Agent Definition revision, finds or creates the Session, appends
-	// your input as one message, and queues the turn. Admission never creates
-	// an Agent or reusable configuration. You get a
+	// its Agent Definition revision, creates the turn's durable transcript,
+	// appends your input as one message, and queues the turn. Admission never
+	// creates an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
 	// you follow it with the stream or by polling.
 	//
-	// Pick the Session with either `session_id` or `session_key`, not both.
-	// A Session ID must belong to the Agent you named, or to a Session
-	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An App credential without a tenant constraint may omit
+	// Omit `session` for a standalone turn. Its private transcript is kept on
+	// a hidden one-turn carrier and expires after the accepted retention
+	// window; no Session is exposed. Send `session.mode: new` to create a
+	// reusable conversation, `continue` with an `id` to append to one, or
+	// `continue_or_create` with a host `key` for an atomic keyed upsert.
+	// A continued Session must belong to the Agent you named. An App
+	// credential without a tenant constraint may omit
 	// `tenant_key` and use whichever tenant the Session already belongs to.
 	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
@@ -10030,9 +10510,9 @@ type ClientInterface interface {
 	// and does not add your input again, even if that turn has already
 	// finished. Keys are scoped to the tenant and Agent.
 	//
-	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// A repeat counts as the same request only if Session selection and
+	// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+	// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 	// admitted revision is returned even if its Definition has advanced.
 	// Values are compared as sent, so omitting an override is not the same as
 	// supplying one that happens to equal the Definition. Key order inside
@@ -10046,7 +10526,7 @@ type ClientInterface interface {
 	//
 	// ## When the Session is already busy
 	//
-	// A Session runs one turn at a time, and `if_active` decides what
+	// A Session runs one turn at a time, and `session.if_active` decides what
 	// happens when you start another. The default, `reject`, returns
 	// `session_invocation_active`.
 	//
@@ -10089,7 +10569,7 @@ type ClientInterface interface {
 	//
 	// This response is the acknowledgment. Once you hold the returned
 	// `id`, follow the turn with
-	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 	// streaming are separate requests on purpose: a dropped stream costs you
 	// nothing, because the turn already exists and no reconnect can create a
 	// second one.
@@ -10098,6 +10578,15 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocation(ctx context.Context, params *CreateInvocationParams, body CreateInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteInvocation Erase a terminal standalone Invocation
+	//
+	// Erases the private content carried by a terminal standalone turn while
+	// retaining its minimal usage, lineage, and idempotency facts. A
+	// conversation-bound Invocation is erased through its Session instead.
+	//
+	// Corresponds with DELETE /v1/invocations/{invocation_id} (the `DeleteInvocation` operationId).
+	DeleteInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInvocation Read authoritative Invocation identity and state
 	//
@@ -10190,7 +10679,7 @@ type ClientInterface interface {
 	// you are steering. Use this when a long turn is heading the wrong way
 	// and you want to correct it in place.
 	//
-	// Compare with `if_active: supersede` on a new Invocation, which
+	// Compare with `session.if_active: supersede` on a new Invocation, which
 	// replaces the running turn and discards what it had produced. Steering
 	// a long turn that way throws away exactly the work you were trying to
 	// redirect.
@@ -10207,7 +10696,7 @@ type ClientInterface interface {
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
-	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// `session.if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
 	// If the turn ends without ever picking it up, your Nudge is marked
@@ -10234,7 +10723,7 @@ type ClientInterface interface {
 	// you are steering. Use this when a long turn is heading the wrong way
 	// and you want to correct it in place.
 	//
-	// Compare with `if_active: supersede` on a new Invocation, which
+	// Compare with `session.if_active: supersede` on a new Invocation, which
 	// replaces the running turn and discards what it had produced. Steering
 	// a long turn that way throws away exactly the work you were trying to
 	// redirect.
@@ -10251,7 +10740,7 @@ type ClientInterface interface {
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
-	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// `session.if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
 	// If the turn ends without ever picking it up, your Nudge is marked
@@ -10337,6 +10826,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StreamInvocation Follow one Invocation over Server-Sent Events
+	//
+	// Carries only this turn's durable transcript updates and optional live
+	// previews, then closes after its terminal change is delivered. The
+	// cursor is scoped to the Invocation and never reveals an internal
+	// carrier Session for a standalone turn.
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+	StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetInvocationTimeline Read the durable execution waterfall for one Invocation
 	//
@@ -10898,7 +11397,7 @@ type ClientInterface interface {
 
 	// StreamSession Follow a Session over Server-Sent Events
 	//
-	// The one stream. It carries the Session's messages and the lifecycle
+	// The conversation stream. It carries the Session's messages and the lifecycle
 	// changes of every turn in it, live, and can be resumed after a dropped
 	// connection. It covers the same records as the JSON transcript
 	// endpoint.
@@ -10915,17 +11414,13 @@ type ClientInterface interface {
 	// arrive. Set `deltas=false` to skip previews entirely; nothing about
 	// replay, resumption, or how the stream ends changes.
 	//
-	// ## Following one turn
-	//
-	// Pass `invocation_id` and every frame is narrowed to that turn:
-	// messages it produced, its lifecycle changes, its previews. The
-	// connection closes once that turn's terminal change has been delivered.
-	// Cursors are Session-scoped either way, so a position taken from a
-	// filtered read resumes an unfiltered one and the other way round.
-	//
-	// Without `invocation_id` this is a subscription. It stays open while
-	// the Session is idle and a turn started later by anyone appears on it,
-	// so there is nothing to poll.
+	// This is a conversation subscription. It stays open while the Session
+	// is idle and a turn started later by anyone appears on it, so there is
+	// nothing to poll. To follow exactly one turn, including a standalone
+	// turn, use `GET /v1/invocations/{invocation_id}/stream`. A
+	// conversation-bound turn uses this Session cursor scope and can resume
+	// here. A standalone turn uses an Invocation-only cursor and has no
+	// public Session stream.
 	//
 	// ## Knowing a turn is over
 	//
@@ -12110,6 +12605,133 @@ func (c *Client) ActivateAppSigningKey(ctx context.Context, appID AppID, purpose
 	return c.Client.Do(req)
 }
 
+// CreateConsoleDeviceAuthorizationWithBody Create a short-lived console CLI authorization
+//
+// Allocates the opaque code pair for one console-mediated CLI login.
+// This operation is server-to-server and requires an installation-admin
+// console issuer token.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+func (c *Client) CreateConsoleDeviceAuthorizationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateConsoleDeviceAuthorizationRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateConsoleDeviceAuthorization Create a short-lived console CLI authorization
+//
+// Allocates the opaque code pair for one console-mediated CLI login.
+// This operation is server-to-server and requires an installation-admin
+// console issuer token.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+func (c *Client) CreateConsoleDeviceAuthorization(ctx context.Context, body CreateConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateConsoleDeviceAuthorizationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeConsoleDeviceAuthorization Poll or claim a console CLI authorization
+//
+// Corresponds with POST /v1/console/device-authorizations/{device_code}/exchange (the `ExchangeConsoleDeviceAuthorization` operationId).
+func (c *Client) ExchangeConsoleDeviceAuthorization(ctx context.Context, deviceCode ConsoleDeviceCode, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeConsoleDeviceAuthorizationRequest(c.Server, deviceCode)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetConsoleDeviceAuthorization Inspect a live console CLI authorization
+//
+// Corresponds with GET /v1/console/device-authorizations/{user_code} (the `GetConsoleDeviceAuthorization` operationId).
+func (c *Client) GetConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConsoleDeviceAuthorizationRequest(c.Server, userCode)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApproveConsoleDeviceAuthorizationWithBody Approve a console CLI authorization for one App
+//
+// Requires the App-scoped issuer bearer that will mint the eventual App
+// credential. Durable API keys cannot approve this flow.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+func (c *Client) ApproveConsoleDeviceAuthorizationWithBody(ctx context.Context, userCode ConsoleDeviceUserCode, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveConsoleDeviceAuthorizationRequestWithBody(c.Server, userCode, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ApproveConsoleDeviceAuthorization Approve a console CLI authorization for one App
+//
+// Requires the App-scoped issuer bearer that will mint the eventual App
+// credential. Durable API keys cannot approve this flow.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+func (c *Client) ApproveConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, body ApproveConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveConsoleDeviceAuthorizationRequest(c.Server, userCode, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DenyConsoleDeviceAuthorization Deny a pending console CLI authorization
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/deny (the `DenyConsoleDeviceAuthorization` operationId).
+func (c *Client) DenyConsoleDeviceAuthorization(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDenyConsoleDeviceAuthorizationRequest(c.Server, userCode)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListCreditAccounts List tenant credit accounts
 //
 // Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -12389,18 +13011,21 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
-// its Agent Definition revision, finds or creates the Session, appends
-// your input as one message, and queues the turn. Admission never creates
-// an Agent or reusable configuration. You get a
+// its Agent Definition revision, creates the turn's durable transcript,
+// appends your input as one message, and queues the turn. Admission never
+// creates an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
 // you follow it with the stream or by polling.
 //
-// Pick the Session with either `session_id` or `session_key`, not both.
-// A Session ID must belong to the Agent you named, or to a Session
-// created without an Agent — in which case this turn binds that Agent
-// permanently. An App credential without a tenant constraint may omit
+// Omit `session` for a standalone turn. Its private transcript is kept on
+// a hidden one-turn carrier and expires after the accepted retention
+// window; no Session is exposed. Send `session.mode: new` to create a
+// reusable conversation, `continue` with an `id` to append to one, or
+// `continue_or_create` with a host `key` for an atomic keyed upsert.
+// A continued Session must belong to the Agent you named. An App
+// credential without a tenant constraint may omit
 // `tenant_key` and use whichever tenant the Session already belongs to.
 // A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
@@ -12413,9 +13038,9 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 // and does not add your input again, even if that turn has already
 // finished. Keys are scoped to the tenant and Agent.
 //
-// A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-// `webhook`, `on_budget_exhausted`, and input all match. The original
+// A repeat counts as the same request only if Session selection and
+// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 // admitted revision is returned even if its Definition has advanced.
 // Values are compared as sent, so omitting an override is not the same as
 // supplying one that happens to equal the Definition. Key order inside
@@ -12429,7 +13054,7 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // ## When the Session is already busy
 //
-// A Session runs one turn at a time, and `if_active` decides what
+// A Session runs one turn at a time, and `session.if_active` decides what
 // happens when you start another. The default, `reject`, returns
 // `session_invocation_active`.
 //
@@ -12472,7 +13097,7 @@ func (c *Client) ListInvocations(ctx context.Context, params *ListInvocationsPar
 //
 // This response is the acknowledgment. Once you hold the returned
 // `id`, follow the turn with
-// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 // streaming are separate requests on purpose: a dropped stream costs you
 // nothing, because the turn already exists and no reconnect can create a
 // second one.
@@ -12496,18 +13121,21 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
-// its Agent Definition revision, finds or creates the Session, appends
-// your input as one message, and queues the turn. Admission never creates
-// an Agent or reusable configuration. You get a
+// its Agent Definition revision, creates the turn's durable transcript,
+// appends your input as one message, and queues the turn. Admission never
+// creates an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
 // you follow it with the stream or by polling.
 //
-// Pick the Session with either `session_id` or `session_key`, not both.
-// A Session ID must belong to the Agent you named, or to a Session
-// created without an Agent — in which case this turn binds that Agent
-// permanently. An App credential without a tenant constraint may omit
+// Omit `session` for a standalone turn. Its private transcript is kept on
+// a hidden one-turn carrier and expires after the accepted retention
+// window; no Session is exposed. Send `session.mode: new` to create a
+// reusable conversation, `continue` with an `id` to append to one, or
+// `continue_or_create` with a host `key` for an atomic keyed upsert.
+// A continued Session must belong to the Agent you named. An App
+// credential without a tenant constraint may omit
 // `tenant_key` and use whichever tenant the Session already belongs to.
 // A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
@@ -12520,9 +13148,9 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // and does not add your input again, even if that turn has already
 // finished. Keys are scoped to the tenant and Agent.
 //
-// A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-// `webhook`, `on_budget_exhausted`, and input all match. The original
+// A repeat counts as the same request only if Session selection and
+// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 // admitted revision is returned even if its Definition has advanced.
 // Values are compared as sent, so omitting an override is not the same as
 // supplying one that happens to equal the Definition. Key order inside
@@ -12536,7 +13164,7 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 //
 // ## When the Session is already busy
 //
-// A Session runs one turn at a time, and `if_active` decides what
+// A Session runs one turn at a time, and `session.if_active` decides what
 // happens when you start another. The default, `reject`, returns
 // `session_invocation_active`.
 //
@@ -12579,7 +13207,7 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 //
 // This response is the acknowledgment. Once you hold the returned
 // `id`, follow the turn with
-// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 // streaming are separate requests on purpose: a dropped stream costs you
 // nothing, because the turn already exists and no reconnect can create a
 // second one.
@@ -12589,6 +13217,25 @@ func (c *Client) CreateInvocationWithBody(ctx context.Context, params *CreateInv
 // Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 func (c *Client) CreateInvocation(ctx context.Context, params *CreateInvocationParams, body CreateInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateInvocationRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteInvocation Erase a terminal standalone Invocation
+//
+// Erases the private content carried by a terminal standalone turn while
+// retaining its minimal usage, lineage, and idempotency facts. A
+// conversation-bound Invocation is erased through its Session instead.
+//
+// Corresponds with DELETE /v1/invocations/{invocation_id} (the `DeleteInvocation` operationId).
+func (c *Client) DeleteInvocation(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteInvocationRequest(c.Server, invocationID)
 	if err != nil {
 		return nil, err
 	}
@@ -12740,7 +13387,7 @@ func (c *Client) ListNudges(ctx context.Context, invocationID InvocationID, para
 // you are steering. Use this when a long turn is heading the wrong way
 // and you want to correct it in place.
 //
-// Compare with `if_active: supersede` on a new Invocation, which
+// Compare with `session.if_active: supersede` on a new Invocation, which
 // replaces the running turn and discards what it had produced. Steering
 // a long turn that way throws away exactly the work you were trying to
 // redirect.
@@ -12757,7 +13404,7 @@ func (c *Client) ListNudges(ctx context.Context, invocationID InvocationID, para
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
-// `if_active` setting says; it never quietly becomes a nudge, and a
+// `session.if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
 // If the turn ends without ever picking it up, your Nudge is marked
@@ -12794,7 +13441,7 @@ func (c *Client) CreateNudgeWithBody(ctx context.Context, invocationID Invocatio
 // you are steering. Use this when a long turn is heading the wrong way
 // and you want to correct it in place.
 //
-// Compare with `if_active: supersede` on a new Invocation, which
+// Compare with `session.if_active: supersede` on a new Invocation, which
 // replaces the running turn and discards what it had produced. Steering
 // a long turn that way throws away exactly the work you were trying to
 // redirect.
@@ -12811,7 +13458,7 @@ func (c *Client) CreateNudgeWithBody(ctx context.Context, invocationID Invocatio
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
-// `if_active` setting says; it never quietly becomes a nudge, and a
+// `session.if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
 // If the turn ends without ever picking it up, your Nudge is marked
@@ -12938,6 +13585,26 @@ func (c *Client) ResumeInvocationWithBody(ctx context.Context, invocationID Invo
 // Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 func (c *Client) ResumeInvocation(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewResumeInvocationRequest(c.Server, invocationID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StreamInvocation Follow one Invocation over Server-Sent Events
+//
+// Carries only this turn's durable transcript updates and optional live
+// previews, then closes after its terminal change is delivered. The
+// cursor is scoped to the Invocation and never reveals an internal
+// carrier Session for a standalone turn.
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+func (c *Client) StreamInvocation(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStreamInvocationRequest(c.Server, invocationID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -13898,7 +14565,7 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 
 // StreamSession Follow a Session over Server-Sent Events
 //
-// The one stream. It carries the Session's messages and the lifecycle
+// The conversation stream. It carries the Session's messages and the lifecycle
 // changes of every turn in it, live, and can be resumed after a dropped
 // connection. It covers the same records as the JSON transcript
 // endpoint.
@@ -13915,17 +14582,13 @@ func (c *Client) ListSessionMessages(ctx context.Context, sessionID SessionID, p
 // arrive. Set `deltas=false` to skip previews entirely; nothing about
 // replay, resumption, or how the stream ends changes.
 //
-// ## Following one turn
-//
-// Pass `invocation_id` and every frame is narrowed to that turn:
-// messages it produced, its lifecycle changes, its previews. The
-// connection closes once that turn's terminal change has been delivered.
-// Cursors are Session-scoped either way, so a position taken from a
-// filtered read resumes an unfiltered one and the other way round.
-//
-// Without `invocation_id` this is a subscription. It stays open while
-// the Session is idle and a turn started later by anyone appears on it,
-// so there is nothing to poll.
+// This is a conversation subscription. It stays open while the Session
+// is idle and a turn started later by anyone appears on it, so there is
+// nothing to poll. To follow exactly one turn, including a standalone
+// turn, use `GET /v1/invocations/{invocation_id}/stream`. A
+// conversation-bound turn uses this Session cursor scope and can resume
+// here. A standalone turn uses an Invocation-only cursor and has no
+// public Session stream.
 //
 // ## Knowing a turn is over
 //
@@ -15691,6 +16354,195 @@ func NewActivateAppSigningKeyRequest(server string, appID AppID, purpose AppSign
 	return req, nil
 }
 
+// NewCreateConsoleDeviceAuthorizationRequest calls the generic CreateConsoleDeviceAuthorization builder with application/json body
+func NewCreateConsoleDeviceAuthorizationRequest(server string, body CreateConsoleDeviceAuthorizationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateConsoleDeviceAuthorizationRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateConsoleDeviceAuthorizationRequestWithBody constructs an http.Request for the CreateConsoleDeviceAuthorization method, with any body, and a specified content type
+func NewCreateConsoleDeviceAuthorizationRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/console/device-authorizations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewExchangeConsoleDeviceAuthorizationRequest constructs an http.Request for the ExchangeConsoleDeviceAuthorization method
+func NewExchangeConsoleDeviceAuthorizationRequest(server string, deviceCode ConsoleDeviceCode) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "device_code", deviceCode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/console/device-authorizations/%s/exchange", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetConsoleDeviceAuthorizationRequest constructs an http.Request for the GetConsoleDeviceAuthorization method
+func NewGetConsoleDeviceAuthorizationRequest(server string, userCode ConsoleDeviceUserCode) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "user_code", userCode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/console/device-authorizations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApproveConsoleDeviceAuthorizationRequest calls the generic ApproveConsoleDeviceAuthorization builder with application/json body
+func NewApproveConsoleDeviceAuthorizationRequest(server string, userCode ConsoleDeviceUserCode, body ApproveConsoleDeviceAuthorizationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApproveConsoleDeviceAuthorizationRequestWithBody(server, userCode, "application/json", bodyReader)
+}
+
+// NewApproveConsoleDeviceAuthorizationRequestWithBody constructs an http.Request for the ApproveConsoleDeviceAuthorization method, with any body, and a specified content type
+func NewApproveConsoleDeviceAuthorizationRequestWithBody(server string, userCode ConsoleDeviceUserCode, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "user_code", userCode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/console/device-authorizations/%s/approve", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDenyConsoleDeviceAuthorizationRequest constructs an http.Request for the DenyConsoleDeviceAuthorization method
+func NewDenyConsoleDeviceAuthorizationRequest(server string, userCode ConsoleDeviceUserCode) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "user_code", userCode, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/console/device-authorizations/%s/deny", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListCreditAccountsRequest constructs an http.Request for the ListCreditAccounts method
 func NewListCreditAccountsRequest(server string, params *ListCreditAccountsParams) (*http.Request, error) {
 	var err error
@@ -16471,6 +17323,40 @@ func NewCreateInvocationRequestWithBody(server string, params *CreateInvocationP
 	return req, nil
 }
 
+// NewDeleteInvocationRequest constructs an http.Request for the DeleteInvocation method
+func NewDeleteInvocationRequest(server string, invocationID InvocationID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetInvocationRequest constructs an http.Request for the GetInvocation method
 func NewGetInvocationRequest(server string, invocationID InvocationID) (*http.Request, error) {
 	var err error
@@ -16908,6 +17794,94 @@ func NewResumeInvocationRequestWithBody(server string, invocationID InvocationID
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewStreamInvocationRequest constructs an http.Request for the StreamInvocation method
+func NewStreamInvocationRequest(server string, invocationID InvocationID, params *StreamInvocationParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "invocation_id", invocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/invocations/%s/stream", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Deltas != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "deltas", *params.Deltas, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.LastEventID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Last-Event-ID", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -18623,18 +19597,6 @@ func NewStreamSessionRequest(server string, sessionID SessionID, params *StreamS
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
-
-		if params.InvocationID != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "invocation_id", *params.InvocationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
 
 		if params.Cursor != nil {
 
@@ -20428,6 +21390,69 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/apps/{app_id}/signing-keys/{purpose}/{version}/activate (the `ActivateAppSigningKey` operationId).
 	ActivateAppSigningKeyWithResponse(ctx context.Context, appID AppID, purpose AppSigningKeyPurpose, version int, reqEditors ...RequestEditorFn) (*ActivateAppSigningKeyHTTPResponse, error)
 
+	// CreateConsoleDeviceAuthorizationWithBodyWithResponse Create a short-lived console CLI authorization
+	//
+	// Allocates the opaque code pair for one console-mediated CLI login.
+	// This operation is server-to-server and requires an installation-admin
+	// console issuer token.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+	CreateConsoleDeviceAuthorizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// CreateConsoleDeviceAuthorizationWithResponse Create a short-lived console CLI authorization
+	//
+	// Allocates the opaque code pair for one console-mediated CLI login.
+	// This operation is server-to-server and requires an installation-admin
+	// console issuer token.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+	CreateConsoleDeviceAuthorizationWithResponse(ctx context.Context, body CreateConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// ExchangeConsoleDeviceAuthorizationWithResponse Poll or claim a console CLI authorization
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{device_code}/exchange (the `ExchangeConsoleDeviceAuthorization` operationId).
+	ExchangeConsoleDeviceAuthorizationWithResponse(ctx context.Context, deviceCode ConsoleDeviceCode, reqEditors ...RequestEditorFn) (*ExchangeConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// GetConsoleDeviceAuthorizationWithResponse Inspect a live console CLI authorization
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/console/device-authorizations/{user_code} (the `GetConsoleDeviceAuthorization` operationId).
+	GetConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*GetConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// ApproveConsoleDeviceAuthorizationWithBodyWithResponse Approve a console CLI authorization for one App
+	//
+	// Requires the App-scoped issuer bearer that will mint the eventual App
+	// credential. Durable API keys cannot approve this flow.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+	ApproveConsoleDeviceAuthorizationWithBodyWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// ApproveConsoleDeviceAuthorizationWithResponse Approve a console CLI authorization for one App
+	//
+	// Requires the App-scoped issuer bearer that will mint the eventual App
+	// credential. Durable API keys cannot approve this flow.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+	ApproveConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, body ApproveConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveConsoleDeviceAuthorizationHTTPResponse, error)
+
+	// DenyConsoleDeviceAuthorizationWithResponse Deny a pending console CLI authorization
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/console/device-authorizations/{user_code}/deny (the `DenyConsoleDeviceAuthorization` operationId).
+	DenyConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*DenyConsoleDeviceAuthorizationHTTPResponse, error)
+
 	// ListCreditAccountsWithResponse List tenant credit accounts
 	//
 	// Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -20591,18 +21616,21 @@ type ClientWithResponsesInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
-	// its Agent Definition revision, finds or creates the Session, appends
-	// your input as one message, and queues the turn. Admission never creates
-	// an Agent or reusable configuration. You get a
+	// its Agent Definition revision, creates the turn's durable transcript,
+	// appends your input as one message, and queues the turn. Admission never
+	// creates an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
 	// you follow it with the stream or by polling.
 	//
-	// Pick the Session with either `session_id` or `session_key`, not both.
-	// A Session ID must belong to the Agent you named, or to a Session
-	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An App credential without a tenant constraint may omit
+	// Omit `session` for a standalone turn. Its private transcript is kept on
+	// a hidden one-turn carrier and expires after the accepted retention
+	// window; no Session is exposed. Send `session.mode: new` to create a
+	// reusable conversation, `continue` with an `id` to append to one, or
+	// `continue_or_create` with a host `key` for an atomic keyed upsert.
+	// A continued Session must belong to the Agent you named. An App
+	// credential without a tenant constraint may omit
 	// `tenant_key` and use whichever tenant the Session already belongs to.
 	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
@@ -20615,9 +21643,9 @@ type ClientWithResponsesInterface interface {
 	// and does not add your input again, even if that turn has already
 	// finished. Keys are scoped to the tenant and Agent.
 	//
-	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// A repeat counts as the same request only if Session selection and
+	// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+	// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 	// admitted revision is returned even if its Definition has advanced.
 	// Values are compared as sent, so omitting an override is not the same as
 	// supplying one that happens to equal the Definition. Key order inside
@@ -20631,7 +21659,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// ## When the Session is already busy
 	//
-	// A Session runs one turn at a time, and `if_active` decides what
+	// A Session runs one turn at a time, and `session.if_active` decides what
 	// happens when you start another. The default, `reject`, returns
 	// `session_invocation_active`.
 	//
@@ -20674,7 +21702,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// This response is the acknowledgment. Once you hold the returned
 	// `id`, follow the turn with
-	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 	// streaming are separate requests on purpose: a dropped stream costs you
 	// nothing, because the turn already exists and no reconnect can create a
 	// second one.
@@ -20688,18 +21716,21 @@ type ClientWithResponsesInterface interface {
 	//
 	// Starts one agent turn and returns immediately. In a single database
 	// transaction nvoken resolves the deliberately created Agent, selects
-	// its Agent Definition revision, finds or creates the Session, appends
-	// your input as one message, and queues the turn. Admission never creates
-	// an Agent or reusable configuration. You get a
+	// its Agent Definition revision, creates the turn's durable transcript,
+	// appends your input as one message, and queues the turn. Admission never
+	// creates an Agent or reusable configuration. You get a
 	// response only after that transaction commits, so a `202` means the
 	// work is safely recorded and will run even if nvoken restarts. The
 	// model does not run on this request — it runs in the background, and
 	// you follow it with the stream or by polling.
 	//
-	// Pick the Session with either `session_id` or `session_key`, not both.
-	// A Session ID must belong to the Agent you named, or to a Session
-	// created without an Agent — in which case this turn binds that Agent
-	// permanently. An App credential without a tenant constraint may omit
+	// Omit `session` for a standalone turn. Its private transcript is kept on
+	// a hidden one-turn carrier and expires after the accepted retention
+	// window; no Session is exposed. Send `session.mode: new` to create a
+	// reusable conversation, `continue` with an `id` to append to one, or
+	// `continue_or_create` with a host `key` for an atomic keyed upsert.
+	// A continued Session must belong to the Agent you named. An App
+	// credential without a tenant constraint may omit
 	// `tenant_key` and use whichever tenant the Session already belongs to.
 	// A credential locked to one tenant cannot reach another; naming a different one
 	// returns `403 forbidden` without revealing whether the resource
@@ -20712,9 +21743,9 @@ type ClientWithResponsesInterface interface {
 	// and does not add your input again, even if that turn has already
 	// finished. Keys are scoped to the tenant and Agent.
 	//
-	// A repeat counts as the same request only if the Session selector, the
-	// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-	// `webhook`, `on_budget_exhausted`, and input all match. The original
+	// A repeat counts as the same request only if Session selection and
+	// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+	// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 	// admitted revision is returned even if its Definition has advanced.
 	// Values are compared as sent, so omitting an override is not the same as
 	// supplying one that happens to equal the Definition. Key order inside
@@ -20728,7 +21759,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// ## When the Session is already busy
 	//
-	// A Session runs one turn at a time, and `if_active` decides what
+	// A Session runs one turn at a time, and `session.if_active` decides what
 	// happens when you start another. The default, `reject`, returns
 	// `session_invocation_active`.
 	//
@@ -20771,7 +21802,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// This response is the acknowledgment. Once you hold the returned
 	// `id`, follow the turn with
-	// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+	// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 	// streaming are separate requests on purpose: a dropped stream costs you
 	// nothing, because the turn already exists and no reconnect can create a
 	// second one.
@@ -20780,6 +21811,17 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/invocations (the `CreateInvocation` operationId).
 	CreateInvocationWithResponse(ctx context.Context, params *CreateInvocationParams, body CreateInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvocationHTTPResponse, error)
+
+	// DeleteInvocationWithResponse Erase a terminal standalone Invocation
+	//
+	// Erases the private content carried by a terminal standalone turn while
+	// retaining its minimal usage, lineage, and idempotency facts. A
+	// conversation-bound Invocation is erased through its Session instead.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/invocations/{invocation_id} (the `DeleteInvocation` operationId).
+	DeleteInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*DeleteInvocationHTTPResponse, error)
 
 	// GetInvocationWithResponse Read authoritative Invocation identity and state
 	//
@@ -20882,7 +21924,7 @@ type ClientWithResponsesInterface interface {
 	// you are steering. Use this when a long turn is heading the wrong way
 	// and you want to correct it in place.
 	//
-	// Compare with `if_active: supersede` on a new Invocation, which
+	// Compare with `session.if_active: supersede` on a new Invocation, which
 	// replaces the running turn and discards what it had produced. Steering
 	// a long turn that way throws away exactly the work you were trying to
 	// redirect.
@@ -20899,7 +21941,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
-	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// `session.if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
 	// If the turn ends without ever picking it up, your Nudge is marked
@@ -20926,7 +21968,7 @@ type ClientWithResponsesInterface interface {
 	// you are steering. Use this when a long turn is heading the wrong way
 	// and you want to correct it in place.
 	//
-	// Compare with `if_active: supersede` on a new Invocation, which
+	// Compare with `session.if_active: supersede` on a new Invocation, which
 	// replaces the running turn and discards what it had produced. Steering
 	// a long turn that way throws away exactly the work you were trying to
 	// redirect.
@@ -20943,7 +21985,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Nudges and Invocations never turn into each other. Posting to
 	// `/v1/invocations` against a busy Session behaves exactly as its
-	// `if_active` setting says; it never quietly becomes a nudge, and a
+	// `session.if_active` setting says; it never quietly becomes a nudge, and a
 	// nudge never quietly becomes a new turn.
 	//
 	// If the turn ends without ever picking it up, your Nudge is marked
@@ -21033,6 +22075,18 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/invocations/{invocation_id}/resume (the `ResumeInvocation` operationId).
 	ResumeInvocationWithResponse(ctx context.Context, invocationID InvocationID, body ResumeInvocationJSONRequestBody, reqEditors ...RequestEditorFn) (*ResumeInvocationHTTPResponse, error)
+
+	// StreamInvocationWithResponse Follow one Invocation over Server-Sent Events
+	//
+	// Carries only this turn's durable transcript updates and optional live
+	// previews, then closes after its terminal change is delivered. The
+	// cursor is scoped to the Invocation and never reveals an internal
+	// carrier Session for a standalone turn.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+	StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error)
 
 	// GetInvocationTimelineWithResponse Read the durable execution waterfall for one Invocation
 	//
@@ -21636,7 +22690,7 @@ type ClientWithResponsesInterface interface {
 
 	// StreamSessionWithResponse Follow a Session over Server-Sent Events
 	//
-	// The one stream. It carries the Session's messages and the lifecycle
+	// The conversation stream. It carries the Session's messages and the lifecycle
 	// changes of every turn in it, live, and can be resumed after a dropped
 	// connection. It covers the same records as the JSON transcript
 	// endpoint.
@@ -21653,17 +22707,13 @@ type ClientWithResponsesInterface interface {
 	// arrive. Set `deltas=false` to skip previews entirely; nothing about
 	// replay, resumption, or how the stream ends changes.
 	//
-	// ## Following one turn
-	//
-	// Pass `invocation_id` and every frame is narrowed to that turn:
-	// messages it produced, its lifecycle changes, its previews. The
-	// connection closes once that turn's terminal change has been delivered.
-	// Cursors are Session-scoped either way, so a position taken from a
-	// filtered read resumes an unfiltered one and the other way round.
-	//
-	// Without `invocation_id` this is a subscription. It stays open while
-	// the Session is idle and a turn started later by anyone appears on it,
-	// so there is nothing to poll.
+	// This is a conversation subscription. It stays open while the Session
+	// is idle and a turn started later by anyone appears on it, so there is
+	// nothing to poll. To follow exactly one turn, including a standalone
+	// turn, use `GET /v1/invocations/{invocation_id}/stream`. A
+	// conversation-bound turn uses this Session cursor scope and can resume
+	// here. A standalone turn uses an Invocation-only cursor and has no
+	// public Session stream.
 	//
 	// ## Knowing a turn is over
 	//
@@ -24498,6 +25548,358 @@ func (r ActivateAppSigningKeyHTTPResponse) ContentType() string {
 	return ""
 }
 
+type CreateConsoleDeviceAuthorizationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ConsoleDeviceAuthorizationGrant
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetJSON201() *ConsoleDeviceAuthorizationGrant {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateConsoleDeviceAuthorizationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ExchangeConsoleDeviceAuthorizationHTTPResponse429Headers the declared response headers of an HTTP 429 response for ExchangeConsoleDeviceAuthorization
+type ExchangeConsoleDeviceAuthorizationHTTPResponse429Headers struct {
+	RetryAfter *string
+}
+
+type ExchangeConsoleDeviceAuthorizationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ConsoleDeviceAuthorizationClaim
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *ConsoleDeviceAuthorizationExchangeState
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *ExchangeConsoleDeviceAuthorization403JSONResponseBody
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *ConsoleDeviceAuthorizationExchangeState
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *ConsoleDeviceAuthorizationExchangeState
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *ExchangeConsoleDeviceAuthorizationHTTPResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON200() *ConsoleDeviceAuthorizationClaim {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON202() *ConsoleDeviceAuthorizationExchangeState {
+	return r.JSON202
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON403() *ExchangeConsoleDeviceAuthorization403JSONResponseBody {
+	return r.JSON403
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON410() *ConsoleDeviceAuthorizationExchangeState {
+	return r.JSON410
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetJSON429() *ConsoleDeviceAuthorizationExchangeState {
+	return r.JSON429
+}
+
+// GetBody returns the raw response body bytes
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExchangeConsoleDeviceAuthorizationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetConsoleDeviceAuthorizationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ConsoleDeviceAuthorizationApproval
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetConsoleDeviceAuthorizationHTTPResponse) GetJSON200() *ConsoleDeviceAuthorizationApproval {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetConsoleDeviceAuthorizationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetConsoleDeviceAuthorizationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetConsoleDeviceAuthorizationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetConsoleDeviceAuthorizationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetConsoleDeviceAuthorizationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetConsoleDeviceAuthorizationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetConsoleDeviceAuthorizationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ApproveConsoleDeviceAuthorizationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ApproveConsoleDeviceAuthorizationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DenyConsoleDeviceAuthorizationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DenyConsoleDeviceAuthorizationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListCreditAccountsHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -25320,6 +26722,110 @@ func (r CreateInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
+// DeleteInvocationHTTPResponse429Headers the declared response headers of an HTTP 429 response for DeleteInvocation
+type DeleteInvocationHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type DeleteInvocationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteInvocationHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r DeleteInvocationHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteInvocationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteInvocationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteInvocationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteInvocationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetInvocationHTTPResponse429Headers the declared response headers of an HTTP 429 response for GetInvocation
 type GetInvocationHTTPResponse429Headers struct {
 	RetryAfter *int
@@ -25338,6 +26844,8 @@ type GetInvocationHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -25371,6 +26879,11 @@ func (r GetInvocationHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetInvocationHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r GetInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -25430,6 +26943,8 @@ type CancelInvocationHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25459,6 +26974,11 @@ func (r CancelInvocationHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r CancelInvocationHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r CancelInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25513,6 +27033,8 @@ type InterruptInvocationHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25542,6 +27064,11 @@ func (r InterruptInvocationHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r InterruptInvocationHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r InterruptInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25596,6 +27123,8 @@ type ListInvocationLogsHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25625,6 +27154,11 @@ func (r ListInvocationLogsHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r ListInvocationLogsHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ListInvocationLogsHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25679,6 +27213,8 @@ type ListNudgesHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25708,6 +27244,11 @@ func (r ListNudgesHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r ListNudgesHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ListNudgesHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25764,6 +27305,8 @@ type CreateNudgeHTTPResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorResponse
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25798,6 +27341,11 @@ func (r CreateNudgeHTTPResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CreateNudgeHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r CreateNudgeHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25854,6 +27402,8 @@ type CancelNudgeHTTPResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorResponse
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -25888,6 +27438,11 @@ func (r CancelNudgeHTTPResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r CancelNudgeHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r CancelNudgeHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -25947,6 +27502,8 @@ type GetInvocationResultHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -25980,6 +27537,11 @@ func (r GetInvocationResultHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetInvocationResultHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r GetInvocationResultHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -26046,6 +27608,8 @@ type ResumeInvocationHTTPResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorResponse
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -26084,6 +27648,11 @@ func (r ResumeInvocationHTTPResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r ResumeInvocationHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ResumeInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -26130,6 +27699,103 @@ func (r ResumeInvocationHTTPResponse) ContentType() string {
 	return ""
 }
 
+// StreamInvocationHTTPResponse429Headers the declared response headers of an HTTP 429 response for StreamInvocation
+type StreamInvocationHTTPResponse429Headers struct {
+	RetryAfter *int
+}
+
+type StreamInvocationHTTPResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *RateLimited
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Internal
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *StreamInvocationHTTPResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON429() *RateLimited {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON500() *Internal {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r StreamInvocationHTTPResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r StreamInvocationHTTPResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StreamInvocationHTTPResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StreamInvocationHTTPResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StreamInvocationHTTPResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetInvocationTimelineHTTPResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -26143,6 +27809,8 @@ type GetInvocationTimelineHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -26172,6 +27840,11 @@ func (r GetInvocationTimelineHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetInvocationTimelineHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r GetInvocationTimelineHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -26231,6 +27904,8 @@ type ListToolCallsHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *RateLimited
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -26264,6 +27939,11 @@ func (r ListToolCallsHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r ListToolCallsHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ListToolCallsHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON429 returns the response for an HTTP 429 `application/json` response
@@ -26325,6 +28005,8 @@ type SubmitHostToolResultsHTTPResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *ErrorResponse
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -26359,6 +28041,11 @@ func (r SubmitHostToolResultsHTTPResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r SubmitHostToolResultsHTTPResponse) GetJSON409() *ErrorResponse {
 	return r.JSON409
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r SubmitHostToolResultsHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -26413,6 +28100,8 @@ type ListInvocationTracesHTTPResponse struct {
 	JSON403 *Forbidden
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *NotFound
+	// JSON410 the response for an HTTP 410 `application/json` response
+	JSON410 *InvocationErased
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Internal
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -26442,6 +28131,11 @@ func (r ListInvocationTracesHTTPResponse) GetJSON403() *Forbidden {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r ListInvocationTracesHTTPResponse) GetJSON404() *NotFound {
 	return r.JSON404
+}
+
+// GetJSON410 returns the response for an HTTP 410 `application/json` response
+func (r ListInvocationTracesHTTPResponse) GetJSON410() *InvocationErased {
+	return r.JSON410
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -30317,6 +32011,111 @@ func (c *ClientWithResponses) ActivateAppSigningKeyWithResponse(ctx context.Cont
 	return ParseActivateAppSigningKeyHTTPResponse(rsp)
 }
 
+// CreateConsoleDeviceAuthorizationWithBodyWithResponse Create a short-lived console CLI authorization
+//
+// Allocates the opaque code pair for one console-mediated CLI login.
+// This operation is server-to-server and requires an installation-admin
+// console issuer token.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) CreateConsoleDeviceAuthorizationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.CreateConsoleDeviceAuthorizationWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// CreateConsoleDeviceAuthorizationWithResponse Create a short-lived console CLI authorization
+//
+// Allocates the opaque code pair for one console-mediated CLI login.
+// This operation is server-to-server and requires an installation-admin
+// console issuer token.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations (the `CreateConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) CreateConsoleDeviceAuthorizationWithResponse(ctx context.Context, body CreateConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.CreateConsoleDeviceAuthorization(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// ExchangeConsoleDeviceAuthorizationWithResponse Poll or claim a console CLI authorization
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations/{device_code}/exchange (the `ExchangeConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) ExchangeConsoleDeviceAuthorizationWithResponse(ctx context.Context, deviceCode ConsoleDeviceCode, reqEditors ...RequestEditorFn) (*ExchangeConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.ExchangeConsoleDeviceAuthorization(ctx, deviceCode, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// GetConsoleDeviceAuthorizationWithResponse Inspect a live console CLI authorization
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/console/device-authorizations/{user_code} (the `GetConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) GetConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*GetConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.GetConsoleDeviceAuthorization(ctx, userCode, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// ApproveConsoleDeviceAuthorizationWithBodyWithResponse Approve a console CLI authorization for one App
+//
+// Requires the App-scoped issuer bearer that will mint the eventual App
+// credential. Durable API keys cannot approve this flow.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) ApproveConsoleDeviceAuthorizationWithBodyWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.ApproveConsoleDeviceAuthorizationWithBody(ctx, userCode, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApproveConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// ApproveConsoleDeviceAuthorizationWithResponse Approve a console CLI authorization for one App
+//
+// Requires the App-scoped issuer bearer that will mint the eventual App
+// credential. Durable API keys cannot approve this flow.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/approve (the `ApproveConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) ApproveConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, body ApproveConsoleDeviceAuthorizationJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.ApproveConsoleDeviceAuthorization(ctx, userCode, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApproveConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
+// DenyConsoleDeviceAuthorizationWithResponse Deny a pending console CLI authorization
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/console/device-authorizations/{user_code}/deny (the `DenyConsoleDeviceAuthorization` operationId).
+func (c *ClientWithResponses) DenyConsoleDeviceAuthorizationWithResponse(ctx context.Context, userCode ConsoleDeviceUserCode, reqEditors ...RequestEditorFn) (*DenyConsoleDeviceAuthorizationHTTPResponse, error) {
+	rsp, err := c.DenyConsoleDeviceAuthorization(ctx, userCode, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDenyConsoleDeviceAuthorizationHTTPResponse(rsp)
+}
+
 // ListCreditAccountsWithResponse List tenant credit accounts
 //
 // Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
@@ -30558,18 +32357,21 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
-// its Agent Definition revision, finds or creates the Session, appends
-// your input as one message, and queues the turn. Admission never creates
-// an Agent or reusable configuration. You get a
+// its Agent Definition revision, creates the turn's durable transcript,
+// appends your input as one message, and queues the turn. Admission never
+// creates an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
 // you follow it with the stream or by polling.
 //
-// Pick the Session with either `session_id` or `session_key`, not both.
-// A Session ID must belong to the Agent you named, or to a Session
-// created without an Agent — in which case this turn binds that Agent
-// permanently. An App credential without a tenant constraint may omit
+// Omit `session` for a standalone turn. Its private transcript is kept on
+// a hidden one-turn carrier and expires after the accepted retention
+// window; no Session is exposed. Send `session.mode: new` to create a
+// reusable conversation, `continue` with an `id` to append to one, or
+// `continue_or_create` with a host `key` for an atomic keyed upsert.
+// A continued Session must belong to the Agent you named. An App
+// credential without a tenant constraint may omit
 // `tenant_key` and use whichever tenant the Session already belongs to.
 // A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
@@ -30582,9 +32384,9 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 // and does not add your input again, even if that turn has already
 // finished. Keys are scoped to the tenant and Agent.
 //
-// A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-// `webhook`, `on_budget_exhausted`, and input all match. The original
+// A repeat counts as the same request only if Session selection and
+// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 // admitted revision is returned even if its Definition has advanced.
 // Values are compared as sent, so omitting an override is not the same as
 // supplying one that happens to equal the Definition. Key order inside
@@ -30598,7 +32400,7 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // ## When the Session is already busy
 //
-// A Session runs one turn at a time, and `if_active` decides what
+// A Session runs one turn at a time, and `session.if_active` decides what
 // happens when you start another. The default, `reject`, returns
 // `session_invocation_active`.
 //
@@ -30641,7 +32443,7 @@ func (c *ClientWithResponses) ListInvocationsWithResponse(ctx context.Context, p
 //
 // This response is the acknowledgment. Once you hold the returned
 // `id`, follow the turn with
-// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 // streaming are separate requests on purpose: a dropped stream costs you
 // nothing, because the turn already exists and no reconnect can create a
 // second one.
@@ -30661,18 +32463,21 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // Starts one agent turn and returns immediately. In a single database
 // transaction nvoken resolves the deliberately created Agent, selects
-// its Agent Definition revision, finds or creates the Session, appends
-// your input as one message, and queues the turn. Admission never creates
-// an Agent or reusable configuration. You get a
+// its Agent Definition revision, creates the turn's durable transcript,
+// appends your input as one message, and queues the turn. Admission never
+// creates an Agent or reusable configuration. You get a
 // response only after that transaction commits, so a `202` means the
 // work is safely recorded and will run even if nvoken restarts. The
 // model does not run on this request — it runs in the background, and
 // you follow it with the stream or by polling.
 //
-// Pick the Session with either `session_id` or `session_key`, not both.
-// A Session ID must belong to the Agent you named, or to a Session
-// created without an Agent — in which case this turn binds that Agent
-// permanently. An App credential without a tenant constraint may omit
+// Omit `session` for a standalone turn. Its private transcript is kept on
+// a hidden one-turn carrier and expires after the accepted retention
+// window; no Session is exposed. Send `session.mode: new` to create a
+// reusable conversation, `continue` with an `id` to append to one, or
+// `continue_or_create` with a host `key` for an atomic keyed upsert.
+// A continued Session must belong to the Agent you named. An App
+// credential without a tenant constraint may omit
 // `tenant_key` and use whichever tenant the Session already belongs to.
 // A credential locked to one tenant cannot reach another; naming a different one
 // returns `403 forbidden` without revealing whether the resource
@@ -30685,9 +32490,9 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 // and does not add your input again, even if that turn has already
 // finished. Keys are scoped to the tenant and Agent.
 //
-// A repeat counts as the same request only if the Session selector, the
-// Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-// `webhook`, `on_budget_exhausted`, and input all match. The original
+// A repeat counts as the same request only if Session selection and
+// policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+// `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
 // admitted revision is returned even if its Definition has advanced.
 // Values are compared as sent, so omitting an override is not the same as
 // supplying one that happens to equal the Definition. Key order inside
@@ -30701,7 +32506,7 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // ## When the Session is already busy
 //
-// A Session runs one turn at a time, and `if_active` decides what
+// A Session runs one turn at a time, and `session.if_active` decides what
 // happens when you start another. The default, `reject`, returns
 // `session_invocation_active`.
 //
@@ -30744,7 +32549,7 @@ func (c *ClientWithResponses) CreateInvocationWithBodyWithResponse(ctx context.C
 //
 // This response is the acknowledgment. Once you hold the returned
 // `id`, follow the turn with
-// `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+// `GET /v1/invocations/{invocation_id}/stream`. Admission and
 // streaming are separate requests on purpose: a dropped stream costs you
 // nothing, because the turn already exists and no reconnect can create a
 // second one.
@@ -30758,6 +32563,23 @@ func (c *ClientWithResponses) CreateInvocationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseCreateInvocationHTTPResponse(rsp)
+}
+
+// DeleteInvocationWithResponse Erase a terminal standalone Invocation
+//
+// Erases the private content carried by a terminal standalone turn while
+// retaining its minimal usage, lineage, and idempotency facts. A
+// conversation-bound Invocation is erased through its Session instead.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/invocations/{invocation_id} (the `DeleteInvocation` operationId).
+func (c *ClientWithResponses) DeleteInvocationWithResponse(ctx context.Context, invocationID InvocationID, reqEditors ...RequestEditorFn) (*DeleteInvocationHTTPResponse, error) {
+	rsp, err := c.DeleteInvocation(ctx, invocationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteInvocationHTTPResponse(rsp)
 }
 
 // GetInvocationWithResponse Read authoritative Invocation identity and state
@@ -30891,7 +32713,7 @@ func (c *ClientWithResponses) ListNudgesWithResponse(ctx context.Context, invoca
 // you are steering. Use this when a long turn is heading the wrong way
 // and you want to correct it in place.
 //
-// Compare with `if_active: supersede` on a new Invocation, which
+// Compare with `session.if_active: supersede` on a new Invocation, which
 // replaces the running turn and discards what it had produced. Steering
 // a long turn that way throws away exactly the work you were trying to
 // redirect.
@@ -30908,7 +32730,7 @@ func (c *ClientWithResponses) ListNudgesWithResponse(ctx context.Context, invoca
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
-// `if_active` setting says; it never quietly becomes a nudge, and a
+// `session.if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
 // If the turn ends without ever picking it up, your Nudge is marked
@@ -30941,7 +32763,7 @@ func (c *ClientWithResponses) CreateNudgeWithBodyWithResponse(ctx context.Contex
 // you are steering. Use this when a long turn is heading the wrong way
 // and you want to correct it in place.
 //
-// Compare with `if_active: supersede` on a new Invocation, which
+// Compare with `session.if_active: supersede` on a new Invocation, which
 // replaces the running turn and discards what it had produced. Steering
 // a long turn that way throws away exactly the work you were trying to
 // redirect.
@@ -30958,7 +32780,7 @@ func (c *ClientWithResponses) CreateNudgeWithBodyWithResponse(ctx context.Contex
 //
 // Nudges and Invocations never turn into each other. Posting to
 // `/v1/invocations` against a busy Session behaves exactly as its
-// `if_active` setting says; it never quietly becomes a nudge, and a
+// `session.if_active` setting says; it never quietly becomes a nudge, and a
 // nudge never quietly becomes a new turn.
 //
 // If the turn ends without ever picking it up, your Nudge is marked
@@ -31077,6 +32899,24 @@ func (c *ClientWithResponses) ResumeInvocationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseResumeInvocationHTTPResponse(rsp)
+}
+
+// StreamInvocationWithResponse Follow one Invocation over Server-Sent Events
+//
+// Carries only this turn's durable transcript updates and optional live
+// previews, then closes after its terminal change is delivered. The
+// cursor is scoped to the Invocation and never reveals an internal
+// carrier Session for a standalone turn.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/invocations/{invocation_id}/stream (the `StreamInvocation` operationId).
+func (c *ClientWithResponses) StreamInvocationWithResponse(ctx context.Context, invocationID InvocationID, params *StreamInvocationParams, reqEditors ...RequestEditorFn) (*StreamInvocationHTTPResponse, error) {
+	rsp, err := c.StreamInvocation(ctx, invocationID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStreamInvocationHTTPResponse(rsp)
 }
 
 // GetInvocationTimelineWithResponse Read the durable execution waterfall for one Invocation
@@ -31915,7 +33755,7 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 
 // StreamSessionWithResponse Follow a Session over Server-Sent Events
 //
-// The one stream. It carries the Session's messages and the lifecycle
+// The conversation stream. It carries the Session's messages and the lifecycle
 // changes of every turn in it, live, and can be resumed after a dropped
 // connection. It covers the same records as the JSON transcript
 // endpoint.
@@ -31932,17 +33772,13 @@ func (c *ClientWithResponses) ListSessionMessagesWithResponse(ctx context.Contex
 // arrive. Set `deltas=false` to skip previews entirely; nothing about
 // replay, resumption, or how the stream ends changes.
 //
-// ## Following one turn
-//
-// Pass `invocation_id` and every frame is narrowed to that turn:
-// messages it produced, its lifecycle changes, its previews. The
-// connection closes once that turn's terminal change has been delivered.
-// Cursors are Session-scoped either way, so a position taken from a
-// filtered read resumes an unfiltered one and the other way round.
-//
-// Without `invocation_id` this is a subscription. It stays open while
-// the Session is idle and a turn started later by anyone appears on it,
-// so there is nothing to poll.
+// This is a conversation subscription. It stays open while the Session
+// is idle and a turn started later by anyone appears on it, so there is
+// nothing to poll. To follow exactly one turn, including a standalone
+// turn, use `GET /v1/invocations/{invocation_id}/stream`. A
+// conversation-bound turn uses this Session cursor scope and can resume
+// here. A standalone turn uses an Invocation-only cursor and has no
+// public Session stream.
 //
 // ## Knowing a turn is over
 //
@@ -34527,6 +36363,295 @@ func ParseActivateAppSigningKeyHTTPResponse(rsp *http.Response) (*ActivateAppSig
 	return response, nil
 }
 
+// ParseCreateConsoleDeviceAuthorizationHTTPResponse parses an HTTP response from a CreateConsoleDeviceAuthorizationWithResponse call
+func ParseCreateConsoleDeviceAuthorizationHTTPResponse(rsp *http.Response) (*CreateConsoleDeviceAuthorizationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateConsoleDeviceAuthorizationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ConsoleDeviceAuthorizationGrant
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExchangeConsoleDeviceAuthorizationHTTPResponse parses an HTTP response from a ExchangeConsoleDeviceAuthorizationWithResponse call
+func ParseExchangeConsoleDeviceAuthorizationHTTPResponse(rsp *http.Response) (*ExchangeConsoleDeviceAuthorizationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExchangeConsoleDeviceAuthorizationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ConsoleDeviceAuthorizationClaim
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest ConsoleDeviceAuthorizationExchangeState
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ExchangeConsoleDeviceAuthorization403JSONResponseBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest ConsoleDeviceAuthorizationExchangeState
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ConsoleDeviceAuthorizationExchangeState
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers ExchangeConsoleDeviceAuthorizationHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetConsoleDeviceAuthorizationHTTPResponse parses an HTTP response from a GetConsoleDeviceAuthorizationWithResponse call
+func ParseGetConsoleDeviceAuthorizationHTTPResponse(rsp *http.Response) (*GetConsoleDeviceAuthorizationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetConsoleDeviceAuthorizationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ConsoleDeviceAuthorizationApproval
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApproveConsoleDeviceAuthorizationHTTPResponse parses an HTTP response from a ApproveConsoleDeviceAuthorizationWithResponse call
+func ParseApproveConsoleDeviceAuthorizationHTTPResponse(rsp *http.Response) (*ApproveConsoleDeviceAuthorizationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApproveConsoleDeviceAuthorizationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDenyConsoleDeviceAuthorizationHTTPResponse parses an HTTP response from a DenyConsoleDeviceAuthorizationWithResponse call
+func ParseDenyConsoleDeviceAuthorizationHTTPResponse(rsp *http.Response) (*DenyConsoleDeviceAuthorizationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DenyConsoleDeviceAuthorizationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListCreditAccountsHTTPResponse parses an HTTP response from a ListCreditAccountsWithResponse call
 func ParseListCreditAccountsHTTPResponse(rsp *http.Response) (*ListCreditAccountsHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -35202,6 +37327,104 @@ func ParseCreateInvocationHTTPResponse(rsp *http.Response) (*CreateInvocationHTT
 	return response, nil
 }
 
+// ParseDeleteInvocationHTTPResponse parses an HTTP response from a DeleteInvocationWithResponse call
+func ParseDeleteInvocationHTTPResponse(rsp *http.Response) (*DeleteInvocationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteInvocationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteInvocationHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetInvocationHTTPResponse parses an HTTP response from a GetInvocationWithResponse call
 func ParseGetInvocationHTTPResponse(rsp *http.Response) (*GetInvocationHTTPResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -35250,6 +37473,13 @@ func ParseGetInvocationHTTPResponse(rsp *http.Response) (*GetInvocationHTTPRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -35339,6 +37569,13 @@ func ParseCancelInvocationHTTPResponse(rsp *http.Response) (*CancelInvocationHTT
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -35406,6 +37643,13 @@ func ParseInterruptInvocationHTTPResponse(rsp *http.Response) (*InterruptInvocat
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
@@ -35475,6 +37719,13 @@ func ParseListInvocationLogsHTTPResponse(rsp *http.Response) (*ListInvocationLog
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -35542,6 +37793,13 @@ func ParseListNudgesHTTPResponse(rsp *http.Response) (*ListNudgesHTTPResponse, e
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
@@ -35618,6 +37876,13 @@ func ParseCreateNudgeHTTPResponse(rsp *http.Response) (*CreateNudgeHTTPResponse,
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -35693,6 +37958,13 @@ func ParseCancelNudgeHTTPResponse(rsp *http.Response) (*CancelNudgeHTTPResponse,
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -35760,6 +38032,13 @@ func ParseGetInvocationResultHTTPResponse(rsp *http.Response) (*GetInvocationRes
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -35856,6 +38135,13 @@ func ParseResumeInvocationHTTPResponse(rsp *http.Response) (*ResumeInvocationHTT
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -35882,6 +38168,94 @@ func ParseResumeInvocationHTTPResponse(rsp *http.Response) (*ResumeInvocationHTT
 	switch {
 	case rsp.StatusCode == 429:
 		var headers ResumeInvocationHTTPResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseStreamInvocationHTTPResponse parses an HTTP response from a StreamInvocationWithResponse call
+func ParseStreamInvocationHTTPResponse(rsp *http.Response) (*StreamInvocationHTTPResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StreamInvocationHTTPResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimited
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Internal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers StreamInvocationHTTPResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -35943,6 +38317,13 @@ func ParseGetInvocationTimelineHTTPResponse(rsp *http.Response) (*GetInvocationT
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
@@ -36011,6 +38392,13 @@ func ParseListToolCallsHTTPResponse(rsp *http.Response) (*ListToolCallsHTTPRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest RateLimited
@@ -36107,6 +38495,13 @@ func ParseSubmitHostToolResultsHTTPResponse(rsp *http.Response) (*SubmitHostTool
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -36174,6 +38569,13 @@ func ParseListInvocationTracesHTTPResponse(rsp *http.Response) (*ListInvocationT
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 410:
+		var dest InvocationErased
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON410 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Internal

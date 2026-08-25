@@ -27,7 +27,7 @@ info:
     `POST /v1/invocations` starts a turn and returns a `202` right away.
     From there:
 
-    - Follow it live with `GET /v1/sessions/{session_id}/stream`, or read
+    - Follow it live with `GET /v1/invocations/{invocation_id}/stream`, or read
       `GET /v1/invocations/{invocation_id}/result` whenever you want the
       finished answer. Disconnecting never cancels anything.
     - If your agent uses tools you run yourself, the turn stops with status
@@ -124,7 +124,7 @@ info:
 
     A `*_key` is a name you choose. `tenant_key`, `agent_key`, `session_key`,
     and `definition_key` name a resource. Send one and nvoken either creates
-    that resource or hands back the one your name already refers to, so the
+    that reusable resource or hands back the one your name already refers to, so the
     same request twice gives you the same resource rather than two.
     `user_key` is a label rather than a name: it records who a Session was
     opened for, so you can filter on it later — and on an Agent whose
@@ -139,8 +139,9 @@ info:
     past it, and never build one yourself.
 
     A resource calls its own identifier `id`. A reference to a different
-    resource carries that resource's name, so `session_id` on an Invocation is
-    the Session it belongs to. There is no third pattern.
+    resource carries that resource's name. `session_id` on an Invocation is
+    the reusable conversation it belongs to, or null for a standalone turn.
+    There is no third pattern.
 
     Paths only ever take IDs. Keys travel in request bodies and query filters.
     Every keyed resource reports both its key and its `id`, so you can always
@@ -164,11 +165,16 @@ info:
 
     ## Streaming
 
-    There is one stream: `GET /v1/sessions/{session_id}/stream`. It carries
-    every turn in the Session, which is what a conversation needs. Add
-    `invocation_id` to narrow it to one turn. That is a filter on one log, not
-    a second endpoint, because cursors were always Session-scoped and a
-    position from a filtered read resumes an unfiltered one.
+    `GET /v1/invocations/{invocation_id}/stream` follows exactly one turn and
+    closes after its terminal change is delivered. For standalone work its
+    cursor is scoped to that Invocation and exposes no carrier ID. For a
+    conversation-bound turn it uses the Session cursor scope, so the same
+    cursor can resume the aggregate Session stream.
+
+    `GET /v1/sessions/{session_id}/stream` is the durable conversation
+    subscription: it carries every turn in the Session and stays open while
+    the conversation is idle. A standalone Invocation cursor cannot be used
+    on this route because standalone work has no public Session.
 
     Admission is separate from streaming. `POST /v1/invocations` returns the
     turn, and that response is your acknowledgment; then you open the stream.
@@ -308,6 +314,8 @@ tags:
     description: |
       Durable machine credential lifecycle and caller introspection. These
       credentials authenticate every other operation in this contract.
+  - name: Console integration
+    description: Server-to-server operations used by the nvoken console.
 paths:
   /health:
     get:
@@ -1733,18 +1741,21 @@ paths:
       description: |
         Starts one agent turn and returns immediately. In a single database
         transaction nvoken resolves the deliberately created Agent, selects
-        its Agent Definition revision, finds or creates the Session, appends
-        your input as one message, and queues the turn. Admission never creates
-        an Agent or reusable configuration. You get a
+        its Agent Definition revision, creates the turn's durable transcript,
+        appends your input as one message, and queues the turn. Admission never
+        creates an Agent or reusable configuration. You get a
         response only after that transaction commits, so a `202` means the
         work is safely recorded and will run even if nvoken restarts. The
         model does not run on this request — it runs in the background, and
         you follow it with the stream or by polling.
 
-        Pick the Session with either `session_id` or `session_key`, not both.
-        A Session ID must belong to the Agent you named, or to a Session
-        created without an Agent — in which case this turn binds that Agent
-        permanently. An App credential without a tenant constraint may omit
+        Omit `session` for a standalone turn. Its private transcript is kept on
+        a hidden one-turn carrier and expires after the accepted retention
+        window; no Session is exposed. Send `session.mode: new` to create a
+        reusable conversation, `continue` with an `id` to append to one, or
+        `continue_or_create` with a host `key` for an atomic keyed upsert.
+        A continued Session must belong to the Agent you named. An App
+        credential without a tenant constraint may omit
         `tenant_key` and use whichever tenant the Session already belongs to.
         A credential locked to one tenant cannot reach another; naming a different one
         returns `403 forbidden` without revealing whether the resource
@@ -1757,9 +1768,9 @@ paths:
         and does not add your input again, even if that turn has already
         finished. Keys are scoped to the tenant and Agent.
 
-        A repeat counts as the same request only if the Session selector, the
-        Agent, explicit revision, per-turn overrides, `metadata`, `context`,
-        `webhook`, `on_budget_exhausted`, and input all match. The original
+        A repeat counts as the same request only if Session selection and
+        policies, the Agent, explicit revision, per-turn overrides, `metadata`,
+        `context`, `webhook`, `on_budget_exhausted`, and input all match. The original
         admitted revision is returned even if its Definition has advanced.
         Values are compared as sent, so omitting an override is not the same as
         supplying one that happens to equal the Definition. Key order inside
@@ -1773,7 +1784,7 @@ paths:
 
         ## When the Session is already busy
 
-        A Session runs one turn at a time, and `if_active` decides what
+        A Session runs one turn at a time, and `session.if_active` decides what
         happens when you start another. The default, `reject`, returns
         `session_invocation_active`.
 
@@ -1816,7 +1827,7 @@ paths:
 
         This response is the acknowledgment. Once you hold the returned
         `id`, follow the turn with
-        `GET /v1/sessions/{session_id}/stream?invocation_id=…`. Admission and
+        `GET /v1/invocations/{invocation_id}/stream`. Admission and
         streaming are separate requests on purpose: a dropped stream costs you
         nothing, because the turn already exists and no reconnect can create a
         second one.
@@ -1863,7 +1874,7 @@ paths:
               $ref: "#/components/schemas/CreateInvocationRequest"
             examples:
               newSession:
-                summary: First turn creates a new Session for an existing Agent
+                summary: Standalone turn with default one-hour retention
                 value:
                   agent_key: support-triage
                   tenant_key: tenant-acme
@@ -1874,7 +1885,9 @@ paths:
                 value:
                   agent_key: support-triage
                   tenant_key: tenant-acme
-                  session_key: ticket-483
+                  session:
+                    mode: continue_or_create
+                    key: ticket-483
                   idempotency_key: ticket-483:follow-up-2
                   input:
                     - type: text
@@ -1883,7 +1896,9 @@ paths:
                 summary: Continue an existing Session by durable ID
                 value:
                   agent_key: support-triage
-                  session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                  session:
+                    mode: continue
+                    id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                   idempotency_key: ticket-483:follow-up-3
                   input:
                     - type: text
@@ -1892,7 +1907,9 @@ paths:
                 summary: Pin this turn to one revision of the Agent's Definition
                 value:
                   agent_key: support-triage
-                  session_key: ticket-483
+                  session:
+                    mode: continue_or_create
+                    key: ticket-483
                   idempotency_key: ticket-483:follow-up-4
                   definition_revision: 3
                   input: Please draft the reply.
@@ -1900,7 +1917,9 @@ paths:
                 summary: Require one validated machine-readable object
                 value:
                   agent_key: support-triage
-                  session_key: ticket-483
+                  session:
+                    mode: continue_or_create
+                    key: ticket-483
                   idempotency_key: ticket-483:classification
                   input:
                     - type: text
@@ -1930,7 +1949,7 @@ paths:
             even when the turn it returns has already finished.
 
             This is the acknowledgment for the turn. Follow it with
-            `GET /v1/sessions/{session_id}/stream?invocation_id=…`.
+            `GET /v1/invocations/{invocation_id}/stream`.
           content:
             application/json:
               schema:
@@ -1942,6 +1961,7 @@ paths:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    content_expires_at: null
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
@@ -1975,6 +1995,7 @@ paths:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    content_expires_at: null
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
@@ -2008,6 +2029,7 @@ paths:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    content_expires_at: null
                     user_key: null
                     id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                     definition_id: def_019b0a12-8d51-7f34-aed2-0e07c1bdb323
@@ -2103,10 +2125,10 @@ paths:
                   summary: Supplied options differ from the stored Session
                   value:
                     code: session_options_conflict
-                    message: "The supplied Session options conflict with the stored Session at /session_options/compaction: stored {trigger_tokens: 40000, model: anthropic/claude-haiku-4-5}, supplied {trigger_tokens: 80000, model: anthropic/claude-haiku-4-5}."
+                    message: "The supplied Session options conflict with the stored Session at /compaction: stored {trigger_tokens: 40000, model: anthropic/claude-haiku-4-5}, supplied {trigger_tokens: 80000, model: anthropic/claude-haiku-4-5}."
                     request_id: req_01K0NV8AJQ9FB89N5MZ5HDZDR4
                     details:
-                      conflicting_paths: [/session_options/compaction]
+                      conflicting_paths: [/compaction]
         "422":
           description: The selected model is retired or URL media could not be accepted.
           content:
@@ -2173,6 +2195,7 @@ paths:
                     agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                     agent_key: support-triage
                     session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    content_expires_at: null
                     user_key: null
                     definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
                     definition_revision: 1
@@ -2209,6 +2232,86 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      tags: [Invocations]
+      operationId: deleteInvocation
+      summary: Erase a terminal standalone Invocation
+      description: |
+        Erases the private content carried by a terminal standalone turn while
+        retaining its minimal usage, lineage, and idempotency facts. A
+        conversation-bound Invocation is erased through its Session instead.
+      responses:
+        "204":
+          description: The standalone Invocation content was erased.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/Internal"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/invocations/{invocation_id}/stream:
+    parameters:
+      - $ref: "#/components/parameters/InvocationID"
+    get:
+      tags: [Invocations]
+      operationId: streamInvocation
+      summary: Follow one Invocation over Server-Sent Events
+      description: |
+        Carries only this turn's durable transcript updates and optional live
+        previews, then closes after its terminal change is delivered. The
+        cursor is scoped to the Invocation and never reveals an internal
+        carrier Session for a standalone turn.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: deltas
+          in: query
+          description: Include id-less preview frames. Defaults to true.
+          schema:
+            type: boolean
+            default: true
+        - name: Last-Event-ID
+          in: header
+          description: Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: A resumable stream that closes after terminal settlement.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SessionStreamEvent"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -2249,6 +2352,7 @@ paths:
                       agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                       agent_key: support-triage
                       session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                      content_expires_at: null
                       user_key: null
                       definition_id: def_019b0a12-5b21-7c04-8ed2-0e07c1bdb300
                       definition_revision: 1
@@ -2280,6 +2384,7 @@ paths:
                     messages:
                       - id: msg_019b0a12-9e61-7a44-bed2-0e07c1bdb333
                         session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        content_expires_at: null
                         agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                         invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                         user_key: null
@@ -2291,6 +2396,7 @@ paths:
                         created_at: "2026-07-20T14:01:02Z"
                       - id: msg_019b0a12-af71-7b54-9ed2-0e07c1bdb344
                         session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                        content_expires_at: null
                         agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
                         invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                         user_key: null
@@ -2309,6 +2415,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -2337,6 +2445,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/InvocationErased" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/invocations/{invocation_id}/traces:
@@ -2366,6 +2475,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/InvocationErased" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/invocations/{invocation_id}/logs:
@@ -2397,6 +2507,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/InvocationErased" }
         "500": { $ref: "#/components/responses/Internal" }
         "503": { $ref: "#/components/responses/Unavailable" }
   /v1/traces/{trace_id}:
@@ -2456,6 +2567,9 @@ paths:
               example:
                 items:
                   - id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                    invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                    content_expires_at: null
                     mode: callback
                     name: create_ticket
                     status: completed
@@ -2478,6 +2592,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -2518,6 +2634,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "500":
           $ref: "#/components/responses/Internal"
         "503":
@@ -2569,6 +2687,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "500":
           $ref: "#/components/responses/Internal"
         "503":
@@ -2608,6 +2728,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/InvocationErased" }
         "409":
           description: |
             The Invocation is not on a raisable budget hold, or the App is
@@ -2633,7 +2754,7 @@ paths:
         you are steering. Use this when a long turn is heading the wrong way
         and you want to correct it in place.
 
-        Compare with `if_active: supersede` on a new Invocation, which
+        Compare with `session.if_active: supersede` on a new Invocation, which
         replaces the running turn and discards what it had produced. Steering
         a long turn that way throws away exactly the work you were trying to
         redirect.
@@ -2650,7 +2771,7 @@ paths:
 
         Nudges and Invocations never turn into each other. Posting to
         `/v1/invocations` against a busy Session behaves exactly as its
-        `if_active` setting says; it never quietly becomes a nudge, and a
+        `session.if_active` setting says; it never quietly becomes a nudge, and a
         nudge never quietly becomes a new turn.
 
         If the turn ends without ever picking it up, your Nudge is marked
@@ -2688,6 +2809,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "409":
           description: |
             `invocation_not_active` when the Invocation is already terminal;
@@ -2746,6 +2869,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "500":
           $ref: "#/components/responses/Internal"
         "503":
@@ -2782,6 +2907,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "409":
           description: |
             `nudge_already_closed` when the nudge was already drained or
@@ -2850,6 +2977,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/InvocationErased"
         "409":
           description: The Invocation cannot accept the supplied result batch.
           content:
@@ -4215,7 +4344,7 @@ paths:
       operationId: streamSession
       summary: Follow a Session over Server-Sent Events
       description: |
-        The one stream. It carries the Session's messages and the lifecycle
+        The conversation stream. It carries the Session's messages and the lifecycle
         changes of every turn in it, live, and can be resumed after a dropped
         connection. It covers the same records as the JSON transcript
         endpoint.
@@ -4232,17 +4361,13 @@ paths:
         arrive. Set `deltas=false` to skip previews entirely; nothing about
         replay, resumption, or how the stream ends changes.
 
-        ## Following one turn
-
-        Pass `invocation_id` and every frame is narrowed to that turn:
-        messages it produced, its lifecycle changes, its previews. The
-        connection closes once that turn's terminal change has been delivered.
-        Cursors are Session-scoped either way, so a position taken from a
-        filtered read resumes an unfiltered one and the other way round.
-
-        Without `invocation_id` this is a subscription. It stays open while
-        the Session is idle and a turn started later by anyone appears on it,
-        so there is nothing to poll.
+        This is a conversation subscription. It stays open while the Session
+        is idle and a turn started later by anyone appears on it, so there is
+        nothing to poll. To follow exactly one turn, including a standalone
+        turn, use `GET /v1/invocations/{invocation_id}/stream`. A
+        conversation-bound turn uses this Session cursor scope and can resume
+        here. A standalone turn uses an Invocation-only cursor and has no
+        public Session stream.
 
         ## Knowing a turn is over
 
@@ -4278,11 +4403,6 @@ paths:
         `thinking` previews. A browser payload carries fewer fields on the
         same schema.
       parameters:
-        - name: invocation_id
-          in: query
-          description: Narrow every frame to one turn, and close once it settles.
-          schema:
-            $ref: "#/components/schemas/InvocationID"
         - $ref: "#/components/parameters/Cursor"
         - name: deltas
           in: query
@@ -4320,6 +4440,150 @@ paths:
           $ref: "#/components/responses/Internal"
         "503":
           $ref: "#/components/responses/Unavailable"
+  /v1/console/device-authorizations:
+    post:
+      tags: [Console integration]
+      operationId: createConsoleDeviceAuthorization
+      summary: Create a short-lived console CLI authorization
+      description: |
+        Allocates the opaque code pair for one console-mediated CLI login.
+        This operation is server-to-server and requires an installation-admin
+        console issuer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConsoleDeviceAuthorizationRequest"
+      responses:
+        "201":
+          description: The new opaque code pair and polling contract
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationGrant"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /v1/console/device-authorizations/{user_code}:
+    parameters:
+      - $ref: "#/components/parameters/ConsoleDeviceUserCode"
+    get:
+      tags: [Console integration]
+      operationId: getConsoleDeviceAuthorization
+      summary: Inspect a live console CLI authorization
+      responses:
+        "200":
+          description: Approval-page state without capability material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationApproval"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/console/device-authorizations/{user_code}/approve:
+    parameters:
+      - $ref: "#/components/parameters/ConsoleDeviceUserCode"
+    post:
+      tags: [Console integration]
+      operationId: approveConsoleDeviceAuthorization
+      summary: Approve a console CLI authorization for one App
+      description: |
+        Requires the App-scoped issuer bearer that will mint the eventual App
+        credential. Durable API keys cannot approve this flow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveConsoleDeviceAuthorizationRequest"
+      responses:
+        "204":
+          description: The pending authorization was approved.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/console/device-authorizations/{user_code}/deny:
+    parameters:
+      - $ref: "#/components/parameters/ConsoleDeviceUserCode"
+    post:
+      tags: [Console integration]
+      operationId: denyConsoleDeviceAuthorization
+      summary: Deny a pending console CLI authorization
+      responses:
+        "204":
+          description: The pending authorization was denied.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/console/device-authorizations/{device_code}/exchange:
+    parameters:
+      - $ref: "#/components/parameters/ConsoleDeviceCode"
+    post:
+      tags: [Console integration]
+      operationId: exchangeConsoleDeviceAuthorization
+      summary: Poll or claim a console CLI authorization
+      responses:
+        "200":
+          description: The approved grant, claimed and deleted exactly once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationClaim"
+        "202":
+          description: Authorization is still pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationExchangeState"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: The authorization was denied or the caller is forbidden.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ConsoleDeviceAuthorizationExchangeState"
+                  - $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: The code is invalid, expired, or already claimed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationExchangeState"
+        "429":
+          description: The pending code was polled before its interval elapsed.
+          headers:
+            Retry-After:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsoleDeviceAuthorizationExchangeState"
   /v1/identity:
     get:
       tags: [Identity]
@@ -4575,6 +4839,7 @@ webhooks:
                 tool_name: open_ticket
                 invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                 session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                content_expires_at: null
                 agent_key: support
                 tenant_key: acme
               input:
@@ -4696,6 +4961,7 @@ webhooks:
                 sequence: 2
                 invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
                 session_id: sess_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                content_expires_at: null
                 agent_key: support
                 tenant_key: acme
               invocation:
@@ -4933,6 +5199,24 @@ components:
       name: authentication_method
       in: query
       schema: { $ref: "#/components/schemas/AuthenticationMethod" }
+    ConsoleDeviceUserCode:
+      name: user_code
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+      description: Short ambiguity-free code shown to the human.
+    ConsoleDeviceCode:
+      name: device_code
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 43
+        maxLength: 43
+        pattern: "^[A-Za-z0-9_-]{43}$"
+      description: Opaque high-entropy capability retained only by the CLI.
     UsageCallKindFilter:
       name: call_kind
       in: query
@@ -5836,6 +6120,14 @@ components:
       type: string
       minLength: 1
       description: Opaque identifier with the public `inv_` prefix. Treat the body as opaque.
+    ContentExpiresAt:
+      oneOf:
+        - type: string
+          format: date-time
+        - type: "null"
+      description: |
+        Scheduled private-content expiry for a terminal standalone Invocation.
+        Null while it is nonterminal and for conversation-bound work.
     TraceID:
       type: string
       pattern: "^[0-9a-f]{32}$"
@@ -6144,8 +6436,6 @@ components:
       allOf:
         - not:
             required: [agent_id, agent_key]
-        - not:
-            required: [session_id, session_key]
       properties:
         agent_id:
           $ref: "#/components/schemas/AgentID"
@@ -6189,35 +6479,24 @@ components:
             scope, and keeps it as immutable idempotency evidence. Accepted
             only from machine credentials. One ToolCall may trigger multiple
             children with different idempotency keys.
-        session_id:
-          $ref: "#/components/schemas/SessionID"
-          description: Existing Session to continue. Mutually exclusive with session_key.
-        session_key:
-          type: string
-          minLength: 1
-          maxLength: 255
+        session:
+          $ref: "#/components/schemas/InvocationSession"
           description: |
-            Caller key resolved within (effective tenant partition,
-            Agent, session_key). Mutually exclusive with session_id.
-        session_options:
-          $ref: "#/components/schemas/SessionOptions"
+            Conversation intent. Omit this object for a standalone Invocation;
+            nvoken still uses an expiring internal carrier, but it is not a
+            public Session and every response reports `session_id: null`.
+        retention:
+          $ref: "#/components/schemas/RetentionPolicy"
           description: |
-            Settings stored on the Session itself, rather than on this turn.
-
-            On a new Session these are saved. On a Session that already exists
-            they are checked rather than applied: matching values are fine, and
-            a different value returns `session_options_conflict` telling you
-            which paths disagreed. This keeps two callers from silently
-            reconfiguring each other's conversation. Send
-            `on_conflict: "join"` when you mean "reach whatever Session is
-            there" rather than "it should be configured like this".
-
-            If no compaction policy is stored yet, this turn can install one,
-            because the policy needs a model to validate against and only a turn
-            supplies that.
-
-            A Session's title and other descriptive labels are not here. They
-            are `metadata`, written with `PATCH /v1/sessions/{session_id}`.
+            Retention for a newly created conversation or a standalone turn.
+            Standalone turns default to one hour. Invalid when continuing an
+            existing Session.
+        compaction:
+          $ref: "#/components/schemas/CompactionPolicy"
+          description: Conversation compaction policy. Invalid for standalone turns.
+        authorization_context:
+          $ref: "#/components/schemas/AuthorizationContext"
+          description: Host authorization binding recorded on a newly created conversation.
         metadata:
           $ref: "#/components/schemas/Metadata"
           description: |
@@ -6245,26 +6524,9 @@ components:
 
             Keys are scoped to the tenant and resolved Agent, so the same key
             under a different tenant or Agent is a different request.
-            Deduplication lasts as long as the original turn still exists.
-        if_active:
-          type: string
-          enum: [reject, supersede, interrupt]
-          default: reject
-          description: |
-            What to do when the Session already has a turn running. A Session
-            runs one turn at a time.
-
-            - `reject` (the default) refuses this request with
-              `session_invocation_active` and leaves the running turn alone.
-            - `supersede` cancels the running turn and starts this one in its
-              place. The cancelled turn's work is discarded and does not carry
-              forward — "discard and redo".
-            - `interrupt` asks the running turn to stop cleanly and starts
-              this one only once it has, so this turn builds on what the
-              stopped one produced — "stop and redo".
-
-            Omitting the field and sending `reject` are the same request for
-            idempotency purposes.
+            Deduplication survives private-content erasure. An equal retry of
+            an erased turn returns `410 invocation_erased` with the original
+            Invocation ID; a changed retry still conflicts.
         on_budget_exhausted:
           type: string
           enum: [stop, hold]
@@ -6332,6 +6594,51 @@ components:
             Whichever source is chosen is fixed when the turn starts. A turn never
             silently falls through to a different payer partway through, so the
             bill cannot move once work has begun.
+    InvocationSession:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [new, continue, continue_or_create]
+          description: |
+            `new` creates a conversation, `continue` requires an existing
+            conversation selected by `id`, and
+            `continue_or_create` resolves or creates a keyed conversation.
+        id:
+          $ref: "#/components/schemas/SessionID"
+          description: Existing conversation ID. Valid only with `continue`.
+        key:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Caller key for `continue_or_create`.
+        if_active:
+          type: string
+          enum: [reject, supersede, interrupt]
+          default: reject
+          description: |
+            Policy for an existing conversation's nonterminal turn. Valid only
+            when the mode can continue a Session.
+        options:
+          $ref: "#/components/schemas/InvocationSessionOptions"
+    InvocationSessionOptions:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        pinned_revision:
+          type: integer
+          format: int64
+          minimum: 1
+        on_conflict:
+          type: string
+          enum: [refuse, join]
+          default: refuse
+          description: |
+            With `continue_or_create`, `join` accepts the stored conversation
+            policies; `refuse` reports mismatches.
     InvocationContextItem:
       type: object
       additionalProperties: false
@@ -6982,11 +7289,12 @@ components:
     ModelCallRecord:
       type: object
       additionalProperties: false
-      required: [id, invocation_id, session_id, app_id, tenant_key, user_key, agent_id, credential_family_id, authentication_method, provider_key_source, provider_key_id, provider_key_version_id, call_kind, call_ordinal, lease_attempt, provider_attempt_ordinal, requested_provider, requested_model, served_provider, served_model, status, outcome, failure_class, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens, model_cost, cost_coverage, max_cost_at_risk, pricing_version, created_at, started_at, first_output_at, settled_at]
+      required: [id, invocation_id, session_id, content_expires_at, app_id, tenant_key, user_key, agent_id, credential_family_id, authentication_method, provider_key_source, provider_key_id, provider_key_version_id, call_kind, call_ordinal, lease_attempt, provider_attempt_ordinal, requested_provider, requested_model, served_provider, served_model, status, outcome, failure_class, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens, model_cost, cost_coverage, max_cost_at_risk, pricing_version, created_at, started_at, first_output_at, settled_at]
       properties:
         id: { type: string, description: Opaque model-call fact ID with the mcall_ prefix. }
         invocation_id: { type: [string, "null"] }
         session_id: { type: [string, "null"] }
+        content_expires_at: { $ref: "#/components/schemas/ContentExpiresAt" }
         app_id: { $ref: "#/components/schemas/AppID" }
         tenant_key: { type: [string, "null"] }
         user_key: { type: [string, "null"], description: Null after user erasure. }
@@ -7062,10 +7370,14 @@ components:
     InvocationTimeline:
       type: object
       additionalProperties: false
-      required: [invocation_id, session_id, app_id, tenant_key, user_key, agent_id, accepted_at, ended_at, status, stop_reason, failure_code, attempt_count, active_execution_ms, waiting_execution_ms, erased_at, steps]
+      required: [invocation_id, session_id, content_expires_at, app_id, tenant_key, user_key, agent_id, accepted_at, ended_at, status, stop_reason, failure_code, attempt_count, active_execution_ms, waiting_execution_ms, erased_at, steps]
       properties:
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        session_id: { $ref: "#/components/schemas/SessionID" }
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at: { $ref: "#/components/schemas/ContentExpiresAt" }
         app_id: { $ref: "#/components/schemas/AppID" }
         tenant_key: { type: [string, "null"] }
         user_key: { type: [string, "null"] }
@@ -7115,8 +7427,14 @@ components:
     TraceList:
       type: object
       additionalProperties: false
-      required: [status, items, next_cursor]
+      required: [invocation_id, session_id, content_expires_at, status, items, next_cursor]
       properties:
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at: { $ref: "#/components/schemas/ContentExpiresAt" }
         status: { $ref: "#/components/schemas/ObservationStatus" }
         items:
           type: array
@@ -7209,8 +7527,14 @@ components:
     InvocationLogList:
       type: object
       additionalProperties: false
-      required: [status, items, next_cursor]
+      required: [invocation_id, session_id, content_expires_at, status, items, next_cursor]
       properties:
+        invocation_id: { $ref: "#/components/schemas/InvocationID" }
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at: { $ref: "#/components/schemas/ContentExpiresAt" }
         status: { $ref: "#/components/schemas/ObservationStatus" }
         items:
           type: array
@@ -7230,6 +7554,7 @@ components:
         - is_partial
         - invocation_id
         - session_id
+        - content_expires_at
         - spans
       properties:
         trace_id: { $ref: "#/components/schemas/TraceID" }
@@ -7251,7 +7576,11 @@ components:
           minimum: 1
           description: Durable Invocation lease attempt associated with this trace.
         invocation_id: { $ref: "#/components/schemas/InvocationID" }
-        session_id: { $ref: "#/components/schemas/SessionID" }
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at: { $ref: "#/components/schemas/ContentExpiresAt" }
         spans:
           type: array
           items: { $ref: "#/components/schemas/TraceSpan" }
@@ -7496,7 +7825,7 @@ components:
         Immutable Agent Definition fields admitted by one Invocation. Detailed
         Invocation reads nest these fields under `agent_definition`; the stable
         resource ID and admitted revision remain top-level.
-        Identity, session selection, input, idempotency, `if_active`, `webhook`,
+        Identity, session selection, input, idempotency, `session.if_active`, `webhook`,
         metadata, and provider key selection are durable elsewhere and
         never appear here. Invocation admission for callback declarations
         requires App callback-signing configuration. Remote MCP authentication
@@ -7785,7 +8114,9 @@ components:
 
         Metadata is correlation data, not an authorization anchor. If a value
         decides what a callback receiver is allowed to touch, put it in
-        `session_options.authorization_context` instead.
+        `authorization_context` on Invocation admission, or
+        `session_options.authorization_context` on direct Session creation,
+        instead.
     AuthorizationContext:
       type: object
       additionalProperties:
@@ -7797,7 +8128,7 @@ components:
         pattern: "^[A-Za-z0-9_.:-]+$"
         maxLength: 64
       description: |
-        What this Session is bound to, in your own terms. If your authorization
+        What this conversation or standalone turn is bound to, in your own terms. If your authorization
         boundary is finer than a tenant — a board, a workspace, a document —
         this is where you say so, and nvoken carries it to your callback
         receiver inside the signed body so authorizing a delivery costs no
@@ -7805,12 +8136,12 @@ components:
 
         Four properties, all guaranteed rather than incidental:
 
-        - **Written at creation only.** Set by the request that brings the
-          Session into existence, whether that is `POST /v1/sessions`, a fork,
-          or the admission that creates it. There is no patch path and there
-          will not be one. A later turn that sends a different value is refused
-          with `session_options_conflict`; one that sends a value on a Session
-          created without one is refused rather than installing it.
+        - **Written at creation only.** Set by the request that creates the
+          conversation or standalone turn. There is no patch path and there
+          will not be one. A later turn that sends a different value for an
+          existing Session is refused with `session_options_conflict`; one that
+          sends a value on a Session created without one is refused rather than
+          installing it.
         - **Never interpreted.** nvoken does not read it, route on it, or index
           it.
         - **Never model-visible.** It is not rendered into context and no tool
@@ -8497,7 +8828,7 @@ components:
         set here is `agent_id`, `user_key`, `agent_definition`, `context`, `credit_block`,
         `usage`, `provenance`, `structured_output_provenance`, `metadata`,
         `limits`, `triggered_by`, and `child_invocation_counts`.
-      required: [id, agent_id, agent_key, session_id, definition_id, definition_revision,
+      required: [id, agent_id, agent_key, session_id, content_expires_at, definition_id, definition_revision,
                  status, stop_reason, attempt, error, structured_output,
                  active_execution_ms, deadline_at,
                  created_at, updated_at, ended_at]
@@ -8511,7 +8842,12 @@ components:
           minLength: 1
           maxLength: 255
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+          description: Conversation identity, or null for a standalone Invocation.
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         user_key:
           oneOf:
             - type: string
@@ -8657,6 +8993,12 @@ components:
             - type: string
               format: date-time
             - type: "null"
+        erased_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+          description: Present on minimal fact-backed lineage rows after erasure.
         tool_calls:
           type: array
           items:
@@ -8952,8 +9294,16 @@ components:
     ToolCall:
       type: object
       additionalProperties: false
-      required: [id, mode, name, status, iteration, created_at, ended_at, attempts, result_origin]
+      required: [invocation_id, session_id, content_expires_at, id, mode, name, status, iteration, created_at, ended_at, attempts, result_origin]
       properties:
+        invocation_id:
+          $ref: "#/components/schemas/InvocationID"
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         id:
           $ref: "#/components/schemas/ToolCallID"
         mode:
@@ -9006,7 +9356,7 @@ components:
       type: object
       additionalProperties: false
       required: [schema_version, delivery_id, tool_call_id, tool_name,
-                 invocation_id, session_id, agent_key]
+                 invocation_id, session_id, content_expires_at, agent_key]
       properties:
         schema_version:
           type: integer
@@ -9029,7 +9379,11 @@ components:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         agent_key:
           type: string
           minLength: 1
@@ -9049,8 +9403,8 @@ components:
         authorization_context:
           $ref: "#/components/schemas/AuthorizationContext"
           description: |
-            The Session's `authorization_context`, absent when the Session was
-            created without one.
+            The conversation or standalone turn's `authorization_context`,
+            absent when admission did not set one.
 
             It sits beside `nvoken` rather than inside it on purpose.
             Everything in `nvoken` is a fact nvoken minted or resolved; this is
@@ -9064,7 +9418,7 @@ components:
       type: object
       additionalProperties: false
       required: [schema_version, delivery_id, event, sequence, invocation_id,
-                 session_id, agent_key]
+                 session_id, content_expires_at, agent_key]
       properties:
         schema_version:
           type: integer
@@ -9085,7 +9439,11 @@ components:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         agent_key:
           type: string
           minLength: 1
@@ -9183,12 +9541,16 @@ components:
     SubmitHostToolResultsResponse:
       type: object
       additionalProperties: false
-      required: [invocation_id, session_id, status, results, tool_calls]
+      required: [invocation_id, session_id, content_expires_at, status, results, tool_calls]
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         status:
           $ref: "#/components/schemas/InvocationStatus"
         results:
@@ -9785,12 +10147,16 @@ components:
     SessionMessage:
       type: object
       additionalProperties: false
-      required: [id, session_id, invocation_id, sequence, role, content, created_at]
+      required: [id, session_id, content_expires_at, invocation_id, sequence, role, content, created_at]
       properties:
         id:
           $ref: "#/components/schemas/SessionMessageID"
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         agent_id:
           $ref: "#/components/schemas/AgentID"
         invocation_id:
@@ -10044,7 +10410,7 @@ components:
             - type: "null"
     InvocationChange:
       type: object
-      required: [invocation_id, revision, status, terminal, through_message_sequence, error, structured_output, occurred_at]
+      required: [invocation_id, session_id, content_expires_at, revision, status, terminal, through_message_sequence, error, structured_output, occurred_at]
       description: |
         One lifecycle step of one turn, as the stream and the JSON transcript
         deliver it. Order changes by `revision` and fold to the highest one to
@@ -10065,6 +10431,12 @@ components:
       properties:
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
+        session_id:
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         revision:
           type: integer
           format: int64
@@ -10182,7 +10554,7 @@ components:
             - type: "null"
     TranscriptUpdateEvent:
       type: object
-      required: [type, session_id, messages, invocation_changes, cursor]
+      required: [type, session_id, content_expires_at, messages, invocation_changes, cursor]
       description: |
         The saved frame, and the only one. Messages append by `sequence` and
         are never sent twice. Changes are an append log keyed by
@@ -10195,7 +10567,11 @@ components:
           enum: [transcript.update]
           x-enum-varnames: [EventTranscriptUpdate]
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         messages:
           type: array
           items:
@@ -10210,14 +10586,18 @@ components:
           description: Your resume position. Store it and send it back as `cursor` to continue where you left off.
     MessageDeltaEvent:
       type: object
-      required: [type, session_id, invocation_id, attempt, message_id, content_index, kind, delta, emitted_at]
+      required: [type, session_id, content_expires_at, invocation_id, attempt, message_id, content_index, kind, delta, emitted_at]
       properties:
         type:
           type: string
           enum: [message.delta]
           x-enum-varnames: [EventMessageDelta]
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         invocation_id:
           $ref: "#/components/schemas/InvocationID"
         attempt:
@@ -10280,14 +10660,18 @@ components:
         as content you do not render, and keep reading.
     StreamResyncEvent:
       type: object
-      required: [type, session_id, reason]
+      required: [type, session_id, content_expires_at, reason]
       properties:
         type:
           type: string
           enum: [stream.resync]
           x-enum-varnames: [EventStreamResync]
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         invocation_id:
           allOf:
             - $ref: "#/components/schemas/InvocationID"
@@ -10299,14 +10683,18 @@ components:
           $ref: "#/components/schemas/StreamResyncReason"
     ConnectionClosingEvent:
       type: object
-      required: [type, session_id, reason]
+      required: [type, session_id, content_expires_at, reason]
       properties:
         type:
           type: string
           enum: [connection.closing]
           x-enum-varnames: [EventConnectionClosing]
         session_id:
-          $ref: "#/components/schemas/SessionID"
+          oneOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: "null"
+        content_expires_at:
+          $ref: "#/components/schemas/ContentExpiresAt"
         reason:
           $ref: "#/components/schemas/ConnectionClosingReason"
       description: |
@@ -10578,11 +10966,14 @@ components:
         - unauthenticated
         - forbidden
         - not_found
+        - invocation_erased
         - idempotency_conflict
         - session_options_conflict
         - session_user_key_conflict
         - provider_key_conflict
         - session_invocation_active
+        - invocation_active
+        - invocation_session_bound
         - invocation_not_waiting
         - invocation_not_budget_hold
         - app_archived
@@ -10625,6 +11016,97 @@ components:
     CredentialStatus:
       type: string
       enum: [active, revoked]
+    ConsoleDeviceAuthorizationStatus:
+      type: string
+      enum: [pending, approved, denied]
+    CreateConsoleDeviceAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[ -~]+$"
+    ConsoleDeviceAuthorizationGrant:
+      type: object
+      additionalProperties: false
+      required: [device_code, user_code, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+          minLength: 43
+          maxLength: 43
+        user_code:
+          type: string
+          pattern: "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$"
+        expires_in:
+          type: integer
+          enum: [600]
+        interval:
+          type: integer
+          enum: [5]
+    ConsoleDeviceAuthorizationApproval:
+      type: object
+      additionalProperties: false
+      required: [status, label]
+      properties:
+        status:
+          $ref: "#/components/schemas/ConsoleDeviceAuthorizationStatus"
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        app_name:
+          type: string
+          minLength: 1
+        credential_type:
+          type: string
+          enum: [app, app_read_only]
+    ApproveConsoleDeviceAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required: [credential_type]
+      properties:
+        credential_type:
+          type: string
+          enum: [app, app_read_only]
+    ConsoleDeviceAuthorizationExchangeState:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [authorization_pending, slow_down, access_denied, expired_token]
+    ConsoleDeviceAuthorizationClaim:
+      type: object
+      additionalProperties: false
+      required: [status, device_code, issuer_token, app_id, app_name, credential_type, label]
+      properties:
+        status:
+          type: string
+          enum: [approved]
+        device_code:
+          type: string
+          minLength: 43
+          maxLength: 43
+        issuer_token:
+          type: string
+          description: Five-minute App issuer bearer, returned only to the authenticated console Worker.
+        app_id:
+          $ref: "#/components/schemas/AppID"
+        app_name:
+          type: string
+          minLength: 1
+        credential_type:
+          type: string
+          enum: [app, app_read_only]
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
     Credential:
       type: object
       required: [id, name, prefix, status, type, created_at, updated_at]
@@ -10823,6 +11305,19 @@ components:
             code: not_found
             message: The requested resource was not found.
             request_id: req_01K0NVASB4CF29K41VZA271H23
+    InvocationErased:
+      description: The standalone Invocation's private content has been erased.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: invocation_erased
+            message: The Invocation content has been erased.
+            request_id: req_01K0NVASB4CF29K41VZA271H24
+            details:
+              invocation_id: inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+              erased_at: "2026-08-25T13:00:00Z"
     MethodNotAllowed:
       description: |
         The request method is not allowed on this path. The `Allow` header

@@ -18,7 +18,7 @@ await client.createAgentDefinition({
 const chat = client.agent({
   agentKey: "typescript-local-chat",
   definitionKey: "typescript-local-chat",
-}).session({ sessionKey });
+}).bindSession({ sessionKey });
 
 const input = createInterface({
   input: process.stdin,

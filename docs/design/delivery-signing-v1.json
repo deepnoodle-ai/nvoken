@@ -28,9 +28,9 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-        "X-Nvoken-Signature": "sha256=7c62ca330d2e74f9a99ded9756353ce4a0a8a718e779fac7ba38034f8cab8a26"
+        "X-Nvoken-Signature": "sha256=8a13868eec1744e1cb2afd21ed76711bb5b3c441ff1c47244c77688e3a4f9641"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-42\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-42\"}}"
     },
     "webhook": {
       "event": "invocation.ended",
@@ -42,9 +42,39 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
-        "X-Nvoken-Signature": "sha256=23bf4214d9f5847d3e08b7c162026f19663d9ec42f928fa49c77f0d76ebc0184"
+        "X-Nvoken-Signature": "sha256=1a248d1c9b7790ef36c7fd4fea689a987f65a75fd8b5f962c715f35fe1c6a486"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329\",\"event\":\"invocation.ended\",\"sequence\":2,\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"invocation\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329\",\"event\":\"invocation.ended\",\"sequence\":2,\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"invocation\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+    },
+    "standalone_callback": {
+      "tool_name": "open_ticket",
+      "authorization_context": {
+        "board": "brd_9f21"
+      },
+      "headers": {
+        "X-Nvoken-Signature-Version": "v1",
+        "X-Nvoken-Delivery-ID": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32c",
+        "X-Nvoken-Timestamp": "1784635200",
+        "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+        "X-Nvoken-Signing-Key-Version": "1",
+        "Idempotency-Key": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32d",
+        "X-Nvoken-Signature": "sha256=baccc5fe3d017af9ab65a0260fbb33401d7753ba888dbfd82aa3b41543e08492"
+      },
+      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32c\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb32d\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"session_id\":null,\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-43\"}}"
+    },
+    "standalone_webhook": {
+      "event": "invocation.ended",
+      "sequence": 2,
+      "headers": {
+        "X-Nvoken-Signature-Version": "v1",
+        "X-Nvoken-Delivery-ID": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f",
+        "X-Nvoken-Timestamp": "1784635200",
+        "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
+        "X-Nvoken-Signing-Key-Version": "1",
+        "Idempotency-Key": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f",
+        "X-Nvoken-Signature": "sha256=71962ee85d9d6f2ba37a415a30fd33d7ffd57e034cfae4c4fed0904982201084"
+      },
+      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f\",\"event\":\"invocation.ended\",\"sequence\":2,\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"session_id\":null,\"content_expires_at\":\"2026-07-21T13:00:00Z\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"invocation\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
     }
   },
   "tampering": [

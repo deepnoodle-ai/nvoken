@@ -37,6 +37,18 @@ type Error struct {
 	Cause      error
 }
 
+// InvocationErasedError reports that an Invocation's retained identity and
+// lifecycle facts still exist, but its private content has been erased.
+type InvocationErasedError struct {
+	Base         *Error
+	InvocationID string
+	ErasedAt     *time.Time
+}
+
+func (e *InvocationErasedError) Error() string { return e.Base.Error() }
+
+func (e *InvocationErasedError) Unwrap() error { return e.Base }
+
 func (e *Error) Error() string {
 	if e.Message != "" {
 		return e.Message
@@ -76,7 +88,7 @@ func errorFromResponse(status int, header http.Header, body []byte) error {
 		category = ErrorPermission
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
 		category = ErrorValidation
-	case status == http.StatusNotFound:
+	case status == http.StatusNotFound || status == http.StatusGone:
 		category = ErrorNotFound
 	case status == http.StatusConflict:
 		category = ErrorConflict
@@ -89,7 +101,7 @@ func errorFromResponse(status int, header http.Header, body []byte) error {
 	if message == "" {
 		message = fmt.Sprintf("nvoken returned HTTP %d", status)
 	}
-	return &Error{
+	nvokenError := &Error{
 		Category:   category,
 		Status:     status,
 		Code:       payload.Code,
@@ -98,6 +110,19 @@ func errorFromResponse(status int, header http.Header, body []byte) error {
 		RetryAfter: parseRetryAfter(header.Get("Retry-After"), time.Now()),
 		Details:    payload.Details,
 	}
+	if status == http.StatusGone && payload.Code == "invocation_erased" {
+		erased := &InvocationErasedError{Base: nvokenError}
+		if invocationID, ok := payload.Details["invocation_id"].(string); ok {
+			erased.InvocationID = invocationID
+		}
+		if erasedAt, ok := payload.Details["erased_at"].(string); ok {
+			if parsed, err := time.Parse(time.RFC3339Nano, erasedAt); err == nil {
+				erased.ErasedAt = &parsed
+			}
+		}
+		return erased
+	}
+	return nvokenError
 }
 
 func transportError(err error) error {

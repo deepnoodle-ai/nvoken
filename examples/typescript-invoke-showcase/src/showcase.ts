@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   const firstRequest: InvokeRequest = {
     agentKey: primaryAgentKey,
     tenantKey: tenantA,
-    sessionKey: sharedSessionKey,
+    session: { mode: "continue_or_create", key: sharedSessionKey },
     idempotencyKey: `${runId}:turn-1`,
     input: "Remember that my confirmation code is ORCHID-724. Reply only with remembered.",
     ...chatDefinition(),
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
 
   const second = await completed({
     agentKey: primaryAgentKey,
-    sessionId: first.handle.sessionId!,
+    session: { mode: "continue", id: first.handle.sessionId! },
     idempotencyKey: `${runId}:turn-2`,
     input: "What is my confirmation code? Reply only with the code.",
     ...chatDefinition(),
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   const referenced = await completed({
     agentKey: referencedAgentKey,
     tenantKey: tenantA,
-    sessionKey: `${runId}-referenced-session`,
+    session: { mode: "continue_or_create", key: `${runId}-referenced-session` },
     idempotencyKey: `${runId}:referenced`,
     input: "Reply only with referenced.",
   });
@@ -173,7 +173,7 @@ async function main(): Promise<void> {
   const recorded = await completed({
     agentKey: primaryAgentKey,
     tenantKey: tenantA,
-    sessionKey: contextSessionKey,
+    session: { mode: "continue_or_create", key: contextSessionKey },
     idempotencyKey: `${runId}:context-1`,
     input: "Reply only with recorded.",
     context: [...contextItems],
@@ -196,7 +196,7 @@ async function main(): Promise<void> {
   const resent = await completed({
     agentKey: primaryAgentKey,
     tenantKey: tenantA,
-    sessionKey: contextSessionKey,
+    session: { mode: "continue_or_create", key: contextSessionKey },
     idempotencyKey: `${runId}:context-2`,
     input: "What is my confirmation code? Reply only with the code.",
     context: [...contextItems],
@@ -253,7 +253,7 @@ async function main(): Promise<void> {
   const tenantBResult = await completed({
     agentKey: primaryAgentKey,
     tenantKey: tenantB,
-    sessionKey: sharedSessionKey,
+    session: { mode: "continue_or_create", key: sharedSessionKey },
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with beta.",
     ...chatDefinition(),
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
   const alternateResult = await completed({
     agentKey: alternateAgentKey,
     tenantKey: tenantA,
-    sessionKey: sharedSessionKey,
+    session: { mode: "continue_or_create", key: sharedSessionKey },
     idempotencyKey: firstRequest.idempotencyKey,
     input: "Reply only with alternate.",
     ...chatDefinition(),
@@ -284,7 +284,7 @@ async function main(): Promise<void> {
   const agentMismatch = await expectNvokenError(
     () => client.invoke({
       agentKey: alternateAgentKey,
-      sessionId: session.id,
+      session: { mode: "continue", id: session.id },
       idempotencyKey: `${runId}:agent-mismatch`,
       input: "This should not be admitted.",
       ...chatDefinition(),
@@ -295,7 +295,7 @@ async function main(): Promise<void> {
     () => client.invoke({
       agentKey: primaryAgentKey,
       tenantKey: tenantB,
-      sessionId: session.id,
+      session: { mode: "continue", id: session.id },
       idempotencyKey: `${runId}:tenant-mismatch`,
       input: "This should not be admitted.",
       ...chatDefinition(),
@@ -321,7 +321,7 @@ async function main(): Promise<void> {
   const toolHandle = await client.invoke({
     agentKey: toolAgentKey,
     tenantKey: tenantA,
-    sessionKey: `${runId}-tool-session`,
+    session: { mode: "continue_or_create", key: `${runId}-tool-session` },
     idempotencyKey: `${runId}:tool`,
     input: "Check order order-42 and tell me its current state. You must use lookup_order first.",
   });
@@ -342,7 +342,7 @@ async function main(): Promise<void> {
   const busySession = await expectNvokenError(
     () => client.invoke({
       agentKey: toolAgentKey,
-      sessionId: toolHandle.sessionId!,
+      session: { mode: "continue", id: toolHandle.sessionId! },
       idempotencyKey: `${runId}:busy-session`,
       input: "This turn should not be admitted while the tool call is waiting.",
       ...chatDefinition(),
@@ -385,7 +385,7 @@ async function main(): Promise<void> {
 
   const toolFollowup = await completed({
     agentKey: toolAgentKey,
-    sessionId: toolHandle.sessionId!,
+    session: { mode: "continue", id: toolHandle.sessionId! },
     idempotencyKey: `${runId}:tool-followup`,
     input: "Based on our previous order lookup, when is the estimated delivery? Reply only with the answer.",
     ...chatDefinition(),
@@ -410,7 +410,7 @@ async function main(): Promise<void> {
   const structuredHandle = await client.invoke<SupportClassification>({
     agentKey: structuredAgentKey,
     tenantKey: tenantA,
-    sessionKey: `${runId}-structured-session`,
+    session: { mode: "continue_or_create", key: `${runId}-structured-session` },
     idempotencyKey: `${runId}:structured`,
     input: "Classify this request: I was billed twice and need a human to review it today.",
   });

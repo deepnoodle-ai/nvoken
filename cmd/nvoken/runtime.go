@@ -37,95 +37,102 @@ const probeMaxOutputTokens = 2048
 var version = "devel"
 
 var operationCommands = map[string]string{
-	"cancelInvocation":           "invocation cancel",
-	"getHealth":                  "health",
-	"getReadiness":               "ready",
-	"interruptInvocation":        "invocation interrupt",
-	"resumeInvocation":           "invocation resume",
-	"createNudge":                "invocation nudge",
-	"listNudges":                 "invocation nudges",
-	"listToolCalls":              "invocation tool-calls",
-	"cancelNudge":                "invocation cancel-nudge",
-	"createCredential":           "credentials create",
-	"createInvocation":           "invoke",
-	"createAgentDefinition":      "agent-definition create",
-	"getAgentDefinitionRevision": "agent-definition revision",
-	"listAgentDefinitions":       "agent-definition list",
-	"getAgentDefinition":         "agent-definition get",
-	"updateAgentDefinition":      "agent-definition update",
-	"archiveAgentDefinition":     "agent-definition archive",
-	"restoreAgentDefinition":     "agent-definition restore",
-	"createAppClientKey":         "client-key create",
-	"listAppClientKeys":          "client-key list",
-	"revokeAppClientKey":         "client-key revoke",
-	"listAppSigningKeys":         "signing-key list",
-	"mintAppSigningKey":          "signing-key mint",
-	"activateAppSigningKey":      "signing-key activate",
-	"retireAppSigningKey":        "signing-key retire",
-	"createSession":              "session create",
-	"deleteTenant":               "tenant delete",
-	"forkSession":                "session fork",
-	"createProviderKey":          "provider-key create",
-	"allocateCredits":            "credits allocate",
-	"listCreditAccounts":         "credits accounts",
-	"listCreditAllocations":      "credits allocations",
-	"getCredential":              "credentials get",
-	"getCurrentIdentity":         "auth status",
-	"getAgent":                   "agent get",
-	"createAgent":                "agent create",
-	"updateAgent":                "agent update",
-	"archiveAgent":               "agent archive",
-	"restoreAgent":               "agent restore",
-	"getApp":                     "app get",
-	"listApps":                   "app list",
-	"registerApp":                "app register",
-	"updateApp":                  "app update",
-	"archiveApp":                 "app archive",
-	"restoreApp":                 "app restore",
-	"getInvocation":              "invocation get",
-	"getInvocationResult":        "invocation result",
-	"getInvocationTimeline":      "invocation timeline",
-	"getMemory":                  "memory get",
-	"getTrace":                   "trace get",
-	"getModel":                   "model get",
-	"getOrg":                     "org get",
-	"archiveOrg":                 "org archive",
-	"restoreOrg":                 "org restore",
-	"getProviderKey":             "provider-key get",
-	"getUsageBreakdown":          "usage breakdown",
-	"getUsageTimeseries":         "usage timeseries",
-	"getProviderKeyUsage":        "provider-key usage",
-	"getSession":                 "session get",
-	"deleteSession":              "session delete",
-	"updateSession":              "session set-metadata",
-	"getSessionTranscript":       "session transcript",
-	"listAgents":                 "agent list",
-	"listCredentials":            "credentials list",
-	"listInvocations":            "invocation list",
-	"listAdmissions":             "admission list",
-	"listInvocationLogs":         "invocation logs",
-	"listInvocationTraces":       "invocation traces",
-	"listMCPTools":               "mcp list-tools",
-	"listMemories":               "memory list",
-	"listModels":                 "model list",
-	"listOrgs":                   "org list",
-	"listProviderKeys":           "provider-key list",
-	"listSessionCompactions":     "session compactions",
-	"listSessionMessages":        "session messages",
-	"listSessions":               "session list",
-	"listTenants":                "tenant list",
-	"listUsageRecords":           "usage records",
-	"registerOrg":                "org register",
-	"revokeProviderKey":          "provider-key revoke",
-	"revokeCredential":           "credentials revoke",
-	"rotateCredential":           "credentials rotate",
-	"rotateProviderKey":          "provider-key rotate",
-	"streamSession":              "session stream",
-	"submitHostToolResults":      "tool-result submit",
-	"summarizeAdmissions":        "admission summary",
-	"deleteMemory":               "memory delete",
-	"issueAnonymousToken":        "app anonymous-token",
-	"updateOrg":                  "org update",
+	"approveConsoleDeviceAuthorization":  "auth login",
+	"cancelInvocation":                   "invocation cancel",
+	"getHealth":                          "health",
+	"getReadiness":                       "ready",
+	"interruptInvocation":                "invocation interrupt",
+	"resumeInvocation":                   "invocation resume",
+	"createNudge":                        "invocation nudge",
+	"listNudges":                         "invocation nudges",
+	"listToolCalls":                      "invocation tool-calls",
+	"cancelNudge":                        "invocation cancel-nudge",
+	"createCredential":                   "credentials create",
+	"createConsoleDeviceAuthorization":   "auth login",
+	"createInvocation":                   "invoke",
+	"deleteInvocation":                   "invocation delete",
+	"denyConsoleDeviceAuthorization":     "auth login",
+	"exchangeConsoleDeviceAuthorization": "auth login",
+	"createAgentDefinition":              "agent-definition create",
+	"getAgentDefinitionRevision":         "agent-definition revision",
+	"listAgentDefinitions":               "agent-definition list",
+	"getAgentDefinition":                 "agent-definition get",
+	"updateAgentDefinition":              "agent-definition update",
+	"archiveAgentDefinition":             "agent-definition archive",
+	"restoreAgentDefinition":             "agent-definition restore",
+	"createAppClientKey":                 "client-key create",
+	"listAppClientKeys":                  "client-key list",
+	"revokeAppClientKey":                 "client-key revoke",
+	"listAppSigningKeys":                 "signing-key list",
+	"mintAppSigningKey":                  "signing-key mint",
+	"activateAppSigningKey":              "signing-key activate",
+	"retireAppSigningKey":                "signing-key retire",
+	"createSession":                      "session create",
+	"deleteTenant":                       "tenant delete",
+	"forkSession":                        "session fork",
+	"createProviderKey":                  "provider-key create",
+	"allocateCredits":                    "credits allocate",
+	"listCreditAccounts":                 "credits accounts",
+	"listCreditAllocations":              "credits allocations",
+	"getCredential":                      "credentials get",
+	"getCurrentIdentity":                 "auth status",
+	"getAgent":                           "agent get",
+	"createAgent":                        "agent create",
+	"updateAgent":                        "agent update",
+	"archiveAgent":                       "agent archive",
+	"restoreAgent":                       "agent restore",
+	"getApp":                             "app get",
+	"listApps":                           "app list",
+	"registerApp":                        "app register",
+	"updateApp":                          "app update",
+	"archiveApp":                         "app archive",
+	"restoreApp":                         "app restore",
+	"getInvocation":                      "invocation get",
+	"getConsoleDeviceAuthorization":      "auth login",
+	"getInvocationResult":                "invocation result",
+	"getInvocationTimeline":              "invocation timeline",
+	"getMemory":                          "memory get",
+	"getTrace":                           "trace get",
+	"getModel":                           "model get",
+	"getOrg":                             "org get",
+	"archiveOrg":                         "org archive",
+	"restoreOrg":                         "org restore",
+	"getProviderKey":                     "provider-key get",
+	"getUsageBreakdown":                  "usage breakdown",
+	"getUsageTimeseries":                 "usage timeseries",
+	"getProviderKeyUsage":                "provider-key usage",
+	"getSession":                         "session get",
+	"deleteSession":                      "session delete",
+	"updateSession":                      "session set-metadata",
+	"getSessionTranscript":               "session transcript",
+	"listAgents":                         "agent list",
+	"listCredentials":                    "credentials list",
+	"listInvocations":                    "invocation list",
+	"listAdmissions":                     "admission list",
+	"listInvocationLogs":                 "invocation logs",
+	"listInvocationTraces":               "invocation traces",
+	"listMCPTools":                       "mcp list-tools",
+	"listMemories":                       "memory list",
+	"listModels":                         "model list",
+	"listOrgs":                           "org list",
+	"listProviderKeys":                   "provider-key list",
+	"listSessionCompactions":             "session compactions",
+	"listSessionMessages":                "session messages",
+	"listSessions":                       "session list",
+	"listTenants":                        "tenant list",
+	"listUsageRecords":                   "usage records",
+	"registerOrg":                        "org register",
+	"revokeProviderKey":                  "provider-key revoke",
+	"revokeCredential":                   "credentials revoke",
+	"rotateCredential":                   "credentials rotate",
+	"rotateProviderKey":                  "provider-key rotate",
+	"streamSession":                      "session stream",
+	"streamInvocation":                   "invocation stream",
+	"submitHostToolResults":              "tool-result submit",
+	"summarizeAdmissions":                "admission summary",
+	"deleteMemory":                       "memory delete",
+	"issueAnonymousToken":                "app anonymous-token",
+	"updateOrg":                          "org update",
 }
 
 type runtimeConfig struct {
@@ -336,6 +343,11 @@ func registerRuntimeCommands(app *cli.App) {
 		Description("Read authoritative state for one Invocation").
 		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
 		Run(runInvocationGet)
+	invocations.Command("delete").
+		Description("Erase the private content of a terminal standalone Invocation").
+		AddArg(requiredArg("invocation-id", "Opaque standalone Invocation ID")).
+		Flags(cli.Bool("yes").Required().Help("Confirm permanent content erasure")).
+		Run(runInvocationDelete)
 	invocations.Command("result").
 		Description("Read the composed result: Invocation, messages, and assistant text").
 		AddArg(requiredArg("invocation-id", "Opaque Invocation ID")).
@@ -571,7 +583,6 @@ func registerRuntimeCommands(app *cli.App) {
 		AddArg(requiredArg("session-id", "Opaque Session ID")).
 		Flags(
 			cli.Bool("deltas").Default(true).Help("Include provisional message deltas"),
-			cli.String("invocation-id").Help("Narrow frames to one Invocation and close when it settles"),
 			cli.String("cursor").Help("Durable stream cursor to resume after"),
 		).
 		Run(runSessionStream)
@@ -1104,7 +1115,6 @@ func runInvoke(command *cli.Context) error {
 		AgentID:        agentID,
 		AgentKey:       agentKey,
 		IdempotencyKey: command.String("idempotency-key"),
-		IfActive:       nvoken.IfActivePolicy(command.String("if-active")),
 		Input:          input,
 		InputBlocks:    blocks,
 	}
@@ -1122,8 +1132,26 @@ func runInvoke(command *cli.Context) error {
 	}
 	request.TenantKey = optionalString(command.String("tenant"))
 	request.UserKey = optionalString(command.String("user"))
-	request.SessionID = optionalString(command.String("session-id"))
-	request.SessionKey = optionalString(command.String("session-key"))
+	sessionID := optionalString(command.String("session-id"))
+	sessionKey := optionalString(command.String("session-key"))
+	if sessionID != nil && sessionKey != nil {
+		return errors.New("--session-id and --session-key are mutually exclusive")
+	}
+	if sessionID != nil {
+		request.Session = &nvoken.InvocationSession{
+			Mode:     nvoken.InvocationSessionContinue,
+			ID:       sessionID,
+			IfActive: nvoken.IfActivePolicy(command.String("if-active")),
+		}
+	} else if sessionKey != nil {
+		request.Session = &nvoken.InvocationSession{
+			Mode:     nvoken.InvocationSessionContinueOrCreate,
+			Key:      sessionKey,
+			IfActive: nvoken.IfActivePolicy(command.String("if-active")),
+		}
+	} else if command.IsSet("if-active") {
+		return errors.New("--if-active requires --session-id or --session-key")
+	}
 	parentInvocationID := command.String("parent-invocation-id")
 	toolCallID := command.String("tool-call-id")
 	if (parentInvocationID == "") != (toolCallID == "") {
@@ -1244,6 +1272,21 @@ func runInvocationGet(command *cli.Context) error {
 	return writeInvocation(command, invocation)
 }
 
+func runInvocationDelete(command *cli.Context) error {
+	client, err := runtimeClient(command)
+	if err != nil {
+		return err
+	}
+	invocationID := command.Arg(0)
+	if err := client.DeleteInvocation(command.Context(), invocationID); err != nil {
+		return err
+	}
+	return writeOutput(command, map[string]string{"deleted": invocationID}, func(writer io.Writer) error {
+		_, err := fmt.Fprintf(writer, "deleted\t%s\n", invocationID)
+		return err
+	})
+}
+
 func runInvocationResult(command *cli.Context) error {
 	client, err := runtimeClient(command)
 	if err != nil {
@@ -1255,7 +1298,7 @@ func runInvocationResult(command *cli.Context) error {
 	}
 	return writeOutput(command, result, func(writer io.Writer) error {
 		invocation := result.Invocation
-		if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", invocation.ID, invocation.Status, invocation.SessionID); err != nil {
+		if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", invocation.ID, invocation.Status, invocationSessionID(invocation.SessionID)); err != nil {
 			return err
 		}
 		if result.OutputText != nil {
@@ -1961,7 +2004,7 @@ func runInvocationList(command *cli.Context) error {
 	}
 	return writeOutput(command, page, func(writer io.Writer) error {
 		for _, invocation := range page.Items {
-			if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", invocation.ID, invocation.Status, invocation.SessionID); err != nil {
+			if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", invocation.ID, invocation.Status, invocationSessionID(invocation.SessionID)); err != nil {
 				return err
 			}
 		}
@@ -2310,9 +2353,8 @@ func runSessionStream(command *cli.Context) error {
 	}
 	deltas := command.Bool("deltas")
 	return client.StreamSessionWithOptions(command.Context(), command.Arg(0), nvoken.StreamOptions{
-		Deltas:       &deltas,
-		Cursor:       optionalString(command.String("cursor")),
-		InvocationID: optionalString(command.String("invocation-id")),
+		Deltas: &deltas,
+		Cursor: optionalString(command.String("cursor")),
 	}, func(event nvoken.StreamEvent, snapshot nvoken.ReducedSnapshot) error {
 		if jsonOutput(command) {
 			return json.NewEncoder(command.Stdout()).Encode(map[string]any{
@@ -2485,7 +2527,7 @@ func writeInvocation(command *cli.Context, invocation *nvoken.Invocation) error 
 			"%s\t%s\t%s\t%s\n",
 			invocation.ID,
 			invocation.Status,
-			invocation.SessionID,
+			invocationSessionID(invocation.SessionID),
 			stopReasonLabel(invocation.StopReason),
 		)
 		return err
@@ -2645,6 +2687,13 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func invocationSessionID(value *generated.SessionID) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
 }
 
 func optionalInt(value int) *int {

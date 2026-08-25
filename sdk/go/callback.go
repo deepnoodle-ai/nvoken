@@ -20,7 +20,7 @@ type CallbackEnvelope struct {
 		// belongs in logs, not in a dispatch decision.
 		ToolName     string  `json:"tool_name"`
 		InvocationID string  `json:"invocation_id"`
-		SessionID    string  `json:"session_id"`
+		SessionID    *string `json:"session_id"`
 		AgentKey     string  `json:"agent_key"`
 		TenantKey    *string `json:"tenant_key,omitempty"`
 	} `json:"nvoken"`

@@ -115,9 +115,18 @@ that, whatever its own definition declares.
 A bound Session serializes admission only within the local client:
 
 ```go
-session, err := agent.Session(nvoken.SessionBinding{SessionKey: "customer-123"})
+session, err := agent.BindSession(
+	nvoken.SessionBinding{SessionKey: "customer-123"},
+	nvoken.SessionOptions{},
+)
 answer, err = session.Text(ctx, "What should I do next?", nvoken.AgentInvocationOptions{})
 ```
+
+An unbound Agent call is standalone: `agent.Start`, `agent.Run`, and
+`agent.Text` create no reusable conversation and expose a nil `SessionID`.
+Standalone private content is retained for at least an hour after settlement;
+read `ContentExpiresAt` for the scheduled boundary. Bind a Session only when
+later turns should reuse conversation history.
 
 The Runtime remains authoritative across processes and rejects a second
 nonterminal turn. Context cancellation or `WaitOptions.Timeout` stops only the
@@ -142,7 +151,7 @@ err = handle.StreamWithOptions(ctx, nvoken.StreamOptions{
 }, consume)
 
 invocationID := handle.InvocationID
-err = client.StreamSessionWithOptions(ctx, handle.SessionID, nvoken.StreamOptions{
+err = client.StreamSessionWithOptions(ctx, sessionID, nvoken.StreamOptions{
 	Deltas:       &deltas,
 	Cursor:       &cursor,
 	InvocationID: &invocationID,
@@ -157,8 +166,7 @@ Invocation usage; it is an estimate, not a billing ledger.
 ### Child Invocations
 
 When a ToolCall starts another turn, record the exact cause on admission. A
-child remains an ordinary Invocation in its own ordinary Session; give that
-Session a short retention window when its transcript is temporary:
+one-off child can stay standalone and expire automatically:
 
 ```go
 trigger := &nvoken.InvocationTrigger{
@@ -167,12 +175,10 @@ trigger := &nvoken.InvocationTrigger{
 	ToolCallID:         call.ID,
 }
 handle, err := client.Invoke(ctx, nvoken.InvokeRequest{
-	AgentKey:   "researcher",
-	Input:      "Investigate this branch",
+	AgentKey:    "researcher",
+	Input:       "Investigate this branch",
 	TriggeredBy: trigger,
-	SessionOptions: &nvoken.SessionOptions{
-		Retention: &nvoken.SessionRetention{TTLSeconds: 3600},
-	},
+	Retention:  &nvoken.SessionRetention{TTLSeconds: 3600},
 })
 ```
 
@@ -185,14 +191,14 @@ For an intentional replace/regenerate action, use a new idempotency key and
 the typed policy:
 
 ```go
-handle, err := agent.Invoke(ctx, "Try that answer again.", nvoken.AgentInvocationOptions{
+handle, err := session.Start(ctx, "Try that answer again.", nvoken.AgentInvocationOptions{
 	IdempotencyKey: "customer-123:regenerate-2",
 	IfActive:       nvoken.IfActiveSupersede,
 })
 ```
 
 Omission or `IfActiveReject` preserves the default conflict response.
-Low-level callers set the same policy on `InvokeRequest.IfActive`.
+Low-level callers set the same policy on `InvokeRequest.Session.IfActive`.
 
 `IfActiveInterrupt` is the keep-the-work variant: the active Invocation stops
 at its next execution seam and settles `completed` with `StopReason`
@@ -256,11 +262,12 @@ relies on the authoritative Runtime check.
 Install restart-stable Session compaction on a new or existing Session:
 
 ```go
-options.SessionKey = &sessionKey
-options.SessionOptions = &nvoken.SessionOptions{
-	Compaction: &nvoken.ContextCompaction{
-		TriggerTokens: nvoken.AutoContextCompaction(),
-	},
+options.Session = &nvoken.InvocationSession{
+	Mode: nvoken.InvocationSessionContinueOrCreate,
+	Key:  &sessionKey,
+}
+options.Compaction = &nvoken.ContextCompaction{
+	TriggerTokens: nvoken.AutoContextCompaction(),
 }
 ```
 
@@ -300,7 +307,7 @@ agent, err := client.Agent(nvoken.AgentOptions{
 	DefinitionKey: resource.DefinitionKey,
 })
 
-handle, err := agent.Invoke(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
+handle, err := agent.Start(ctx, "Why was I charged twice?", nvoken.AgentInvocationOptions{})
 ```
 
 `AgentDefinition` is flat and matches the wire, and a read gives back the same

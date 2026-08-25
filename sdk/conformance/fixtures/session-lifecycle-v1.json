@@ -60,10 +60,8 @@
         "board": "brand-2026",
         "surface": "web"
       },
-      "session_options": {
-        "retention": {
-          "ttl_seconds": 86400
-        }
+      "retention": {
+        "ttl_seconds": 86400
       }
     }
   },

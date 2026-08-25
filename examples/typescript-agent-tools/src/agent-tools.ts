@@ -57,7 +57,7 @@ try {
     definitionKey: agentKey,
     tools: [lookupOrder],
   });
-  const chat = support.session({
+  const chat = support.bindSession({
     sessionKey: `order-chat-${runId}`,
   });
 

@@ -83,9 +83,15 @@ agent = client.agent(AgentOptions(
 ))
 
 print(await agent.text("Why was I charged twice?"))
-continued = agent.session(session_key="customer-123")
+continued = agent.bind_session(session_key="customer-123")
 print(await continued.text("What should I do next?"))
 ```
+
+The first call is standalone: it creates no reusable conversation and its
+handle has `session_id=None`. Standalone private content is retained for at
+least an hour after settlement; read `content_expires_at` for the scheduled
+boundary. Bind a Session only when later turns should reuse conversation
+history.
 
 A bound Session serializes admission only within that local binding. The
 Runtime remains authoritative across processes and rejects a second
@@ -100,18 +106,17 @@ For an intentional replace/regenerate action, use a new idempotency key and
 the typed option:
 
 ```python
-handle = await agent.invoke(
+handle = await continued.start(
     "Try that answer again.",
     options=InvocationOptions(
         idempotency_key="customer-123:regenerate-2",
         if_active="supersede",
-        session_key="customer-123",
     ),
 )
 ```
 
 Omission or `"reject"` preserves the default conflict response. Low-level
-callers set the same policy on `InvokeRequest.if_active`.
+callers set the same policy on `InvokeRequest.session.if_active`.
 
 `if_active="interrupt"` is the keep-the-work variant: the active Invocation
 stops at its next execution seam and settles `completed` with `stop_reason`
@@ -147,11 +152,11 @@ Invocation usage as a convenience estimate rather than a billing ledger.
 
 ### Child Invocations
 
-Record the exact ToolCall that caused another turn, and use normal Session
-retention when the child's transcript is temporary:
+Record the exact ToolCall that caused another turn. A one-off child can stay
+standalone and expire automatically:
 
 ```python
-from nvoken import InvocationTrigger, InvokeRequest, SessionOptions, SessionRetention
+from nvoken import InvocationTrigger, InvokeRequest, SessionRetention
 
 request = InvokeRequest(
     agent_key="researcher",
@@ -161,9 +166,7 @@ request = InvokeRequest(
         parent_invocation_id=parent.id,
         tool_call_id=call.id,
     ),
-    session_options=SessionOptions(
-        retention=SessionRetention(ttl_seconds=3600),
-    ),
+    retention=SessionRetention(ttl_seconds=3600),
 )
 ```
 
@@ -175,14 +178,12 @@ cancellation, budgets, results, or lifecycle state.
 Install restart-stable compaction on a new or existing Session:
 
 ```python
-from nvoken import ContextCompaction, SessionOptions
+from nvoken import ContextCompaction, InvocationSession
 
 request = InvokeRequest(
     agent_key="support",
-    session_key="support:123",
-    session_options=SessionOptions(
-        compaction=ContextCompaction(trigger_tokens="auto"),
-    ),
+    session=InvocationSession(mode="continue_or_create", key="support:123"),
+    compaction=ContextCompaction(trigger_tokens="auto"),
     input="hello",
 )
 ```
@@ -307,7 +308,7 @@ agent = client.agent(AgentOptions(
     definition_key=resource.definition_key,
 ))
 
-handle = await agent.invoke("Why was I charged twice?")
+handle = await agent.start("Why was I charged twice?")
 ```
 
 `AgentDefinition` is flat and matches the wire, and a read gives back the same
@@ -362,10 +363,10 @@ Keep `instructions` static. Product state that changes between turns — a board
 snapshot, customer facts, the current policy — belongs in `context`:
 
 ```python
-answer = await agent.text(
+conversation = agent.bind_session(session_key="ticket-483")
+answer = await conversation.text(
     "Can I refund the duplicate charge?",
     InvocationOptions(
-        session_key="ticket-483",
         context=(
             ContextItem(name="customer", tier="contextual", content="plan: pro"),
             ContextItem(

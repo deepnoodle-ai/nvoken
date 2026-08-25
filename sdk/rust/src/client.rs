@@ -33,7 +33,7 @@ pub enum ErrorCategory {
     UnexpectedResponse,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 #[error("{message}")]
 pub struct NvokenError {
     pub category: ErrorCategory,
@@ -43,6 +43,45 @@ pub struct NvokenError {
     pub request_id: Option<String>,
     pub retry_after: Option<Duration>,
     pub details: Option<Value>,
+}
+
+/// A retained Invocation identity whose private content has expired or been
+/// erased. Convert an [`NvokenError`] with [`TryFrom`] when callers need the
+/// typed lineage fields carried by `410 invocation_erased`.
+#[derive(Debug, thiserror::Error)]
+#[error("{source}")]
+pub struct InvocationErasedError {
+    pub invocation_id: Option<String>,
+    pub erased_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    #[source]
+    pub source: NvokenError,
+}
+
+impl TryFrom<NvokenError> for InvocationErasedError {
+    type Error = NvokenError;
+
+    fn try_from(error: NvokenError) -> Result<Self, Self::Error> {
+        if error.status != Some(410) || error.code.as_deref() != Some("invocation_erased") {
+            return Err(error);
+        }
+        let invocation_id = error
+            .details
+            .as_ref()
+            .and_then(|details| details.get("invocation_id"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let erased_at = error
+            .details
+            .as_ref()
+            .and_then(|details| details.get("erased_at"))
+            .and_then(Value::as_str)
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok());
+        Ok(Self {
+            invocation_id,
+            erased_at,
+            source: error,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -514,6 +553,65 @@ pub enum SessionOptionsConflict {
     /// way to express intent.
     #[serde(rename = "join")]
     Join,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InvocationSessionOptions {
+    pub pinned_revision: Option<u32>,
+    pub on_conflict: Option<SessionOptionsConflict>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvocationSessionMode {
+    New,
+    Continue,
+    ContinueOrCreate,
+}
+
+#[derive(Debug, Clone)]
+pub struct InvocationSession {
+    pub mode: InvocationSessionMode,
+    pub id: Option<String>,
+    pub key: Option<String>,
+    pub if_active: Option<IfActivePolicy>,
+    pub options: Option<InvocationSessionOptions>,
+}
+
+impl InvocationSession {
+    pub fn new() -> Self {
+        Self {
+            mode: InvocationSessionMode::New,
+            id: None,
+            key: None,
+            if_active: None,
+            options: None,
+        }
+    }
+
+    pub fn continue_by_id(id: impl Into<String>) -> Self {
+        Self {
+            mode: InvocationSessionMode::Continue,
+            id: Some(id.into()),
+            key: None,
+            if_active: None,
+            options: None,
+        }
+    }
+
+    pub fn continue_or_create(key: impl Into<String>) -> Self {
+        Self {
+            mode: InvocationSessionMode::ContinueOrCreate,
+            id: None,
+            key: Some(key.into()),
+            if_active: None,
+            options: None,
+        }
+    }
+
+    pub fn if_active(mut self, policy: IfActivePolicy) -> Self {
+        self.if_active = Some(policy);
+        self
+    }
 }
 
 impl SessionOptions {
@@ -1078,13 +1176,13 @@ pub struct InvokeRequest {
     /// durable memories the model can recall — so it is required on the turn
     /// that opens a Session for such an Agent.
     pub user_key: Option<String>,
-    pub session_id: Option<String>,
-    pub session_key: Option<String>,
-    pub session_options: Option<SessionOptions>,
+    pub session: Option<InvocationSession>,
+    pub retention: Option<SessionRetention>,
+    pub compaction: Option<ContextCompaction>,
+    pub authorization_context: Option<HashMap<String, String>>,
     /// Verified parent Invocation and ToolCall that caused this turn.
     pub triggered_by: Option<models::InvocationTrigger>,
     pub idempotency_key: Option<String>,
-    pub if_active: Option<IfActivePolicy>,
     pub on_budget_exhausted: Option<BudgetExhaustionBehavior>,
     pub input: String,
     /// Ordered blocks mixing text, images, and documents. Supply exactly one of
@@ -1120,12 +1218,12 @@ impl InvokeRequest {
             agent_key: Some(agent_key.into()),
             tenant_key: None,
             user_key: None,
-            session_id: None,
-            session_key: None,
-            session_options: None,
+            session: None,
+            retention: None,
+            compaction: None,
+            authorization_context: None,
             triggered_by: None,
             idempotency_key: None,
-            if_active: None,
             on_budget_exhausted: None,
             input: input.into(),
             input_blocks: Vec::new(),
@@ -1168,20 +1266,18 @@ impl InvokeRequest {
         self
     }
 
-    pub fn session_id(mut self, session_id: impl Into<String>) -> Self {
-        self.session_id = Some(session_id.into());
-        self.session_key = None;
+    pub fn session(mut self, session: InvocationSession) -> Self {
+        self.session = Some(session);
         self
     }
 
-    pub fn session_key(mut self, session_key: impl Into<String>) -> Self {
-        self.session_key = Some(session_key.into());
-        self.session_id = None;
+    pub fn retention(mut self, ttl_seconds: u32) -> Self {
+        self.retention = Some(SessionRetention { ttl_seconds });
         self
     }
 
-    pub fn session_options(mut self, options: SessionOptions) -> Self {
-        self.session_options = Some(options);
+    pub fn compaction(mut self, compaction: ContextCompaction) -> Self {
+        self.compaction = Some(compaction);
         self
     }
 
@@ -1196,7 +1292,9 @@ impl InvokeRequest {
     }
 
     pub fn if_active(mut self, policy: IfActivePolicy) -> Self {
-        self.if_active = Some(policy);
+        if let Some(session) = &mut self.session {
+            session.if_active = Some(policy);
+        }
         self
     }
 
@@ -2016,11 +2114,12 @@ impl Client {
             client: self.clone(),
             invocation_id: invocation.id,
             idempotency_key: Some(idempotency_key),
-            session_id: Some(invocation.session_id),
+            session_id: invocation.session_id,
             agent_id: Some(invocation.agent_id),
             status: Some(invocation.status),
             deduplicated: Some(invocation.deduplicated.unwrap_or(false)),
             deadline_at: invocation.deadline_at,
+            content_expires_at: invocation.content_expires_at,
         })
     }
 
@@ -2373,67 +2472,22 @@ impl Client {
         body.context = context;
         body.tenant_key = request.tenant_key;
         body.user_key = request.user_key;
-        body.session_id = request.session_id;
-        body.session_key = request.session_key;
-        body.session_options = request
-            .session_options
-            .map(|value| {
-                if value.compaction.is_none()
-                    && value.retention.is_none()
-                    && value.pinned_revision.is_none()
-                    && value.authorization_context.is_none()
-                    && value.on_conflict.is_none()
-                {
-                    return Err(NvokenError::validation(
-                        "session_options requires at least one member",
-                    ));
-                }
-                // Every session option is independently optional, so the
-                // generated constructor takes none of them.
-                let mut options = models::SessionOptions::new();
-                options.compaction = value
-                    .compaction
-                    .map(|value| {
-                        let trigger_tokens = match value.trigger_tokens {
-                            ContextCompactionTrigger::Auto => {
-                                models::CompactionPolicyTriggerTokens::String("auto".to_string())
-                            }
-                            ContextCompactionTrigger::Tokens(tokens) => {
-                                models::CompactionPolicyTriggerTokens::Integer(tokens)
-                            }
-                        };
-                        let mut compaction = models::CompactionPolicy::new(trigger_tokens);
-                        compaction.model = value
-                            .model
-                            .map(|model| {
-                                let provider = model_provider(&model.provider)?;
-                                Ok::<_, NvokenError>(Box::new(models::Model::new(
-                                    provider, model.id,
-                                )))
-                            })
-                            .transpose()?;
-                        Ok::<_, NvokenError>(Box::new(compaction))
-                    })
-                    .transpose()?;
-                options.retention = value
-                    .retention
-                    .map(|retention| Box::new(models::RetentionPolicy::new(retention.ttl_seconds)));
-                options.pinned_revision = value.pinned_revision.map(u64::from);
-                options.authorization_context = value.authorization_context;
-                options.on_conflict = value.on_conflict.map(|policy| match policy {
-                    SessionOptionsConflict::Refuse => models::session_options::OnConflict::Refuse,
-                    SessionOptionsConflict::Join => models::session_options::OnConflict::Join,
-                });
-                Ok::<_, NvokenError>(Box::new(options))
-            })
-            .transpose()?;
+        body.session = request
+            .session
+            .map(generated_invocation_session)
+            .transpose()?
+            .map(Box::new);
+        body.retention = request
+            .retention
+            .map(|value| Box::new(models::RetentionPolicy::new(value.ttl_seconds)));
+        body.compaction = request
+            .compaction
+            .map(generated_compaction)
+            .transpose()?
+            .map(Box::new);
+        body.authorization_context = request.authorization_context;
         body.triggered_by = request.triggered_by.map(Box::new);
         body.metadata = request.metadata;
-        body.if_active = request.if_active.map(|policy| match policy {
-            IfActivePolicy::Reject => models::create_invocation_request::IfActive::Reject,
-            IfActivePolicy::Supersede => models::create_invocation_request::IfActive::Supersede,
-            IfActivePolicy::Interrupt => models::create_invocation_request::IfActive::Interrupt,
-        });
         body.on_budget_exhausted = request.on_budget_exhausted.map(|behavior| match behavior {
             BudgetExhaustionBehavior::Stop => {
                 models::create_invocation_request::OnBudgetExhausted::Stop
@@ -2502,6 +2556,7 @@ impl Client {
             status: None,
             deduplicated: None,
             deadline_at: None,
+            content_expires_at: None,
         }
     }
 
@@ -2861,6 +2916,13 @@ impl Client {
         invocation_id: &str,
     ) -> Result<models::Invocation, NvokenError> {
         apis::invocations_api::get_invocation(&self.configuration, invocation_id)
+            .await
+            .map_err(|error| self.normalize_generated_error(error))
+    }
+
+    /// Erases the private content of a terminal standalone Invocation.
+    pub async fn delete_invocation(&self, invocation_id: &str) -> Result<(), NvokenError> {
+        apis::invocations_api::delete_invocation(&self.configuration, invocation_id)
             .await
             .map_err(|error| self.normalize_generated_error(error))
     }
@@ -3469,6 +3531,82 @@ fn provider_key_selection(
     }
 }
 
+fn generated_compaction(value: ContextCompaction) -> Result<models::CompactionPolicy, NvokenError> {
+    let trigger_tokens = match value.trigger_tokens {
+        ContextCompactionTrigger::Auto => {
+            models::CompactionPolicyTriggerTokens::String("auto".to_string())
+        }
+        ContextCompactionTrigger::Tokens(tokens) => {
+            models::CompactionPolicyTriggerTokens::Integer(tokens)
+        }
+    };
+    let mut compaction = models::CompactionPolicy::new(trigger_tokens);
+    compaction.model = value
+        .model
+        .map(|model| {
+            let provider = model_provider(&model.provider)?;
+            Ok::<_, NvokenError>(Box::new(models::Model::new(provider, model.id)))
+        })
+        .transpose()?;
+    Ok(compaction)
+}
+
+fn generated_invocation_session(
+    value: InvocationSession,
+) -> Result<models::InvocationSession, NvokenError> {
+    match value.mode {
+        InvocationSessionMode::New
+            if value.id.is_some() || value.key.is_some() || value.if_active.is_some() =>
+        {
+            return Err(NvokenError::validation(
+                "session mode new accepts neither id, key, nor if_active",
+            ));
+        }
+        InvocationSessionMode::Continue
+            if value.id.as_deref().unwrap_or_default().is_empty() || value.key.is_some() =>
+        {
+            return Err(NvokenError::validation(
+                "session mode continue requires only id",
+            ));
+        }
+        InvocationSessionMode::ContinueOrCreate
+            if value.key.as_deref().unwrap_or_default().is_empty() || value.id.is_some() =>
+        {
+            return Err(NvokenError::validation(
+                "session mode continue_or_create requires only key",
+            ));
+        }
+        _ => {}
+    }
+    let mode = match value.mode {
+        InvocationSessionMode::New => models::invocation_session::Mode::New,
+        InvocationSessionMode::Continue => models::invocation_session::Mode::Continue,
+        InvocationSessionMode::ContinueOrCreate => {
+            models::invocation_session::Mode::ContinueOrCreate
+        }
+    };
+    let mut session = models::InvocationSession::new(mode);
+    session.id = value.id;
+    session.key = value.key;
+    session.if_active = value.if_active.map(|policy| match policy {
+        IfActivePolicy::Reject => models::invocation_session::IfActive::Reject,
+        IfActivePolicy::Supersede => models::invocation_session::IfActive::Supersede,
+        IfActivePolicy::Interrupt => models::invocation_session::IfActive::Interrupt,
+    });
+    session.options = value.options.map(|options| {
+        let mut generated = models::InvocationSessionOptions::new();
+        generated.pinned_revision = options.pinned_revision.map(u64::from);
+        generated.on_conflict = options.on_conflict.map(|policy| match policy {
+            SessionOptionsConflict::Refuse => {
+                models::invocation_session_options::OnConflict::Refuse
+            }
+            SessionOptionsConflict::Join => models::invocation_session_options::OnConflict::Join,
+        });
+        Box::new(generated)
+    });
+    Ok(session)
+}
+
 fn model_provider(provider: &str) -> Result<String, NvokenError> {
     let mut characters = provider.chars();
     if !matches!(characters.next(), Some('a'..='z'))
@@ -3493,6 +3631,7 @@ pub struct InvocationHandle {
     pub status: Option<models::InvocationStatus>,
     pub deduplicated: Option<bool>,
     pub deadline_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 impl InvocationHandle {
@@ -3503,10 +3642,11 @@ impl InvocationHandle {
     }
 
     fn apply(&mut self, invocation: &models::Invocation) {
-        self.session_id = Some(invocation.session_id.clone());
+        self.session_id = invocation.session_id.clone();
         self.agent_id = Some(invocation.agent_id.clone());
         self.status = Some(invocation.status);
         self.deadline_at = invocation.deadline_at;
+        self.content_expires_at = invocation.content_expires_at;
     }
 
     /// The Session this turn belongs to, resolving it if the handle lacks it.
@@ -3516,11 +3656,11 @@ impl InvocationHandle {
         if let Some(session_id) = &self.session_id {
             return Ok(session_id.clone());
         }
-        Ok(self
-            .client
+        self.client
             .get_invocation(&self.invocation_id)
             .await?
-            .session_id)
+            .session_id
+            .ok_or_else(|| NvokenError::unexpected("the Invocation carried no Session"))
     }
 
     pub async fn wait(
@@ -3801,7 +3941,7 @@ impl NvokenError {
             401 => ErrorCategory::Authentication,
             403 => ErrorCategory::Permission,
             400 | 422 => ErrorCategory::Validation,
-            404 => ErrorCategory::NotFound,
+            404 | 410 => ErrorCategory::NotFound,
             409 => ErrorCategory::Conflict,
             429 => ErrorCategory::RateLimit,
             value if value >= 500 => ErrorCategory::Server,
@@ -3861,6 +4001,29 @@ impl NvokenError {
 mod tests {
     use super::*;
     use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+
+    #[test]
+    fn invocation_erased_errors_expose_retained_lineage() {
+        let error = NvokenError::response(
+            StatusCode::GONE,
+            json!({
+                "code": "invocation_erased",
+                "message": "Invocation content was erased",
+                "details": {
+                    "invocation_id": "inv_123",
+                    "erased_at": "2026-08-25T12:34:56Z"
+                }
+            }),
+        );
+        assert_eq!(error.category, ErrorCategory::NotFound);
+
+        let erased = InvocationErasedError::try_from(error).unwrap();
+        assert_eq!(erased.invocation_id.as_deref(), Some("inv_123"));
+        assert_eq!(
+            erased.erased_at.unwrap().to_rfc3339(),
+            "2026-08-25T12:34:56+00:00"
+        );
+    }
 
     #[test]
     fn response_metadata_is_bounded_after_success_and_error_handling() {

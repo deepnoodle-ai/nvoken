@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use nvoken::{
-    AgentInvocationOptions, AgentOptions, Client, ErrorCategory, IfActivePolicy, NvokenError,
-    SessionBinding, Tool, ToolHandlerError,
+    AgentInvocationOptions, AgentOptions, Client, ErrorCategory, IfActivePolicy, InvocationSession,
+    NvokenError, SessionBinding, SessionOptions, Tool, ToolHandlerError,
 };
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -150,6 +150,7 @@ fn invocation_payload(id: &str, status: &str) -> Value {
         "agent_id": AGENT_ID,
         "agent_key": "support",
         "session_id": SESSION_ID,
+        "content_expires_at": null,
         "user_key": null,
         "definition_id": DEFINITION_ID,
         "definition_revision": 1,
@@ -296,8 +297,14 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
             body["agent_key"].as_str().map(str::to_owned),
         ));
         let input = body["input"].as_str().unwrap_or_default().to_owned();
-        let session_key = body["session_key"].as_str().unwrap_or_default().to_owned();
-        let if_active = body["if_active"].as_str().unwrap_or_default().to_owned();
+        let session_key = body["session"]["key"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let if_active = body["session"]["if_active"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
         let id = {
             let mut state = runtime.state.lock().unwrap();
             state.next_id += 1;
@@ -320,12 +327,16 @@ async fn handle_connection(mut stream: TcpStream, runtime: Arc<TestRuntime>) {
         return;
     }
 
-    // One stream, filtered to one turn by query parameter.
-    if request.method == "GET" && request.path.starts_with("/v1/sessions/") {
+    // One stream, addressed directly by the Invocation it follows.
+    if request.method == "GET"
+        && request.path.starts_with("/v1/invocations/")
+        && request.path.contains("/stream")
+    {
         let id = request
             .path
-            .split_once("invocation_id=")
-            .map(|(_, value)| value.split('&').next().unwrap_or("").to_owned())
+            .strip_prefix("/v1/invocations/")
+            .and_then(|value| value.split_once("/stream"))
+            .map(|(id, _)| id.to_owned())
             .unwrap_or_default();
         stream_turn(&mut stream, &runtime, &id).await;
         return;
@@ -420,9 +431,12 @@ fn change_frame(invocation_id: &str, status: &str, cursor: &str) -> String {
     let data = json!({
         "type": "transcript.update",
         "session_id": SESSION_ID,
+        "content_expires_at": null,
         "messages": [],
         "invocation_changes": [{
             "invocation_id": invocation_id,
+            "session_id": SESSION_ID,
+            "content_expires_at": null,
             "revision": 1,
             "status": status,
             "terminal": TERMINAL_STATUS_NAMES.contains(&status),
@@ -450,6 +464,7 @@ async fn submit_tool_results(stream: &mut TcpStream, runtime: &TestRuntime, id: 
         &json!({
             "invocation_id": id,
             "session_id": SESSION_ID,
+            "content_expires_at": null,
             "status": "queued",
             "results": [{
                 "tool_call_id": TOOL_CALL_ID,
@@ -555,9 +570,10 @@ async fn agent_five_verbs_dispatch_and_structured_output() {
     let agent = client.agent(options).expect("agent");
 
     let handle = agent
-        .invoke(
+        .start(
             "invoke",
             AgentInvocationOptions {
+                session: Some(InvocationSession::continue_by_id(SESSION_ID)),
                 if_active: Some(IfActivePolicy::Supersede),
                 ..Default::default()
             },
@@ -598,7 +614,10 @@ async fn agent_five_verbs_dispatch_and_structured_output() {
     assert_eq!(text, "hello");
 
     let bound = agent
-        .session(SessionBinding::by_key("customer-123"))
+        .bind_session(
+            SessionBinding::by_key("customer-123"),
+            SessionOptions::default(),
+        )
         .expect("session");
     let bound_text = bound
         .text("bound", AgentInvocationOptions::default())
@@ -690,7 +709,7 @@ async fn bound_session_serializes_admission() {
     let client = Client::new(&base_url, "test-key").unwrap();
     let agent = client.agent(base_options()).expect("agent");
     let bound = agent
-        .session(SessionBinding::by_id(SESSION_ID))
+        .bind_session(SessionBinding::by_id(SESSION_ID), SessionOptions::default())
         .expect("session");
 
     let first_bound = bound.clone();
@@ -793,7 +812,7 @@ async fn declared_agent_creates_its_record_on_first_use() {
 
     for input in ["first", "second"] {
         agent
-            .invoke(input, AgentInvocationOptions::default())
+            .start(input, AgentInvocationOptions::default())
             .await
             .unwrap();
     }

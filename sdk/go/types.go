@@ -457,6 +457,34 @@ const (
 	SessionOptionsJoin SessionOptionsConflict = "join"
 )
 
+// InvocationSessionMode declares whether one turn is standalone or belongs to
+// a reusable conversation. Omit InvokeRequest.Session for standalone work.
+type InvocationSessionMode string
+
+const (
+	InvocationSessionNew              InvocationSessionMode = "new"
+	InvocationSessionContinue         InvocationSessionMode = "continue"
+	InvocationSessionContinueOrCreate InvocationSessionMode = "continue_or_create"
+)
+
+// InvocationSessionOptions are conversation assertions nested under the
+// session selector. Retention, compaction, and authorization context are
+// top-level turn policies because they also apply when creating a conversation.
+type InvocationSessionOptions struct {
+	PinnedRevision *int64                 `json:"pinned_revision,omitempty"`
+	OnConflict     SessionOptionsConflict `json:"on_conflict,omitempty"`
+}
+
+// InvocationSession selects or creates a reusable conversation. Omit it to
+// admit a standalone Invocation.
+type InvocationSession struct {
+	Mode     InvocationSessionMode     `json:"mode"`
+	ID       *string                   `json:"id,omitempty"`
+	Key      *string                   `json:"key,omitempty"`
+	IfActive IfActivePolicy            `json:"if_active,omitempty"`
+	Options  *InvocationSessionOptions `json:"options,omitempty"`
+}
+
 func (o *SessionOptions) empty() bool {
 	return o.Retention == nil && len(o.AuthorizationContext) == 0 && o.PinnedRevision == nil
 }
@@ -839,10 +867,11 @@ type InvokeRequest struct {
 	// it is also the memory partition — it decides whose durable memories the
 	// model can recall — so it is required on the turn that opens a Session for
 	// such an Agent.
-	UserKey        *string
-	SessionID      *string
-	SessionKey     *string
-	SessionOptions *SessionOptions
+	UserKey              *string
+	Session              *InvocationSession
+	Retention            *SessionRetention
+	Compaction           *ContextCompaction
+	AuthorizationContext map[string]string
 	// TriggeredBy records that this Invocation was admitted because one
 	// durable ToolCall on another Invocation requested it. The parent and
 	// ToolCall pair is verified by nvoken; it does not couple their lifecycles.
@@ -850,7 +879,6 @@ type InvokeRequest struct {
 	IdempotencyKey     string
 	DefinitionRevision *int64
 	Overrides          *AgentDefinitionOverrides
-	IfActive           IfActivePolicy
 	OnBudgetExhausted  BudgetExhaustionBehavior
 	Input              string
 	// InputBlocks carries ordered multi-block input mixing text, images, and
@@ -1492,10 +1520,6 @@ type StreamOptions struct {
 	// Cursor starts the first connection after a durable stream cursor. Once a
 	// newer durable event arrives, reconnects resume from that newer cursor.
 	Cursor *string
-	// InvocationID narrows a Session subscription to one Invocation. An
-	// InvocationHandle already supplies its own ID, so this field is for
-	// Client.StreamSessionWithOptions.
-	InvocationID *string
 }
 
 type WaitOptions struct {
@@ -1818,34 +1842,36 @@ func (r InvokeRequest) encoded() ([]byte, error) {
 	if r.UserKey != nil {
 		wire["user_key"] = *r.UserKey
 	}
-	if r.SessionID != nil {
-		wire["session_id"] = *r.SessionID
-	}
-	if r.SessionKey != nil {
-		wire["session_key"] = *r.SessionKey
-	}
-	if r.SessionOptions != nil {
-		if r.SessionOptions.Compaction == nil && r.SessionOptions.empty() &&
-			r.SessionOptions.OnConflict == "" {
-			return nil, fmt.Errorf("session options require at least one member")
+	if r.Session != nil {
+		if r.Session.Mode == "" {
+			return nil, fmt.Errorf("session mode is required")
 		}
-		if _, err := r.SessionOptions.conflictPolicy(); err != nil {
-			return nil, err
+		if r.Session.Options != nil {
+			if r.Session.Options.PinnedRevision == nil && r.Session.Options.OnConflict == "" {
+				return nil, fmt.Errorf("session options require at least one member")
+			}
+			if r.Session.Options.OnConflict != "" &&
+				r.Session.Options.OnConflict != SessionOptionsRefuse &&
+				r.Session.Options.OnConflict != SessionOptionsJoin {
+				return nil, fmt.Errorf("unsupported session conflict policy %q", r.Session.Options.OnConflict)
+			}
 		}
-		wire["session_options"] = r.SessionOptions
+		wire["session"] = r.Session
+	}
+	if r.Retention != nil {
+		wire["retention"] = r.Retention
+	}
+	if r.Compaction != nil {
+		wire["compaction"] = r.Compaction
+	}
+	if len(r.AuthorizationContext) > 0 {
+		wire["authorization_context"] = r.AuthorizationContext
 	}
 	if r.TriggeredBy != nil {
 		wire["triggered_by"] = r.TriggeredBy
 	}
 	if len(r.Metadata) > 0 {
 		wire["metadata"] = r.Metadata
-	}
-	switch r.IfActive {
-	case "":
-	case IfActiveReject, IfActiveSupersede, IfActiveInterrupt:
-		wire["if_active"] = r.IfActive
-	default:
-		return nil, fmt.Errorf("if active must be reject, supersede, or interrupt")
 	}
 	switch r.OnBudgetExhausted {
 	case "":

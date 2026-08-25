@@ -45,13 +45,14 @@ type AgentOptions struct {
 }
 
 type AgentInvocationOptions struct {
-	IdempotencyKey     string
-	DefinitionRevision *int64
-	Overrides          *AgentDefinitionOverrides
-	SessionID          *string
-	SessionKey         *string
-	SessionOptions     *SessionOptions
-	TriggeredBy        *InvocationTrigger
+	IdempotencyKey       string
+	DefinitionRevision   *int64
+	Overrides            *AgentDefinitionOverrides
+	Session              *InvocationSession
+	Retention            *SessionRetention
+	Compaction           *ContextCompaction
+	AuthorizationContext map[string]string
+	TriggeredBy          *InvocationTrigger
 	// UserKey says who this turn is for. Per-call rather than per-Agent,
 	// because one Agent serves many end users; the first turn on a Session
 	// fixes it and later turns inherit it.
@@ -327,7 +328,7 @@ func (a *Agent) ready(ctx context.Context) error {
 	return err
 }
 
-func (a *Agent) Invoke(
+func (a *Agent) Start(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
@@ -353,22 +354,22 @@ func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequ
 		agentID, agentKey = record.ID, ""
 	}
 	request := InvokeRequest{
-		AgentID:            agentID,
-		AgentKey:           agentKey,
-		TenantKey:          a.options.TenantKey,
-		SessionID:          options.SessionID,
-		SessionKey:         options.SessionKey,
-		UserKey:            options.UserKey,
-		SessionOptions:     options.SessionOptions,
-		TriggeredBy:        options.TriggeredBy,
-		IdempotencyKey:     options.IdempotencyKey,
-		DefinitionRevision: options.DefinitionRevision,
-		Overrides:          options.Overrides,
-		IfActive:           options.IfActive,
-		OnBudgetExhausted:  onBudgetExhausted,
-		Input:              input,
-		MCPServerHeaders:   a.options.MCPServerHeaders,
-		ProviderKeys:       a.options.ProviderKeys,
+		AgentID:              agentID,
+		AgentKey:             agentKey,
+		TenantKey:            a.options.TenantKey,
+		Session:              options.Session,
+		Retention:            options.Retention,
+		Compaction:           options.Compaction,
+		AuthorizationContext: options.AuthorizationContext,
+		UserKey:              options.UserKey,
+		TriggeredBy:          options.TriggeredBy,
+		IdempotencyKey:       options.IdempotencyKey,
+		DefinitionRevision:   options.DefinitionRevision,
+		Overrides:            options.Overrides,
+		OnBudgetExhausted:    onBudgetExhausted,
+		Input:                input,
+		MCPServerHeaders:     a.options.MCPServerHeaders,
+		ProviderKeys:         a.options.ProviderKeys,
 		// A per-call target overrides the agent default so one Agent can
 		// webhook different endpoints without a second Agent.
 		Webhook:  webhookTarget(options.Webhook, a.options.Webhook),
@@ -384,7 +385,7 @@ func (a *Agent) Stream(
 	options AgentInvocationOptions,
 	consume func(AgentStreamEvent) error,
 ) (*InvocationHandle, error) {
-	handle, err := a.Invoke(ctx, input, options)
+	handle, err := a.Start(ctx, input, options)
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +483,7 @@ func (a *Agent) textFromResult(result *AgentResult) (string, error) {
 	}
 }
 
-func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
+func (a *Agent) BindSession(binding SessionBinding, options SessionOptions) (*BoundSession, error) {
 	if (binding.SessionID == "") == (binding.SessionKey == "") {
 		return nil, &Error{
 			Category: ErrorValidation,
@@ -507,11 +508,12 @@ func (a *Agent) Session(binding SessionBinding) (*AgentSession, error) {
 		a.client.locks.locks[key] = lock
 	}
 	a.client.locks.mu.Unlock()
-	return &AgentSession{
+	return &BoundSession{
 		agent:      a,
 		lock:       lock,
 		sessionID:  binding.SessionID,
 		sessionKey: binding.SessionKey,
+		options:    options,
 	}, nil
 }
 
@@ -621,14 +623,15 @@ type SessionBinding struct {
 	SessionKey string
 }
 
-type AgentSession struct {
+type BoundSession struct {
 	agent      *Agent
 	lock       *sync.Mutex
 	sessionID  string
 	sessionKey string
+	options    SessionOptions
 }
 
-func (s *AgentSession) Invoke(
+func (s *BoundSession) Start(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
@@ -637,7 +640,7 @@ func (s *AgentSession) Invoke(
 		return nil, err
 	}
 	s.lock.Lock()
-	handle, err := s.agent.Invoke(ctx, input, options)
+	handle, err := s.agent.Start(ctx, input, options)
 	if err != nil {
 		s.lock.Unlock()
 		return nil, err
@@ -646,7 +649,7 @@ func (s *AgentSession) Invoke(
 	return handle, nil
 }
 
-func (s *AgentSession) Run(
+func (s *BoundSession) Run(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
@@ -664,7 +667,7 @@ func (s *AgentSession) Run(
 	return result, err
 }
 
-func (s *AgentSession) Text(
+func (s *BoundSession) Text(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
@@ -676,7 +679,7 @@ func (s *AgentSession) Text(
 	return s.agent.textFromResult(result)
 }
 
-func (s *AgentSession) Stream(
+func (s *BoundSession) Stream(
 	ctx context.Context,
 	input string,
 	options AgentInvocationOptions,
@@ -695,22 +698,42 @@ func (s *AgentSession) Stream(
 	return handle, err
 }
 
-func (s *AgentSession) bind(options *AgentInvocationOptions) error {
-	if options.SessionID != nil || options.SessionKey != nil {
+func (s *BoundSession) bind(options *AgentInvocationOptions) error {
+	if options.Session != nil {
 		return &Error{
 			Category: ErrorValidation,
 			Message:  "bound Session calls cannot override their Session",
 		}
 	}
-	if s.sessionID != "" {
-		options.SessionID = &s.sessionID
-	} else {
-		options.SessionKey = &s.sessionKey
+	sessionOptions := &InvocationSessionOptions{
+		PinnedRevision: s.options.PinnedRevision,
+		OnConflict:     s.options.OnConflict,
 	}
+	if sessionOptions.PinnedRevision == nil && sessionOptions.OnConflict == "" {
+		sessionOptions = nil
+	}
+	if s.sessionID != "" {
+		options.Session = &InvocationSession{
+			Mode:     InvocationSessionContinue,
+			ID:       &s.sessionID,
+			IfActive: options.IfActive,
+			Options:  sessionOptions,
+		}
+	} else {
+		options.Session = &InvocationSession{
+			Mode:     InvocationSessionContinueOrCreate,
+			Key:      &s.sessionKey,
+			IfActive: options.IfActive,
+			Options:  sessionOptions,
+		}
+	}
+	options.Retention = s.options.Retention
+	options.Compaction = s.options.Compaction
+	options.AuthorizationContext = s.options.AuthorizationContext
 	return nil
 }
 
-func (s *AgentSession) releaseWhenTerminal(
+func (s *BoundSession) releaseWhenTerminal(
 	handle *InvocationHandle,
 	options WaitOptions,
 ) {

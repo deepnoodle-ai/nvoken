@@ -39,7 +39,7 @@ class VerifiedWebhook:
     event: str
     sequence: int
     invocation_id: str
-    session_id: str
+    session_id: str | None
     key_id: str
     key_version: int
     timestamp: datetime
@@ -107,7 +107,7 @@ def verify_webhook(
         event=event,
         sequence=sequence,
         invocation_id=context.get("invocation_id", ""),
-        session_id=context.get("session_id", ""),
+        session_id=context.get("session_id"),
         key_id=delivery.key_id,
         key_version=delivery.key_version,
         timestamp=delivery.timestamp,
