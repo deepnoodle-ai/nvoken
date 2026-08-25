@@ -18,6 +18,23 @@ Every change from here is measured against it.
 The test any proposal has to pass: if we were starting now, with nothing to
 stay compatible with, would we write it this way?
 
+## Accepted public terminology
+
+[Design 008](008-typescript-sdk-ergonomics.md) records the accepted next
+contract vocabulary: the public Session resource becomes Conversation and the
+public Invocation resource becomes Turn. The rename is coordinated across
+HTTP, OpenAPI, generated and handwritten SDKs, callbacks, events, errors,
+telemetry, CLI, console, and documentation. It adds no compatibility aliases.
+
+The same target names stored, reusable behavior `Agent`, immutable snapshots
+`AgentRevision`, and durable memory partitions `MemorySpace`. Behavior source,
+memory, and optional Conversation continuity meet at Turn admission; there is
+no public Agent Definition or AgentInstance resource in the target contract.
+
+The old nouns below describe the contract implemented when this direction was
+written. They are evidence about current pollution, not a requirement to
+preserve Session or Invocation in the target language system.
+
 ## What this changes about how we work
 
 A change that adds a way to do something without retiring a way needs a reason
@@ -67,6 +84,11 @@ end-state design, not the design itself.
    the other, so the Invocation stream is a filtered view of the Session
    stream that we ship as a separate endpoint. The inline `POST` form is a
    third, and our own deployment target buffers it until the turn settles.
+   Design 004 originally collapsed these to one route. Standalone Turns later
+   justified two resource scopes: a per-Turn stream and a Conversation
+   subscription, with no Turn filter on the latter. The remaining pollution is
+   the inline `POST` form and any duplicated frame vocabulary, not the two
+   independently scoped reads.
 
 3. **Two frame vocabularies for the same facts.** `invocation.accepted`,
    `invocation.update`, and `invocation.result` on one route;
