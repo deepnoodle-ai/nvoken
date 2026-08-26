@@ -110,11 +110,13 @@ Admission resolves the requested current revision and records its exact ID
 before queuing work.
 
 `client.agent(key, options?)` always treats the string as a caller-owned key and
-performs one remote lookup. `client.agents.getById(id, options?)` is the explicit
-opaque-ID lookup and uses the same owner namespace. The collection groups
-creation, ID lookup, and listing; the returned Agent exposes publication,
-archive, and restore. A raw cross-resource selector always states either Agent
-ID or an owner-qualified key; `agentKey` is not a relationship field.
+performs one remote lookup. `client.agents.getById(id)` is the explicit opaque-ID
+lookup. The ID already determines the Agent and its owner, so it takes no
+`ownedBy`; credential scope determines visibility and an invisible Agent is not
+found. The collection groups creation, ID lookup, and listing; the returned
+Agent exposes publication, archive, and restore. A raw cross-resource selector
+always states either Agent ID or an owner-qualified key; `agentKey` is not a
+relationship field.
 `definitionKey` disappears because the target has no separately addressable
 Agent Definition.
 
@@ -135,6 +137,8 @@ type MemorySelection =
 - `tenant` intentionally shares memory across users in the tenant.
 - an explicit tenant namespace such as `leasing-team` lets trusted host code
   select product-specific memory shared by several users or Agents.
+- an explicit user namespace may likewise survive Agent replacement or be
+  shared by several Agents while remaining partitioned by the bound user.
 - `none` disables durable memory and its tools.
 
 Actor identity and memory selection are separate. A Turn attributed to Alice
@@ -211,9 +215,7 @@ lookup keeps an explicit name:
 await client.agent("real-estate-analyst");
 await client.agent("assistant", { ownedBy: { tenant: "acme" } });
 await client.agents.getById(savedAgentId);
-await client.agents.getById(savedPersonalAgentId, {
-  ownedBy: { tenant: "acme", user: "alice" },
-});
+await client.agents.getById(savedPersonalAgentId);
 ```
 
 `await` is important: `client.agent()` performs the lookup now and fails now if
@@ -254,10 +256,9 @@ await analyst.run(input, {
 });
 ```
 
-For an App-owned Agent, `tenant` is required and `user` is optional. A
-tenant-owned Agent already supplies and constrains its tenant. A user-owned
-Agent supplies and constrains both tenant and actor user. Explicit values, when
-accepted for readability, must agree with those ownership constraints. No
+`tenant` is required on every execution and `user` is optional. Tenant- and
+user-owned Agents constrain those explicit values; the server rejects a tenant
+or actor that disagrees with the owner. No
 `forTenant()`, `forUser()`, `scoped()`, or `bindTenant()` facade ships in the
 first target.
 
@@ -274,6 +275,8 @@ const turn = client.turn(savedTurnId, {
 resource. It constructs a recovery handle and delays authorization and
 existence checks until the first remote operation. Agent key lookup cannot do
 that because a key must first resolve inside its owner namespace.
+On a trusted credential, omitting `user` constrains the read only to `tenant`;
+it neither asserts nor infers a Turn actor.
 
 `bindTools()` retains the narrower verb because it genuinely pairs durable
 tool contracts with process-local executable handlers. It returns a new local
@@ -369,7 +372,7 @@ interface Client {
 
   agent<TOutput extends object = JsonObject>(
     key: string,
-    options?: AgentLookupOptions,
+    options?: AgentKeyLookupOptions,
   ): Promise<Agent<TOutput>>;
 
   inline<TOutput extends object = JsonObject>(
@@ -388,7 +391,7 @@ type AgentOwnedBy =
   | { tenant: string; user?: never }
   | { tenant: string; user: string };
 
-interface AgentLookupOptions {
+interface AgentKeyLookupOptions {
   ownedBy?: AgentOwnedBy;
 }
 
@@ -398,10 +401,10 @@ interface TurnAccessContext {
 }
 ```
 
-Omitting `ownedBy` always selects the App-owned key namespace. The singular
-lookup is intentionally redundant with the plural management collection: it is
-the concise hot path, while `agents` groups lifecycle operations. No argument
-shape accepted by `agent()` can create or configure a resource.
+Omitting `ownedBy` always selects the App-owned key namespace. Key lookup lives
+deliberately only on singular `client.agent()`: it is the concise hot path,
+while `client.agents` groups lifecycle operations and opaque-ID lookup. No
+argument shape accepted by `agent()` can create or configure a resource.
 
 ### Agent collections and resources
 
@@ -413,7 +416,6 @@ interface AgentCollection {
 
   getById<TOutput extends object = JsonObject>(
     id: string,
-    options?: AgentLookupOptions,
   ): Promise<Agent<TOutput>>;
 
   list<TOutput extends object = JsonObject>(
@@ -464,11 +466,10 @@ interface Agent<TOutput extends object = JsonObject> {
 }
 ```
 
-The signatures show `options` as required because an App-owned Agent needs a
-tenant. Implementations may use owner-aware overloads so tenant-owned and
-user-owned Agents omit context already fixed by their owner, but every language
-exposes one conceptual `Agent`, not an App/Tenant/User Agent and runner class
-ladder. A user-owned Agent can execute only as its owner user.
+The signatures show `options` as required because every execution explicitly
+states its tenant, even when Agent ownership already constrains it. Every
+language exposes one conceptual `Agent`, not an App/Tenant/User Agent and runner
+class ladder. A user-owned Agent can execute only as its owner user.
 
 Creating an Agent creates its first immutable revision atomically. Publishing
 returns the new revision and advances the Agent's current pointer in one remote
@@ -489,6 +490,17 @@ interface BehaviorInput<TOutput extends object = JsonObject> {
 type InlineBehavior<TOutput extends object = JsonObject> =
   BehaviorInput<TOutput>;
 
+interface TurnLimits {
+  totalTimeoutSeconds?: number;
+  activeTimeoutSeconds?: number;
+  waitingTimeoutSeconds?: number;
+  maxOutputTokens?: number;
+  maxEstimatedCostUsd?: number;
+  maxIterations?: number;
+}
+
+type NarrowedTurnLimits = Readonly<TurnLimits>;
+
 interface AgentRevision<TOutput extends object = JsonObject> {
   readonly id: string;
   readonly agentId: string;
@@ -502,6 +514,12 @@ type DefaultMemoryPolicy =
   | { defaultScope: "tenant"; namespace?: string };
 ```
 
+`NarrowedTurnLimits` deliberately contains only scalar execution ceilings. The
+type prevents a per-Turn object from carrying behavior overrides; admission
+still performs the value-dependent check that every supplied ceiling is
+positive and no greater than the selected revision, credential, or installation
+maximum.
+
 Shared memory is a tenant selection with an explicit namespace because that
 namespace usually comes from host product data. The server-owned behavior
 snapshot remains the authority for tool schemas; local handlers cannot replace
@@ -510,8 +528,15 @@ them.
 ### Execution options and inline runner
 
 ```ts
+interface RunnerTurnOptions {
+  idempotencyKey?: string;
+  metadata?: Metadata;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
 interface AgentTurnOptions extends RunnerTurnOptions {
-  tenant?: string;
+  tenant: string;
   user?: string;
   memory?: MemorySelection;
   conversation?: ConversationSelection;
@@ -555,10 +580,13 @@ interface TurnToolContext {
 }
 ```
 
-`bindTools()` validates handler names against the resolved behavior's durable
-contracts no later than admission and returns a new local wrapper. It makes no
-request merely to bind the handlers. Memory, actor, Conversation, and narrowed
-limits remain per-Turn admitted options rather than a chain of scope wrappers.
+`bindTools()` stores an exact-name handler map on a new local wrapper. It makes
+no request merely to bind the handlers and sends no handler-name field during
+admission. When the exact effective behavior is available, the SDK validates
+the names locally before invoking a handler; they do not enter the idempotency
+fingerprint. Missing handlers follow the durable waiting policy defined by the
+admitted tool contracts. Memory, actor, Conversation, and narrowed limits remain
+admitted Turn facts rather than a chain of scope wrappers.
 
 ### Conversation
 
@@ -580,6 +608,10 @@ interface ConversationContext {
 
 type AgentConversationOptions = ConversationContext & ConversationSelection;
 type InlineConversationOptions = ConversationContext & ConversationSelection;
+
+interface ConversationTurnOptions extends RunnerTurnOptions {
+  limits?: NarrowedTurnLimits;
+}
 
 interface Conversation<TOutput extends object = JsonObject> {
   start(
@@ -603,8 +635,10 @@ interface Conversation<TOutput extends object = JsonObject> {
 Turn resolves the Conversation and admits work atomically. `conversation({id})`
 continues one exact resource. `tenant` and `user` state Turn context; `owner`
 states the keyed Conversation namespace. Conversation ownership never supplies
-actor identity. Memory and limits captured by this wrapper are local defaults
-copied into each admitted Turn, not durable Conversation configuration.
+actor identity. The wrapper fixes local tenant, actor, memory, and Conversation
+selection for its calls; a per-call option may further narrow its limits but
+cannot replace that context. None of those bindings become durable Conversation
+configuration.
 
 The high-level wrapper serializes local calls for the same effective
 Conversation identity. Exact concurrent conflict controls remain under raw
@@ -624,7 +658,7 @@ interface Turn<TOutput extends object = JsonObject> {
 
 interface TurnSnapshot<TOutput extends object = JsonObject> {
   status: TurnStatus;
-  messages: ConversationMessage[];
+  messages: TurnMessage[];
   text: string | null;
   structuredOutput: TOutput | null;
   behaviorSource: "agent_revision" | "inline";
@@ -648,6 +682,11 @@ interface TurnUpdate<TOutput extends object = JsonObject> {
   snapshot: TurnSnapshot<TOutput>;
 }
 ```
+
+`admission` is present on a result reached from the fresh `start()` or `run()`
+handle, including an exact idempotent replay. It is absent when the result came
+from a recovery handle constructed later with `client.turn()` because that
+handle did not observe the admission acknowledgement.
 
 `start()` returns after durable admission. The returned Turn retains the local
 handler map, but no background JavaScript promise is a durability guarantee.
@@ -815,7 +854,7 @@ Agent and AgentRevision IDs, never `agentKey`.
 | Workflow | Request behavior | Retry and recovery guarantee |
 | --- | --- | --- |
 | `client.agent(key, {ownedBy?})` | One Agent read | The string is always a key; owner namespace is fixed and lookup fails immediately if absent or invisible |
-| `agents.getById(id, {ownedBy?})` | One Agent read | Opaque ID lookup is explicit and wrong-owner visibility is not found |
+| `agents.getById(id)` | One Agent read | Opaque ID lookup is explicit; credential-invisible resources are not found |
 | `agents.create()` | One atomic Agent plus first-revision create | Idempotent create policy is explicit; no empty Agent is exposed |
 | `agent.publish()` | One immutable revision create plus current-pointer update | One update affects later unpinned Turns without fan-out |
 | `inline()` | No request | Creates a local runner; never provisions an Agent |
@@ -930,12 +969,12 @@ about 0.29.0.
 - App-, tenant-, and user-owned Agents have explicit, enforced visibility.
 - `client.agent(key, {ownedBy?})` is an awaited lookup whose arguments contain
   only Agent addressing; it never provisions or configures an Agent.
-- App ownership is the lookup default; `ownedBy` explicitly names tenant- and
-  user-owned Agent namespaces for both key and ID lookup. Opaque ID lookup
-  remains `agents.getById()`.
-- Agent ownership and Turn context are separate: tenant/user execution options
-  state where and for whom the Turn runs, while `ownedBy` appears only in Agent
-  lookup and lifecycle operations.
+- App ownership is the key-lookup default; `ownedBy` explicitly names tenant-
+  and user-owned key namespaces. Opaque ID lookup remains
+  `agents.getById(id)` and takes no owner argument.
+- Agent ownership and Turn context are separate: every execution states
+  `tenant`, optional `user` states the actor, and `ownedBy` appears only in Agent
+  key lookup and lifecycle operations.
 - No `forTenant()`, `forUser()`, `scoped()`, or Agent/runner type ladder is
   required by the initial facade.
 - Memory may be disabled, per-user, or tenant-namespaced without
@@ -946,7 +985,8 @@ about 0.29.0.
   Turn-owned effective-behavior row, with only monotonic limit narrowing and
   independently optional Conversation and MemorySpace.
 - `bindTools()` takes an exact-name handler map, returns a new local Agent,
-  inline runner, or Turn wrapper, and never changes durable configuration.
+  inline runner, or Turn wrapper, never changes durable configuration, and adds
+  no admitted request field.
 - `start()` returns one admitted Turn; `run()` is exactly `start()` followed by
   `turn.result()`. No `startTurn()` or `runTurn()` alias exists.
 - `turn(id, context)` makes no request and does not repair, retry, restart, or
