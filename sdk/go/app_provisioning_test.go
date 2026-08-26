@@ -16,7 +16,7 @@ func TestAppProvisioningUsesTargetTurnLimitsAndWebhook(t *testing.T) {
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusCreated)
-		_, _ = writer.Write([]byte(`{"app":{"id":"app_test","name":"acme"},"signing_keys":[]}`))
+		_, _ = writer.Write([]byte(`{"app":{"id":"app_01kc514000e008000000000002","name":"acme"},"signing_keys":[]}`))
 	}))
 	defer server.Close()
 
@@ -66,10 +66,10 @@ func TestAppUpdateRefusesContradictionsAndEmptyPatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	if _, err := client.UpdateApp(context.Background(), "app_test", UpdateAppOptions{}); err == nil {
+	if _, err := client.UpdateApp(context.Background(), "app_01kc514000e008000000000002", UpdateAppOptions{}); err == nil {
 		t.Fatal("empty update was accepted")
 	}
-	if _, err := client.UpdateApp(context.Background(), "app_test", UpdateAppOptions{
+	if _, err := client.UpdateApp(context.Background(), "app_01kc514000e008000000000002", UpdateAppOptions{
 		DefaultRateLimits:      &AppDefaultRateLimits{MaxAdmissionsPerMinute: 1, MaxConcurrentTurns: 1},
 		ClearDefaultRateLimits: true,
 	}); err == nil {

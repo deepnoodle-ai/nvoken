@@ -29,8 +29,8 @@ class TurnTrigger(BaseModel):
     Immutable causal evidence for a child Turn. The ToolCall must belong to the named parent. The IDs remain readable after the source Conversation is erased; they do not imply cancellation, budget, or result propagation.
     """ # noqa: E501
     type: StrictStr
-    parent_turn_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    tool_call_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    parent_turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    tool_call_id: Annotated[str, Field(strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     __properties: ClassVar[List[str]] = ["type", "parent_turn_id", "tool_call_id"]
 
     @field_validator('type')
@@ -38,6 +38,26 @@ class TurnTrigger(BaseModel):
         """Validates the enum"""
         if value not in set(['tool_call']):
             raise ValueError("must be one of enum values ('tool_call')")
+        return value
+
+    @field_validator('parent_turn_id')
+    def parent_turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('tool_call_id')
+    def tool_call_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

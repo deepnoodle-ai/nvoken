@@ -514,7 +514,7 @@ func onboardingAnswer(conversation *onboardingConversation, input string) string
 }
 
 func onboardingID(prefix string, value int) string {
-	return fmt.Sprintf("%s_019b0a12-8d51-7f34-aed2-%012x", prefix, value)
+	return fmt.Sprintf("%s_01kc514000e0080000%08x", prefix, value)
 }
 
 func cloneMap(input map[string]any) map[string]any {

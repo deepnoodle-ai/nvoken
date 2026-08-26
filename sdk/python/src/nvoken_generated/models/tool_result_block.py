@@ -29,7 +29,7 @@ class ToolResultBlock(BaseModel):
     The durable result of one tool call.
     """ # noqa: E501
     type: StrictStr
-    tool_use_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="The `id` of the `tool_use` block this result answers. The name comes from the provider message format nvoken stores and replays; the value is a ToolCall ID. ")
+    tool_use_id: Annotated[str, Field(strict=True)] = Field(description="The `id` of the `tool_use` block this result answers. The name comes from the provider message format nvoken stores and replays; the value is a ToolCall ID. ")
     content: Optional[Any]
     is_error: Optional[StrictBool] = None
     __properties: ClassVar[List[str]] = ["type", "tool_use_id", "content", "is_error"]
@@ -39,6 +39,16 @@ class ToolResultBlock(BaseModel):
         """Validates the enum"""
         if value not in set(['tool_result']):
             raise ValueError("must be one of enum values ('tool_result')")
+        return value
+
+    @field_validator('tool_use_id')
+    def tool_use_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

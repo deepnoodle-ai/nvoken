@@ -29,7 +29,7 @@ class ToolUseBlock(BaseModel):
     A host, builtin, MCP, or callback tool call.
     """ # noqa: E501
     type: StrictStr
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    id: Annotated[str, Field(strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     name: Annotated[str, Field(min_length=1, strict=True)]
     input: Optional[Any]
     __properties: ClassVar[List[str]] = ["type", "id", "name", "input"]
@@ -39,6 +39,16 @@ class ToolUseBlock(BaseModel):
         """Validates the enum"""
         if value not in set(['tool_use']):
             raise ValueError("must be one of enum values ('tool_use')")
+        return value
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

@@ -2117,23 +2117,23 @@ mod tests {
     #[test]
     fn turn_snapshot_flattens_the_high_level_result() {
         let client = Client::with_base_url("test", "http://localhost");
-        let mut turn = client.turn("turn_123", "acme", None);
+        let mut turn = client.turn("turn_01kc514000e008000000000003", "acme", None);
         let source = models::StoredTurnBehaviorSource::new(
             models::stored_turn_behavior_source::Kind::AgentRevision,
-            "agent_1".into(),
-            "arev_1".into(),
+            "agent_01kc514000e008000000000001".into(),
+            "arev_01kc514000e008000000000001".into(),
             1,
         );
         let resource = models::Turn {
-            id: "turn_123".into(),
+            id: "turn_01kc514000e008000000000003".into(),
             tenant_key: "acme".into(),
             status: models::TurnStatus::Running,
             behavior_source: Some(Box::new(models::TurnBehaviorSource::AgentRevision(
                 Box::new(source),
             ))),
             structured_output: Some(HashMap::from([("score".into(), Value::from(9))])),
-            memory_space_id: Some("mspc_1".into()),
-            conversation_id: Some("conv_1".into()),
+            memory_space_id: Some("mspc_01kc514000e008000000000001".into()),
+            conversation_id: Some("conv_01kc514000e008000000000001".into()),
             ..models::Turn::default()
         };
         let snapshot = turn.snapshot_from_wire(models::TurnResult::new(
@@ -2144,18 +2144,30 @@ mod tests {
         assert_eq!(snapshot.status, models::TurnStatus::Running);
         assert_eq!(snapshot.text.as_deref(), Some("done"));
         assert_eq!(snapshot.behavior_source, BehaviorSourceKind::AgentRevision);
-        assert_eq!(snapshot.agent_id.as_deref(), Some("agent_1"));
-        assert_eq!(snapshot.agent_revision_id.as_deref(), Some("arev_1"));
-        assert_eq!(snapshot.memory_space_id.as_deref(), Some("mspc_1"));
-        assert_eq!(snapshot.conversation_id.as_deref(), Some("conv_1"));
+        assert_eq!(
+            snapshot.agent_id.as_deref(),
+            Some("agent_01kc514000e008000000000001")
+        );
+        assert_eq!(
+            snapshot.agent_revision_id.as_deref(),
+            Some("arev_01kc514000e008000000000001")
+        );
+        assert_eq!(
+            snapshot.memory_space_id.as_deref(),
+            Some("mspc_01kc514000e008000000000001")
+        );
+        assert_eq!(
+            snapshot.conversation_id.as_deref(),
+            Some("conv_01kc514000e008000000000001")
+        );
     }
 
     #[tokio::test]
     async fn missing_tool_handler_leaves_waiting_turn_unmodified() {
         let client = Client::with_base_url("test", "http://localhost");
-        let turn = client.turn("turn_123", "acme", None);
+        let turn = client.turn("turn_01kc514000e008000000000003", "acme", None);
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_1".into();
+        call.id = "call_01kc514000e008000000000001".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::from([("id".into(), Value::from(1))]));
@@ -2180,7 +2192,11 @@ mod tests {
             }
         });
         let turn = client
-            .turn("turn_123", "acme", Some("alice".into()))
+            .turn(
+                "turn_01kc514000e008000000000003",
+                "acme",
+                Some("alice".into()),
+            )
             .bind_tools([tool]);
         let call = |id: &str, name: &str| {
             let mut call = models::ToolCallSummary::default();
@@ -2191,20 +2207,23 @@ mod tests {
             call
         };
         let resource = models::Turn {
-            tool_calls: vec![call("call_1", "lookup"), call("call_2", "other")],
+            tool_calls: vec![
+                call("call_01kc514000e008000000000001", "lookup"),
+                call("call_01kc514000e008000000000002", "other"),
+            ],
             ..models::Turn::default()
         };
         assert!(turn.run_host_tools(&resource).await.unwrap());
         assert!(!turn.run_host_tools(&resource).await.unwrap());
         let requests = server.await.unwrap();
         assert_eq!(requests.len(), 1);
-        assert!(requests[0].contains("call_1"));
-        assert!(!requests[0].contains("call_2"));
+        assert!(requests[0].contains("call_01kc514000e008000000000001"));
+        assert!(!requests[0].contains("call_01kc514000e008000000000002"));
         assert_eq!(
             *contexts.lock().await,
             vec![ToolContext {
-                turn_id: "turn_123".into(),
-                tool_call_id: "call_1".into(),
+                turn_id: "turn_01kc514000e008000000000003".into(),
+                tool_call_id: "call_01kc514000e008000000000001".into(),
             }]
         );
     }
@@ -2216,18 +2235,17 @@ mod tests {
         let client = Client::with_base_url("test", base_url);
         let calls = StdArc::new(Mutex::new(0));
         let handler_calls = calls.clone();
-        let turn = client.turn("turn_123", "acme", None).bind_tools([Tool::new(
-            "lookup",
-            move |arguments, _context| {
+        let turn = client
+            .turn("turn_01kc514000e008000000000003", "acme", None)
+            .bind_tools([Tool::new("lookup", move |arguments, _context| {
                 let calls = handler_calls.clone();
                 async move {
                     *calls.lock().await += 1;
                     Ok(arguments)
                 }
-            },
-        )]);
+            })]);
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_1".into();
+        call.id = "call_01kc514000e008000000000001".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::new());
@@ -2247,9 +2265,9 @@ mod tests {
         let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
         let entered_tx = StdArc::new(StdMutex::new(Some(entered_tx)));
         let signal = entered_tx.clone();
-        let turn = client.turn("turn_123", "acme", None).bind_tools([Tool::new(
-            "lookup",
-            move |_arguments, _context| {
+        let turn = client
+            .turn("turn_01kc514000e008000000000003", "acme", None)
+            .bind_tools([Tool::new("lookup", move |_arguments, _context| {
                 let signal = signal.clone();
                 async move {
                     if let Some(sender) = signal.lock().unwrap().take() {
@@ -2257,11 +2275,10 @@ mod tests {
                     }
                     futures_util::future::pending::<Result<Value, String>>().await
                 }
-            },
-        )]);
+            })]);
         let handled = turn.handled_tool_call_ids.clone();
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_1".into();
+        call.id = "call_01kc514000e008000000000001".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::new());
@@ -2273,7 +2290,10 @@ mod tests {
         entered_rx.await.unwrap();
         task.abort();
         let _ = task.await;
-        assert!(!handled.lock().unwrap().contains("call_1"));
+        assert!(!handled
+            .lock()
+            .unwrap()
+            .contains("call_01kc514000e008000000000001"));
     }
 
     #[tokio::test]
@@ -2333,7 +2353,7 @@ mod tests {
     #[test]
     fn lifecycle_resource_refresh_preserves_bound_tools() {
         let archived = models::Agent {
-            id: "agent_1".into(),
+            id: "agent_01kc514000e008000000000001".into(),
             agent_key: "analyst".into(),
             name: "Analyst".into(),
             ..models::Agent::default()
@@ -2357,7 +2377,7 @@ mod tests {
     async fn result_reports_typed_execution_and_timeout_errors_with_recovery_context() {
         let timestamp = chrono::DateTime::parse_from_rfc3339("2026-08-26T12:00:00Z").unwrap();
         let failed_resource = models::Turn {
-            id: "turn_failed".into(),
+            id: "turn_01kc514000e00800000000000a".into(),
             tenant_key: "acme".into(),
             status: models::TurnStatus::Failed,
             ended_at: Some(timestamp),
@@ -2368,14 +2388,14 @@ mod tests {
                 .unwrap();
         let (base_url, server) = response_server(vec![(200, failed_body)]).await;
         let client = Client::with_base_url("test", base_url);
-        let mut failed = client.turn("turn_failed", "acme", None);
+        let mut failed = client.turn("turn_01kc514000e00800000000000a", "acme", None);
         failed.admission = Some(TurnAdmission {
             idempotency_key: "idem-failed".into(),
             deduplicated: false,
         });
         match failed.result(None).await {
             Err(NvokenError::TurnExecution(error)) => {
-                assert_eq!(error.result.turn.id, "turn_failed");
+                assert_eq!(error.result.turn.id, "turn_01kc514000e00800000000000a");
                 assert_eq!(
                     error.result.admission.unwrap().idempotency_key,
                     "idem-failed"
@@ -2393,14 +2413,17 @@ mod tests {
             futures_util::future::pending::<()>().await;
         });
         let client = Client::with_base_url("test", base_url);
-        let mut running = client.turn("turn_running", "acme", None);
+        let mut running = client.turn("turn_01kc514000e00800000000000b", "acme", None);
         running.admission = Some(TurnAdmission {
             idempotency_key: "idem-running".into(),
             deduplicated: false,
         });
         match running.result(Some(Duration::from_millis(1))).await {
             Err(NvokenError::TurnTimeout(error)) => {
-                assert_eq!(error.turn.as_ref().unwrap().id, "turn_running");
+                assert_eq!(
+                    error.turn.as_ref().unwrap().id,
+                    "turn_01kc514000e00800000000000b"
+                );
                 assert_eq!(error.idempotency_key.as_deref(), Some("idem-running"));
             }
             Err(other) => panic!("expected timeout error, got {other:?}"),
@@ -2424,9 +2447,16 @@ mod tests {
     #[test]
     fn recovery_requests_carry_tenant_and_user_assertions() {
         let client = Client::with_base_url("test", "http://localhost");
-        let turn = client.turn("turn_123", "acme", Some("alice".into()));
+        let turn = client.turn(
+            "turn_01kc514000e008000000000003",
+            "acme",
+            Some("alice".into()),
+        );
         let request = turn
-            .request(reqwest::Method::GET, "/v1/turns/turn_123/result")
+            .request(
+                reqwest::Method::GET,
+                "/v1/turns/turn_01kc514000e008000000000003/result",
+            )
             .build()
             .unwrap();
         assert_eq!(request.headers()["X-Nvoken-Tenant-Key"], "acme");

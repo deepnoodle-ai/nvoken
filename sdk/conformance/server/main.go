@@ -13,14 +13,14 @@ import (
 )
 
 const (
-	agentID         = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	agentRevisionID = "arev_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
-	conversationID  = "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	turnID          = "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	waitID          = "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
-	toolCallID      = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	agentID         = "agent_01kc5153ahfwtaxmge0z0vvcs0"
+	agentRevisionID = "arev_01kc5153ahfwtaxmge0z0vvcs9"
+	conversationID  = "conv_01kc5153ahfwtaxmge0z0vvcs1"
+	turnID          = "turn_01kc5153ahfwtaxmge0z0vvcs2"
+	waitID          = "turn_01kc5153ahfwtaxmge0z0vvcs8"
+	toolCallID      = "call_01kc5153ahfwtaxmge0z0vvcs5"
 	exactModelID    = "experimental/model?variant=雪%#1"
-	allocationID    = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	allocationID    = "alloc_01kc5153ahfwtaxmge0z0vvcsg"
 )
 
 type state struct {
@@ -186,7 +186,7 @@ func creditAllocation() map[string]any {
 }
 
 func serveMemorySpaces(response http.ResponseWriter, request *http.Request) bool {
-	const memorySpaceID = "mspc_019b0a12-8d51-7f34-aed2-0e07c1bdb340"
+	const memorySpaceID = "mspc_01kc5153ahfwtaxmge0z0vvct0"
 	resource := func() map[string]any {
 		return map[string]any{
 			"id": memorySpaceID, "tenant_key": "acme", "scope": "tenant",
@@ -720,21 +720,21 @@ func toolCallRecords() map[string]any {
 		"items": []any{
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
+				"id": "call_01kc5153ahfwtaxmge0z0vvcs4", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 				"result_origin": "builtin",
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
+				"id": "call_01kc5153ahfwtaxmge0z0vvcs5", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 				"result_origin": nil,
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
+				"id": "call_01kc5153ahfwtaxmge0z0vvcs6", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
 				"result_origin": "callback",
@@ -742,7 +742,7 @@ func toolCallRecords() map[string]any {
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
+				"id": "call_01kc5153ahfwtaxmge0z0vvcs7", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
 				"result_origin": "mcp",
@@ -752,7 +752,7 @@ func toolCallRecords() map[string]any {
 			// is host even though the mode is callback.
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
+				"id": "call_01kc5153ahfwtaxmge0z0vvcsa", "mode": "callback",
 				"name": "run_migration", "status": "completed", "iteration": 3,
 				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
 				"result_origin": "host",
@@ -830,7 +830,7 @@ func (s *state) conversation(response http.ResponseWriter, request *http.Request
 	case strings.HasSuffix(path, "/compactions") && request.Method == http.MethodGet:
 		writeJSON(response, http.StatusOK, map[string]any{
 			"items": []any{map[string]any{
-				"id":             "cmp_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+				"id":             "comp_01kc5153ahfwtaxmge0z0vvcs2",
 				"turn_id":        turnID,
 				"covers_through": 2,
 				"status":         "applied",
@@ -1056,7 +1056,7 @@ func turnResult() map[string]any {
 	composed["structured_output"] = map[string]any{"answer": "world"}
 	composed["structured_output_provenance"] = map[string]any{
 		"source":        "tool_call",
-		"tool_call_id":  "call_019b0a12-8d51-7f34-aed2-0e07c1bdb999",
+		"tool_call_id":  "call_01kc5153ahfwtaxmge0z0vvecs",
 		"schema_sha256": "abababababababababababababababababababababababababababababababab",
 	}
 	return map[string]any{
@@ -1132,7 +1132,7 @@ func validAgentFilter(query url.Values) bool {
 
 func firstMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs3",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
@@ -1148,7 +1148,7 @@ func firstMessage() map[string]any {
 // secondMessageID is the assistant message the preview below is building. The
 // preview carries it, so the handoff to the saved message updates a row that
 // already has its permanent identity.
-const secondMessageID = "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+const secondMessageID = "msg_01kc5153ahfwtaxmge0z0vvcs4"
 
 func secondMessage() map[string]any {
 	return map[string]any{
@@ -1167,7 +1167,7 @@ func secondMessage() map[string]any {
 
 func firstResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs5",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
@@ -1187,7 +1187,7 @@ func firstResultAssistantMessage() map[string]any {
 
 func secondResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs6",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,

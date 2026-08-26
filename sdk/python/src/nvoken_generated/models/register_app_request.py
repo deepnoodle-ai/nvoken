@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.app_default_rate_limits import AppDefaultRateLimits
@@ -33,7 +33,7 @@ class RegisterAppRequest(BaseModel):
     There is deliberately no `anonymous_access` here. Enabling it requires browser access, finite App limits, and `credit_policy: required` to already be stored, so it is set with `PATCH /v1/apps/{app_id}` once the App exists rather than validated against a request that is still describing itself.
     """ # noqa: E501
     name: StrictStr = Field(description="The unique name identifying this app. Registering a name that already exists is rejected. ")
-    org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration. ")
+    org_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Owning Org. Org-scoped callers may omit this to use their own Org and cannot name another. Installation callers may name any registered Org or omit it during the staged migration. ")
     external_ref: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional opaque owner reference.")
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Optional human-facing label.")
     callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=10, description="Callback HTTP reply deadline for tools that declare none of their own. A single tool may declare up to 300 in `callback.timeout_seconds`; this App-wide value stays capped at 60 so one slow tool cannot loosen loss detection for all of them. ")
@@ -42,6 +42,19 @@ class RegisterAppRequest(BaseModel):
     browser_access: Optional[BrowserAccess] = Field(default=None, description="Optional complete browser configuration. Null and omission both create the App with browser access disabled. ")
     credit_policy: Optional[CreditPolicy] = Field(default=None, description="Defaults to `off`. See the schema for what each value enforces.")
     __properties: ClassVar[List[str]] = ["name", "org_id", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "machine_concurrency_limits", "browser_access", "credit_policy"]
+
+    @field_validator('org_id')
+    def org_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

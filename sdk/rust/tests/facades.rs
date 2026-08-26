@@ -14,8 +14,12 @@ fn raw_exposes_the_exact_generated_transport_configuration() {
 #[test]
 fn turn_recovery_is_local() {
     let client = Client::new("test");
-    let turn = client.turn("turn_123", "acme", Some("alice".into()));
-    assert_eq!(turn.id, "turn_123");
+    let turn = client.turn(
+        "turn_01kc514000e008000000000003",
+        "acme",
+        Some("alice".into()),
+    );
+    assert_eq!(turn.id, "turn_01kc514000e008000000000003");
     assert_eq!(turn.tenant, "acme");
     assert_eq!(turn.user.as_deref(), Some("alice"));
 }

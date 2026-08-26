@@ -16,15 +16,15 @@ def document(callback_signature: str, webhook_signature: str) -> dict:
         "vectors": {
             "callback": {
                 "headers": {
-                    "X-Nvoken-Delivery-ID": "dlvr_1",
+                    "X-Nvoken-Delivery-ID": "dlvr_01kc514000e008000000000001",
                     "X-Nvoken-Timestamp": "1784635200",
                     "X-Nvoken-Signature": callback_signature,
                 },
-                "body": '{"nvoken":{"tool_call_id":"call_1"}}',
+                "body": '{"nvoken":{"tool_call_id":"call_01kc514000e008000000000001"}}',
             },
             "webhook": {
                 "headers": {
-                    "X-Nvoken-Delivery-ID": "dlvr_2",
+                    "X-Nvoken-Delivery-ID": "dlvr_01kc514000e008000000000002",
                     "X-Nvoken-Timestamp": "1784635200",
                     "X-Nvoken-Signature": webhook_signature,
                 },
@@ -43,10 +43,10 @@ class SigningVectorTest(unittest.TestCase):
         digest of any one input.
         """
         body = '{"nvoken":{}}'
-        base = checker.sign("k" * 32, "dlvr_1", 1784635200, body)
-        self.assertNotEqual(base, checker.sign("k" * 32, "dlvr_2", 1784635200, body))
-        self.assertNotEqual(base, checker.sign("k" * 32, "dlvr_1", 1784635201, body))
-        self.assertNotEqual(base, checker.sign("j" * 32, "dlvr_1", 1784635200, body))
+        base = checker.sign("k" * 32, "dlvr_01kc514000e008000000000001", 1784635200, body)
+        self.assertNotEqual(base, checker.sign("k" * 32, "dlvr_01kc514000e008000000000002", 1784635200, body))
+        self.assertNotEqual(base, checker.sign("k" * 32, "dlvr_01kc514000e008000000000001", 1784635201, body))
+        self.assertNotEqual(base, checker.sign("j" * 32, "dlvr_01kc514000e008000000000001", 1784635200, body))
         self.assertTrue(base.startswith("sha256="))
 
     def test_expected_signatures_cover_every_vector(self) -> None:

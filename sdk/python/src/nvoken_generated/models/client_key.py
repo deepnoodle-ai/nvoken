@@ -29,11 +29,21 @@ class ClientKey(BaseModel):
     """
     Public-key metadata only; no key bytes are returned.
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque App client verification-key identifier with the public `ckey_` prefix.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque App client verification-key identifier with the public `ckey_` prefix.")
     name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     fingerprint: Annotated[str, Field(strict=True)] = Field(description="Base64url-without-padding SHA-256 of the raw 32 public-key bytes.")
     created_at: datetime
     __properties: ClassVar[List[str]] = ["id", "name", "fingerprint", "created_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^ckey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^ckey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('fingerprint')
     def fingerprint_validate_regular_expression(cls, value):

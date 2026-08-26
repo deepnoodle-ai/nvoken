@@ -60,8 +60,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
-        nudge_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
+        nudge_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -139,8 +139,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
-        nudge_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
+        nudge_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -218,8 +218,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
-        nudge_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
+        nudge_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,7 +360,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -434,7 +434,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -508,7 +508,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -642,7 +642,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -721,7 +721,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -800,7 +800,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -1316,7 +1316,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1392,7 +1392,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1468,7 +1468,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1883,7 +1883,7 @@ class TurnsApi:
     @validate_call
     async def get_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1958,7 +1958,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2033,7 +2033,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2168,7 +2168,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2243,7 +2243,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2318,7 +2318,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2453,7 +2453,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2527,7 +2527,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2601,7 +2601,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2735,7 +2735,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2809,7 +2809,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2883,7 +2883,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3017,7 +3017,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3103,7 +3103,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3189,7 +3189,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3350,7 +3350,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3433,7 +3433,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3516,7 +3516,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3669,7 +3669,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -3755,7 +3755,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -3841,7 +3841,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -4002,7 +4002,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4084,7 +4084,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4166,7 +4166,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4321,8 +4321,8 @@ class TurnsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4434,8 +4434,8 @@ class TurnsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4547,8 +4547,8 @@ class TurnsApi:
         tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
         default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4779,7 +4779,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -4859,7 +4859,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -4939,7 +4939,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -5095,7 +5095,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5182,7 +5182,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5269,7 +5269,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5430,7 +5430,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,
@@ -5509,7 +5509,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results_with_http_info(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,
@@ -5588,7 +5588,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(min_length=1, strict=True)],
+        turn_id: Annotated[str, Field(strict=True)],
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,

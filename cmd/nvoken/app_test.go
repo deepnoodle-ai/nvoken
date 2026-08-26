@@ -40,7 +40,7 @@ func TestEnvironmentAuthenticationCreatesNoCredentialsFile(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("environment-backed command created credentials file: %v", err)
 	}
-	if !strings.Contains(result.Stdout, `"credential_id": "cred_test"`) {
+	if !strings.Contains(result.Stdout, `"credential_id": "cred_01kc514000e008000000000002"`) {
 		t.Fatalf("JSON output = %s", result.Stdout)
 	}
 }
@@ -72,7 +72,7 @@ func TestEndpointAndCredentialPrecedenceAreIndependent(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "credentials")
 	authstore.SetPathOverride(path)
-	if err := authstore.PutProfile("saved", authstore.Profile{Endpoint: "https://wrong.example", Token: "profile-token", CredentialID: "cred_profile"}, true); err != nil {
+	if err := authstore.PutProfile("saved", authstore.Profile{Endpoint: "https://wrong.example", Token: "profile-token", CredentialID: "cred_01kc514000e008000000000003"}, true); err != nil {
 		t.Fatal(err)
 	}
 	authstore.SetPathOverride("")
@@ -152,8 +152,8 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"authentication": map[string]any{
-				"credential_id": "cred_machine",
-				"app_id":        "app_test",
+				"credential_id": "cred_01kc514000e008000000000004",
+				"app_id":        "app_01kc514000e008000000000002",
 				"type":          "app",
 				"method":        "api_key",
 			},
@@ -172,7 +172,7 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 	authstore.SetPathOverride(path)
 	profile, err := authstore.ResolveProfile("work")
 	authstore.SetPathOverride("")
-	if err != nil || profile.Token != "nvk_machine.secret" || profile.Endpoint != server.URL || !profile.Default || profile.CredentialID != "cred_machine" {
+	if err != nil || profile.Token != "nvk_machine.secret" || profile.Endpoint != server.URL || !profile.Default || profile.CredentialID != "cred_01kc514000e008000000000004" {
 		t.Fatalf("saved profile = %#v, %v", profile, err)
 	}
 	if !json.Valid([]byte(result.Stdout)) || !strings.Contains(result.Stdout, `"profile": "work"`) || strings.Contains(result.Stdout, "nvk_machine.secret") {
@@ -210,7 +210,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 	remoteCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		remoteCalls++
-		if r.URL.Path != "/v1/identity/credentials/cred_saved/revoke" || r.Method != http.MethodPost {
+		if r.URL.Path != "/v1/identity/credentials/cred_01kc514000e008000000000005/revoke" || r.Method != http.MethodPost {
 			http.NotFound(w, r)
 			return
 		}
@@ -219,7 +219,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":         "cred_saved",
+			"id":         "cred_01kc514000e008000000000005",
 			"name":       "saved",
 			"prefix":     "nvk_saved",
 			"status":     "revoked",
@@ -235,7 +235,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 	profile := authstore.Profile{
 		Endpoint:     server.URL,
 		Token:        "saved-token",
-		CredentialID: "cred_saved",
+		CredentialID: "cred_01kc514000e008000000000005",
 		CreatedAt:    "2026-07-21T12:00:00Z",
 	}
 	if err := authstore.PutProfile("saved", profile, true); err != nil {
@@ -273,6 +273,6 @@ func writeIdentityFixture(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": "acct_test", "created_at": "2026-07-21T12:00:00Z",
-		"authentication": map[string]any{"credential_id": "cred_test", "app_id": "app_test", "type": "app", "method": "api_key"},
+		"authentication": map[string]any{"credential_id": "cred_01kc514000e008000000000002", "app_id": "app_01kc514000e008000000000002", "type": "app", "method": "api_key"},
 	})
 }

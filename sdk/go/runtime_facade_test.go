@@ -20,13 +20,13 @@ func TestAgentLookupAndStartKeepOwnerActorAndContinuitySeparate(t *testing.T) {
 			if request.URL.Query().Get("owner_kind") != "app" || request.URL.Query().Get("agent_key") != "analyst" {
 				t.Fatalf("lookup query = %s", request.URL.RawQuery)
 			}
-			_, _ = writer.Write([]byte(`{"items":[{"id":"agent_1","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":3,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"has_more":false,"next_cursor":null}`))
+			_, _ = writer.Write([]byte(`{"items":[{"id":"agent_01kc514000e008000000000001","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":3,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"has_more":false,"next_cursor":null}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/v1/turns":
 			if err := json.NewDecoder(request.Body).Decode(&admitted); err != nil {
 				t.Fatal(err)
 			}
 			writer.WriteHeader(http.StatusAccepted)
-			_, _ = writer.Write([]byte(`{"id":"turn_1","status":"queued","tenant_key":"acme","user_key":"alice","attempt":0,"active_execution_ms":0,"conversation_id":null,"memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","deadline_at":null,"ended_at":null,"error":null,"stop_reason":null,"structured_output":null,"tool_calls":[]}`))
+			_, _ = writer.Write([]byte(`{"id":"turn_01kc514000e008000000000001","status":"queued","tenant_key":"acme","user_key":"alice","attempt":0,"active_execution_ms":0,"conversation_id":null,"memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","deadline_at":null,"ended_at":null,"error":null,"stop_reason":null,"structured_output":null,"tool_calls":[]}`))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -45,12 +45,12 @@ func TestAgentLookupAndStartKeepOwnerActorAndContinuitySeparate(t *testing.T) {
 		TenantKey:    "acme",
 		UserKey:      "alice",
 		Memory:       TenantMemory("shared"),
-		Conversation: ContinueConversation("conv_1"),
+		Conversation: ContinueConversation("conv_01kc514000e008000000000001"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if turn.ID() != "turn_1" || turn.IdempotencyKey() == "" {
+	if turn.ID() != "turn_01kc514000e008000000000001" || turn.IdempotencyKey() == "" {
 		t.Fatalf("Turn = %#v", turn)
 	}
 	if admitted["tenant_key"] != "acme" || admitted["user_key"] != "alice" {
@@ -61,7 +61,7 @@ func TestAgentLookupAndStartKeepOwnerActorAndContinuitySeparate(t *testing.T) {
 		t.Fatalf("behavior = %#v", behavior)
 	}
 	conversation := admitted["conversation"].(map[string]any)
-	if conversation["conversation_id"] != "conv_1" {
+	if conversation["conversation_id"] != "conv_01kc514000e008000000000001" {
 		t.Fatalf("conversation = %#v", conversation)
 	}
 	memory := admitted["memory"].(map[string]any)
@@ -80,7 +80,7 @@ func TestAgentListReturnsRunnableHandles(t *testing.T) {
 			t.Fatalf("list query = %s", request.URL.RawQuery)
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"items":[{"id":"agent_1","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":3,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"has_more":true,"next_cursor":"next"}`))
+		_, _ = writer.Write([]byte(`{"items":[{"id":"agent_01kc514000e008000000000001","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":3,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}],"has_more":true,"next_cursor":"next"}`))
 	}))
 	defer server.Close()
 
@@ -92,7 +92,7 @@ func TestAgentListReturnsRunnableHandles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || page.Items[0].Resource().ID != "agent_1" || !page.HasMore || page.NextCursor == nil || *page.NextCursor != "next" {
+	if len(page.Items) != 1 || page.Items[0].Resource().ID != "agent_01kc514000e008000000000001" || !page.HasMore || page.NextCursor == nil || *page.NextCursor != "next" {
 		t.Fatalf("page = %#v", page)
 	}
 }
@@ -114,12 +114,12 @@ func TestReducerSettlesOnTargetTurnChange(t *testing.T) {
 	reducer := NewReducer()
 	event := StreamEvent{ID: "cursor-1", Type: "transcript.update", Data: json.RawMessage(`{
 		"type":"transcript.update","cursor":"cursor-1","conversation_id":null,"content_expires_at":null,
-		"messages":[],"turn_changes":[{"turn_id":"turn_1","revision":2,"status":"completed","terminal":true,"conversation_id":null,"content_expires_at":null,"through_message_sequence":null,"occurred_at":"2026-01-01T00:00:00Z","error":null,"structured_output":null}]
+		"messages":[],"turn_changes":[{"turn_id":"turn_01kc514000e008000000000001","revision":2,"status":"completed","terminal":true,"conversation_id":null,"content_expires_at":null,"through_message_sequence":null,"occurred_at":"2026-01-01T00:00:00Z","error":null,"structured_output":null}]
 	}`)}
 	if err := reducer.Apply(event); err != nil {
 		t.Fatal(err)
 	}
-	if !reducer.Settled("turn_1") {
+	if !reducer.Settled("turn_01kc514000e008000000000001") {
 		t.Fatal("terminal Turn was not settled")
 	}
 	snapshot := reducer.Snapshot()
@@ -133,7 +133,7 @@ func TestConversationBindsExecutionContextAndSharesClientLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agent := &Agent{client: client, value: AgentResource{ID: "agent_1"}}
+	agent := &Agent{client: client, value: AgentResource{ID: "agent_01kc514000e008000000000001"}}
 	maxIterations := 8
 	selection := *ContinueOrCreateConversation("case-42", UserConversation("alice"))
 	options := ConversationOptions{
@@ -176,7 +176,7 @@ func TestConversationDeepCopiesBoundContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agent := &Agent{client: client, value: AgentResource{ID: "agent_1"}}
+	agent := &Agent{client: client, value: AgentResource{ID: "agent_01kc514000e008000000000001"}}
 	maxIterations := 8
 	metadata := map[string]any{"nested": map[string]any{"value": "original"}}
 	selection := ContinueOrCreateConversation("case-42", TenantConversation())
@@ -252,7 +252,7 @@ func TestInlineMemoryRequiresNamespaceAndUserMemoryRequiresActor(t *testing.T) {
 		t.Fatalf("inline namespace error = %v", err)
 	}
 
-	agent := &Agent{client: client, value: AgentResource{ID: "agent_1"}}
+	agent := &Agent{client: client, value: AgentResource{ID: "agent_01kc514000e008000000000001"}}
 	_, err = agent.Start(context.Background(), "hello", TurnOptions{
 		TenantKey: "acme",
 		Memory:    UserMemory("personal"),
@@ -267,10 +267,10 @@ func TestAgentLifecycleReturnsAndUpdatesResource(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
-		case request.Method == http.MethodDelete && request.URL.Path == "/v1/agents/agent_1":
-			_, _ = writer.Write([]byte(`{"id":"agent_1","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":1,"archived_at":` + archivedAt + `,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-08-26T12:00:00Z"}`))
-		case request.Method == http.MethodPost && request.URL.Path == "/v1/agents/agent_1/restore":
-			_, _ = writer.Write([]byte(`{"id":"agent_1","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":1,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-08-26T12:00:01Z"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/v1/agents/agent_01kc514000e008000000000001":
+			_, _ = writer.Write([]byte(`{"id":"agent_01kc514000e008000000000001","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":1,"archived_at":` + archivedAt + `,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-08-26T12:00:00Z"}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/agents/agent_01kc514000e008000000000001/restore":
+			_, _ = writer.Write([]byte(`{"id":"agent_01kc514000e008000000000001","agent_key":"analyst","name":"Analyst","owner":{"kind":"app"},"current_revision":1,"archived_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-08-26T12:00:01Z"}`))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -280,7 +280,7 @@ func TestAgentLifecycleReturnsAndUpdatesResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	agent := &Agent{client: client, value: AgentResource{ID: "agent_1"}}
+	agent := &Agent{client: client, value: AgentResource{ID: "agent_01kc514000e008000000000001"}}
 	returned, err := agent.Archive(context.Background())
 	if err != nil || returned != agent || agent.Resource().ArchivedAt == nil {
 		t.Fatalf("archive returned = %#v error = %v resource = %#v", returned, err, agent.Resource())
@@ -294,12 +294,12 @@ func TestAgentLifecycleReturnsAndUpdatesResource(t *testing.T) {
 func TestTurnExecutionAndTimeoutErrorsRetainRecoveryContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		if request.URL.Path == "/v1/turns/turn_failed/result" {
-			_, _ = writer.Write([]byte(`{"turn":{"id":"turn_failed","status":"failed","ended_at":"2026-08-26T12:00:00Z","error":{"code":"provider_error","message":"model failed"},"tool_calls":[]},"messages":[],"output_text":null}`))
+		if request.URL.Path == "/v1/turns/turn_01kc514000e00800000000000a/result" {
+			_, _ = writer.Write([]byte(`{"turn":{"id":"turn_01kc514000e00800000000000a","status":"failed","ended_at":"2026-08-26T12:00:00Z","error":{"code":"provider_error","message":"model failed"},"tool_calls":[]},"messages":[],"output_text":null}`))
 			return
 		}
-		if request.URL.Path == "/v1/turns/turn_wait/result" {
-			_, _ = writer.Write([]byte(`{"turn":{"id":"turn_wait","status":"running","ended_at":null,"tool_calls":[]},"messages":[],"output_text":null}`))
+		if request.URL.Path == "/v1/turns/turn_01kc514000e008000000000009/result" {
+			_, _ = writer.Write([]byte(`{"turn":{"id":"turn_01kc514000e008000000000009","status":"running","ended_at":null,"tool_calls":[]},"messages":[],"output_text":null}`))
 			return
 		}
 		http.NotFound(writer, request)
@@ -309,13 +309,13 @@ func TestTurnExecutionAndTimeoutErrorsRetainRecoveryContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.Turn("turn_failed", TurnAccess{TenantKey: "acme"}).Result(context.Background())
+	_, err = client.Turn("turn_01kc514000e00800000000000a", TurnAccess{TenantKey: "acme"}).Result(context.Background())
 	var executionError *TurnExecutionError
-	if !errors.As(err, &executionError) || executionError.Result == nil || executionError.Result.Resource.ID != "turn_failed" {
+	if !errors.As(err, &executionError) || executionError.Result == nil || executionError.Result.Resource.ID != "turn_01kc514000e00800000000000a" {
 		t.Fatalf("execution error = %#v (%v)", executionError, err)
 	}
 
-	turn := client.Turn("turn_wait", TurnAccess{TenantKey: "acme"})
+	turn := client.Turn("turn_01kc514000e008000000000009", TurnAccess{TenantKey: "acme"})
 	turn.idempotencyKey = "idem-1"
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
@@ -332,7 +332,7 @@ func TestToolHandlerRunsOncePerTurnCallID(t *testing.T) {
 		submissions++
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusAccepted)
-		_, _ = writer.Write([]byte(`{"content_expires_at":null,"conversation_id":null,"results":[],"status":"queued","tool_calls":[],"turn_id":"turn_1"}`))
+		_, _ = writer.Write([]byte(`{"content_expires_at":null,"conversation_id":null,"results":[],"status":"queued","tool_calls":[],"turn_id":"turn_01kc514000e008000000000001"}`))
 	}))
 	defer server.Close()
 	client, err := NewClient(server.URL, "secret")
@@ -340,18 +340,18 @@ func TestToolHandlerRunsOncePerTurnCallID(t *testing.T) {
 		t.Fatal(err)
 	}
 	handled := 0
-	turn := client.Turn("turn_1", TurnAccess{TenantKey: "acme"}).BindTools(Tool{
+	turn := client.Turn("turn_01kc514000e008000000000001", TurnAccess{TenantKey: "acme"}).BindTools(Tool{
 		Name: "lookup",
 		Handler: func(_ context.Context, _ any, toolContext TurnToolContext) (any, error) {
 			handled++
-			if toolContext.TurnID != "turn_1" || toolContext.ToolCallID != "call_1" {
+			if toolContext.TurnID != "turn_01kc514000e008000000000001" || toolContext.ToolCallID != "call_01kc514000e008000000000001" {
 				t.Fatalf("tool context = %#v", toolContext)
 			}
 			return map[string]any{"ok": true}, nil
 		},
 	})
 	arguments := map[string]any{"id": "42"}
-	calls := []ToolCallSummary{{ID: "call_1", Name: "lookup", Mode: ToolCallModeHost, Arguments: &arguments}}
+	calls := []ToolCallSummary{{ID: "call_01kc514000e008000000000001", Name: "lookup", Mode: ToolCallModeHost, Arguments: &arguments}}
 	if _, err := turn.settleHostTools(context.Background(), calls); err != nil {
 		t.Fatal(err)
 	}
@@ -391,14 +391,14 @@ func TestTurnStatusIsPassiveResultSnapshot(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_done/result":
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_01kc514000e008000000000008/result":
 			_, _ = writer.Write([]byte(`{
-				"turn":{"id":"turn_done","status":"completed","ended_at":"2026-08-26T12:00:01Z","tool_calls":[]},
+				"turn":{"id":"turn_01kc514000e008000000000008","status":"completed","ended_at":"2026-08-26T12:00:01Z","tool_calls":[]},
 				"messages":[],"output_text":"done"
 			}`))
-		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_wait/result":
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_01kc514000e008000000000009/result":
 			_, _ = writer.Write([]byte(`{
-				"turn":{"id":"turn_wait","status":"waiting","ended_at":null,"tool_calls":[{"id":"call_1","name":"missing","mode":"host","status":"pending","arguments":{},"updated_at":"2026-08-26T12:00:00Z"}]},
+				"turn":{"id":"turn_01kc514000e008000000000009","status":"waiting","ended_at":null,"tool_calls":[{"id":"call_01kc514000e008000000000001","name":"missing","mode":"host","status":"pending","arguments":{},"updated_at":"2026-08-26T12:00:00Z"}]},
 				"messages":[],"output_text":null
 			}`))
 		case request.Method == http.MethodPost:
@@ -414,7 +414,7 @@ func TestTurnStatusIsPassiveResultSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	turn := client.Turn("turn_done", TurnAccess{TenantKey: "acme"})
+	turn := client.Turn("turn_01kc514000e008000000000008", TurnAccess{TenantKey: "acme"})
 	snapshot, err := turn.Status(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -426,7 +426,7 @@ func TestTurnStatusIsPassiveResultSnapshot(t *testing.T) {
 		t.Fatalf("Status submitted %d tool result requests", toolSubmissions)
 	}
 
-	turn = client.Turn("turn_wait", TurnAccess{TenantKey: "acme"})
+	turn = client.Turn("turn_01kc514000e008000000000009", TurnAccess{TenantKey: "acme"})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
 	_, err = turn.Result(ctx)
@@ -444,7 +444,7 @@ func TestRecoveredTurnRequiresTenantOnFirstOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.Turn("turn_1", TurnAccess{}).Status(context.Background())
+	_, err = client.Turn("turn_01kc514000e008000000000001", TurnAccess{}).Status(context.Background())
 	var sdkError *Error
 	if !errors.As(err, &sdkError) || sdkError.Category != ErrorValidation {
 		t.Fatalf("missing tenant error = %v", err)

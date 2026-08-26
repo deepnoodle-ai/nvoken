@@ -26,7 +26,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 			var body map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode App registration: %v", err)
-			} else if body["name"] != "support" || body["display_name"] != "Support" || body["org_id"] != "org_test" {
+			} else if body["name"] != "support" || body["display_name"] != "Support" || body["org_id"] != "org_01kc514000e008000000000001" {
 				t.Errorf("App registration = %#v", body)
 			} else if _, exists := body["browser_access"]; exists {
 				t.Errorf("App registration enabled browser access before credential issuance: %#v", body)
@@ -40,12 +40,12 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 			var body map[string]any
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode credential issuance: %v", err)
-			} else if body["app_id"] != "app_test" || body["type"] != "app" || body["name"] != "support deploy" {
+			} else if body["app_id"] != "app_01kc514000e008000000000002" || body["type"] != "app" || body["name"] != "support deploy" {
 				t.Errorf("credential issuance = %#v", body)
 			}
 			response.WriteHeader(http.StatusCreated)
 			_, _ = response.Write([]byte(appInitCredentialFixture))
-		case "PATCH /v1/apps/app_test":
+		case "PATCH /v1/apps/app_01kc514000e008000000000002":
 			var body struct {
 				BrowserAccess struct {
 					AllowedOrigins []string `json:"allowed_origins"`
@@ -74,8 +74,8 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 				body.DefaultRateLimits.PerMinute != 200 {
 				t.Errorf("browser configuration = %#v", body)
 			}
-			_, _ = response.Write([]byte(`{"id":"app_test","name":"support","status":"active"}`))
-		case "POST /v1/apps/app_test/client-keys":
+			_, _ = response.Write([]byte(`{"id":"app_01kc514000e008000000000002","name":"support","status":"active"}`))
+		case "POST /v1/apps/app_01kc514000e008000000000002/client-keys":
 			var body struct {
 				Name      string `json:"name"`
 				PublicKey []byte `json:"public_key"`
@@ -86,7 +86,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 				t.Errorf("client key = name %q, public key length %d", body.Name, len(body.PublicKey))
 			}
 			response.WriteHeader(http.StatusCreated)
-			_, _ = response.Write([]byte(`{"id":"ckey_test","name":"web production","fingerprint":"fingerprint","created_at":"2026-08-17T12:00:02Z"}`))
+			_, _ = response.Write([]byte(`{"id":"ckey_01kc514000e008000000000002","name":"web production","fingerprint":"fingerprint","created_at":"2026-08-17T12:00:02Z"}`))
 		default:
 			http.NotFound(response, request)
 		}
@@ -100,7 +100,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 			"--api-key", "operator-key",
 			"app", "init", "support",
 			"--display-name", "Support",
-			"--org-id", "org_test",
+			"--org-id", "org_01kc514000e008000000000001",
 			"--credential-name", "support deploy",
 			"--browser",
 			"--origin", "https://app.example.test",
@@ -120,15 +120,15 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 	wantSequence := []string{
 		"POST /v1/apps",
 		"POST /v1/identity/credentials",
-		"PATCH /v1/apps/app_test",
-		"POST /v1/apps/app_test/client-keys",
+		"PATCH /v1/apps/app_01kc514000e008000000000002",
+		"POST /v1/apps/app_01kc514000e008000000000002/client-keys",
 	}
 	if !reflect.DeepEqual(sequence, wantSequence) {
 		t.Fatalf("request sequence = %#v, want %#v", sequence, wantSequence)
 	}
 	for _, assignment := range []string{
 		"NVOKEN_BASE_URL='" + server.URL + "'",
-		"NVOKEN_APP_ID='app_test'",
+		"NVOKEN_APP_ID='app_01kc514000e008000000000002'",
 		"NVOKEN_API_KEY='nvk_app.secret'",
 		"NVOKEN_CALLBACK_KEY_ID='sign_callback'",
 		"NVOKEN_CALLBACK_KEY_VERSION='1'",
@@ -136,7 +136,7 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 		"NVOKEN_WEBHOOK_KEY_ID='sign_webhook'",
 		"NVOKEN_WEBHOOK_KEY_VERSION='1'",
 		"NVOKEN_WEBHOOK_SECRET='webhook-secret'",
-		"NVOKEN_CLIENT_KEY_ID='ckey_test'",
+		"NVOKEN_CLIENT_KEY_ID='ckey_01kc514000e008000000000002'",
 	} {
 		if !strings.Contains(result.Stdout, assignment+"\n") {
 			t.Errorf("environment is missing %q:\n%s", assignment, result.Stdout)
@@ -243,9 +243,9 @@ func TestAppInitPrintsOneTimeRecoveryValuesAfterPartialFailure(t *testing.T) {
 		case "POST /v1/identity/credentials":
 			response.WriteHeader(http.StatusCreated)
 			_, _ = response.Write([]byte(appInitCredentialFixture))
-		case "PATCH /v1/apps/app_test":
-			_, _ = response.Write([]byte(`{"id":"app_test","name":"support","status":"active"}`))
-		case "POST /v1/apps/app_test/client-keys":
+		case "PATCH /v1/apps/app_01kc514000e008000000000002":
+			_, _ = response.Write([]byte(`{"id":"app_01kc514000e008000000000002","name":"support","status":"active"}`))
+		case "POST /v1/apps/app_01kc514000e008000000000002/client-keys":
 			response.WriteHeader(http.StatusInternalServerError)
 			_, _ = response.Write([]byte(`{"code":"internal","message":"try again"}`))
 		default:
@@ -295,7 +295,7 @@ func appInitEnvironmentValue(t *testing.T, output, name string) string {
 }
 
 const appInitRegistrationFixture = `{
-  "app": {"id":"app_test","name":"support","status":"active"},
+  "app": {"id":"app_01kc514000e008000000000002","name":"support","status":"active"},
   "signing_keys": [
     {"purpose":"callback","key_id":"sign_callback","version":1,"active":true,"secret":"callback-secret"},
     {"purpose":"webhook","key_id":"sign_webhook","version":1,"active":true,"secret":"webhook-secret"}
@@ -304,8 +304,8 @@ const appInitRegistrationFixture = `{
 
 const appInitCredentialFixture = `{
   "credential": {
-    "id":"cred_test",
-    "app_id":"app_test",
+    "id":"cred_01kc514000e008000000000002",
+    "app_id":"app_01kc514000e008000000000002",
     "name":"support app",
     "prefix":"nvk_app",
     "type":"app",

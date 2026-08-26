@@ -31,12 +31,12 @@ class ToolCallbackContext(BaseModel):
     ToolCallbackContext
     """ # noqa: E501
     schema_version: StrictInt
-    delivery_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem. ")
-    tool_call_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    delivery_id: Annotated[str, Field(strict=True)] = Field(description="Identifies one delivery nvoken sent you, callback or webhook alike — both are the same durable record and carry the same `dlvr_` prefix. Treat it as opaque; it appears in the signed payload and identifies the attempt when you report a delivery problem. ")
+    tool_call_id: Annotated[str, Field(strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     tool_name: Annotated[str, Field(min_length=1, strict=True, max_length=64)] = Field(description="The tool this delivery is asking you to run, taken from the durable ToolCall. It is inside the signed body, so a receiver serving many tools dispatches on it with no authoritative read — and any per-tool path suffix you configure stays an unsigned logging convenience rather than the thing you branch on. ")
-    turn_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
-    memory_space_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
+    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    memory_space_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     behavior_source: DeliveryBehaviorSource
     tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
@@ -51,6 +51,26 @@ class ToolCallbackContext(BaseModel):
             raise ValueError("must be one of enum values (2)")
         return value
 
+    @field_validator('delivery_id')
+    def delivery_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^dlvr_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^dlvr_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('tool_call_id')
+    def tool_call_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
     @field_validator('tool_name')
     def tool_name_validate_regular_expression(cls, value):
         """Validates the regular expression"""
@@ -59,6 +79,42 @@ class ToolCallbackContext(BaseModel):
 
         if not re.match(r"^[A-Za-z0-9_-]+$", value):
             raise ValueError(r"must validate the regular expression /^[A-Za-z0-9_-]+$/")
+        return value
+
+    @field_validator('turn_id')
+    def turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('memory_space_id')
+    def memory_space_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

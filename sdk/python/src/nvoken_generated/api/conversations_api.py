@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictStr, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.conversation import Conversation
@@ -345,7 +345,7 @@ class ConversationsApi:
     @validate_call
     async def delete_conversation(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -419,7 +419,7 @@ class ConversationsApi:
     @validate_call
     async def delete_conversation_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -493,7 +493,7 @@ class ConversationsApi:
     @validate_call
     async def delete_conversation_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -628,7 +628,7 @@ class ConversationsApi:
     async def fork_conversation(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         fork_conversation_request: ForkConversationRequest,
         _request_timeout: Union[
             None,
@@ -711,7 +711,7 @@ class ConversationsApi:
     async def fork_conversation_with_http_info(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         fork_conversation_request: ForkConversationRequest,
         _request_timeout: Union[
             None,
@@ -794,7 +794,7 @@ class ConversationsApi:
     async def fork_conversation_without_preload_content(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         fork_conversation_request: ForkConversationRequest,
         _request_timeout: Union[
             None,
@@ -955,7 +955,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1027,7 +1027,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1099,7 +1099,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1231,7 +1231,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation_transcript(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1303,7 +1303,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation_transcript_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1375,7 +1375,7 @@ class ConversationsApi:
     @validate_call
     async def get_conversation_transcript_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1507,7 +1507,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_compactions(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1589,7 +1589,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_compactions_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1671,7 +1671,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_compactions_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1823,7 +1823,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_messages(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1904,7 +1904,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_messages_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1985,7 +1985,7 @@ class ConversationsApi:
     @validate_call
     async def list_conversation_messages_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -2502,7 +2502,7 @@ class ConversationsApi:
     @validate_call
     async def stream_conversation(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
@@ -2580,7 +2580,7 @@ class ConversationsApi:
     @validate_call
     async def stream_conversation_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
@@ -2658,7 +2658,7 @@ class ConversationsApi:
     @validate_call
     async def stream_conversation_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         cursor: Optional[StrictStr] = None,
         _request_timeout: Union[
             None,
@@ -2802,7 +2802,7 @@ class ConversationsApi:
     @validate_call
     async def update_conversation(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         update_conversation_request: UpdateConversationRequest,
         _request_timeout: Union[
             None,
@@ -2880,7 +2880,7 @@ class ConversationsApi:
     @validate_call
     async def update_conversation_with_http_info(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         update_conversation_request: UpdateConversationRequest,
         _request_timeout: Union[
             None,
@@ -2958,7 +2958,7 @@ class ConversationsApi:
     @validate_call
     async def update_conversation_without_preload_content(
         self,
-        conversation_id: Annotated[str, Field(min_length=1, strict=True)],
+        conversation_id: Annotated[str, Field(strict=True)],
         update_conversation_request: UpdateConversationRequest,
         _request_timeout: Union[
             None,

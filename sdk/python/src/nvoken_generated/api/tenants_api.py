@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.tenant_list import TenantList
@@ -41,7 +41,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant(
         self,
-        tenant_id: Annotated[str, Field(min_length=1, strict=True)],
+        tenant_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -114,7 +114,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant_with_http_info(
         self,
-        tenant_id: Annotated[str, Field(min_length=1, strict=True)],
+        tenant_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -187,7 +187,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant_without_preload_content(
         self,
-        tenant_id: Annotated[str, Field(min_length=1, strict=True)],
+        tenant_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],

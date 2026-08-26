@@ -17,7 +17,7 @@ import {
 } from "../index.js";
 
 const BASE_URL = "https://runtime.example.test";
-const TURN_ID = "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322";
+const TURN_ID = "turn_01kc5153ahfwtaxmge0z0vvcs2";
 const NOW = "2026-07-21T12:00:00Z";
 
 function wireTurn(status: "queued" | "completed" = "queued") {
@@ -127,7 +127,7 @@ test("anonymous exchange uses target Conversation fields and no credential", asy
   let seenBody: Record<string, unknown> | undefined;
   const token = await issueAnonymousToken({
     baseUrl: `${BASE_URL}/`,
-    appId: "app_1",
+    appId: "app_01kc514000e008000000000001",
     idempotencyKey: "anonymous-exchange-1",
     visitorToken: "visitor-1",
     fetch: async (_input, init) => {
@@ -138,12 +138,12 @@ test("anonymous exchange uses target Conversation fields and no credential", asy
         access_token_expires_in_seconds: 900,
         visitor_token: "visitor-2",
         visitor_token_expires_at: "2027-08-17T12:00:00Z",
-        conversation_id: "conv_1",
+        conversation_id: "conv_01kc514000e008000000000001",
       }, { status: 201 });
     },
   });
 
-  assert.equal(token.conversationId, "conv_1");
+  assert.equal(token.conversationId, "conv_01kc514000e008000000000001");
   assert.deepEqual(seenBody, { visitor_token: "visitor-1" });
   assert.equal(seenHeaders.get("Idempotency-Key"), "anonymous-exchange-1");
   assert.equal(seenHeaders.get("Authorization"), null);

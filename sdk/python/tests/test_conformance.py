@@ -20,13 +20,13 @@ def test_removed_runtime_nouns_are_not_exported() -> None:
 def test_reducer_previews_are_keyed_by_turn_and_resync_scope() -> None:
     reducer = Reducer()
     reducer.apply(StreamEvent("message.delta", {
-        "turn_id": "turn_1", "attempt": 1, "message_id": "msg_1",
+        "turn_id": "turn_01kc514000e008000000000001", "attempt": 1, "message_id": "msg_01kc514000e008000000000001",
         "content_index": 0, "kind": "text", "delta": "hel",
     }))
     reducer.apply(StreamEvent("message.delta", {
-        "turn_id": "turn_1", "attempt": 1, "message_id": "msg_1",
+        "turn_id": "turn_01kc514000e008000000000001", "attempt": 1, "message_id": "msg_01kc514000e008000000000001",
         "content_index": 0, "kind": "text", "delta": "lo",
     }))
     assert reducer.snapshot().previews[0].delta == "hello"
-    reducer.apply(StreamEvent("stream.resync", {"turn_id": "turn_1"}))
+    reducer.apply(StreamEvent("stream.resync", {"turn_id": "turn_01kc514000e008000000000001"}))
     assert reducer.snapshot().previews == []

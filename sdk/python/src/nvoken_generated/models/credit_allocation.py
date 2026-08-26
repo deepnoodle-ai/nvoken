@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
@@ -30,13 +30,23 @@ class CreditAllocation(BaseModel):
     """
     One append-only addition to a tenant's credit account. Allocations are never rewritten or deleted by this API.
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.")
     tenant_key: Optional[StrictStr] = Field(description="Null identifies the App's default tenant.")
     amount: Money
     reference: Optional[StrictStr]
     created_by: StrictStr
     created_at: datetime
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "amount", "reference", "created_by", "created_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
