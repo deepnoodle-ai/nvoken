@@ -1,1396 +1,165 @@
-// No Node-only imports here: this module must load in browsers and edge
-// runtimes. Node built-ins are reached lazily through process.getBuiltinModule
-// in resolveEnvironment, the only place that touches the filesystem.
-
 import {
   AdmissionsApi,
-  AgentDefinitionsApi,
   AgentsApi,
   AppsApi,
+  ConsoleIntegrationApi,
+  ConversationsApi,
   CreditsApi,
   IdentityApi,
-  InvocationsApi,
   MCPApi,
-  MemoriesApi,
+  MemorySpacesApi,
   ModelsApi,
+  OperationsApi,
   OrgsApi,
   ProviderKeysApi,
-  SessionsApi,
   TenantsApi,
+  TurnsApi,
   UsageApi,
 } from "./generated/apis/index.js";
 import type {
   Agent as AgentResource,
-  CreateAgentRequest,
-  UpdateAgentRequest,
-  AgentDefinitionResource,
-  AgentDefinitionResourceList,
-  AgentDefinitionCreate,
-  AgentDefinitionWrite,
-  AgentList,
-  App,
-  AppRegistration,
-  AppSigningKeySecret,
+  AgentOwner as GeneratedAgentOwner,
+  AgentRevision as AgentRevisionResource,
   AllocateCreditsResult,
-  ClientKey,
+  BehaviorInput as GeneratedBehaviorInput,
+  ConversationContentBlock,
+  ConversationMessage,
+  CreateTurnRequest,
+  CredentialIssuance,
+  CredentialType,
   CreditAccountList,
   CreditAllocationList,
-  CreateClientKeyRequest,
-  Money,
-  CreateInvocationRequest,
-  CreateSessionRequest,
-  ForkSessionRequest,
-  Invocation,
-  InvocationTrigger,
-  InvocationChange,
-  InvocationLogList,
-  InvocationList,
-  WebhookEvent,
-  ProviderKeySelection,
-  InvocationResult,
-  InvocationStatus,
-  MCPListToolsResponse,
-  MCPServer,
-  MCPTimeouts,
-  ModelDescriptor,
+  DocumentInputBlock,
+  ImageInputBlock,
+  InputBlock,
   ModelList,
-  MemoryKind,
-  MemoryList,
-  MemorySearchMode,
-  MintAppSigningKeyRequest,
-  Nudge,
-  NudgeAcknowledgement,
-  NudgeList,
-  NudgeStatus,
-  ToolCallSummary,
+  Money,
+  Org,
   ProviderKey,
   ProviderKeyList,
   ProviderKeyScope,
-  ProviderKeyUsage,
-  Org,
-  RegisterAppRequest,
-  RegisterOrgRequest,
-  Session,
-  SessionCompaction,
-  SessionCompactionList,
-  SessionContentBlock,
-  SessionList,
-  InputBlock as GeneratedInputBlock,
-  SessionMessage,
-  SessionMessageList,
-  SubmitHostToolResultsResponse,
-  ToolCallList,
-  TranscriptSnapshot,
-  UpdateAppRequest,
-  UpdateSessionRequest,
+  ToolCallSummary,
+  TurnBehaviorSelection,
+  TurnConversation,
+  TurnMemorySelection,
+  TurnResult as GeneratedTurnResult,
 } from "./generated/models/index.js";
-export type {
-  /**
-   * One tenant's Agent exactly as the server stores it: the serialization
-   * behind {@link Agent}, reachable at {@link Agent.resource}. Reach for it
-   * when you are storing or displaying a record; reach for {@link Agent} when
-   * you are running turns.
-   */
-  Agent as AgentResource,
-  CallbackDeliveryOutcome,
-  SessionCompaction,
-  SessionCompactionList,
-  ToolCall,
-  ToolCallDelivery,
-  ToolCallList,
-  ToolCallMode,
-  ToolCallStatus,
-  InvocationChildCounts,
-  InvocationTrigger,
-} from "./generated/models/index.js";
+import { Configuration, ResponseError } from "./generated/runtime.js";
 import type {
-  Credential,
-  CredentialIssuance,
-  CredentialList,
-  CredentialStatus,
-  CredentialType,
-  CurrentIdentity,
-} from "./generated/models/index.js";
-export type {
-  Credential,
-  CredentialIssuance,
-  CredentialList,
-  CredentialStatus,
-  CredentialType,
-  CurrentIdentity,
-} from "./generated/models/index.js";
-import { Configuration, FetchError, ResponseError } from "./generated/runtime.js";
-import { invocationFailureMessage } from "./invocation-error.js";
+  Agent,
+  AgentCollection,
+  AgentConversationOptions,
+  AgentKeyLookupOptions,
+  AgentOwnedBy,
+  AgentOwner,
+  AgentRevision,
+  AgentTurnOptions,
+  BehaviorInput,
+  ClientOptions,
+  Conversation,
+  ConversationSelection,
+  ConversationTurnOptions,
+  CreateAgent,
+  HostToolContract,
+  InlineBehavior,
+  InlineConversationOptions,
+  InlineMemorySelection,
+  InlineRunner,
+  InlineTurnOptions,
+  JsonObject,
+  JsonSchema,
+  JsonValue,
+  ListAgentsOptions,
+  Page,
+  RawStreamOptions,
+  ResponseObservation,
+  RetryPolicy,
+  RunnerTurnOptions,
+  StreamOptions,
+  ToolHandlers,
+  Turn,
+  TurnAccessContext,
+  TurnLimits,
+  TurnResult,
+  TurnSnapshot,
+  TurnUpdate,
+  WaitOptions,
+} from "./facade-types.js";
+import type { TurnInput } from "./generated/models/TurnInput.js";
+import { Reducer, streamConversationFrames, streamTurnFrames } from "./stream.js";
+import { isTerminalTurnStatus } from "./turn-status.js";
 import {
-  mediaInputIssue,
-  MEDIA_PREFLIGHT_CODE,
-  type MediaIssue,
-} from "./media-preflight.js";
-import {
-  outputSchemaIssue,
-  SCHEMA_PREFLIGHT_CODE,
-} from "./schema-preflight.js";
-import { isTurnOver } from "./invocation-status.js";
-import {
-  Reducer,
-  streamInvocationByID,
-  streamInvocationByIDWithOptions,
-  streamInvocationReducedByID,
-  streamSessionByID,
-  type SessionStreamEvent,
-  type StreamOptions,
-  type StreamUpdate,
-} from "./stream.js";
+  NoOutputTextError,
+  NvokenError,
+  TurnExecutionError,
+  TurnTimeoutError,
+  normalizeError,
+} from "./turn-error.js";
 import { VERSION } from "./version.js";
 
-const QUICKSTART_ENV_MARKER = "# Generated by nvokend quickstart. Disposable local use only.";
-
-export type ErrorCategory =
-  | "authentication"
-  | "permission"
-  | "validation"
-  | "not_found"
-  | "conflict"
-  | "rate_limit"
-  | "server"
-  | "transport"
-  | "cancelled"
-  | "timeout"
-  | "invocation"
-  | "unexpected_response";
-
-export class NvokenError extends Error {
-  constructor(
-    public readonly category: ErrorCategory,
-    message: string,
-    public readonly status?: number,
-    public readonly code?: string,
-    public readonly requestId?: string,
-    public readonly retryAfterMs?: number,
-    public readonly details?: Record<string, unknown>,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = "NvokenError";
-  }
-}
-
-/** A retained standalone Invocation whose private content has expired. */
-export class InvocationErasedError extends NvokenError {
-  constructor(
-    message: string,
-    public readonly invocationId?: string,
-    public readonly erasedAt?: Date,
-    requestId?: string,
-    details?: Record<string, unknown>,
-    options?: ErrorOptions,
-  ) {
-    super(
-      "not_found",
-      message,
-      410,
-      "invocation_erased",
-      requestId,
-      undefined,
-      details,
-      options,
-    );
-    this.name = "InvocationErasedError";
-  }
-}
-
-export type { SchemaIssue } from "./schema-preflight.js";
-export type { MediaIssue, MediaIssueCode } from "./media-preflight.js";
-export {
-  DOCUMENT_MEDIA_TYPES,
-  IMAGE_MEDIA_TYPES,
-  MAX_DOCUMENT_INPUT_BYTES,
-  MAX_IMAGE_INPUT_BYTES,
-  MAX_MEDIA_INPUT_BLOCKS,
-  MAX_MEDIA_INPUT_BYTES,
-  MAX_MEDIA_TITLE_CHARACTERS,
-  MEDIA_PREFLIGHT_CODE,
-} from "./media-preflight.js";
-
-/**
- * preflightInput rejects locally checkable input problems with the same issue
- * vocabulary the Runtime uses, so a mistake surfaces before a request is sent.
- */
-export function preflightInput(input: InvokeInput): void {
-  if (typeof input === "string") {
-    if (input.trim().length === 0) {
-      throw mediaPreflightError({
-        code: "invalid_media",
-        path: "input",
-        message: "text must not be blank",
-      });
-    }
-    return;
-  }
-  if (input.length === 0) {
-    throw mediaPreflightError({
-      code: "invalid_media",
-      path: "input.content",
-      message: "input must contain at least one block",
-    });
-  }
-  const issue = mediaInputIssue(input);
-  if (issue) throw mediaPreflightError(issue);
-}
-
-function mediaPreflightError(issue: MediaIssue): NvokenError {
-  return new NvokenError(
-    "validation",
-    `input is invalid: ${issue.message}`,
-    undefined,
-    MEDIA_PREFLIGHT_CODE,
-    undefined,
-    undefined,
-    { kind: "input_media", code: issue.code, path: issue.path },
-  );
-}
-
-export function preflightOutputSchema(schema: Record<string, unknown>): void {
-  const issue = outputSchemaIssue(schema);
-  if (!issue) return;
-  const details: Record<string, unknown> = {
-    kind: "output_schema",
-    code: issue.code,
-    path: issue.path,
-  };
-  if (issue.keyword !== undefined) details.keyword = issue.keyword;
-  throw new NvokenError(
-    "validation",
-    `output schema is invalid: ${issue.message}`,
-    undefined,
-    SCHEMA_PREFLIGHT_CODE,
-    undefined,
-    undefined,
-    details,
-  );
-}
-
-export class SessionBusyError extends NvokenError {
-  constructor(
-    message: string,
-    public readonly activeInvocationId?: string,
-    public readonly activeInvocationStatus?: InvocationStatus,
-    requestId?: string,
-    details?: Record<string, unknown>,
-  ) {
-    super("conflict", message, 409, "session_invocation_active", requestId, undefined, details);
-    this.name = "SessionBusyError";
-  }
-}
-
-export class InvocationError<TOutput extends object = JsonObject> extends NvokenError {
-  readonly invocationId: string;
-  readonly sessionId: string | null;
-  readonly terminalStatus: InvocationStatus;
-  readonly failureCode?: string;
-
-  constructor(
-    public readonly handle: InvocationHandle<TOutput>,
-    public readonly invocation: TypedInvocation<TOutput>,
-  ) {
-    super(
-      "invocation",
-      invocationFailureMessage(
-        invocation.id,
-        invocation,
-        handle.modelProvider,
-      ),
-      undefined,
-      invocation.error?.code,
-      undefined,
-      undefined,
-      invocation.error?.details,
-    );
-    this.name = "InvocationError";
-    this.invocationId = invocation.id;
-    this.sessionId = invocation.sessionId;
-    this.terminalStatus = invocation.status;
-    this.failureCode = invocation.error?.code;
-  }
-}
-
-export class MissingToolHandlerError<TOutput extends object = JsonObject> extends NvokenError {
-  constructor(
-    public readonly handle: InvocationHandle<TOutput>,
-    public readonly toolCall: ToolCallSummary,
-    public readonly invocationCancelled: boolean,
-    options?: ErrorOptions,
-  ) {
-    super(
-      "validation",
-      invocationCancelled
-        ? `Invocation ${handle.invocationId} was cancelled because host tool ${toolCall.name} has no local handler`
-        : `Invocation ${handle.invocationId} remains waiting because host tool ${toolCall.name} has no local handler`,
-      undefined,
-      "missing_tool_handler",
-      undefined,
-      undefined,
-      {
-        invocation_id: handle.invocationId,
-        tool_call_id: toolCall.id,
-        tool_name: toolCall.name,
-        invocation_cancelled: invocationCancelled,
-      },
-      options,
-    );
-    this.name = "MissingToolHandlerError";
-  }
-}
-
-export class NoOutputTextError<TOutput extends object = JsonObject> extends NvokenError {
-  constructor(public readonly result: AgentResult<TOutput>) {
-    const producedStructuredOutput = result.structuredOutput !== null;
-    const producedToolOutput = result.messages.some((message) => message.role === "tool");
-    const produced = producedStructuredOutput
-      ? "structured output"
-      : producedToolOutput
-        ? "tool output"
-        : "no canonical assistant text";
-    const ending = result.invocation.status === "incomplete"
-      ? "stopped at a budget with"
-      : "completed with";
-    super(
-      "unexpected_response",
-      `Invocation ${result.invocation.id} ${ending} ${produced}; call run() and inspect the full result`,
-      undefined,
-      "no_output_text",
-      undefined,
-      undefined,
-      {
-        invocation_id: result.invocation.id,
-        produced_structured_output: producedStructuredOutput,
-        produced_tool_output: producedToolOutput,
-      },
-    );
-    this.name = "NoOutputTextError";
-  }
-}
-
-export interface Model {
-  provider: ModelProvider;
-  id: string;
-}
-
-/**
- * Either accepted spelling of a model: the object, or `"provider/id"` split at
- * the first slash. Responses always carry the object form.
- */
-export type ModelInput = Model | string;
-
-export type ModelProvider = string;
-
-export type TextContentBlock = Extract<SessionContentBlock, { type: "text" }>;
-
-/**
- * A recorded application context snapshot as it appears in the transcript. Its
- * `name` carries the reserved `app-` prefix nvoken adds, so it never collides
- * with anything the model wrote.
- */
-export type ReminderContentBlock = Extract<SessionContentBlock, { type: "reminder" }>;
-
-export interface TextInputBlock {
-  type: "text";
-  text: string;
-}
-
-export interface InlineImageInputSource {
-  mediaType: "image/gif" | "image/jpeg" | "image/png" | "image/webp";
-  /** Standard padded base64 with no whitespace. */
-  data: string;
-  url?: never;
-}
-
-export interface URLImageInputSource {
-  /** Public HTTPS URL fetched once when the Invocation is accepted. */
-  url: string;
-  /** Optional declared type. The Runtime still sniffs the fetched bytes. */
-  mediaType?: InlineImageInputSource["mediaType"];
-  data?: never;
-}
-
-export type ImageInputSource = InlineImageInputSource | URLImageInputSource;
-
-export interface ImageInputBlock {
-  type: "image";
-  source: ImageInputSource;
-}
-
-export interface InlineDocumentInputSource {
-  mediaType: "application/pdf";
-  /** Standard padded base64 with no whitespace. */
-  data: string;
-  url?: never;
-}
-
-export interface URLDocumentInputSource {
-  /** Public HTTPS URL fetched once when the Invocation is accepted. */
-  url: string;
-  /** Optional declared type. The Runtime still sniffs the fetched bytes. */
-  mediaType?: InlineDocumentInputSource["mediaType"];
-  data?: never;
-}
-
-export type DocumentInputSource = InlineDocumentInputSource | URLDocumentInputSource;
-
-export interface DocumentInputBlock {
-  type: "document";
-  source: DocumentInputSource;
-  /** Filename for providers that require one; omission uses their default. */
-  title?: string;
-}
-
-export type InputBlock = TextInputBlock | ImageInputBlock | DocumentInputBlock;
-
-/** textBlock builds the ordinary text input block. */
-export function textBlock(text: string): TextInputBlock {
-  return { type: "text", text };
-}
-
-/** imageBlock inlines image bytes that are already base64 encoded. */
-export function imageBlock(
-  mediaType: InlineImageInputSource["mediaType"],
-  data: string,
-): ImageInputBlock {
-  return { type: "image", source: { mediaType, data } };
-}
-
-/** imageURLBlock lets the Runtime fetch one public HTTPS image at admission. */
-export function imageURLBlock(
-  url: string,
-  mediaType?: InlineImageInputSource["mediaType"],
-): ImageInputBlock {
-  return { type: "image", source: { url, mediaType } };
-}
-
-/** documentBlock inlines document bytes that are already base64 encoded. */
-export function documentBlock(
-  mediaType: InlineDocumentInputSource["mediaType"],
-  data: string,
-  title?: string,
-): DocumentInputBlock {
-  return title === undefined
-    ? { type: "document", source: { mediaType, data } }
-    : { type: "document", source: { mediaType, data }, title };
-}
-
-/** documentURLBlock lets the Runtime fetch one public HTTPS PDF at admission. */
-export function documentURLBlock(
-  url: string,
-  title?: string,
-  mediaType?: InlineDocumentInputSource["mediaType"],
-): DocumentInputBlock {
-  const source: URLDocumentInputSource = { url, mediaType };
-  return title === undefined
-    ? { type: "document", source }
-    : { type: "document", source, title };
-}
-
-export function isTextContentBlock(block: SessionContentBlock): block is TextContentBlock {
-  return block.type === "text" && typeof block.text === "string";
-}
-
-export function isReminderContentBlock(
-  block: SessionContentBlock,
-): block is ReminderContentBlock {
-  return block.type === "reminder" && typeof block.content === "string";
-}
-
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
-export type JsonObject = { [key: string]: JsonValue };
-
-/**
- * The dependency-free Standard JSON Schema v1 contract. Zod 4.2+, ArkType,
- * Valibot adapters, and other compliant libraries can be passed directly.
- */
-export interface StandardJSONSchemaV1<Input = unknown, Output = Input> {
-  readonly "~standard": StandardJSONSchemaV1.Props<Input, Output>;
-}
-
-export namespace StandardJSONSchemaV1 {
-  export interface Types<Input = unknown, Output = Input> {
-    readonly input: Input;
-    readonly output: Output;
-  }
-
-  export interface Options {
-    readonly target: "draft-2020-12" | "draft-07" | "openapi-3.0" | (string & {});
-    readonly libraryOptions?: Record<string, unknown>;
-  }
-
-  export interface Converter {
-    readonly input: (options: Options) => Record<string, unknown>;
-    readonly output: (options: Options) => Record<string, unknown>;
-  }
-
-  export interface Props<Input = unknown, Output = Input> {
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: Types<Input, Output>;
-    readonly jsonSchema: Converter;
-  }
-
-  export type InferInput<Schema extends StandardJSONSchemaV1> =
-    NonNullable<Schema["~standard"]["types"]>["input"];
-  export type InferOutput<Schema extends StandardJSONSchemaV1> =
-    NonNullable<Schema["~standard"]["types"]>["output"];
-}
-
-/**
- * Raw JSON Schema with a type-only marker used by defineJsonSchema().
- */
-export type JsonSchema<TValue extends object = JsonObject> = Record<string, unknown> & {
-  readonly __nvokenType?: TValue;
-};
-
-export function defineJsonSchema<TValue extends object>(
-  schema: Record<string, unknown>,
-): JsonSchema<TValue> {
-  return schema;
-}
-
-export type InputSchema<TInput extends object = JsonObject> =
-  | JsonSchema<TInput>
-  | StandardJSONSchemaV1<TInput, unknown>;
-
-export type OutputSchema<TOutput extends object = JsonObject> =
-  | JsonSchema<TOutput>
-  | StandardJSONSchemaV1<unknown, TOutput>;
-
-export interface ToolHandlerContext<TOutput extends object = object> {
-  invocationId: string;
-  sessionId: string | null;
-  toolCallId: string;
-  handle: InvocationHandle<TOutput>;
-}
-
-interface ToolBase<TInput extends object> {
-  name: string;
-  description: string;
-  inputSchema: InputSchema<TInput>;
-}
-
-export interface HostTool<TInput extends object = JsonObject> extends ToolBase<TInput> {
-  mode: "host";
-  callback?: never;
-  handler?(
-    input: TInput,
-    context: ToolHandlerContext,
-  ): JsonValue | void | Promise<JsonValue | void>;
-}
-
-export interface CallbackTool<TInput extends object = JsonObject> extends ToolBase<TInput> {
-  mode: "callback";
-  callback: { url: string; timeoutSeconds?: number };
-  handler?: never;
-}
-
-export interface BuiltinTool {
-  mode: "builtin";
-  name: "nvoken_fetch";
-  description?: never;
-  inputSchema?: never;
-  callback?: never;
-  handler?: never;
-}
-
-export type Tool<TInput extends object = JsonObject> =
-  | BuiltinTool
-  | HostTool<TInput>
-  | CallbackTool<TInput>;
-
-export function fetchTool(): BuiltinTool {
-  return {
-    mode: "builtin",
-    name: "nvoken_fetch",
-  };
-}
-
-export function defineHostTool<TInput extends object>(
-  tool: Omit<HostTool<TInput>, "mode"> & { mode?: "host" },
-): HostTool<TInput> {
-  return { ...tool, mode: "host" };
-}
-
-export type TypedToolCallSummary<TInput extends object> =
-  Omit<ToolCallSummary, "arguments"> & { arguments: TInput };
-
-export function toolInput<TInput extends object>(
-  tool: HostTool<TInput>,
-  call: ToolCallSummary,
-): TInput {
-  if (call.name !== tool.name) {
-    throw new NvokenError(
-      "validation",
-      `ToolCall ${call.id} is for ${call.name}, not ${tool.name}`,
-    );
-  }
-  if (!call.arguments || typeof call.arguments !== "object" || Array.isArray(call.arguments)) {
-    throw new NvokenError(
-      "unexpected_response",
-      `ToolCall ${call.id} did not contain object arguments`,
-    );
-  }
-  return call.arguments as TInput;
-}
-
-/**
- * The tool calls this caller is expected to run.
- *
- * There is one tool-call collection. A call you have to answer is the one
- * carrying the arguments to answer it with; builtin and MCP calls nvoken runs
- * itself, and calls that have already settled, carry none. Filtering on that
- * is what replaced the separate pending list.
- */
-export function answerableToolCalls(invocation: {
-  toolCalls?: ToolCallSummary[];
-}): ToolCallSummary[] {
-  return (invocation.toolCalls ?? []).filter((call) => call.arguments != null);
-}
-
-/**
- * The tool calls this caller must run itself.
- *
- * Answerable is not the same as yours. Once an App declares callback tools,
- * nvoken delivers those to an endpoint — but a machine credential may still
- * settle one after its receiver acknowledged delivery, so a pending
- * callback-mode call carries arguments and is answerable. Running it here as
- * well would double the side effect.
- *
- * Yours is answerable and `mode: "host"`. Partitioning on that beats keeping a
- * list of your own tool names, which goes stale the first time an agent gains a
- * tool and nobody updates the list.
- */
-export function hostToolCalls(invocation: {
-  toolCalls?: ToolCallSummary[];
-}): ToolCallSummary[] {
-  return answerableToolCalls(invocation).filter((call) => call.mode === "host");
-}
-
-export type TypedInvocation<TOutput extends object = JsonObject> =
-  Omit<Invocation, "structuredOutput"> & { structuredOutput: TOutput | null };
-
-export type TypedInvocationResult<TOutput extends object = JsonObject> =
-  Omit<InvocationResult, "invocation"> & { invocation: TypedInvocation<TOutput> };
-
-export interface Limits {
-  totalTimeoutSeconds?: number;
-  activeTimeoutSeconds?: number;
-  waitingTimeoutSeconds?: number;
-  maxOutputTokens?: number;
-  /**
-   * Requires known USD pricing. Absence fails closed before generation when
-   * knowable from the local registry, or after the response otherwise.
-   */
-  maxEstimatedCostUsd?: number;
-  maxIterations?: number;
-}
-
-export interface Sampling {
-  temperature: number;
-}
-
-export type ReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max";
-
-export interface Reasoning {
-  effort?: ReasoningEffort;
-  budgetTokens?: number;
-}
-
-export interface ContextCompaction {
-  triggerTokens: number | "auto";
-  model?: ModelInput;
-}
-
-/**
- * Bounds how long an idle Session is retained. The window measures idle time
- * rather than lifetime: it restarts on every Invocation admission and
- * completion, so a turn outlasting the window cannot expire underneath itself.
- * Automatic expiry never cancels running work.
- */
-export interface SessionRetention {
-  /** Idle window in seconds, from one hour to thirty days. */
-  ttlSeconds: number;
-}
-
-/** Opaque host correlation data. nvoken stores it and returns it verbatim. */
-export type Metadata = Record<string, string>;
-
-/**
- * Durable Session options. Every member is optional and at least one must be
- * present. Existing values are comparison-only: equal is accepted and
- * different returns `session_options_conflict`.
- */
-export interface SessionOptions {
-  /**
-   * Requires an Invocation because the policy is validated against that turn's
-   * model. It may be installed on any Session that has no policy yet, but
-   * {@link Client.createSession} still cannot set it.
-   */
-  compaction?: ContextCompaction;
-  retention?: SessionRetention;
-  /**
-   * Binds the Session to your own authorization facts. Written only by the
-   * request that creates the Session, never interpreted by nvoken, never
-   * visible to the model, and carried inside the signed callback envelope so
-   * a receiver authorizes a delivery without reading the Invocation back.
-   * What nvoken guarantees is integrity, not authentication: what creation
-   * recorded is what a signed delivery carries.
-   */
-  authorizationContext?: Metadata;
-  /** Immutable Agent Definition revision pin for a newly created Session. */
-  pinnedRevision?: number;
-  /**
-   * What you are asserting about a Session that already exists. `refuse`, the
-   * default, compares every member you sent. `join` reaches whatever Session
-   * is there without asserting how it is configured, so `compaction` and
-   * `retention` stop conflicting. `join` never relaxes `authorizationContext`,
-   * `pinnedRevision`, or the Session's end user.
-   */
-  onConflict?: "refuse" | "join";
-}
-
-/**
- * Everything writable on an App-owned Agent Definition, flat, matching the
- * wire's `AgentDefinitionWrite`. Reads return {@link AgentDefinitionResource},
- * which is this same flat object plus `id`, `revision`, and timestamps, so a
- * read-modify-write is a spread:
- *
- * ```ts
- * const current = await client.getAgentDefinition(id);
- * await client.updateAgentDefinition(
- *   id,
- *   { ...current, instructions: "Be concise and warm." },
- *   { expectedRevision: current.revision },
- * );
- * ```
- *
- * The read-only fields a spread carries along are dropped on the way to the
- * wire rather than rejected.
- */
-export interface AgentDefinition<TOutput extends object = JsonObject> {
-  /**
-   * Caller-chosen immutable key, unique within the App. Required to create.
-   * A replacement cannot move a resource to another key, so this is ignored
-   * there and a spread resource may carry it along.
-   */
-  definitionKey?: string;
-  /**
-   * Display name. Defaults to `definitionKey`, and because a replacement
-   * replaces the whole resource, omitting it on update resets the name to the
-   * key rather than keeping the current one.
-   */
-  name?: string;
-  instructions?: string;
-  model: ModelInput;
-  sampling?: Sampling;
-  reasoning?: Reasoning;
-  toolChoice?: ToolChoice;
-  limits?: Limits;
-  tools?: Array<Tool<object>>;
-  mcpServers?: Array<MCPServer>;
-  /**
-   * Server-side tools the provider runs inside the generation call and bills
-   * on the same provider key as the model. The turn does not park for them
-   * and nvoken does not execute them.
-   */
-  providerTools?: Array<ProviderTool>;
-  /** Durable memory scope and how much of it reaches each turn. */
-  memory?: MemoryConfig;
-  /**
-   * What a browser client principal may do against this definition. Omission
-   * means the definition is not client-token-capable; an explicit empty object
-   * opts in with no client-authored context or tools.
-   */
-  clientInterface?: ClientInterface;
-  outputSchema?: OutputSchema<TOutput>;
-}
-
-export type MemoryScope = "tenant" | "user";
-
-/** `index` and `full` differ in how much memory text a turn receives. */
-export type MemoryContextMode = "index" | "full" | "false";
-
-export interface MemoryContextConfig {
-  mode?: MemoryContextMode;
-  /** Defaults to 1536 for `index` and 131072 for `full`; must be zero for `false`. */
-  maxBytes?: number;
-}
-
-export interface MemoryConfig {
-  /** `user` scope requires a user key on every admitted Invocation. */
-  scope?: MemoryScope;
-  context?: MemoryContextConfig;
-}
-
-/**
- * One definition-specific browser authorization. It grants authorship and
- * settlement only, never selective read visibility: every public transcript
- * item in a browser-reachable Session must be treated as client-visible.
- */
-export interface ClientInterface {
-  /** Recorded-context names a client may append or supersede, contextual tier only. */
-  contextNames?: Iterable<string>;
-  /** Host-mode tools whose parked calls a client may see and settle. */
-  toolNames?: Iterable<string>;
-}
-
-/**
- * Selects one provider server-side tool. Web search is Anthropic only for now,
- * and a model that does not declare `controls.tools.web_search` is refused at
- * admission rather than served a search the provider would ignore.
- */
-export interface ProviderTool {
-  type: "web_search";
-  webSearch: WebSearchTool;
-}
-
-/** Anthropic web search options, passed through as the provider defines them. */
-export interface WebSearchTool {
-  /**
-   * Searches this turn may run, 1 to 20. The only bound nvoken can place on
-   * search spend: the provider reports no per-search fee it could meter, so
-   * search charges ride the provider's bill outside nvoken's cost estimate.
-   */
-  maxUses?: number;
-  /**
-   * Restrict results to these hosts. Bare hostnames only — a scheme, path, or
-   * port is rejected rather than reinterpreted. Mutually exclusive with
-   * `blockedDomains`, which is the provider's rule.
-   */
-  allowedDomains?: string[];
-  blockedDomains?: string[];
-  /**
-   * Biases results. Every member is optional; the host decides how precise to
-   * be about its end user.
-   */
-  userLocation?: WebSearchLocation;
-}
-
-export interface WebSearchLocation {
-  city?: string;
-  region?: string;
-  country?: string;
-  timezone?: string;
-}
-
-/** Anthropic server-side web search with default options. */
-export function webSearchTool(options: WebSearchTool = {}): ProviderTool {
-  return { type: "web_search", webSearch: options };
-}
-
-export type ToolChoiceMode = "auto" | "none" | "required" | "named";
-
-/**
- * Portable tool selection. `auto` preserves normal selection, `none` disables
- * tools for the turn, and `required` and `named` apply to the first durable
- * model iteration and then return to `auto`.
- *
- * `name` belongs to `named` and to nothing else. That pairing is checked when
- * the definition is sent rather than in the type, so the shape stays the one
- * the wire and the other SDKs use and a definition read back from the server
- * can be passed straight into a write.
- */
-export interface ToolChoice {
-  mode: ToolChoiceMode;
-  name?: string;
-}
-
-/**
- * Declares a remote MCP server. It carries no secrets, so authentication
- * headers travel per Invocation in {@link InvokeRequestBase.mcpServerHeaders}.
- */
-export interface MCPServerOptions {
-  name: string;
-  url: string;
-  transport?: "streamable_http";
-  allowedTools?: Iterable<string>;
-  timeouts?: MCPTimeouts;
-}
-
-export function mcpServer(options: MCPServerOptions): MCPServer {
-  return {
-    name: options.name,
-    url: options.url,
-    transport: options.transport,
-    allowedTools: options.allowedTools === undefined
-      ? undefined
-      : new Set(options.allowedTools),
-    timeouts: options.timeouts === undefined ? undefined : { ...options.timeouts },
-  };
-}
-
-/**
- * Secret headers for one MCP server named by the selected Agent Definition.
- * They are encrypted for a single turn, and are never stored in, hashed into,
- * or returned with the Agent Definition.
- */
-export interface MCPServerHeaders {
-  name: string;
-  headers: Record<string, string>;
-}
-
-/**
- * Controls how a recorded snapshot reaches the model: `contextual` for
- * conversation-adjacent facts, `operator` for policy or other
- * application-authoritative state. The tier stays typed in the transcript; the
- * provider-native role is chosen when the turn generates.
- */
-export type ContextTier = "contextual" | "operator";
-
-/**
- * One application-owned state snapshot recorded ahead of a turn's input. `name`
- * is a stable identity: sending it again supersedes the earlier value, and an
- * unchanged resend adds no transcript message, so a stateless host may resend
- * its whole snapshot every turn. Omit the reserved `app-` prefix the model
- * sees; nvoken adds it. Context is durable Session history rather than an Agent
- * Definition field, so it never changes the admitted Definition revision.
- */
-export interface ContextItem {
-  name: string;
-  tier: ContextTier;
-  content: string;
-}
-
-export type InvokeInput = string | readonly InputBlock[];
-export type IfActivePolicy = "reject" | "supersede" | "interrupt";
-export type BudgetExhaustionBehavior = "stop" | "hold";
-
-/**
- * Endpoint nvoken posts a signed webhook to when this Invocation parks
- * awaiting host tool results or reaches a terminal status. Omitting `events`
- * selects every event. The payload carries identifiers and status only, so
- * authoritative state is still read through the API.
- */
-export interface WebhookTarget {
-  url: string;
-  events?: readonly WebhookEvent[];
-}
-
-interface InvokeRequestBase {
-  tenantKey?: string;
-  /**
-   * Who this turn is for. The first request that opens a Session fixes its
-   * user key, including fixing it to absent; every later turn either sends the
-   * same one or leaves it out and inherits it. A turn naming a different end
-   * user is refused with `session_user_key_conflict`.
-   *
-   * It is a filter, and on an Agent whose Definition sets `memory.scope: user`
-   * it is also the memory partition — it decides whose durable memories the
-   * model can recall — so it is required on the turn that opens a Session for
-   * such an Agent.
-   */
-  userKey?: string;
-  /**
-   * Records that this Invocation was admitted because one durable ToolCall on
-   * another Invocation requested it. nvoken verifies the exact pair without
-   * coupling the two lifecycles.
-   */
-  triggeredBy?: InvocationTrigger;
-  /** Optional one-turn revision pin, ahead of Session and Agent pins. */
-  definitionRevision?: number;
-  /** Safe per-turn replacements that cannot expand Agent authority. */
-  overrides?: AgentDefinitionOverrides;
-  idempotencyKey?: string;
-  onBudgetExhausted?: BudgetExhaustionBehavior;
-  input: InvokeInput;
-  webhook?: WebhookTarget;
-  providerKeys?: ProviderKeySelection[];
-  /**
-   * Per-turn secret headers, keyed to MCP server names in the selected Agent
-   * Definition. They live here rather than on {@link MCPServer} because an
-   * Agent Definition may be reused across turns.
-   */
-  mcpServerHeaders?: readonly MCPServerHeaders[];
-  /**
-   * Ordered application state snapshots recorded before this turn's input. The
-   * list is order-sensitive and material to idempotency: a replay that reorders
-   * or edits an item conflicts rather than updating it.
-   */
-  context?: readonly ContextItem[];
-  /**
-   * Opaque host correlation data recorded on this Invocation. It is part of
-   * the admitted input, so it is immutable and material to idempotency: a
-   * replay carrying different metadata conflicts rather than updating it.
-   * Session metadata is separate and mutable — see
-   * {@link Client.updateSession}.
-   */
-  metadata?: Metadata;
-}
-
-export interface AgentDefinitionOverrides<TOutput extends object = JsonObject> {
-  model?: ModelInput;
-  sampling?: Sampling;
-  reasoning?: Reasoning;
-  toolChoice?: ToolChoice;
-  limits?: Limits;
-  outputSchema?: OutputSchema<TOutput>;
-}
-
-type AgentIdentityRequest =
-  | { agentId: string; agentKey?: never }
-  | { agentKey: string; agentId?: never };
-
-export type InvocationSession =
-  | { mode: "new"; id?: never; key?: never; ifActive?: never; options?: InvocationSessionOptions }
-  | { mode: "continue"; id: string; key?: never; ifActive?: IfActivePolicy; options?: InvocationSessionOptions }
-  | { mode: "continue_or_create"; key: string; id?: never; ifActive?: IfActivePolicy; options?: InvocationSessionOptions };
-
-export interface InvocationSessionOptions {
-  pinnedRevision?: number;
-  onConflict?: "refuse" | "join";
-}
-
-type SessionTargetRequest = {
-  /** Omit for a standalone Invocation. */
-  session?: InvocationSession;
-  retention?: SessionRetention;
-  compaction?: ContextCompaction;
-  authorizationContext?: Metadata;
-};
-
-export type InvokeRequest<TOutput extends object = JsonObject> = InvokeRequestBase
-  & AgentIdentityRequest & SessionTargetRequest;
-
-/**
- * What {@link Client.invoke} takes when the client holds a browser token.
- *
- * A browser token names the Agent, the Definition revision, the tenant, and
- * the end user, so none of them appear here — there is nothing for a page to
- * choose and nothing for it to get wrong. The fields a browser token is not
- * allowed to send are absent for the same reason: keyed Session creation,
- * Session options, `triggeredBy`, `providerKeys`, `mcpServerHeaders`, and
- * `webhook` are the host's authority, and the service refuses them here rather
- * than ignoring them.
- *
- * `sessionId` continues a Session a host-minted token has already opened. An
- * anonymous grant resolves its own Session from the visitor token, so it omits
- * this too and reads the Session it landed in from the returned handle.
- */
-export interface BrowserInvokeRequest {
-  input: InvokeInput;
-  idempotencyKey?: string;
-  /** Omit for standalone; managed anonymous grants must omit this too. */
-  session?:
-    | { mode: "new" }
-    | { mode: "continue"; id: string; ifActive?: Exclude<IfActivePolicy, "supersede"> };
-  /** `hold` is the host's authority and is refused from a browser token. */
-  onBudgetExhausted?: Exclude<BudgetExhaustionBehavior, "hold">;
-  /** Safe per-turn replacements that cannot expand Agent authority. */
-  overrides?: AgentDefinitionOverrides;
-  /**
-   * Contextual state recorded before this turn's input. A browser token may
-   * only send names the Agent Definition's client interface lists.
-   */
-  context?: readonly ContextItem[];
-  metadata?: Metadata;
-}
-
-export interface ToolResult {
-  toolCallId: string;
-  content: unknown;
-  isError?: boolean;
-}
-
-export interface RetryPolicy {
-  maxAttempts?: number;
-  minDelayMs?: number;
-  maxDelayMs?: number;
-}
-
-export interface ClientOptions {
-  baseUrl?: string;
-  /**
-   * The credential every request carries. A function is resolved per request,
-   * which is what a short-lived credential needs: a client token expires in
-   * minutes, so a browser holding one static string stops working mid-session
-   * rather than fetching the next one.
-   */
-  apiKey?: string | (() => string | Promise<string>);
-  /**
-   * Reads only a marked nvokend quickstart file. Set false to disable the
-   * default .env lookup. Probing is skipped outside Node-like runtimes, so a
-   * Worker or browser bundle needs no opt-out.
-   */
-  envFile?: string | false;
-  fetch?: typeof globalThis.fetch;
-  retry?: RetryPolicy;
-  /**
-   * How long a stream may fail to connect before it stops retrying and
-   * throws. The clock covers a run of consecutive failures and resets on any
-   * successful connection, so a long-lived stream is bounded by "cannot
-   * connect", never by how long its turn runs. Defaults to five minutes.
-   */
-  streamReconnectTimeoutMs?: number;
-  /**
-   * Called with every HTTP response the client receives, including error
-   * statuses, before it is decoded. It exists so a production consumer can
-   * see status codes and latency without wrapping `fetch` itself. It must not
-   * read the body: the client has not consumed it yet.
-   */
-  onResponse?: (observation: ResponseObservation) => void;
-  /**
-   * Narrows every request this client makes. See {@link Scope}.
-   */
-  scope?: Scope;
-  /**
-   * Declares that this client's credential is a browser token.
-   *
-   * One rule changes: a browser token already names the Agent, so
-   * {@link Client.invoke} stops requiring `agentId` or `agentKey`. It is the
-   * same rule the contract states — what a browser supplies outside the body
-   * is absent from it — and without this flag the check written for machine
-   * credentials refuses the one request a browser is able to make.
-   *
-   * {@link createBrowserClient} sets it, and returns a client whose `invoke`
-   * is typed for a browser. Set it yourself only if you build a `Client`
-   * directly from a client token.
-   */
-  browserCredential?: boolean;
-}
-
-/**
- * Narrows every request a client makes to one tenant, one end user, or both.
- * Anything outside it is reported as not found, so an id that arrives from the
- * wrong place cannot be acted on — which is what lets one app-wide credential
- * serve a whole application without an ownership check written at every call
- * site. A scope may only narrow: naming a tenant the credential is not bound
- * to is refused rather than silently returning nothing.
- */
-export interface Scope {
-  tenantKey?: string;
-  userKey?: string;
-}
-
-/** One observed HTTP round trip, as reported to `ClientOptions.onResponse`. */
-export interface ResponseObservation {
-  method: string;
-  url: string;
-  status: number;
-  durationMs: number;
-  /** Present when the request failed before a response existed. */
-  error?: unknown;
-}
-
-/**
- * A declaration of one tenant's Agent.
- *
- * Nothing here reaches the server when the {@link Agent} is constructed. The
- * keys are the identity — `(tenantKey, agentKey)` names the record, and
- * `definitionKey` names the Agent Definition it follows — so the first use of
- * the Agent, or an explicit {@link Agent.ensure}, creates the record if it is
- * missing. Declaring `agentId` instead names a record that already exists.
- *
- * Tool *handlers* are the one part that is local by nature: the Definition
- * holds the schemas, and the code is supplied by whichever process runs the
- * turn.
- */
-export type AgentOptions<TOutput extends object = JsonObject> =
-  & AgentIdentityRequest
-  & {
-    tenantKey?: string;
-    /**
-     * The `definitionKey` of the Agent Definition this Agent follows. Give it
-     * with `agentKey` and the Agent can create itself on first use; leave it
-     * out and the Agent must already exist.
-     */
-    definitionKey?: string;
-    /** The Definition by opaque ID, for a host that stores nvoken IDs. */
-    definitionId?: string;
-    /**
-     * Revision of the Definition this instance follows. Omit to track the
-     * latest, which is what makes revising the Definition the rollout.
-     */
-    pinnedRevision?: number;
-    /** Display name recorded at creation. Defaults to `agentKey`. */
-    name?: string;
-    /** Local handlers for host tools declared by the Agent Definition. */
-    tools?: Array<Tool<object>>;
-    /**
-     * Per-turn secret headers for the MCP servers this Agent declares. They
-     * stay outside the Agent Definition so no reusable revision contains a
-     * secret.
-     */
-    mcpServerHeaders?: readonly MCPServerHeaders[];
-    providerKeys?: ProviderKeySelection[];
-    webhook?: WebhookTarget;
-    onBudgetExhausted?: BudgetExhaustionBehavior;
-  };
-
-export interface InvocationOptions {
-  session?: InvocationSession;
-  retention?: SessionRetention;
-  compaction?: ContextCompaction;
-  authorizationContext?: Metadata;
-  /**
-   * Who this turn is for. Per-call rather than per-Agent, because one Agent
-   * serves many end users; the first turn on a Session fixes it and later
-   * turns inherit it. See {@link InvokeRequest.userKey}.
-   */
-  userKey?: string;
-  triggeredBy?: InvocationTrigger;
-  idempotencyKey?: string;
-  definitionRevision?: number;
-  overrides?: AgentDefinitionOverrides;
-  ifActive?: IfActivePolicy;
-  onBudgetExhausted?: BudgetExhaustionBehavior;
-  webhook?: WebhookTarget;
-  /**
-   * Application state snapshots to record ahead of this turn's input. Per-call
-   * rather than per-Agent, because a snapshot is what changes between turns
-   * while the Agent Definition stays fixed.
-   */
-  context?: readonly ContextItem[];
-  /**
-   * Opaque host correlation data recorded on this Invocation. Per-call rather
-   * than per-Agent: it is immutable and material to idempotency, so an
-   * Agent-level default would make two otherwise distinct calls conflict.
-   */
-  metadata?: Metadata;
-  timeoutMs?: number;
-  leaveWaitingOnMissingHandler?: boolean;
-  signal?: AbortSignal;
-}
-
-export interface SessionBindingByID {
-  sessionId: string;
-  sessionKey?: never;
-  tenantKey?: never;
-}
-
-export interface SessionBindingByKey {
-  sessionKey: string;
-  sessionId?: never;
-}
-
-export type SessionBinding = SessionBindingByID | SessionBindingByKey;
-export type BoundInvocationOptions = Omit<
-  InvocationOptions,
-  "session" | "retention" | "compaction" | "authorizationContext"
->;
-
-export interface AgentResult<TOutput extends object = JsonObject> {
-  handle: EndedInvocationHandle<TOutput>;
-  invocation: TypedInvocation<TOutput>;
-  messages: SessionMessage[];
-  text: string | null;
-  structuredOutput: TOutput | null;
-  idempotencyKey: string;
-  agentId: string;
-  sessionId: string | null;
-  deduplicated: boolean;
-}
-
-export type EndedInvocationHandle<TOutput extends object = JsonObject> =
-  InvocationHandle<TOutput> & {
-    readonly idempotencyKey: string;
-    readonly deduplicated: boolean;
-    sessionId: string | null;
-    agentId: string;
-    /**
-     * The two endings that carry work. `incomplete` is a turn that ran out of
-     * budget with everything it produced retained, so callers must branch on
-     * this rather than assume `completed`.
-     */
-    status: OutcomeStatus;
-  };
-
-/**
- * A terminal status that produced work worth reading: the turn finished, or it
- * stopped at a budget with what it had. The other two terminal statuses,
- * `failed` and `cancelled`, are what `InvocationError` is raised for.
- */
-export type OutcomeStatus = "completed" | "incomplete";
-
-/**
- * Whether a turn ended with work to read. `incomplete` counts: it means a
- * budget stopped the turn, not that the turn produced nothing — and when a
- * schema was demanded, an `incomplete` turn's structured output is present and
- * validated, because an unsatisfied schema settles `failed` instead.
- */
-export function isOutcomeStatus(status: string): status is OutcomeStatus {
-  return status === "completed" || status === "incomplete";
-}
-
-export type AgentStreamEvent<TOutput extends object = JsonObject> =
-  SessionStreamEvent<TOutput> & { handle: InvocationHandle<TOutput> };
-
-export interface ListInvocationOptions {
-  tenantKey?: string;
-  defaultTenant?: boolean;
-  userKey?: string;
-  sessionId?: string;
-  agentId?: string;
-  agentKey?: string;
-  status?: InvocationStatus | InvocationStatus[];
-  /**
-   * Selects direct children of one Invocation. Use the literal `"null"` for
-   * top-level Invocations; omit it for the unfiltered collection.
-   */
-  parentInvocationId?: string;
-  cursor?: string;
-  limit?: number;
-}
-
-export interface ListInvocationLogOptions {
-  cursor?: string;
-  limit?: number;
-  traceId?: string;
-}
-
-export interface ListMemoryOptions {
-  agentId: string;
-  tenantKey?: string;
-  userKey?: string;
-  query?: string;
-  searchMode?: MemorySearchMode;
-  kind?: MemoryKind;
-  cursor?: string;
-  limit?: number;
+export interface RawClient {
+  admissions: AdmissionsApi;
+  agents: AgentsApi;
+  apps: AppsApi;
+  consoleIntegration: ConsoleIntegrationApi;
+  conversations: ConversationsApi;
+  credits: CreditsApi;
+  identity: IdentityApi;
+  mcp: MCPApi;
+  memorySpaces: MemorySpacesApi;
+  models: ModelsApi;
+  operations: OperationsApi;
+  orgs: OrgsApi;
+  providerKeys: ProviderKeysApi;
+  tenants: TenantsApi;
+  turns: TurnsApi;
+  usage: UsageApi;
+}
+
+export interface ListModelsOptions {
+  provider?: string;
+  includeDeprecated?: boolean;
 }
 
 export interface RegisterOrgOptions {
   externalRef?: string;
 }
 
-export interface EndedInvocationOptions
-  extends Omit<ListInvocationOptions, "cursor"> {
-  /**
-   * Where to start a feed that has no cursor yet. Mutually exclusive with
-   * `cursor`, which already carries a position.
-   */
-  endedSince?: Date;
-  cursor?: string;
+export interface CreateCredentialOptions {
+  name: string;
+  type: CredentialType;
+  appId?: string;
+  expiresAt?: Date;
+  idempotencyKey?: string;
 }
 
-export interface ListAgentDefinitionsOptions {
-  /**
-   * Narrows the page to the resource this key names. The key is unique within
-   * the App, so the page holds zero or one item; prefer
-   * `getAgentDefinitionByKey` when that is what you meant.
-   */
-  definitionKey?: string;
-  includeArchived?: boolean;
-  cursor?: string;
-  limit?: number;
-}
-
-export interface ListModelsOptions {
-  provider?: ModelProvider;
-  includeDeprecated?: boolean;
+export interface RotateCredentialOptions {
+  overlapSeconds: number;
+  idempotencyKey?: string;
 }
 
 export interface CreateProviderKeyOptions {
-  provider: ModelProvider;
+  provider: string;
   scope: ProviderKeyScope;
   apiKey: string;
   tenantKey?: string;
   expiresAt?: Date;
+  idempotencyKey?: string;
+}
+
+export interface ListProviderKeysOptions {
+  provider?: string;
+  scope?: ProviderKeyScope;
+  status?: "active" | "revoked";
+  tenantKey?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface RotateProviderKeyOptions {
+  apiKey: string;
+  expiresAt?: Date;
+  overlapSeconds?: number;
   idempotencyKey?: string;
 }
 
@@ -1409,261 +178,26 @@ export interface ListCreditsOptions {
   limit?: number;
 }
 
-export interface ListProviderKeysOptions {
-  provider?: ModelProvider;
-  scope?: ProviderKeyScope;
-  status?: "active" | "revoked";
-  tenantKey?: string;
-  cursor?: string;
-  limit?: number;
-}
-
-export interface RotateProviderKeyOptions {
-  apiKey: string;
-  expiresAt?: Date;
-  overlapSeconds?: number;
-  idempotencyKey?: string;
-}
-
-export interface CreateCredentialOptions {
-  name: string;
-  type: CredentialType;
-  appId?: string;
-  expiresAt?: Date;
-  idempotencyKey?: string;
-}
-
-export interface ListCredentialsOptions {
-  status?: CredentialStatus;
-  cursor?: string;
-  limit?: number;
-}
-
-export interface RotateCredentialOptions {
-  overlapSeconds: number;
-  idempotencyKey?: string;
-}
-
-export interface ListSessionOptions {
-  tenantKey?: string;
-  defaultTenant?: boolean;
-  agentId?: string;
-  agentKey?: string;
-  sessionKey?: string;
-  cursor?: string;
-  limit?: number;
-}
-
-/**
- * Sequence order for a message page. A cursor belongs to the direction that
- * issued it and is refused by the other, so page one direction to its end
- * rather than turning around mid-walk.
- */
-export type ListOrder = "asc" | "desc";
-
-export interface ListMessageOptions {
-  cursor?: string;
-  limit?: number;
-  /** Defaults to `"asc"`, oldest first. `"desc"` starts at the newest message. */
-  order?: ListOrder;
-}
-
-export interface ListCompactionOptions {
-  cursor?: string;
-  limit?: number;
-}
-
-export interface DeleteSessionOptions {
-  /**
-   * Erase a Session that still holds a live turn. Without it that Session is
-   * refused with `session_invocation_active`. Erasure skips settlement: the
-   * turn is removed rather than ended, so it records no terminal status and
-   * fires no `invocation.ended` webhook. Cancel and wait first if you bill or
-   * reconcile on settlement; force is for erasing on an end user's behalf.
-   */
-  force?: boolean;
-}
-
-/**
- * A metadata merge patch: a string sets the key, `null` deletes it, and a key
- * you leave out survives.
- */
-export type MetadataPatch = Record<string, string | null>;
-
-export interface UpdateSessionOptions {
-  metadata: MetadataPatch;
-}
-
-export type SessionKeyScope = (
-  | { agentId: string; agentKey?: never }
-  | { agentKey: string; agentId?: never }
-) & (
-  | {
-    tenantKey: string;
-    defaultTenant?: never;
-  }
-  | {
-    defaultTenant: true;
-    tenantKey?: never;
-  }
-);
-
-export interface ListAgentOptions {
-  tenantKey?: string;
-  agentKey?: string;
-  definitionId?: string;
-  includeArchived?: boolean;
-  cursor?: string;
-  limit?: number;
-}
-
-/** An {@link AgentDefinition} with the key a create needs. */
-export type CreateAgentDefinitionOptions<TOutput extends object = JsonObject> =
-  AgentDefinition<TOutput> & { definitionKey: string };
-
-/** An {@link AgentDefinition}. A replacement cannot change the key. */
-export type UpdateAgentDefinitionOptions<TOutput extends object = JsonObject> =
-  AgentDefinition<TOutput>;
-
-export interface CreateAgentDefinitionRequestOptions {
-  /**
-   * Pins replay to this specific create, so the same key keeps returning that
-   * create's revision-1 resource even after later revisions moved it on.
-   *
-   * Leave it unset for the ordinary case. `definitionKey` is unique within the
-   * App and already scopes replay: restating a definition resolves to the
-   * existing resource at its current revision, which is what a deploy-time
-   * sync wants. Nothing is invented on your behalf here, because a key the SDK
-   * made up would be new on every attempt and so could never deduplicate one.
-   */
-  idempotencyKey?: string;
-}
-
-export interface UpdateAgentDefinitionRequestOptions {
-  /**
-   * The `revision` the definition was read at, sent as `If-Match`, or `"*"`.
-   *
-   * `"*"` means "I read no revision; replace whichever is current" — the
-   * honest precondition for a caller syncing from its own source of truth,
-   * which has nothing to be stale against. It is never refused as stale, and
-   * it still cannot create: the Definition must already exist.
-   *
-   * A number keeps its own meaning — "I am replacing the revision I read" —
-   * so one that has since moved is refused even if the replacement happens to
-   * match it, because you are acting on a state you have not seen. Reach for
-   * `"*"` when that is genuinely not what you meant.
-   */
-  expectedRevision: number | "*";
-}
-
-/** What one definition's {@link NvokenClient.syncDefinitions} call did. */
-export type DefinitionSyncOutcome = "created" | "updated" | "unchanged";
-
-/** One definition's result from {@link NvokenClient.syncDefinitions}. */
-export interface DefinitionSyncResult {
-  definitionKey: string;
-  /**
-   * `created` — the key named nothing and now names this.
-   * `updated` — a revision was published over different contents.
-   * `unchanged` — nvoken already held exactly this, so nothing was published
-   * and the revision did not move.
-   */
-  outcome: DefinitionSyncOutcome;
-  definition: AgentDefinitionResource;
-}
-
-export interface TranscriptPageOptions {
-  cursor?: string;
-  pageToken?: string;
-  limit?: number;
-  /** Read the newest bounded window; omit when following its page token. */
-  tail?: boolean;
-}
-
-export interface TranscriptDrainOptions {
-  cursor?: string;
-  pageSize?: number;
-}
-
-export interface TranscriptDrain {
-  messages: SessionMessage[];
-  invocationChanges: InvocationChange[];
-  cursor: string;
-}
-
-export interface WaitOptions {
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  minPollIntervalMs?: number;
-  maxPollIntervalMs?: number;
-  until?: "terminal" | "actionable" | readonly InvocationStatus[];
-}
-
-/**
- * What reading a stream needs from a client.
- *
- * The stream helpers take this rather than `Client` so that a `BrowserClient`
- * can be passed to them. `BrowserClient` is `Omit<Client, "invoke">` plus a
- * narrower `invoke`, and `Omit` is built on `keyof`, which does not include a
- * class's private members — so it is not assignable to `Client` even though it
- * is one. Minting a browser client and streaming its Session is the flagship
- * browser flow, and it should not need a cast to say so.
- *
- * `Client implements StreamClient` below is what keeps this honest: narrowing
- * one of these members, or making it private, fails at the class rather than
- * at whichever caller notices first.
- */
-export interface StreamClient {
-  readonly sessions: SessionsApi;
-  readonly invocations: InvocationsApi;
+export class Client {
+  readonly agents: AgentCollection;
+  /** @internal */
   readonly configuration: Configuration;
-  readonly retry: Required<RetryPolicy>;
+  /** @internal */
   readonly fetch: typeof globalThis.fetch;
-  readonly streamReconnectTimeoutMs: number;
-}
-
-export class Client implements StreamClient {
-  readonly agents: AgentsApi;
-  readonly credits: CreditsApi;
-  readonly invocations: InvocationsApi;
-  readonly agentDefinitions: AgentDefinitionsApi;
-  readonly mcp: MCPApi;
-  readonly models: ModelsApi;
-  readonly providerKeys: ProviderKeysApi;
-  readonly sessions: SessionsApi;
-  readonly identity: IdentityApi;
-  readonly memories: MemoriesApi;
-  readonly usage: UsageApi;
-  /**
-   * Org-scoped management operations. They resolve no tenant and are not part
-   * of the Runtime surface an App key reaches, so they carry no hand-written
-   * wrapper — the generated API is the whole interface.
-   */
-  readonly apps: AppsApi;
-  readonly orgs: OrgsApi;
-  readonly tenants: TenantsApi;
-  readonly admissions: AdmissionsApi;
-  readonly configuration: Configuration;
+  /** @internal */
   readonly retry: Required<RetryPolicy>;
-  readonly fetch: typeof globalThis.fetch;
+  /** @internal */
   readonly streamReconnectTimeoutMs: number;
-  /** The scope this client stamps, or undefined when it stamps none. */
-  readonly scope: Scope | undefined;
-  /**
-   * Whether this client's credential is a browser token, which names the Agent
-   * itself. See {@link ClientOptions.browserCredential}.
-   */
+  /** @internal */
   readonly browserCredential: boolean;
-  private readonly resolvedOptions: ClientOptions;
+
+  private readonly exact: RawClient;
+  private readonly apiKey: string | (() => string | Promise<string>);
+  private readonly conversationLocks = new Map<string, Promise<void>>();
 
   constructor(options: ClientOptions = {}) {
-    const environment = resolveEnvironment(options.envFile);
-    const baseUrl = options.baseUrl
-      ?? environmentVariable("NVOKEN_BASE_URL")
-      ?? environment.NVOKEN_BASE_URL;
-    const apiKey = options.apiKey
-      ?? environmentVariable("NVOKEN_API_KEY")
-      ?? environment.NVOKEN_API_KEY;
+    const baseUrl = options.baseUrl ?? environmentVariable("NVOKEN_BASE_URL");
+    const apiKey = options.apiKey ?? environmentVariable("NVOKEN_API_KEY");
     if (!baseUrl) {
       throw new NvokenError(
         "validation",
@@ -1676,258 +210,100 @@ export class Client implements StreamClient {
         "apiKey is required; pass it to new Client() or set NVOKEN_API_KEY",
       );
     }
-    this.streamReconnectTimeoutMs = options.streamReconnectTimeoutMs ?? 300_000;
-    if (!(this.streamReconnectTimeoutMs > 0)) {
-      throw new NvokenError(
-        "validation",
-        "streamReconnectTimeoutMs must be a positive number of milliseconds",
-      );
-    }
-    // Bound to globalThis, because some runtimes — workerd among them —
-    // refuse a fetch invoked with any other receiver. The REST path calls it
-    // through generated code that happens to keep the binding, so an unbound
-    // default breaks only streaming, which is the hardest place to notice.
-    const transport = options.fetch ?? globalThis.fetch.bind(globalThis);
-    this.fetch = options.onResponse
-      ? observedFetch(transport, options.onResponse)
-      : transport;
-    this.scope = scopeOrUndefined(options.scope);
+    this.apiKey = apiKey;
     this.browserCredential = options.browserCredential ?? false;
-    this.resolvedOptions = { ...options, baseUrl, apiKey, fetch: transport };
-    this.configuration = new Configuration({
-      basePath: baseUrl.replace(/\/$/, ""),
-      accessToken: apiKey,
-      fetchApi: this.fetch,
-      headers: {
-        "User-Agent": `@deepnoodle/nvoken/${VERSION}`,
-        ...scopeHeaders(this.scope),
-      },
-    });
-    this.agents = new AgentsApi(this.configuration);
-    this.credits = new CreditsApi(this.configuration);
-    this.invocations = new InvocationsApi(this.configuration);
-    this.agentDefinitions = new AgentDefinitionsApi(this.configuration);
-    this.mcp = new MCPApi(this.configuration);
-    this.models = new ModelsApi(this.configuration);
-    this.providerKeys = new ProviderKeysApi(this.configuration);
-    this.sessions = new SessionsApi(this.configuration);
-    this.identity = new IdentityApi(this.configuration);
-    this.memories = new MemoriesApi(this.configuration);
-    this.usage = new UsageApi(this.configuration);
-    this.apps = new AppsApi(this.configuration);
-    this.orgs = new OrgsApi(this.configuration);
-    this.tenants = new TenantsApi(this.configuration);
-    this.admissions = new AdmissionsApi(this.configuration);
+    this.streamReconnectTimeoutMs = options.streamReconnectTimeoutMs ?? 300_000;
+    if (!Number.isFinite(this.streamReconnectTimeoutMs) || this.streamReconnectTimeoutMs <= 0) {
+      throw new NvokenError("validation", "streamReconnectTimeoutMs must be positive");
+    }
+    const transport = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.fetch = options.onResponse ? observedFetch(transport, options.onResponse) : transport;
     this.retry = {
       maxAttempts: options.retry?.maxAttempts ?? 4,
       minDelayMs: options.retry?.minDelayMs ?? 100,
       maxDelayMs: options.retry?.maxDelayMs ?? 2_000,
     };
-    if (
-      !Number.isInteger(this.retry.maxAttempts)
-      || this.retry.maxAttempts < 1
-      || !Number.isFinite(this.retry.minDelayMs)
-      || this.retry.minDelayMs < 0
-      || !Number.isFinite(this.retry.maxDelayMs)
-      || this.retry.maxDelayMs < this.retry.minDelayMs
-    ) {
-      throw new NvokenError(
-        "validation",
-        "retry requires maxAttempts >= 1 and 0 <= minDelayMs <= maxDelayMs",
-      );
-    }
-  }
-
-  /**
-   * Returns a client that stamps this scope on every request it makes. The
-   * receiver is unchanged, so a scoped client can be handed to the part of an
-   * application that handles one tenant's or one end user's work while the
-   * unscoped one keeps doing administrative reads.
-   */
-  scoped(scope: Scope): Client {
-    if (scopeOrUndefined(scope) === undefined) {
-      throw new NvokenError(
-        "validation",
-        "scope requires a tenantKey, a userKey, or both",
-      );
-    }
-    return new Client({ ...this.resolvedOptions, scope });
-  }
-
-  /** Every generated API, so nothing on the contract is out of reach. */
-  raw(): {
-    agents: AgentsApi;
-    credits: CreditsApi;
-    invocations: InvocationsApi;
-    agentDefinitions: AgentDefinitionsApi;
-    mcp: MCPApi;
-    models: ModelsApi;
-    providerKeys: ProviderKeysApi;
-    sessions: SessionsApi;
-    identity: IdentityApi;
-    memories: MemoriesApi;
-    usage: UsageApi;
-    apps: AppsApi;
-    orgs: OrgsApi;
-    tenants: TenantsApi;
-    admissions: AdmissionsApi;
-  } {
-    return {
-      agents: this.agents,
-      credits: this.credits,
-      invocations: this.invocations,
-      agentDefinitions: this.agentDefinitions,
-      mcp: this.mcp,
-      models: this.models,
-      providerKeys: this.providerKeys,
-      sessions: this.sessions,
-      identity: this.identity,
-      memories: this.memories,
-      usage: this.usage,
-      apps: this.apps,
-      orgs: this.orgs,
-      tenants: this.tenants,
-      admissions: this.admissions,
+    validateRetryPolicy(this.retry);
+    this.configuration = new Configuration({
+      basePath: baseUrl.replace(/\/$/, ""),
+      accessToken: apiKey,
+      fetchApi: this.fetch,
+      headers: { "User-Agent": `@deepnoodle/nvoken/${VERSION}` },
+    });
+    this.exact = {
+      admissions: new AdmissionsApi(this.configuration),
+      agents: new AgentsApi(this.configuration),
+      apps: new AppsApi(this.configuration),
+      consoleIntegration: new ConsoleIntegrationApi(this.configuration),
+      conversations: new ConversationsApi(this.configuration),
+      credits: new CreditsApi(this.configuration),
+      identity: new IdentityApi(this.configuration),
+      mcp: new MCPApi(this.configuration),
+      memorySpaces: new MemorySpacesApi(this.configuration),
+      models: new ModelsApi(this.configuration),
+      operations: new OperationsApi(this.configuration),
+      orgs: new OrgsApi(this.configuration),
+      providerKeys: new ProviderKeysApi(this.configuration),
+      tenants: new TenantsApi(this.configuration),
+      turns: new TurnsApi(this.configuration),
+      usage: new UsageApi(this.configuration),
     };
+    this.agents = new AgentCollectionHandle(this);
   }
 
-  /**
-   * Declares one tenant's Agent. Local: no request is made here.
-   *
-   * Declare it by its keys — `{tenantKey, agentKey, definitionKey}` — and the
-   * record is created on first use if it is missing, or by
-   * {@link Agent.ensure} at a moment you choose. Declare it by `agentId` to
-   * name a record that already exists.
-   */
-  agent<TOutput extends object = JsonObject>(
-    options: AgentOptions<TOutput>,
-  ): Agent<TOutput> {
-    return new Agent(this, options);
+  async agent<TOutput extends object = JsonObject>(
+    key: string,
+    options: AgentKeyLookupOptions = {},
+  ): Promise<Agent<TOutput>> {
+    requireText(key, "Agent key");
+    const owner = ownerQuery(options.ownedBy);
+    const page = await this.request(() => this.exact.agents.listAgents({
+      ownerKind: owner.ownerKind,
+      tenantKey: owner.tenantKey,
+      userKey: owner.userKey,
+      agentKey: key,
+      limit: 1,
+    }));
+    const resource = page.items[0];
+    if (!resource) {
+      throw new NvokenError(
+        "not_found",
+        `Agent ${JSON.stringify(key)} was not found`,
+        404,
+        "agent_not_found",
+      );
+    }
+    return new AgentHandle<TOutput>(this, resource, {});
   }
 
-  /**
-   * Creates or resolves the record and returns the {@link Agent} that runs
-   * turns through it. Repeating the same keys and Definition is safe; a
-   * different Definition for the same key is `agent_key_conflict`.
-   */
-  async createAgent<TOutput extends object = JsonObject>(
-    request: CreateAgentRequest,
-    signal?: AbortSignal,
-  ): Promise<EnsuredAgent<TOutput>> {
-    const resource = await this.createAgentResource(request, signal);
-    return Agent.hydrate<TOutput>(this, resource);
+  inline<TOutput extends object = JsonObject>(
+    behavior: InlineBehavior<TOutput>,
+  ): InlineRunner<TOutput> {
+    validateInlineBehavior(behavior);
+    return new InlineHandle(this, copyInlineBehavior(behavior), {});
   }
 
-  createAgentResource(
-    request: CreateAgentRequest,
-    signal?: AbortSignal,
-  ): Promise<AgentResource> {
-    return this.replaySafe(
-      () => this.agents.createAgent({ createAgentRequest: request }, { signal }),
-      signal,
-    );
+  turn<TOutput extends object = JsonObject>(
+    turnId: string,
+    context: TurnAccessContext,
+  ): Turn<TOutput> {
+    requireText(turnId, "Turn id");
+    validateContext(context, this.browserCredential);
+    return new TurnHandle(this, turnId, { ...context }, {}, undefined);
   }
 
-  listAgents(
-    options: ListAgentOptions = {},
-    signal?: AbortSignal,
-  ): Promise<AgentList> {
-    return this.replaySafe(() => this.agents.listAgents(options, { signal }), signal);
-  }
-
-  /**
-   * Reads one Agent and returns it as the same {@link Agent} that
-   * {@link Client.agent} declares — hydrated, and ready for
-   * {@link Agent.withTools} to supply this process's handlers.
-   *
-   * {@link Client.getAgentResource} returns the plain record instead.
-   */
-  async getAgent<TOutput extends object = JsonObject>(
-    agentId: string,
-    signal?: AbortSignal,
-  ): Promise<EnsuredAgent<TOutput>> {
-    return Agent.hydrate<TOutput>(this, await this.getAgentResource(agentId, signal));
-  }
-
-  getAgentResource(agentId: string, signal?: AbortSignal): Promise<AgentResource> {
-    return this.replaySafe(() => this.agents.getAgent({ agentId }, { signal }), signal);
-  }
-
-  updateAgent(
-    agentId: string,
-    request: UpdateAgentRequest,
-    signal?: AbortSignal,
-  ): Promise<AgentResource> {
-    return this.replaySafe(
-      () => this.agents.updateAgent({ agentId, updateAgentRequest: request }, { signal }),
-      signal,
-    );
-  }
-
-  archiveAgent(agentId: string, signal?: AbortSignal): Promise<void> {
-    return this.replaySafe(() => this.agents.archiveAgent({ agentId }, { signal }), signal);
-  }
-
-  restoreAgent(agentId: string, signal?: AbortSignal): Promise<void> {
-    return this.replaySafe(() => this.agents.restoreAgent({ agentId }, { signal }), signal);
+  raw(): RawClient {
+    return this.exact;
   }
 
   listModels(options: ListModelsOptions = {}, signal?: AbortSignal): Promise<ModelList> {
-    return this.replaySafe(
-      () => this.models.listModels(
-        {
-          provider: options.provider,
-          includeDeprecated: options.includeDeprecated,
-        },
-        { signal },
-      ),
+    return this.request(
+      () => this.exact.models.listModels({
+        provider: options.provider,
+        includeDeprecated: options.includeDeprecated,
+      }, { signal }),
       signal,
     );
-  }
-
-  /**
-   * Discovers the tools a remote MCP server projects. Headers are a separate
-   * argument because {@link MCPServer} is durable Agent Definition
-   * configuration and therefore carries no secrets; these are used for this one
-   * discovery request and never stored.
-   */
-  listMcpTools(
-    server: MCPServer,
-    headers?: Record<string, string>,
-    signal?: AbortSignal,
-  ): Promise<MCPListToolsResponse> {
-    return this.replaySafe(
-      () => this.mcp.listMCPTools(
-        {
-          mCPListToolsRequest: {
-            server,
-            headers: headers === undefined ? undefined : { ...headers },
-          },
-        },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  getModel(model: Model, signal?: AbortSignal): Promise<ModelDescriptor> {
-    if (!model.id) {
-      throw new NvokenError("validation", "model id is required");
-    }
-    return this.replaySafe(
-      () => this.models.getModel(
-        { provider: model.provider, modelId: model.id },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  getCurrentIdentity(signal?: AbortSignal): Promise<CurrentIdentity> {
-    return this.replaySafe(
-      () => this.identity.getCurrentIdentity({ signal }),
-      signal,
-    ) as Promise<CurrentIdentity>;
   }
 
   registerOrg(
@@ -1935,130 +311,46 @@ export class Client implements StreamClient {
     options: RegisterOrgOptions = {},
     signal?: AbortSignal,
   ): Promise<Org> {
-    const request: RegisterOrgRequest = {
-      displayName,
-      externalRef: options.externalRef,
-    };
-    const call = () => this.orgs.registerOrg({ registerOrgRequest: request }, { signal });
+    requireText(displayName, "Org displayName");
+    const call = () => this.exact.orgs.registerOrg({
+      registerOrgRequest: {
+        displayName,
+        externalRef: options.externalRef,
+      },
+    }, { signal });
     return options.externalRef === undefined
-      ? this.callOnce(call)
-      : this.replaySafe(call, signal);
+      ? this.requestOnce(call, signal)
+      : this.request(call, signal);
   }
 
-  updateOrg(
-    orgId: string,
-    displayName: string,
-    signal?: AbortSignal,
-  ): Promise<Org> {
-    return this.replaySafe(
-      () => this.orgs.updateOrg(
-        { orgId, updateOrgRequest: { displayName } },
-        { signal },
-      ),
+  updateOrg(orgId: string, displayName: string, signal?: AbortSignal): Promise<Org> {
+    requireText(orgId, "Org id");
+    requireText(displayName, "Org displayName");
+    return this.request(
+      () => this.exact.orgs.updateOrg({
+        orgId,
+        updateOrgRequest: { displayName },
+      }, { signal }),
       signal,
     );
-  }
-
-  registerApp(
-    request: RegisterAppRequest,
-    signal?: AbortSignal,
-  ): Promise<AppRegistration> {
-    return this.callOnce(
-      () => this.apps.registerApp({ registerAppRequest: request }, { signal }),
-    );
-  }
-
-  updateApp(
-    appId: string,
-    request: UpdateAppRequest,
-    signal?: AbortSignal,
-  ): Promise<App> {
-    return this.replaySafe(
-      () => this.apps.updateApp({ appId, updateAppRequest: request }, { signal }),
-      signal,
-    );
-  }
-
-  createAppClientKey(
-    appId: string,
-    request: CreateClientKeyRequest,
-    signal?: AbortSignal,
-  ): Promise<ClientKey> {
-    return this.callOnce(
-      () => this.apps.createAppClientKey(
-        { appId, createClientKeyRequest: request },
-        { signal },
-      ),
-    );
-  }
-
-  /**
-   * Mints a receiver key and returns its plaintext exactly once. Ordinary
-   * rotation leaves `activate` false until every receiver accepts the new key.
-   */
-  mintAppSigningKey(
-    appId: string,
-    request: MintAppSigningKeyRequest,
-    signal?: AbortSignal,
-  ): Promise<AppSigningKeySecret> {
-    return this.callOnce(
-      () => this.apps.mintAppSigningKey(
-        { appId, mintAppSigningKeyRequest: request },
-        { signal },
-      ),
-    );
-  }
-
-  listCredentials(
-    options: ListCredentialsOptions = {},
-    signal?: AbortSignal,
-  ): Promise<CredentialList> {
-    return this.replaySafe(
-      () => this.identity.listCredentials(options, { signal }),
-      signal,
-    );
-  }
-
-  async *credentialPages(
-    options: Omit<ListCredentialsOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<Credential> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listCredentials({ ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
   }
 
   createCredential(
     options: CreateCredentialOptions,
     signal?: AbortSignal,
   ): Promise<CredentialIssuance> {
-    if (!options.name || !options.type) {
-      throw new NvokenError("validation", "credential name and type are required");
-    }
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.replaySafe(
-      () => this.identity.createCredential(
-        {
-          idempotencyKey,
-          createCredentialRequest: {
-            name: options.name,
-            type: options.type,
-            appId: options.appId,
-            expiresAt: options.expiresAt,
-          },
+    requireText(options.name, "Credential name");
+    const idempotencyKey = options.idempotencyKey ?? newIdempotencyKey();
+    return this.request(
+      () => this.exact.identity.createCredential({
+        idempotencyKey,
+        createCredentialRequest: {
+          name: options.name,
+          type: options.type,
+          appId: options.appId,
+          expiresAt: options.expiresAt,
         },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  getCredential(credentialId: string, signal?: AbortSignal): Promise<Credential> {
-    return this.replaySafe(
-      () => this.identity.getCredential({ credentialId }, { signal }),
+      }, { signal }),
       signal,
     );
   }
@@ -2068,34 +360,21 @@ export class Client implements StreamClient {
     options: RotateCredentialOptions,
     signal?: AbortSignal,
   ): Promise<CredentialIssuance> {
-    if (
-      !credentialId
-      || !Number.isInteger(options.overlapSeconds)
+    requireText(credentialId, "Credential id");
+    if (!Number.isInteger(options.overlapSeconds)
       || options.overlapSeconds < 0
-      || options.overlapSeconds > 86_400
-    ) {
+      || options.overlapSeconds > 86_400) {
       throw new NvokenError(
         "validation",
-        "credentialId is required and overlapSeconds must be an integer between 0 and 86400",
+        "overlapSeconds must be an integer between 0 and 86400",
       );
     }
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.replaySafe(
-      () => this.identity.rotateCredential(
-        {
-          credentialId,
-          idempotencyKey,
-          rotateCredentialRequest: { overlapSeconds: options.overlapSeconds },
-        },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  revokeCredential(credentialId: string, signal?: AbortSignal): Promise<Credential> {
-    return this.replaySafe(
-      () => this.identity.revokeCredential({ credentialId }, { signal }),
+    return this.request(
+      () => this.exact.identity.rotateCredential({
+        credentialId,
+        idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
+        rotateCredentialRequest: { overlapSeconds: options.overlapSeconds },
+      }, { signal }),
       signal,
     );
   }
@@ -2104,33 +383,25 @@ export class Client implements StreamClient {
     options: CreateProviderKeyOptions,
     signal?: AbortSignal,
   ): Promise<ProviderKey> {
-    if (!options.provider || !options.apiKey) {
-      throw new NvokenError("validation", "provider and apiKey are required");
-    }
-    if (
-      (options.scope === "app" && options.tenantKey !== undefined)
-      || (options.scope === "tenant" && !options.tenantKey)
-    ) {
+    requireText(options.provider, "Provider");
+    requireText(options.apiKey, "Provider API key");
+    if ((options.scope === "tenant") !== Boolean(options.tenantKey)) {
       throw new NvokenError(
         "validation",
         "tenantKey is required for tenant scope and forbidden for app scope",
       );
     }
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.replaySafe(
-      () => this.providerKeys.createProviderKey(
-        {
-          createProviderKeyRequest: {
-            provider: options.provider,
-            scope: options.scope,
-            tenantKey: options.tenantKey,
-            key: { apiKey: options.apiKey },
-            expiresAt: options.expiresAt,
-            idempotencyKey,
-          },
+    return this.request(
+      () => this.exact.providerKeys.createProviderKey({
+        createProviderKeyRequest: {
+          provider: options.provider,
+          scope: options.scope,
+          tenantKey: options.tenantKey,
+          key: { apiKey: options.apiKey },
+          expiresAt: options.expiresAt,
+          idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
         },
-        { signal },
-      ),
+      }, { signal }),
       signal,
     );
   }
@@ -2139,46 +410,8 @@ export class Client implements StreamClient {
     options: ListProviderKeysOptions = {},
     signal?: AbortSignal,
   ): Promise<ProviderKeyList> {
-    return this.replaySafe(
-      () => this.providerKeys.listProviderKeys(options, { signal }),
-      signal,
-    );
-  }
-
-  async *providerKeyPages(
-    options: Omit<ListProviderKeysOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<ProviderKey> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listProviderKeys({ ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-  }
-
-  getProviderKey(
-    providerKeyId: string,
-    signal?: AbortSignal,
-  ): Promise<ProviderKey> {
-    return this.replaySafe(
-      () => this.providerKeys.getProviderKey(
-        { providerKeyId },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  getProviderKeyUsage(
-    providerKeyId: string,
-    signal?: AbortSignal,
-  ): Promise<ProviderKeyUsage> {
-    return this.replaySafe(
-      () => this.providerKeys.getProviderKeyUsage(
-        { providerKeyId },
-        { signal },
-      ),
+    return this.request(
+      () => this.exact.providerKeys.listProviderKeys(options, { signal }),
       signal,
     );
   }
@@ -2188,39 +421,18 @@ export class Client implements StreamClient {
     options: RotateProviderKeyOptions,
     signal?: AbortSignal,
   ): Promise<ProviderKey> {
-    if (!providerKeyId || !options.apiKey) {
-      throw new NvokenError(
-        "validation",
-        "providerKeyId and apiKey are required",
-      );
-    }
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.replaySafe(
-      () => this.providerKeys.rotateProviderKey(
-        {
-          providerKeyId,
-          rotateProviderKeyRequest: {
-            key: { apiKey: options.apiKey },
-            expiresAt: options.expiresAt,
-            overlapSeconds: options.overlapSeconds,
-            idempotencyKey,
-          },
+    requireText(providerKeyId, "Provider key id");
+    requireText(options.apiKey, "Provider API key");
+    return this.request(
+      () => this.exact.providerKeys.rotateProviderKey({
+        providerKeyId,
+        rotateProviderKeyRequest: {
+          key: { apiKey: options.apiKey },
+          expiresAt: options.expiresAt,
+          overlapSeconds: options.overlapSeconds,
+          idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
         },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  revokeProviderKey(
-    providerKeyId: string,
-    signal?: AbortSignal,
-  ): Promise<ProviderKey> {
-    return this.replaySafe(
-      () => this.providerKeys.revokeProviderKey(
-        { providerKeyId },
-        { signal },
-      ),
+      }, { signal }),
       signal,
     );
   }
@@ -2229,15 +441,14 @@ export class Client implements StreamClient {
     options: AllocateCreditsOptions,
     signal?: AbortSignal,
   ): Promise<AllocateCreditsResult> {
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.replaySafe(
-      () => this.credits.allocateCredits({
+    return this.request(
+      () => this.exact.credits.allocateCredits({
         allocateCreditsRequest: {
           amount: options.amount,
           tenantKey: options.tenantKey,
           defaultTenant: options.defaultTenant,
           reference: options.reference,
-          idempotencyKey,
+          idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
         },
       }, { signal }),
       signal,
@@ -2248,8 +459,8 @@ export class Client implements StreamClient {
     options: ListCreditsOptions = {},
     signal?: AbortSignal,
   ): Promise<CreditAccountList> {
-    return this.replaySafe(
-      () => this.credits.listCreditAccounts(options, { signal }),
+    return this.request(
+      () => this.exact.credits.listCreditAccounts(options, { signal }),
       signal,
     );
   }
@@ -2258,876 +469,177 @@ export class Client implements StreamClient {
     options: ListCreditsOptions = {},
     signal?: AbortSignal,
   ): Promise<CreditAllocationList> {
-    return this.replaySafe(
-      () => this.credits.listCreditAllocations(options, { signal }),
+    return this.request(
+      () => this.exact.credits.listCreditAllocations(options, { signal }),
       signal,
     );
   }
 
-  async invoke<TOutput extends object = JsonObject>(
-    request: InvokeRequest<TOutput>,
-    signal?: AbortSignal,
-  ): Promise<InvocationHandle<TOutput>> {
-    if (!validInvokeInput(request.input)) {
-      throw new NvokenError("validation", "input is required");
-    }
-    const hasAgentId = "agentId" in request && Boolean(request.agentId);
-    const hasAgentKey = "agentKey" in request && Boolean(request.agentKey);
-    if (hasAgentId && hasAgentKey) {
-      throw new NvokenError(
-        "validation",
-        "supply exactly one of agentId and agentKey",
+  /** @internal */
+  async admit<TOutput extends object>(
+    request: CreateTurnRequest,
+    context: TurnAccessContext,
+    handlers: ToolHandlers,
+    options: RunnerTurnOptions,
+  ): Promise<Turn<TOutput>> {
+    const idempotencyKey = request.idempotencyKey;
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    try {
+      const resource = await this.request(
+        () => this.exact.turns.createTurn(
+          { createTurnRequest: request },
+          contextOverride(context, scope.signal),
+        ),
+        scope.signal,
       );
-    }
-    // A browser token names the Agent, so a page sends neither. Requiring one
-    // here would leave browser-direct access with no way to call the operation
-    // it exists for.
-    if (!hasAgentId && !hasAgentKey && !this.browserCredential) {
-      throw new NvokenError(
-        "validation",
-        "supply exactly one of agentId and agentKey",
+      return new TurnHandle<TOutput>(
+        this,
+        resource.id,
+        { ...context },
+        handlers,
+        { idempotencyKey, deduplicated: resource.deduplicated ?? false },
       );
-    }
-    validateInvocationSession(request.session);
-    if (request.onBudgetExhausted !== undefined
-      && request.onBudgetExhausted !== "stop"
-      && request.onBudgetExhausted !== "hold") {
-      throw new NvokenError(
-        "validation",
-        "onBudgetExhausted must be stop or hold",
-      );
-    }
-    validateAgentDefinitionOverrides(request.overrides);
-    validateMCPServerHeaders(request.mcpServerHeaders);
-    const idempotencyKey = request.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    const generatedRequest = invocationRequestToWire(request, idempotencyKey);
-    const ack = await this.replaySafe(
-      () => this.invocations.createInvocation(
-        { createInvocationRequest: generatedRequest },
-        { signal },
-      ),
-      signal,
-    ) as unknown as Invocation;
-    return new InvocationHandle<TOutput>(
-      this,
-      ack.id,
-      idempotencyKey,
-      ack.sessionId,
-      ack.agentId,
-      ack.status,
-      ack.deduplicated,
-      ack.deadlineAt,
-      undefined,
-      ack.contentExpiresAt,
-    );
-  }
-
-  /**
-   * Creates one reusable App-owned Agent Definition resource, or returns the
-   * one `definitionKey` already names.
-   *
-   * The key is unique within the App, so this is ensure-shaped: restating an
-   * existing definition returns it rather than creating a second, and a key
-   * already held by a different definition is a conflict naming the resource
-   * to update instead. That makes it safe to call on every deploy without a
-   * caller-invented idempotency key — see `idempotencyKey` for when you still
-   * want one.
-   */
-  async createAgentDefinition<TOutput extends object = JsonObject>(
-    definition: CreateAgentDefinitionOptions<TOutput>,
-    options: CreateAgentDefinitionRequestOptions = {},
-    signal?: AbortSignal,
-  ): Promise<AgentDefinitionResource> {
-    const { definition: resource } = await this.ensureAgentDefinition(
-      definition,
-      signal,
-      options.idempotencyKey,
-    );
-    return resource;
-  }
-
-  /**
-   * The created-or-resolved resource, plus whether this call minted it — which
-   * the status carries and the body does not: 201 for a create, 200 for a
-   * restatement that resolved to what already existed.
-   */
-  private async ensureAgentDefinition<TOutput extends object = JsonObject>(
-    definition: CreateAgentDefinitionOptions<TOutput>,
-    signal?: AbortSignal,
-    idempotencyKey?: string,
-  ): Promise<{ definition: AgentDefinitionResource; created: boolean }> {
-    validateAgentDefinition(definition);
-    if (!definition.definitionKey) {
-      throw new NvokenError("validation", "definitionKey is required");
-    }
-    return await this.replaySafe(
-      async () => {
-        const response = await this.agentDefinitions.createAgentDefinitionRaw(
-          {
-            idempotencyKey,
-            // An omitted name is left omitted rather than filled in with the key
-            // here: the runtime applies that default, and duplicating it would
-            // make two places to change it.
-            agentDefinitionCreate: agentDefinitionToWire(
-              definition,
-              { definitionKey: definition.definitionKey },
-            ) as AgentDefinitionCreate,
-          },
-          { signal },
+    } catch (error) {
+      const normalized = await normalizeError(error);
+      if (scope.timedOut()
+        || normalized.category === "transport"
+        || normalized.category === "cancelled") {
+        throw new TurnTimeoutError(
+          "Turn admission outcome is unknown; retry the exact request with this idempotency key",
+          undefined,
+          idempotencyKey,
+          { cause: normalized },
         );
-        return {
-          definition: await response.value(),
-          created: response.raw.status === 201,
-        };
-      },
-      signal,
-    );
+      }
+      throw normalized;
+    } finally {
+      scope.dispose();
+    }
   }
 
-  getAgentDefinition(
-    definitionId: string,
+  /** @internal */
+  async readTurnResult(
+    turnId: string,
+    context: TurnAccessContext,
     signal?: AbortSignal,
-  ): Promise<AgentDefinitionResource> {
-    return this.replaySafe(
-      () => this.agentDefinitions.getAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
-      signal,
-    );
-  }
-
-  getAgentDefinitionRevision(
-    definitionId: string,
-    revision: number,
-    signal?: AbortSignal,
-  ): Promise<AgentDefinitionResource> {
-    return this.replaySafe(
-      () => this.agentDefinitions.getAgentDefinitionRevision(
-        { agentDefinitionId: definitionId, revision },
-        { signal },
+  ): Promise<GeneratedTurnResult> {
+    return this.request(
+      () => this.exact.turns.getTurnResult(
+        { turnId },
+        contextOverride(context, signal),
       ),
       signal,
     );
   }
 
-  listAgentDefinitions(
-    options: ListAgentDefinitionsOptions = {},
-    signal?: AbortSignal,
-  ): Promise<AgentDefinitionResourceList> {
-    return this.replaySafe(
-      () => this.agentDefinitions.listAgentDefinitions(options, { signal }),
-      signal,
-    );
-  }
-
-  /**
-   * Reads the Agent Definition a caller-owned key names, or null when the key
-   * names none.
-   *
-   * `definitionKey` is unique within the App, so this is a lookup rather than
-   * a search: there is nothing to paginate, nothing to filter client-side, and
-   * no duplicate to detect. Archived resources are excluded unless asked for,
-   * matching the list.
-   */
-  async getAgentDefinitionByKey(
-    definitionKey: string,
-    options: { includeArchived?: boolean } = {},
-    signal?: AbortSignal,
-  ): Promise<AgentDefinitionResource | null> {
-    if (!definitionKey) {
-      throw new NvokenError("validation", "definitionKey is required");
-    }
-    const page = await this.listAgentDefinitions(
-      { definitionKey, includeArchived: options.includeArchived },
-      signal,
-    );
-    return page.items[0] ?? null;
-  }
-
-  /**
-   * Publishes the next revision of an Agent Definition, replacing the whole
-   * resource. Pass the definition you read, changed:
-   *
-   * ```ts
-   * const current = await client.getAgentDefinition(id);
-   * await client.updateAgentDefinition(
-   *   id,
-   *   { ...current, instructions: "Be concise and warm." },
-   *   { expectedRevision: current.revision },
-   * );
-   * ```
-   *
-   * A field you leave out is cleared, not kept, which is why spreading the
-   * current resource rather than restating it by hand is the safe habit.
-   *
-   * Replacement is ensure-shaped: a definition already matching the current
-   * revision publishes nothing and returns that revision unchanged. So this is
-   * safe to call with contents you are not sure differ — see
-   * {@link NvokenClient.syncDefinitions}, which is that call in a loop.
-   */
-  async updateAgentDefinition<TOutput extends object = JsonObject>(
-    definitionId: string,
-    definition: UpdateAgentDefinitionOptions<TOutput>,
-    options: UpdateAgentDefinitionRequestOptions,
-    signal?: AbortSignal,
-  ): Promise<AgentDefinitionResource> {
-    const { definition: resource } = await this.replaceAgentDefinition(
-      definitionId,
-      definition,
-      options.expectedRevision,
-      signal,
-    );
-    return resource;
-  }
-
-  /**
-   * The replacement, plus whether a revision was published — which the status
-   * carries and the body does not: 201 for a published revision, 200 for a
-   * request the current revision already satisfied.
-   */
-  private async replaceAgentDefinition<TOutput extends object = JsonObject>(
-    definitionId: string,
-    definition: UpdateAgentDefinitionOptions<TOutput>,
-    expectedRevision: number | "*",
-    signal?: AbortSignal,
-  ): Promise<{ definition: AgentDefinitionResource; published: boolean }> {
-    validateAgentDefinition(definition);
-    if (expectedRevision !== "*" && !(expectedRevision >= 1)) {
-      throw new NvokenError("validation", 'expectedRevision must be positive, or "*"');
-    }
-    return await this.replaySafe(
-      async () => {
-        const response = await this.agentDefinitions.updateAgentDefinitionRaw({
-          agentDefinitionId: definitionId,
-          ifMatch: expectedRevision === "*" ? "*" : `"${expectedRevision}"`,
-          // The key is immutable, so it is dropped rather than sent back: a
-          // spread resource always carries one and the replacement schema does
-          // not want it.
-          agentDefinitionWrite: agentDefinitionToWire(definition, {}),
-        }, { signal });
-        return {
-          definition: await response.value(),
-          published: response.raw.status === 201,
-        };
-      },
-      signal,
-    );
-  }
-
-  /**
-   * Makes nvoken hold exactly the definitions given, publishing a revision
-   * only where one differs.
-   *
-   * This is a write-only loop: nothing is read back and nothing is compared
-   * here. Both write paths are ensure-shaped, so nvoken decides what moved —
-   * which matters because it canonicalizes a definition before comparing it,
-   * and a caller reproducing that comparison would be maintaining a second
-   * copy of the rule, in another language, free to disagree the first time
-   * either side gains a field.
-   *
-   * ```ts
-   * const synced = await client.syncDefinitions(definitions);
-   * for (const { definitionKey, outcome } of synced) {
-   *   if (outcome !== "unchanged") console.log(`${definitionKey}: ${outcome}`);
-   * }
-   * ```
-   *
-   * Each definition costs one call, or two when its contents changed: the
-   * create conflict names the resource to replace, so nothing has to be looked
-   * up.
-   *
-   * It is sequential and stops at the first error, which is the useful
-   * behavior for a deploy step. A key held by an archived Definition is one of
-   * those errors rather than an outcome: restoring it is a decision, not a
-   * sync.
-   */
-  async syncDefinitions<TOutput extends object = JsonObject>(
-    definitions: readonly CreateAgentDefinitionOptions<TOutput>[],
-    signal?: AbortSignal,
-  ): Promise<DefinitionSyncResult[]> {
-    const results: DefinitionSyncResult[] = [];
-    for (const definition of definitions) {
-      const { definitionKey } = definition;
-      try {
-        const { definition: resource, created } =
-          await this.ensureAgentDefinition(definition, signal);
-        // The create either minted the resource or resolved to one already
-        // holding these exact contents. Either way nvoken now holds them.
-        results.push({
-          definitionKey,
-          outcome: created ? "created" : "unchanged",
-          definition: resource,
-        });
-        continue;
-      } catch (error) {
-        const conflict = await normalizeError(error);
-        // The conflict names the resource holding the key, so the replacement
-        // it points at needs no lookup first.
-        const id = conflict.code === "agent_definition_key_conflict"
-          ? conflict.details?.definition_id
-          : undefined;
-        if (typeof id !== "string" || !id) throw conflict;
-        // "*", because nothing was read: the conflict proves the resource
-        // exists and differs, not which revision it is at.
-        const { definition: resource, published } =
-          await this.replaceAgentDefinition(id, definition, "*", signal);
-        results.push({
-          definitionKey,
-          // Not published means someone else published these contents between
-          // the two calls.
-          outcome: published ? "updated" : "unchanged",
-          definition: resource,
-        });
-      }
-    }
-    return results;
-  }
-
-  archiveAgentDefinition(
-    definitionId: string,
+  /** @internal */
+  async submitToolResults(
+    turnId: string,
+    context: TurnAccessContext,
+    results: Array<{ toolCallId: string; content: JsonValue | null; isError?: boolean }>,
     signal?: AbortSignal,
   ): Promise<void> {
-    return this.replaySafe(
-      () => this.agentDefinitions.archiveAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
+    await this.request(
+      () => this.exact.turns.submitHostToolResults(
+        { turnId, submitHostToolResultsRequest: { results } },
+        contextOverride(context, signal),
+      ),
       signal,
     );
   }
 
-  restoreAgentDefinition(
-    definitionId: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    return this.replaySafe(
-      () => this.agentDefinitions.restoreAgentDefinition({ agentDefinitionId: definitionId }, { signal }),
-      signal,
-    );
-  }
-
-  /**
-   * Creates a lazy durable handle. No network request is made until the handle
-   * is read, waited, cancelled, or streamed.
-   */
-  invocation<TOutput extends object = JsonObject>(
-    invocationId: string,
-  ): InvocationHandle<TOutput> {
-    if (!invocationId) {
-      throw new NvokenError("validation", "invocationId is required");
-    }
-    return new InvocationHandle<TOutput>(this, invocationId);
-  }
-
-  getInvocation<TOutput extends object = JsonObject>(
-    invocationId: string,
-    signal?: AbortSignal,
-  ): Promise<TypedInvocation<TOutput>> {
-    return this.replaySafe(
-      () => this.invocations.getInvocation({ invocationId }, { signal }),
-      signal,
-    ) as Promise<TypedInvocation<TOutput>>;
-  }
-
-  /** Erases the private content of a terminal standalone Invocation. */
-  deleteInvocation(invocationId: string, signal?: AbortSignal): Promise<void> {
-    return this.callOnce(
-      () => this.invocations.deleteInvocation({ invocationId }, { signal }),
-    );
-  }
-
-  getInvocationResult<TOutput extends object = JsonObject>(
-    invocationId: string,
-    signal?: AbortSignal,
-  ): Promise<TypedInvocationResult<TOutput>> {
-    return this.replaySafe(
-      () => this.invocations.getInvocationResult({ invocationId }, { signal }),
-      signal,
-    ) as Promise<TypedInvocationResult<TOutput>>;
-  }
-
-  cancelInvocation<TOutput extends object = JsonObject>(
-    invocationId: string,
-    signal?: AbortSignal,
-  ): Promise<TypedInvocation<TOutput>> {
-    return this.replaySafe(
-      () => this.invocations.cancelInvocation({ invocationId }, { signal }),
-      signal,
-    ) as Promise<TypedInvocation<TOutput>>;
-  }
-
-  /**
-   * Stops an Invocation gracefully and keeps its work. The turn settles
-   * `completed` with stop reason `interrupted` once it reaches an execution
-   * seam, so the messages it already produced stay in the Session.
-   * `cancelInvocation` is the discarding stop.
-   */
-  interruptInvocation<TOutput extends object = JsonObject>(
-    invocationId: string,
-    signal?: AbortSignal,
-  ): Promise<TypedInvocation<TOutput>> {
-    return this.replaySafe(
-      () => this.invocations.interruptInvocation({ invocationId }, { signal }),
-      signal,
-    ) as Promise<TypedInvocation<TOutput>>;
-  }
-
-  /**
-   * Appends steering to a running Invocation without ending it. The turn keeps
-   * everything it has already produced — the difference from supersession,
-   * which rewinds — and the model sees the input at its next execution seam
-   * rather than immediately.
-   *
-   * Input the turn never reaches is marked `expired` when the Invocation
-   * settles; nvoken never re-homes it onto a later turn, so re-sending missed
-   * direction as the next Invocation's input is the caller's decision.
-   *
-   * Supplying `idempotencyKey` makes a retry safe: the same key with the same
-   * content returns the original acknowledgement with `deduplicated` set, and the
-   * same key with different content is refused.
-   */
-  createNudge(
-    invocationId: string,
-    content: string,
-    options: { idempotencyKey?: string } = {},
-    signal?: AbortSignal,
-  ): Promise<NudgeAcknowledgement> {
-    const call = () => this.invocations.createNudge(
+  /** @internal */
+  async *turnFrames<TOutput extends object>(
+    turnId: string,
+    context: TurnAccessContext,
+    options: RawStreamOptions = {},
+  ) {
+    yield* streamTurnFrames<TOutput>(
+      (cursor, signal) => this.openStream(
+        `/v1/turns/${encodeURIComponent(turnId)}/stream`,
+        context,
+        cursor,
+        options.deltas,
+        signal,
+      ),
       {
-        invocationId,
-        createNudgeRequest: { content, idempotencyKey: options.idempotencyKey },
+        cursor: options.cursor,
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+        reconnectTimeoutMs: this.streamReconnectTimeoutMs,
       },
-      { signal },
     );
-    // Without a key a retried POST would stage the same direction twice.
-    return options.idempotencyKey === undefined ? call() : this.replaySafe(call, signal);
   }
 
-  /**
-   * Reads the staged queue in the order the turn will consume it, ended rows
-   * included. This is the reconciliation source for a surface that shows
-   * queued direction.
-   */
-  listNudges(
-    invocationId: string,
-    options: { status?: NudgeStatus; cursor?: string; limit?: number } = {},
-    signal?: AbortSignal,
-  ): Promise<NudgeList> {
-    return this.replaySafe(
-      () => this.invocations.listNudges(
-        {
-          invocationId,
-          status: options.status,
-          cursor: options.cursor,
-          limit: options.limit,
-        },
-        { signal },
+  /** @internal */
+  async *conversationFrames<TOutput extends object = JsonObject>(
+    conversationId: string,
+    context: TurnAccessContext,
+    options: RawStreamOptions = {},
+  ) {
+    requireText(conversationId, "Conversation id");
+    validateContext(context, this.browserCredential);
+    yield* streamConversationFrames<TOutput>(
+      (cursor, signal) => this.openStream(
+        `/v1/conversations/${encodeURIComponent(conversationId)}/stream`,
+        context,
+        cursor,
+        options.deltas,
+        signal,
       ),
-      signal,
+      {
+        cursor: options.cursor,
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+        reconnectTimeoutMs: this.streamReconnectTimeoutMs,
+      },
     );
   }
 
-  /** Reads durable ToolCall lifecycle records in discovery order. */
-  listToolCalls(
-    invocationId: string,
-    options: { cursor?: string; limit?: number } = {},
-    signal?: AbortSignal,
-  ): Promise<ToolCallList> {
-    return this.replaySafe(
-      () => this.invocations.listToolCalls(
-        { invocationId, cursor: options.cursor, limit: options.limit },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  /**
-   * Withdraws staged input the turn has not taken. Input the executor already
-   * drained is reported as a conflict rather than removed from a transcript it
-   * is already part of.
-   */
-  cancelNudge(
-    invocationId: string,
-    nudgeId: string,
-    signal?: AbortSignal,
-  ): Promise<Nudge> {
-    return this.replaySafe(
-      () => this.invocations.cancelNudge({ invocationId, nudgeId }, { signal }),
-      signal,
-    );
-  }
-
-  submitToolResults(
-    invocationId: string,
-    results: ToolResult[],
-    signal?: AbortSignal,
-  ): Promise<SubmitHostToolResultsResponse> {
-    return this.replaySafe(
-      () => this.invocations.submitHostToolResults(
-        {
-          invocationId,
-          submitHostToolResultsRequest: {
-            results: results.map((result) => ({
-              toolCallId: result.toolCallId,
-              content: result.content,
-              isError: result.isError,
-            })),
-          },
-        },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  /** Reads the bounded, content-free operational logs for one Invocation. */
-  listInvocationLogs(
-    invocationId: string,
-    options: ListInvocationLogOptions = {},
-    signal?: AbortSignal,
-  ): Promise<InvocationLogList> {
-    return this.replaySafe(
-      () => this.invocations.listInvocationLogs(
-        { invocationId, ...options },
-        { signal },
-      ),
-      signal,
-    );
-  }
-
-  /** Browses or searches durable memories for one Agent and scope. */
-  listMemories(
-    options: ListMemoryOptions,
-    signal?: AbortSignal,
-  ): Promise<MemoryList> {
-    return this.replaySafe(
-      () => this.memories.listMemories(options, { signal }),
-      signal,
-    );
-  }
-
-  listInvocations(
-    options: ListInvocationOptions & { ended?: boolean; endedSince?: Date } = {},
-    signal?: AbortSignal,
-  ): Promise<InvocationList> {
-    const request = {
-      ...options,
-      status: options.status === undefined
-        ? undefined
-        : Array.isArray(options.status) ? options.status : [options.status],
-    };
-	return this.replaySafe(
-      () => this.invocations.listInvocations(request, { signal }),
-      signal,
-	) as Promise<InvocationList>;
-  }
-
-  async *invocationPages(
-    options: Omit<ListInvocationOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<Invocation> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listInvocations({ ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-  }
-
-  /**
-   * One page of the reconciliation feed: turns that ended, oldest first by the
-   * moment they ended. Walk it and append by `id`.
-   *
-   * This is the backstop for settlement. `invocation.ended` webhooks are
-   * delivered at least once, so a delivery that never lands leaves a turn
-   * nobody settles — silently, since nothing errors and the only evidence is a
-   * ledger row that was never written. Reading this to the end is how you find
-   * out. {@link listInvocations} cannot stand in: it is newest-first over
-   * current state, so a turn ending mid-page moves under you and a terminal
-   * status filter gives you a set with no position in it.
-   *
-   * `nextCursor` is always a string here, including on an empty page, so a
-   * consumer that catches up keeps its place without special-casing. Keep
-   * calling while `hasMore`; when it is false you are caught up.
-   *
-   * `completeThrough` is the instant the feed is complete to. Turns that ended
-   * after it are held back until their settling transactions are certainly
-   * visible, because a turn appearing behind your cursor is one you never see
-   * again. It is also the value to alarm on: one that stops advancing means
-   * settlement has stalled rather than that nothing ended.
-   *
-   * There is deliberately no auto-paging generator for this one. A generator
-   * would hide the cursor, and the cursor is the only thing that has to survive
-   * the process — losing it is the failure this feed exists to prevent. Store
-   * it yourself between pages:
-   *
-   * ```ts
-   * let cursor = await loadCursor();
-   * for (;;) {
-   *   const page = await client.listEndedInvocations({ cursor });
-   *   for (const invocation of page.items) await settle(invocation);
-   *   cursor = page.nextCursor!;
-   *   await saveCursor(cursor);
-   *   if (!page.hasMore) break;
-   * }
-   * ```
-   */
-  listEndedInvocations(
-    options: EndedInvocationOptions = {},
-    signal?: AbortSignal,
-  ): Promise<InvocationList> {
-    return this.listInvocations({ ...options, ended: true }, signal);
-  }
-
-  listSessions(
-    options: ListSessionOptions = {},
-    signal?: AbortSignal,
-  ): Promise<SessionList> {
-	return this.replaySafe(
-	  () => this.sessions.listSessions(options, { signal }),
-	  signal,
-	) as Promise<SessionList>;
-  }
-
-  async *sessionPages(
-    options: Omit<ListSessionOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<Session> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listSessions({ ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-  }
-
-  getSession(sessionId: string, signal?: AbortSignal): Promise<Session> {
-	return this.replaySafe(
-	  () => this.sessions.getSession({ sessionId }, { signal }),
-	  signal,
-	) as Promise<Session>;
-  }
-
-  /**
-   * Creates a Session with zero Invocations and optional host-asserted history.
-   * Omitting agentKey creates an unbound Session only when seedMessages is
-   * empty. A sessionKey requires an agentKey and makes creation an upsert, so
-   * only keyed creates are retried.
-   */
-  async createSession(request: CreateSessionRequest = {}, signal?: AbortSignal): Promise<Session> {
-    const call = () =>
-      this.sessions.createSession({ createSessionRequest: request }, { signal });
-    if (request.sessionKey != null) {
-	  return this.replaySafe(call, signal) as Promise<Session>;
-    }
+  /** @internal */
+  async serialize<T>(identity: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.conversationLocks.get(identity) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.catch(() => undefined).then(() => current);
+    this.conversationLocks.set(identity, tail);
+    await previous.catch(() => undefined);
     try {
-	  return await call() as Session;
-    } catch (error) {
-      throw await normalizeError(error);
+      return await operation();
+    } finally {
+      release();
+      if (this.conversationLocks.get(identity) === tail) this.conversationLocks.delete(identity);
     }
   }
 
-  /**
-   * Copies source history through an inclusive message into a new Session.
-   * The source is unchanged, and the child starts with no usage or compaction
-   * summary. A sessionKey makes the fork replay-safe.
-   */
-  async forkSession(
-    sourceSessionId: string,
-    request: ForkSessionRequest,
-    signal?: AbortSignal,
-  ): Promise<Session> {
-    const call = () =>
-      this.sessions.forkSession(
-        { sessionId: sourceSessionId, forkSessionRequest: request },
-        { signal },
-      );
-    if (request.sessionKey != null) {
-	  return this.replaySafe(call, signal) as Promise<Session>;
-    }
-    try {
-	  return await call() as Session;
-    } catch (error) {
-      throw await normalizeError(error);
-    }
-  }
-
-  /**
-   * Erases a Session and everything under it: its Invocations, transcript,
-   * checkpoints, tool calls, artifacts, and undelivered webhooks. The
-   * erasure is immediate and irreversible.
-   *
-   * A Session holding a nonterminal Invocation is refused with
-   * `session_invocation_active` unless `options.force`. Erasure skips
-   * settlement — the Invocation is removed rather than ended, so it records no
-   * terminal status and emits no `invocation.ended` webhook — which is why a
-   * caller that bills or reconciles on settlement must cancel first and wait
-   * for the final state.
-   *
-   * `force` erases anyway, over a live turn. It is for erasing on an end
-   * user's behalf, where removing the transcript now outranks keeping a
-   * settled record: a deletion request has to be honoured, and a refusal
-   * thrown into that path leaves it unhonoured.
-   *
-   * An unknown or out-of-scope Session is not found, so a retry after a lost
-   * response can treat that as already-done.
-   *
-   * This is not account erasure by itself: nvoken keeps no account tombstone,
-   * so a caller honouring a deletion request must stop admitting work for the
-   * tenant before paginating and deleting.
-   */
-  async deleteSession(
-    sessionId: string,
-    options: DeleteSessionOptions = {},
-    signal?: AbortSignal,
-  ): Promise<void> {
-    // Deletion is idempotent by shape — a repeat is not-found rather than a
-    // second erasure — so it is safe to replay.
-    await this.replaySafe(
-      () => this.sessions.deleteSession({ sessionId, force: options.force }, { signal }),
-      signal,
-    );
-  }
-
-  /**
-   * Merges a metadata patch into a Session: a present key replaces, an explicit
-   * `null` deletes, and an unmentioned key survives. Merging rather than
-   * replacing is what stops independent writers — a title UI and correlation
-   * tooling — from silently discarding each other's keys.
-   */
-  async updateSession(
-    sessionId: string,
-    options: UpdateSessionOptions,
-    signal?: AbortSignal,
-  ): Promise<Session> {
-    return this.replaySafe(
-      () => this.sessions.updateSession(
-        { sessionId, updateSessionRequest: updateSessionRequestToWire(options) },
-        { signal },
-      ),
-      signal,
-    ) as Promise<Session>;
-  }
-
-  async getSessionByKey(
-    sessionKey: string,
-    scope: SessionKeyScope,
-    signal?: AbortSignal,
-  ): Promise<Session> {
-    if (!sessionKey || (!scope.agentId && !scope.agentKey)) {
-      throw new NvokenError("validation", "sessionKey and one Agent identifier are required");
-    }
-    const page = await this.listSessions({ ...scope, sessionKey, limit: 2 }, signal);
-    if (page.items.length === 0) {
-      throw new NvokenError(
-        "not_found",
-        `Session ${sessionKey} was not found in the requested scope`,
-        404,
-        "not_found",
-      );
-    }
-    if (page.items.length !== 1) {
-      throw new NvokenError(
-        "unexpected_response",
-        `Session lookup for ${sessionKey} returned more than one exact match`,
-      );
-    }
-    return page.items[0];
-  }
-
-  listSessionMessages(
-    sessionId: string,
-    options: ListMessageOptions = {},
-    signal?: AbortSignal,
-  ): Promise<SessionMessageList> {
-	return this.replaySafe(
-      () => this.sessions.listSessionMessages({ sessionId, ...options }, { signal }),
-      signal,
-	) as Promise<SessionMessageList>;
-  }
-
-  async *messagePages(
-    sessionId: string,
-    options: Omit<ListMessageOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<SessionMessage> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listSessionMessages(sessionId, { ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-  }
-
-  /** Newest-first immutable diagnostics for applied and fell-through passes. */
-  listSessionCompactions(
-    sessionId: string,
-    options: ListCompactionOptions = {},
-    signal?: AbortSignal,
-  ): Promise<SessionCompactionList> {
-    return this.replaySafe(
-      () => this.sessions.listSessionCompactions({ sessionId, ...options }, { signal }),
-      signal,
-    );
-  }
-
-  async *compactionPages(
-    sessionId: string,
-    options: Omit<ListCompactionOptions, "cursor"> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<SessionCompaction> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.listSessionCompactions(sessionId, { ...options, cursor }, signal);
-      yield* page.items;
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor);
-  }
-
-  getTranscriptPage(
-    sessionId: string,
-    options: TranscriptPageOptions = {},
-    signal?: AbortSignal,
-  ): Promise<TranscriptSnapshot> {
-	return this.replaySafe(
-      () => this.sessions.getSessionTranscript({ sessionId, ...options }, { signal }),
-      signal,
-	) as Promise<TranscriptSnapshot>;
-  }
-
-  async drainTranscript(
-    sessionId: string,
-    options: TranscriptDrainOptions = {},
-    signal?: AbortSignal,
-  ): Promise<TranscriptDrain> {
-    const messages: SessionMessage[] = [];
-    const invocationChanges: InvocationChange[] = [];
-    let pageToken: string | undefined;
-    let cursor = options.cursor;
-    for (;;) {
-      const page = await this.getTranscriptPage(sessionId, {
-        cursor: pageToken ? undefined : options.cursor,
-        pageToken,
-        limit: options.pageSize,
-      }, signal);
-      messages.push(...page.messages);
-      invocationChanges.push(...page.invocationChanges);
-      cursor = page.cursor;
-      if (!page.hasMore) break;
-      if (!page.nextPageToken) {
-        throw new NvokenError(
-          "unexpected_response",
-          "nvoken transcript page reported hasMore without a nextPageToken",
+  /** @internal */
+  async request<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    let lastError: NvokenError | undefined;
+    for (let attempt = 1; attempt <= this.retry.maxAttempts; attempt += 1) {
+      if (signal?.aborted) throw abortError(signal);
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = await normalizeError(error);
+        if (attempt === this.retry.maxAttempts || !retryable(lastError)) throw lastError;
+        const exponential = Math.min(
+          this.retry.maxDelayMs,
+          this.retry.minDelayMs * 2 ** (attempt - 1),
         );
+        const delay = lastError.retryAfterMs === undefined
+          ? exponential
+          : Math.min(lastError.retryAfterMs, this.retry.maxDelayMs);
+        await sleep(delay, signal);
       }
-      pageToken = page.nextPageToken;
     }
-    if (!cursor) {
-      throw new NvokenError(
-        "unexpected_response",
-        "nvoken transcript drain returned no cursor",
-      );
-    }
-    return { messages, invocationChanges, cursor };
+    throw lastError ?? new NvokenError("unexpected_response", "nvoken request failed");
   }
 
-  private async callOnce<T>(operation: () => Promise<T>): Promise<T> {
+  private async requestOnce<T>(
+    operation: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (signal?.aborted) throw abortError(signal);
     try {
       return await operation();
     } catch (error) {
@@ -3135,1761 +647,747 @@ export class Client implements StreamClient {
     }
   }
 
-  private async replaySafe<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-    let lastError: NvokenError | undefined;
-    for (let attempt = 1; attempt <= this.retry.maxAttempts; attempt += 1) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = await normalizeError(error);
-        if (attempt === this.retry.maxAttempts || !retryable(lastError)) {
-          throw lastError;
-        }
-        const exponential = Math.min(
-          this.retry.maxDelayMs,
-          this.retry.minDelayMs * 2 ** (attempt - 1),
-        );
-        const delay = lastError.retryAfterMs
-          ? Math.min(lastError.retryAfterMs, this.retry.maxDelayMs)
-          : exponential / 2 + Math.random() * (exponential / 2);
-        await sleep(delay, signal);
-      }
-    }
-    throw lastError ?? new NvokenError("unexpected_response", "request did not run");
-  }
-}
-
-/** Options for {@link Agent.answerToolCalls}. */
-export interface AnswerToolCallsOptions {
-  /**
-   * Called before each tool runs. Return false to skip that call — use this to
-   * take an execution lease keyed by the call id, so a reader and a webhook
-   * worker cannot both start the same non-idempotent tool.
-   */
-  claim?: (call: ToolCallSummary) => boolean | Promise<boolean>;
-  /**
-   * Throw rather than skipping a call this Agent has no handler for. The
-   * default skips, because an unattended worker is often one of several
-   * answering different tools.
-   */
-  leaveWaitingOnMissingHandler?: boolean;
-  signal?: AbortSignal;
-}
-
-/**
- * An {@link Agent} whose server record is known, so `id` and `resource` are
- * no longer optional. {@link Agent.ensure}, {@link Client.getAgent}, and
- * {@link Client.createAgent} all return one.
- */
-export type EnsuredAgent<TOutput extends object = JsonObject> =
-  & Agent<TOutput>
-  & { readonly id: string; readonly resource: AgentResource };
-
-/**
- * One tenant's Agent: the server record and the object that runs its turns,
- * which are the same thing.
- *
- * An Agent's identity and configuration live on the server; its tool
- * *handlers* are supplied by whichever process runs the turn, the way a
- * queue worker supplies the code for the jobs it claims. That asymmetry is
- * the only one — everything else about the Agent is the record.
- *
- * Declared from its keys, an Agent creates its record on first use:
- *
- * ```ts
- * const support = client.agent({
- *   tenantKey: userId,
- *   agentKey: "support",
- *   definitionKey: "support",
- *   tools: [lookupOrderTool],
- * });
- * const ticket = support.bindSession({ sessionKey: "ticket-483" });
- * await ticket.run("Where is order 4821?");
- * ```
- */
-export class Agent<TOutput extends object = JsonObject> {
-  private readonly hostTools: Map<string, HostTool<object>>;
-  /**
-   * Tools nvoken delivers over HTTPS. They can appear in a waiting Invocation's
-   * pending calls once an endpoint has acknowledged a delivery without settling
-   * it, and are answered by whatever accepted that acknowledgement rather than
-   * from local handlers. Kept as a fallback for a server too old to stamp
-   * `mode` on a summary; see {@link Agent.runsLocally}.
-   */
-  private readonly callbackTools: Set<string>;
-  private record?: AgentResource;
-  private ensuring?: Promise<AgentResource>;
-
-  constructor(
-    readonly client: Client,
-    readonly options: AgentOptions<TOutput>,
-    resource?: AgentResource,
-  ) {
-    const hasAgentId = "agentId" in options && Boolean(options.agentId);
-    const hasAgentKey = "agentKey" in options && Boolean(options.agentKey);
-    if (hasAgentId === hasAgentKey) {
-      throw new NvokenError(
-        "validation",
-        "supply exactly one of agentId and agentKey",
-      );
-    }
-    if (options.definitionKey && options.definitionId) {
-      throw new NvokenError(
-        "validation",
-        "supply at most one of definitionKey and definitionId",
-      );
-    }
-    if (hasAgentId && (options.definitionKey || options.definitionId)) {
-      throw new NvokenError(
-        "validation",
-        "an Agent declared by agentId already names its record; the Definition"
-          + " belongs to a declaration by agentKey",
-      );
-    }
-    this.record = resource;
-    this.hostTools = new Map(
-      (options.tools ?? [])
-        .filter((tool): tool is HostTool<object> => tool.mode === "host")
-        .map((tool) => [tool.name, tool]),
-    );
-    this.callbackTools = new Set(
-      (options.tools ?? [])
-        .filter((tool) => tool.mode === "callback")
-        .map((tool) => tool.name),
-    );
-  }
-
-  /** Wraps a record read from the server as the Agent that runs its turns. */
-  static hydrate<TOutput extends object = JsonObject>(
-    client: Client,
-    resource: AgentResource,
-    tools?: Array<Tool<object>>,
-  ): EnsuredAgent<TOutput> {
-    const agent = new Agent<TOutput>(
-      client,
-      { agentId: resource.id, tools } as AgentOptions<TOutput>,
-      resource,
-    );
-    return agent as EnsuredAgent<TOutput>;
-  }
-
-  /** The record's ID, once the record is known. */
-  get id(): string | undefined {
-    return this.record?.id ?? this.options.agentId;
-  }
-
-  get agentKey(): string | undefined {
-    return this.record?.agentKey ?? this.options.agentKey;
-  }
-
-  get tenantKey(): string | undefined {
-    return this.record ? this.record.tenantKey ?? undefined : this.options.tenantKey;
-  }
-
-  get name(): string | undefined {
-    return this.record?.name ?? this.options.name;
-  }
-
-  get definitionId(): string | undefined {
-    return this.record?.definitionId ?? this.options.definitionId;
-  }
-
-  get pinnedRevision(): number | undefined {
-    return (this.record ? this.record.pinnedRevision ?? undefined : this.options.pinnedRevision);
-  }
-
-  get archivedAt(): Date | undefined {
-    return this.record?.archivedAt ?? undefined;
-  }
-
-  /** The server record, once {@link Agent.ensure} or a first use has run. */
-  get resource(): AgentResource | undefined {
-    return this.record;
-  }
-
-  /**
-   * Serializes as the record, so logging or storing an Agent gives what the
-   * server holds rather than this process's handlers.
-   */
-  toJSON(): AgentResource | Record<string, unknown> {
-    return this.record ?? {
-      agentId: this.options.agentId,
-      agentKey: this.options.agentKey,
-      tenantKey: this.options.tenantKey,
-      definitionKey: this.options.definitionKey,
-      definitionId: this.options.definitionId,
-    };
-  }
-
-  /**
-   * Creates the server record if it is missing, and returns this Agent with
-   * its record known.
-   *
-   * Creation never mutates: the same keys backed by the same Definition
-   * resolve onto the existing record, a different Definition is
-   * `agent_key_conflict`, and an archived record is `agent_archived` rather
-   * than a silent resolve onto something that refuses every admission. A
-   * declared `pinnedRevision` that disagrees with the record is refused here
-   * too — the pin decides which configuration runs, so a declaration that no
-   * longer describes the record is a mistake worth hearing about.
-   *
-   * A first use calls this for you. Call it directly to create the record at
-   * a moment you choose, or to read back what the server holds.
-   */
-  ensure(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
-    if (this.record) return Promise.resolve(this.ensured());
-    this.ensuring ??= this.resolveRecord(signal).finally(() => {
-      this.ensuring = undefined;
+  private async openStream(
+    path: string,
+    context: TurnAccessContext,
+    cursor: string | undefined,
+    deltas: boolean | undefined,
+    signal: AbortSignal | undefined,
+  ): Promise<Response> {
+    const query = new URLSearchParams();
+    if (cursor) query.set("cursor", cursor);
+    if (deltas !== undefined) query.set("deltas", String(deltas));
+    const suffix = query.size > 0 ? `?${query}` : "";
+    const response = await this.fetch(`${this.configuration.basePath}${path}${suffix}`, {
+      method: "GET",
+      headers: {
+        Accept: "text/event-stream",
+        Authorization: `Bearer ${await this.resolveApiKey()}`,
+        ...contextHeaders(context),
+      },
+      signal,
     });
-    return this.ensuring.then(() => this.ensured());
-  }
-
-  /** Re-reads the record from the server. */
-  async refresh(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
-    const ensured = await this.ensure(signal);
-    this.record = await this.client.getAgentResource(ensured.id, signal);
-    return this.ensured();
-  }
-
-  /** Renames the Agent or moves its revision pin. */
-  async update(
-    request: UpdateAgentRequest,
-    signal?: AbortSignal,
-  ): Promise<EnsuredAgent<TOutput>> {
-    const ensured = await this.ensure(signal);
-    this.record = await this.client.updateAgent(ensured.id, request, signal);
-    return this.ensured();
-  }
-
-  /** Archives the Agent, so admissions through it are refused. */
-  async archive(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
-    const ensured = await this.ensure(signal);
-    await this.client.archiveAgent(ensured.id, signal);
-    return this.refresh(signal);
-  }
-
-  async restore(signal?: AbortSignal): Promise<EnsuredAgent<TOutput>> {
-    const ensured = await this.ensure(signal);
-    await this.client.restoreAgent(ensured.id, signal);
-    return this.refresh(signal);
-  }
-
-  /**
-   * Returns the same Agent with this process's tool handlers attached. Use it
-   * on an Agent that came back from {@link Client.getAgent}, which knows the
-   * record but not who runs its tools.
-   */
-  withTools(tools: Array<Tool<object>>): this {
-    const next = new Agent<TOutput>(
-      this.client,
-      { ...this.options, tools } as AgentOptions<TOutput>,
-      this.record,
-    );
-    return next as this;
-  }
-
-  private ensured(): EnsuredAgent<TOutput> {
-    return this as EnsuredAgent<TOutput>;
-  }
-
-  private async resolveRecord(signal?: AbortSignal): Promise<AgentResource> {
-    if (this.options.definitionKey || this.options.definitionId) {
-      // The Definition travels by whichever spelling was declared: the server
-      // resolves a key in the same transaction that resolves the Agent, so
-      // this stays one round trip either way.
-      const record = await this.client.createAgentResource({
-        tenantKey: this.options.tenantKey,
-        agentKey: this.options.agentKey!,
-        name: this.options.name,
-        definitionId: this.options.definitionId,
-        definitionKey: this.options.definitionKey,
-        pinnedRevision: this.options.pinnedRevision,
-      }, signal);
-      this.verifyDeclaration(record);
-      this.record = record;
-      return record;
-    }
-    if (this.options.agentId) {
-      this.record = await this.client.getAgentResource(this.options.agentId, signal);
-      return this.record;
-    }
-    throw new NvokenError(
-      "validation",
-      `Agent ${this.options.agentKey} cannot be created without knowing which`
-        + " Agent Definition it follows: declare definitionKey, or declare"
-        + " agentId for a record that already exists",
-    );
-  }
-
-  /**
-   * Refuses a record that contradicts the declaration. Creation resolves on
-   * the Definition pointer, which the server already guards; the pin is the
-   * remaining substantive field, and a declaration naming a revision the
-   * record does not follow would otherwise run configuration the caller
-   * never asked for. A differing `name` is cosmetic and is left alone.
-   */
-  private verifyDeclaration(record: AgentResource): void {
-    const declared = this.options.pinnedRevision;
-    if (declared === undefined || record.pinnedRevision === declared) return;
-    throw new NvokenError(
-      "conflict",
-      `Agent ${record.agentKey} follows revision `
-        + `${record.pinnedRevision ?? "latest"}, not the declared ${declared};`
-        + " move the pin with update() or drop pinnedRevision from the declaration",
-      409,
-      "agent_pin_conflict",
-      undefined,
-      undefined,
-      { agent_id: record.id, pinned_revision: record.pinnedRevision },
-    );
-  }
-
-  /**
-   * Whether a pending call is this caller's to execute.
-   *
-   * The call's own mode is the authority, not what this Agent happens to
-   * declare: an Invocation running a server-owned Agent Definition can park on
-   * callback tools this object never listed, and answering those here would run
-   * work nvoken is already delivering elsewhere.
-   *
-   * A server too old to send `mode` leaves it undefined, where a name check is
-   * all there is. Fall back to it rather than treating every call as somebody
-   * else's, which would leave the turn parked forever.
-   */
-  private runsLocally(call: ToolCallSummary): boolean {
-    if (call.mode) return call.mode === "host";
-    return !this.callbackTools.has(call.name);
-  }
-
-  bindSession(
-    binding: SessionBinding,
-    options: SessionOptions = {},
-  ): BoundSession<TOutput> {
-    return new BoundSession(this, binding, options);
-  }
-
-  async start(
-    input: InvokeInput,
-    options: InvocationOptions = {},
-  ): Promise<InvocationHandle<TOutput>> {
-    await this.ready(options.signal);
-    return this.client.invoke<TOutput>(this.request(input, options), options.signal);
-  }
-
-  /**
-   * Creates the record before the turn that needs it, and only when the
-   * declaration says how. An Agent declared by `agentId`, or by `agentKey`
-   * alone, is one the caller has said already exists: admitting it directly
-   * keeps the turn at one round trip and lets the server answer for a key
-   * that names nothing.
-   */
-  private async ready(signal?: AbortSignal): Promise<void> {
-    if (this.record) return;
-    if (!this.options.definitionKey && !this.options.definitionId) return;
-    await this.ensure(signal);
-  }
-
-  private request(
-    input: InvokeInput,
-    options: InvocationOptions,
-    idempotencyKey = options.idempotencyKey,
-  ): InvokeRequest<TOutput> {
-    // The record's ID wins once it is known, so a declared Agent stops being
-    // re-resolved by key on every turn.
-    const identity: AgentIdentityRequest = this.record || "agentId" in this.options
-      ? { agentId: this.id! }
-      : { agentKey: this.options.agentKey };
-    const request: InvokeRequestBase & AgentIdentityRequest = {
-      ...identity,
-      tenantKey: this.options.tenantKey,
-      userKey: options.userKey,
-      triggeredBy: options.triggeredBy,
-      idempotencyKey,
-      definitionRevision: options.definitionRevision,
-      overrides: options.overrides,
-      onBudgetExhausted: options.onBudgetExhausted ?? this.options.onBudgetExhausted,
-      input,
-      mcpServerHeaders: this.options.mcpServerHeaders,
-      providerKeys: this.options.providerKeys,
-      // A per-call target overrides the agent default so one Agent can webhook
-      // different endpoints without a second Agent.
-      webhook: options.webhook ?? this.options.webhook,
-      context: options.context,
-      metadata: options.metadata,
-    };
-    let session = options.session;
-    if (session !== undefined && options.ifActive !== undefined) {
-      if (session.mode === "new") {
-        throw new NvokenError("validation", "ifActive cannot be used with session mode new");
-      }
-      session = { ...session, ifActive: options.ifActive };
-    }
-    return {
-      ...request,
-      session,
-      retention: options.retention,
-      compaction: options.compaction,
-      authorizationContext: options.authorizationContext,
-    };
-  }
-
-  /**
-   * Runs one turn to its end, answering host tool calls along the way.
-   *
-   * Every ending that produced work returns. `result.invocation.status` is
-   * `completed` or `incomplete`, and `incomplete` is not a failure: the turn
-   * hit a budget and kept what it had, including a validated
-   * `structuredOutput` when a schema was demanded — an unsatisfiable schema
-   * settles `failed` instead. Branch on the status; do not assume `completed`.
-   *
-   * `InvocationError` is reserved for `failed` and `cancelled`, the two
-   * endings with no result to read.
-   */
-  run(input: InvokeInput, options: InvocationOptions = {}): Promise<AgentResult<TOutput>> {
-    return this.runLoop(input, options);
-  }
-
-  async text(input: InvokeInput, options: InvocationOptions = {}): Promise<string> {
-    return outputTextOrThrow(await this.run(input, options));
-  }
-
-  async *stream(
-    input: InvokeInput,
-    options: InvocationOptions = {},
-  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
-    const scope = localAbortScope(options.signal, options.timeoutMs);
-    try {
-      const handle = await this.admit(input, options, scope.signal);
-      yield* this.streamLoop(handle, options, scope.signal);
-    } catch (error) {
-      if (scope.timedOut()) {
-        throw new NvokenError("timeout", "local stream timed out", undefined, undefined, undefined, undefined, undefined, {
-          cause: error,
-        });
-      }
-      throw error;
-    } finally {
-      scope.dispose();
-    }
-  }
-
-  /**
-   * Admission is separate from streaming: this acknowledgement is the handle,
-   * and the stream follows the turn it already names. A dropped stream costs
-   * nothing, because no reconnect can create a second turn — and a caller
-   * holding the handle can fall back to authoritative reads.
-   */
-  private admit(
-    input: InvokeInput,
-    options: InvocationOptions,
-    signal?: AbortSignal,
-  ): Promise<InvocationHandle<TOutput>> {
-    const idempotencyKey = options.idempotencyKey ?? `nvoken-${globalThis.crypto.randomUUID()}`;
-    return this.start(input, { ...options, idempotencyKey, signal });
-  }
-
-  private async *streamLoop(
-    handle: InvocationHandle<TOutput>,
-    options: InvocationOptions,
-    signal?: AbortSignal,
-  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
-    const dispatched = new Set<string>();
-    for await (const event of handle.stream(signal)) {
-      yield { ...event, handle };
-      // A turn that stopped for your tools says so on a change, which replays
-      // on reconnect like every other change.
-      if (event.type === "transcript.update" && waitingFor(event, handle.invocationId)) {
-        const invocation = await handle.refresh(signal);
-        if (invocation.status === "waiting") {
-          await this.dispatchTools(handle, invocation, options, signal, dispatched);
-        }
-      }
-    }
-  }
-
-  private async runLoop(
-    input: InvokeInput,
-    options: InvocationOptions = {},
-  ): Promise<AgentResult<TOutput>> {
-    const scope = localAbortScope(options.signal, options.timeoutMs);
-    let handle: InvocationHandle<TOutput> | undefined;
-    try {
-      try {
-        // The stream drives the turn, including answering host tools. It ends
-        // on the turn's terminal change; the composed result is a read. The
-        // handle exists before the stream does, so a stream this client cannot
-        // use falls back to authoritative reads instead of failing the run.
-        handle = await this.admit(input, options, scope.signal);
-        for await (const _ of this.streamLoop(handle, options, scope.signal)) {
-          // The loop's work is the dispatching it does; nothing to collect.
-        }
-      } catch (error) {
-        if (scope.timedOut()) {
-          throw new NvokenError("timeout", "local Agent run timed out", undefined, undefined, undefined, undefined, undefined, {
-            cause: error,
-          });
-        }
-        if (!handle || !streamFallbackAllowed(error)) throw error;
-      }
-      if (!handle) {
-        throw new NvokenError(
-          "unexpected_response",
-          "the stream ended before the turn was acknowledged",
-        );
-      }
-      for (;;) {
-        const invocation = await handle.waitForAction({ signal: scope.signal });
-        if (invocation.status !== "waiting") {
-          if (!isOutcomeStatus(invocation.status)) {
-            throw new InvocationError(handle, invocation);
-          }
-          break;
-        }
-        await this.dispatchTools(handle, invocation, options, scope.signal);
-      }
-      const result = await handle.result(scope.signal);
-      return this.agentResult(handle, result);
-    } finally {
-      scope.dispose();
-    }
-  }
-
-  private agentResult(
-    handle: InvocationHandle<TOutput>,
-    result: TypedInvocationResult<TOutput>,
-  ): AgentResult<TOutput> {
-    const { invocation } = result;
-    handle.applyInvocation(invocation);
-    const endedHandle = asEndedHandle(handle);
-    return {
-      handle: endedHandle,
-      invocation,
-      messages: result.messages,
-      text: result.outputText,
-      structuredOutput: invocation.structuredOutput,
-      idempotencyKey: endedHandle.idempotencyKey,
-      agentId: invocation.agentId ?? endedHandle.agentId,
-      sessionId: invocation.sessionId,
-      deduplicated: endedHandle.deduplicated,
-    };
-  }
-
-  /**
-   * Answers the host tool calls a parked Invocation is waiting on, without
-   * streaming it.
-   *
-   * This is the unattended path: an Invocation's `webhook` target receives a
-   * signed `invocation.waiting` post when the turn parks, and a worker calls
-   * this to finish it. A turn therefore makes progress with nobody watching,
-   * while the same handlers still serve an attached reader — first accepted
-   * result per call wins, so the two coexist rather than being a choice made
-   * per deployment.
-   *
-   * **Acknowledge the webhook first.** Webhook delivery uses a 10 second
-   * request timeout while a host tool budget is minutes, so a receiver that
-   * executes tools inline will have its delivery marked failed and retried
-   * while the work is still running. Verify the signature, enqueue, return
-   * 2xx, and call this from the worker.
-   *
-   * **Fence side effects yourself.** First-accepted-result deduplicates the
-   * transcript; it does not stop two processes from both *beginning* a call.
-   * An attached browser and this worker can race, and webhooks are
-   * at-least-once, so two deliveries can race each other. Pass `claim` to take
-   * an execution lease keyed by `toolCallId` before a non-idempotent tool
-   * runs; returning false skips that call and leaves it for whoever holds the
-   * claim.
-   *
-   * Returns the number of results submitted. Zero means the Invocation was no
-   * longer waiting or every call was already claimed elsewhere, both of which
-   * are ordinary outcomes rather than errors.
-   */
-  async answerToolCalls(
-    invocationId: string,
-    options: AnswerToolCallsOptions = {},
-  ): Promise<number> {
-    const handle = this.client.invocation<TOutput>(invocationId);
-    const invocation = await this.client.getInvocation<TOutput>(invocationId, options.signal);
-    if (invocation.status !== "waiting") return 0;
-    const results: ToolResult[] = [];
-    for (const call of answerableToolCalls(invocation)) {
-      if (!this.runsLocally(call)) continue;
-      const tool = this.hostTools.get(call.name);
-      if (!tool?.handler) {
-        if (options.leaveWaitingOnMissingHandler) {
-          throw new MissingToolHandlerError(handle, call, false);
-        }
-        continue;
-      }
-      if (options.claim && !(await options.claim(call))) continue;
-      const context: ToolHandlerContext<TOutput> = {
-        invocationId,
-        sessionId: invocation.sessionId,
-        toolCallId: call.id,
-        handle,
-      };
-      try {
-        const content = await tool.handler(toolInput(tool, call), context);
-        results.push({ toolCallId: call.id, content: content ?? null });
-      } catch (error) {
-        results.push({
-          toolCallId: call.id,
-          content: {
-            error: error instanceof Error ? error.message : "Host tool handler failed",
-          },
-          isError: true,
-        });
-      }
-    }
-    if (results.length === 0) return 0;
-    await handle.submitToolResults(results, options.signal);
-    return results.length;
-  }
-
-  private async dispatchTools(
-    handle: InvocationHandle<TOutput>,
-    invocation: TypedInvocation<TOutput>,
-    options: InvocationOptions,
-    signal?: AbortSignal,
-    dispatched?: Set<string>,
-  ): Promise<void> {
-    const calls = answerableToolCalls(invocation);
-    const results: ToolResult[] = [];
-    for (const call of calls) {
-      if (dispatched?.has(call.id)) continue;
-      if (!this.runsLocally(call)) continue;
-      const tool = this.hostTools.get(call.name);
-      if (!tool?.handler) {
-        if (options.leaveWaitingOnMissingHandler) {
-          throw new MissingToolHandlerError(handle, call, false);
-        }
-        try {
-          await handle.cancel(signal);
-        } catch (error) {
-          throw new MissingToolHandlerError(handle, call, false, { cause: error });
-        }
-        throw new MissingToolHandlerError(handle, call, true);
-      }
-      const context: ToolHandlerContext<TOutput> = {
-        invocationId: handle.invocationId,
-        sessionId: invocation.sessionId,
-        toolCallId: call.id,
-        handle,
-      };
-      try {
-        const content = await tool.handler(toolInput(tool, call), context);
-        results.push({ toolCallId: call.id, content: content ?? null });
-      } catch (error) {
-        results.push({
-          toolCallId: call.id,
-          content: {
-            error: error instanceof Error ? error.message : "Host tool handler failed",
-          },
-          isError: true,
-        });
-      }
-    }
-    if (results.length === 0) {
-      if (calls.length > 0 && dispatched) return;
-      throw new NvokenError(
-        "unexpected_response",
-        `Invocation ${handle.invocationId} is waiting without pending host ToolCalls`,
-      );
-    }
-    await handle.submitToolResults(results, signal);
-    for (const result of results) dispatched?.add(result.toolCallId);
-  }
-}
-
-export class BoundSession<TOutput extends object = JsonObject> {
-  private serial: Promise<void> = Promise.resolve();
-
-  constructor(
-    readonly agent: Agent<TOutput>,
-    readonly binding: SessionBinding,
-    readonly options: SessionOptions = {},
-  ) {
-    if ("sessionId" in binding && !binding.sessionId) {
-      throw new NvokenError("validation", "sessionId is required");
-    }
-    if ("sessionKey" in binding && !binding.sessionKey) {
-      throw new NvokenError("validation", "sessionKey is required");
-    }
-  }
-
-  start(
-    input: InvokeInput,
-    options: BoundInvocationOptions = {},
-  ): Promise<InvocationHandle<TOutput>> {
-    const prior = this.serial;
-    let release!: () => void;
-    const active = new Promise<void>((resolvePromise) => {
-      release = resolvePromise;
-    });
-    this.serial = prior.then(() => active, () => active);
-    return prior.then(async () => {
-      try {
-        const handle = await this.agent.start(input, this.invocationOptions(options));
-        // Keep the bound Session reserved until the Invocation is terminal,
-        // even if the caller stops waiting for it.
-        void handle.wait().then(release, release);
-        return handle;
-      } catch (error) {
-        release();
-        throw error;
-      }
-    });
-  }
-
-  run(input: InvokeInput, options: BoundInvocationOptions = {}): Promise<AgentResult<TOutput>> {
-    return this.serialize(() => this.agent.run(input, this.invocationOptions(options)));
-  }
-
-  async text(input: InvokeInput, options: BoundInvocationOptions = {}): Promise<string> {
-    return outputTextOrThrow(await this.run(input, options));
-  }
-
-  async *stream(
-    input: InvokeInput,
-    options: BoundInvocationOptions = {},
-  ): AsyncGenerator<AgentStreamEvent<TOutput>> {
-    const prior = this.serial;
-    let release!: () => void;
-    const active = new Promise<void>((resolvePromise) => {
-      release = resolvePromise;
-    });
-    this.serial = prior.then(() => active, () => active);
-    await prior;
-    try {
-      yield* this.agent.stream(input, this.invocationOptions(options));
-    } finally {
-      release();
-    }
-  }
-
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.serial.then(operation, operation);
-    this.serial = result.then(() => undefined, () => undefined);
-    return result;
-  }
-
-  private invocationOptions(options: BoundInvocationOptions): InvocationOptions {
-    const sessionOptions: InvocationSessionOptions = {
-      pinnedRevision: this.options.pinnedRevision,
-      onConflict: this.options.onConflict,
-    };
-    const session = this.binding.sessionId !== undefined
-      ? {
-          mode: "continue" as const,
-          id: this.binding.sessionId,
-          ifActive: options.ifActive,
-          options: hasInvocationSessionOptions(sessionOptions) ? sessionOptions : undefined,
-        }
-      : {
-          mode: "continue_or_create" as const,
-          key: this.binding.sessionKey,
-          ifActive: options.ifActive,
-          options: hasInvocationSessionOptions(sessionOptions) ? sessionOptions : undefined,
-        };
-    return {
-      ...options,
-      session,
-      retention: this.options.retention,
-      compaction: this.options.compaction,
-      authorizationContext: this.options.authorizationContext,
-    };
-  }
-}
-
-export class InvocationHandle<TOutput extends object = JsonObject> {
-  constructor(
-    private readonly client: Client,
-    public readonly invocationId: string,
-    public readonly idempotencyKey?: string,
-    public sessionId?: string | null,
-    public agentId?: string,
-    public status?: InvocationStatus,
-    public readonly deduplicated?: boolean,
-    public deadlineAt?: Date | null,
-    public modelProvider?: ModelProvider,
-    public contentExpiresAt?: Date | null,
-  ) {}
-
-  applyInvocation(invocation: TypedInvocation<TOutput>): void {
-    this.sessionId = invocation.sessionId;
-    this.agentId = invocation.agentId;
-    this.status = invocation.status;
-    this.deadlineAt = invocation.deadlineAt;
-    this.contentExpiresAt = invocation.contentExpiresAt;
-    // Provider identity is an open string: record whatever the Runtime reported
-    // so a provider added after this SDK version still reaches diagnostics.
-    if (!this.modelProvider && invocation.provenance?.provider) {
-      this.modelProvider = invocation.provenance.provider;
-    }
-  }
-
-  async refresh(signal?: AbortSignal): Promise<TypedInvocation<TOutput>> {
-    const invocation = await this.client.getInvocation<TOutput>(this.invocationId, signal);
-    this.applyInvocation(invocation);
-    return invocation;
-  }
-
-  async requireSessionId(signal?: AbortSignal): Promise<string> {
-    if (!this.sessionId) await this.refresh(signal);
-    if (!this.sessionId) {
-      throw new NvokenError(
-        "unexpected_response",
-        `Invocation ${this.invocationId} did not resolve to a Session`,
-      );
-    }
-    return this.sessionId;
-  }
-
-  async wait(options: WaitOptions = {}): Promise<TypedInvocation<TOutput>> {
-    let delay = options.minPollIntervalMs ?? 100;
-    const maximum = options.maxPollIntervalMs ?? 2_000;
-    const until = options.until ?? "terminal";
-    if (
-      !Number.isFinite(delay)
-      || delay < 0
-      || !Number.isFinite(maximum)
-      || maximum < delay
-    ) {
-      throw new NvokenError(
-        "validation",
-        "wait requires 0 <= minPollIntervalMs <= maxPollIntervalMs",
-      );
-    }
-    if (Array.isArray(until) && until.length === 0) {
-      throw new NvokenError("validation", "wait until status list cannot be empty");
-    }
-    const scope = localAbortScope(options.signal, options.timeoutMs);
-    try {
-      for (;;) {
-        const invocation = await this.refresh(scope.signal);
-        if (waitSatisfied(invocation.status, until)) return invocation;
-        await sleep(delay, scope.signal);
-        delay = Math.min(delay * 2, maximum);
-      }
-    } catch (error) {
-      if (scope.timedOut()) {
-        throw new NvokenError("timeout", "local wait timed out", undefined, undefined, undefined, undefined, undefined, {
-          cause: error,
-        });
-      }
-      throw error;
-    } finally {
-      scope.dispose();
-    }
-  }
-
-  waitForAction(options: Omit<WaitOptions, "until"> = {}): Promise<TypedInvocation<TOutput>> {
-    return this.wait({ ...options, until: "actionable" });
-  }
-
-  /**
-   * Waits for the turn to end and reads its result.
-   *
-   * Throws only for the two endings that produced no work to read: `failed`
-   * and `cancelled`. An `incomplete` turn stopped at a budget with everything
-   * it produced retained — including a validated structured output, since a
-   * schema it could not satisfy would have settled `failed` instead — so it is
-   * paid-for work and comes back as a result to branch on, not an exception.
-   */
-  async waitForResult(
-    options: Omit<WaitOptions, "until"> = {},
-  ): Promise<TypedInvocationResult<TOutput>> {
-    const invocation = await this.wait({ ...options, until: "terminal" });
-    if (!isOutcomeStatus(invocation.status)) {
-      throw new InvocationError(this, invocation);
-    }
-    return this.result(options.signal);
-  }
-
-  async result(signal?: AbortSignal): Promise<TypedInvocationResult<TOutput>> {
-    const result = await this.client.getInvocationResult<TOutput>(this.invocationId, signal);
-    this.applyInvocation(result.invocation);
-    return result;
-  }
-
-  async listMessages(signal?: AbortSignal): Promise<SessionMessage[]> {
-    return (await this.result(signal)).messages;
-  }
-
-  async outputText(signal?: AbortSignal): Promise<string> {
-    const { outputText } = await this.result(signal);
-    if (!outputText) {
-      throw new NvokenError(
-        "unexpected_response",
-        `Invocation ${this.invocationId} has no canonical assistant text`,
-      );
-    }
-    return outputText;
-  }
-
-  async submitToolResults(
-    results: ToolResult[],
-    signal?: AbortSignal,
-  ): Promise<SubmitHostToolResultsResponse> {
-    const response = await this.client.submitToolResults(this.invocationId, results, signal);
-    this.sessionId = response.sessionId;
-    this.status = response.status;
+    if (!response.ok) throw new ResponseError(response, "Response returned an error code");
     return response;
   }
 
-  async cancel(signal?: AbortSignal): Promise<TypedInvocation<TOutput>> {
-    const invocation = await this.client.cancelInvocation<TOutput>(this.invocationId, signal);
-    this.applyInvocation(invocation);
-    return invocation;
+  private async resolveApiKey(): Promise<string> {
+    return typeof this.apiKey === "function" ? await this.apiKey() : this.apiKey;
+  }
+}
+
+class AgentCollectionHandle implements AgentCollection {
+  constructor(private readonly client: Client) {}
+
+  async create<TOutput extends object = JsonObject>(
+    input: CreateAgent<TOutput>,
+  ): Promise<Agent<TOutput>> {
+    const { key, name, ownedBy, idempotencyKey = newIdempotencyKey(), ...behavior } = input;
+    requireText(key, "Agent key");
+    const resource = await this.client.request(() => this.client.raw().agents.createAgent({
+      idempotencyKey,
+      createAgentRequest: {
+        ...copyBehavior(behavior),
+        agentKey: key,
+        name,
+        owner: generatedOwner(ownedBy),
+      },
+    }));
+    return new AgentHandle<TOutput>(this.client, resource, {});
   }
 
-  async interrupt(signal?: AbortSignal): Promise<TypedInvocation<TOutput>> {
-    const invocation = await this.client.interruptInvocation<TOutput>(this.invocationId, signal);
-    this.applyInvocation(invocation);
-    return invocation;
-  }
-
-  /**
-   * Appends steering to this running turn. Not an interrupt: the model sees
-   * the input at the next execution seam, and nothing in flight is aborted.
-   */
-  nudge(
-    content: string,
-    options: { idempotencyKey?: string } = {},
-    signal?: AbortSignal,
-  ): Promise<NudgeAcknowledgement> {
-    return this.client.createNudge(this.invocationId, content, options, signal);
-  }
-
-  listNudges(
-    options: { status?: NudgeStatus; cursor?: string; limit?: number } = {},
-    signal?: AbortSignal,
-  ): Promise<NudgeList> {
-    return this.client.listNudges(this.invocationId, options, signal);
-  }
-
-  listToolCalls(
-    options: { cursor?: string; limit?: number } = {},
-    signal?: AbortSignal,
-  ): Promise<ToolCallList> {
-    return this.client.listToolCalls(this.invocationId, options, signal);
-  }
-
-  cancelNudge(nudgeId: string, signal?: AbortSignal): Promise<Nudge> {
-    return this.client.cancelNudge(this.invocationId, nudgeId, signal);
-  }
-
-  /**
-   * Follow this turn until a change for it carries a terminal status. The one
-   * stream, filtered to one Invocation.
-   */
-  async *stream(signal?: AbortSignal): AsyncGenerator<SessionStreamEvent<TOutput>> {
-    yield* this.streamWithOptions({}, signal);
-  }
-
-  async *streamWithOptions(
-    options: StreamOptions,
-    signal?: AbortSignal,
-  ): AsyncGenerator<SessionStreamEvent<TOutput>> {
-    yield* streamInvocationByIDWithOptions<TOutput>(
-      this.client,
-      this.invocationId,
-      options,
-      signal,
+  async getById<TOutput extends object = JsonObject>(id: string): Promise<Agent<TOutput>> {
+    requireText(id, "Agent id");
+    const resource = await this.client.request(
+      () => this.client.raw().agents.getAgent({ agentId: id }),
     );
+    return new AgentHandle<TOutput>(this.client, resource, {});
   }
 
-  /**
-   * Follows this turn with the frames already folded into a snapshot.
-   *
-   * `stream()` yields raw frames, which leaves every consumer to rediscover
-   * the four signals that void a preview — a resync, the saved message
-   * landing, the terminal change, and a rising `attempt` from a restarted
-   * execution — plus the rule that messages in a frame apply before its
-   * changes. Getting the last one wrong shows half-written text from a dead
-   * attempt; getting the ordering wrong reads a turn as settled before its
-   * final message exists. The Reducer already knows all of it, so this is the
-   * path that should be reached for, and `streamSession` already yields the
-   * same shape.
-   *
-   * The snapshot is authoritative for rendering, not for settlement: read the
-   * result with `result()` once `event` reports the terminal change.
-   */
-  async *streamReduced(
-    signal?: AbortSignal,
-  ): AsyncGenerator<StreamUpdate> {
-    yield* this.streamReducedWithOptions({}, signal);
-  }
-
-  async *streamReducedWithOptions(
-    options: StreamOptions,
-    signal?: AbortSignal,
-  ): AsyncGenerator<StreamUpdate> {
-    const reducer = new Reducer();
-    for await (const update of streamInvocationReducedByID(
-      this.client,
-      this.invocationId,
-      reducer,
-      options,
-      signal,
-    )) {
-      yield update;
-      // isTurnOver, not a status comparison: the change carries `terminal` as
-      // the protocol's own witness, and a status this build has never seen
-      // must read as live rather than end the stream early.
-      const ended = update.snapshot.invocationChanges.some(
-        (change) => change.invocationId === this.invocationId && isTurnOver(change),
-      );
-      if (ended) return;
-    }
-  }
-}
-
-// inputBlockToWire copies one facade block into the generated wire shape. The
-// member names already match, so the copy exists to avoid sharing caller state.
-// waitingFor reports whether a transcript.update carries a change parking this
-// turn on your tools.
-function waitingFor(event: { invocationChanges?: { invocationId: string; status: string }[] }, invocationId: string): boolean {
-  return (event.invocationChanges ?? []).some(
-    (change) => change.invocationId === invocationId && change.status === "waiting",
-  );
-}
-
-function inputBlockToWire(block: InputBlock): GeneratedInputBlock {
-  if (block.type === "text") return { type: "text", text: block.text };
-  if (block.type === "image") {
+  async list<TOutput extends object = JsonObject>(
+    options: ListAgentsOptions = {},
+  ): Promise<Page<Agent<TOutput>>> {
+    const owner = ownerQuery(options.ownedBy);
+    const page = await this.client.request(() => this.client.raw().agents.listAgents({
+      ownerKind: owner.ownerKind,
+      tenantKey: owner.tenantKey,
+      userKey: owner.userKey,
+      includeArchived: options.archived,
+      cursor: options.cursor,
+    }));
     return {
-      type: "image",
-      source: "url" in block.source
-        ? { mediaType: block.source.mediaType, url: block.source.url }
-        : { mediaType: block.source.mediaType, data: block.source.data },
+      items: page.items.map((resource) => new AgentHandle<TOutput>(this.client, resource, {})),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     };
   }
-  const document: GeneratedInputBlock = {
-    type: "document",
-    source: "url" in block.source
-      ? { mediaType: block.source.mediaType, url: block.source.url }
-      : { mediaType: block.source.mediaType, data: block.source.data },
-  };
-  if (block.title !== undefined) document.title = block.title;
-  return document;
 }
 
-function validInvokeInput(input: InvokeInput): boolean {
-  if (typeof input === "string") return input.length > 0;
-  return input.length > 0 && mediaInputIssue(input) === undefined;
-}
+class AgentHandle<TOutput extends object> implements Agent<TOutput> {
+  constructor(
+    private readonly client: Client,
+    private resource: AgentResource,
+    private readonly handlers: ToolHandlers,
+  ) {}
 
-function scopeOrUndefined(scope: Scope | undefined): Scope | undefined {
-  if (scope === undefined) return undefined;
-  const tenantKey = scope.tenantKey?.trim();
-  const userKey = scope.userKey?.trim();
-  if (!tenantKey && !userKey) return undefined;
-  return {
-    ...(tenantKey ? { tenantKey } : {}),
-    ...(userKey ? { userKey } : {}),
-  };
-}
+  get id(): string { return this.resource.id; }
+  get key(): string { return this.resource.agentKey; }
+  get owner(): AgentOwner { return publicOwner(this.resource.owner); }
+  get currentRevision(): number { return this.resource.currentRevision; }
 
-function scopeHeaders(scope: Scope | undefined): Record<string, string> {
-  if (scope === undefined) return {};
-  return {
-    ...(scope.tenantKey ? { "X-Nvoken-Tenant-Key": scope.tenantKey } : {}),
-    ...(scope.userKey ? { "X-Nvoken-User-Key": scope.userKey } : {}),
-  };
-}
-
-function hasInvocationSessionOptions(options: InvocationSessionOptions): boolean {
-  return options.pinnedRevision !== undefined || options.onConflict !== undefined;
-}
-
-function validateInvocationSession(session: InvocationSession | undefined): void {
-  if (session === undefined) return;
-  if (session.ifActive !== undefined
-    && session.ifActive !== "reject"
-    && session.ifActive !== "supersede"
-    && session.ifActive !== "interrupt") {
-    throw new NvokenError("validation", "session.ifActive must be reject, supersede, or interrupt");
+  async publish(input: BehaviorInput<TOutput>): Promise<AgentRevision<TOutput>> {
+    const idempotencyKey = newIdempotencyKey();
+    const revision = await this.client.request(
+      () => this.client.raw().agents.publishAgentRevision({
+        idempotencyKey,
+        agentId: this.id,
+        behaviorInput: copyBehavior(input),
+      }),
+    );
+    this.resource = { ...this.resource, currentRevision: revision.revision };
+    return publicRevision<TOutput>(revision);
   }
-  if (session.mode === "new") {
-    if ("id" in session || "key" in session || session.ifActive !== undefined) {
-      throw new NvokenError("validation", "session mode new accepts neither id, key, nor ifActive");
+
+  async archive(): Promise<Agent<TOutput>> {
+    const resource = await this.client.request(
+      () => this.client.raw().agents.archiveAgent({ agentId: this.id }),
+    );
+    return new AgentHandle(this.client, resource, this.handlers);
+  }
+
+  async restore(): Promise<Agent<TOutput>> {
+    const resource = await this.client.request(
+      () => this.client.raw().agents.restoreAgent({ agentId: this.id }),
+    );
+    return new AgentHandle(this.client, resource, this.handlers);
+  }
+
+  bindTools(handlers: ToolHandlers): Agent<TOutput> {
+    return new AgentHandle(this.client, this.resource, copyHandlers(handlers));
+  }
+
+  conversation(options: AgentConversationOptions): Conversation<TOutput> {
+    return new ConversationHandle(
+      this.client,
+      (input, merged) => this.start(input, merged as AgentTurnOptions),
+      options,
+    );
+  }
+
+  async start(input: TurnInput, options: AgentTurnOptions): Promise<Turn<TOutput>> {
+    validateContext(options, false);
+    const request = turnRequest(input, options, {
+      kind: "agent",
+      agent: { agentId: this.id, revision: "current" },
+    });
+    return this.client.admit<TOutput>(request, options, this.handlers, options);
+  }
+
+  async run(input: TurnInput, options: AgentTurnOptions): Promise<TurnResult<TOutput>> {
+    const turn = await this.start(input, options);
+    return turn.result({ signal: options.signal, timeoutMs: options.timeoutMs });
+  }
+
+  async text(input: TurnInput, options: AgentTurnOptions): Promise<string> {
+    return requiredText(await this.run(input, options));
+  }
+}
+
+class InlineHandle<TOutput extends object> implements InlineRunner<TOutput> {
+  constructor(
+    private readonly client: Client,
+    private readonly behavior: InlineBehavior<TOutput>,
+    private readonly handlers: ToolHandlers,
+  ) {}
+
+  bindTools(handlers: ToolHandlers): InlineRunner<TOutput> {
+    validateHandlerNames(handlers, this.behavior.tools);
+    return new InlineHandle(this.client, this.behavior, copyHandlers(handlers));
+  }
+
+  conversation(options: InlineConversationOptions): Conversation<TOutput> {
+    validateInlineDefaultMemory(this.behavior, options);
+    return new ConversationHandle(
+      this.client,
+      (input, merged) => this.start(input, merged as InlineTurnOptions),
+      options,
+    );
+  }
+
+  async start(input: TurnInput, options: InlineTurnOptions): Promise<Turn<TOutput>> {
+    validateContext(options, false);
+    validateInlineDefaultMemory(this.behavior, options);
+    const request = turnRequest(input, options, {
+      kind: "inline",
+      behavior: copyBehavior(this.behavior),
+    });
+    return this.client.admit<TOutput>(request, options, this.handlers, options);
+  }
+
+  async run(input: TurnInput, options: InlineTurnOptions): Promise<TurnResult<TOutput>> {
+    const turn = await this.start(input, options);
+    return turn.result({ signal: options.signal, timeoutMs: options.timeoutMs });
+  }
+
+  async text(input: TurnInput, options: InlineTurnOptions): Promise<string> {
+    return requiredText(await this.run(input, options));
+  }
+}
+
+class ConversationHandle<TOutput extends object> implements Conversation<TOutput> {
+  private readonly identity: string;
+
+  constructor(
+    private readonly client: Client,
+    private readonly startBound: (
+      input: TurnInput,
+      options: AgentTurnOptions | InlineTurnOptions,
+    ) => Promise<Turn<TOutput>>,
+    private readonly bound: AgentConversationOptions | InlineConversationOptions,
+  ) {
+    validateContext(bound, false);
+    this.identity = conversationIdentity(bound);
+  }
+
+  async start(input: TurnInput, options: ConversationTurnOptions = {}): Promise<Turn<TOutput>> {
+    return this.client.serialize(
+      this.identity,
+      () => this.startBound(input, mergeConversationOptions(this.bound, options)),
+    );
+  }
+
+  async run(input: TurnInput, options: ConversationTurnOptions = {}): Promise<TurnResult<TOutput>> {
+    return this.client.serialize(this.identity, async () => {
+      const merged = mergeConversationOptions(this.bound, options);
+      const turn = await this.startBound(input, merged);
+      return turn.result({ signal: merged.signal, timeoutMs: merged.timeoutMs });
+    });
+  }
+
+  async text(input: TurnInput, options: ConversationTurnOptions = {}): Promise<string> {
+    return requiredText(await this.run(input, options));
+  }
+}
+
+class TurnHandle<TOutput extends object> implements Turn<TOutput> {
+  private readonly handledToolCallIds = new Set<string>();
+
+  constructor(
+    private readonly client: Client,
+    readonly id: string,
+    private readonly context: TurnAccessContext,
+    private readonly handlers: ToolHandlers,
+    private readonly admission: TurnResult<TOutput>["admission"],
+  ) {}
+
+  bindTools(handlers: ToolHandlers): Turn<TOutput> {
+    return new TurnHandle(
+      this.client,
+      this.id,
+      this.context,
+      copyHandlers(handlers),
+      this.admission,
+    );
+  }
+
+  async status(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>> {
+    return snapshotOf<TOutput>(await this.client.readTurnResult(this.id, this.context, signal));
+  }
+
+  async result(options: WaitOptions = {}): Promise<TurnResult<TOutput>> {
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    const minimum = options.minPollIntervalMs ?? 100;
+    const maximum = options.maxPollIntervalMs ?? 1_000;
+    if (!Number.isFinite(minimum) || minimum < 0
+      || !Number.isFinite(maximum) || maximum < minimum) {
+      scope.dispose();
+      throw new NvokenError(
+        "validation",
+        "poll intervals require 0 <= minPollIntervalMs <= maxPollIntervalMs",
+      );
     }
-    return;
-  }
-  if (session.mode === "continue") {
-    if (!session.id || "key" in session) {
-      throw new NvokenError("validation", "session mode continue requires only id");
-    }
-    return;
-  }
-  if (session.mode === "continue_or_create") {
-    if (!session.key || "id" in session) {
-      throw new NvokenError("validation", "session mode continue_or_create requires only key");
-    }
-    return;
-  }
-  throw new NvokenError("validation", "session mode is invalid");
-}
-
-/**
- * Renders one Agent Definition onto the wire.
- *
- * Every field is named explicitly rather than spread, which is what lets a
- * caller pass a whole {@link AgentDefinitionResource} back: `id`, `revision`,
- * and the timestamps simply have no line here, and the schema is
- * `additionalProperties: false`, so sending them would be a rejection rather
- * than a harmless extra.
- *
- * `definitionKey` comes from the caller instead of the definition because only
- * a create carries one.
- */
-function agentDefinitionToWire<TOutput extends object>(
-  definition: AgentDefinition<TOutput>,
-  identity: { definitionKey?: string },
-): AgentDefinitionWrite {
-  const outputSchema = definition.outputSchema
-    ? schemaToJSON(definition.outputSchema, "output")
-    : undefined;
-  if (outputSchema) preflightOutputSchema(outputSchema);
-  return {
-    definitionKey: identity.definitionKey,
-    name: definition.name,
-    instructions: definition.instructions,
-    model: normalizeModel(definition.model),
-    sampling: definition.sampling === undefined
-        ? undefined
-        : { ...definition.sampling },
-    reasoning: definition.reasoning === undefined
-        ? undefined
-        : { ...definition.reasoning },
-    toolChoice: definition.toolChoice === undefined
-        ? undefined
-        : { ...definition.toolChoice },
-    limits: definition.limits,
-    tools: definition.tools?.map((tool) => tool.mode === "builtin"
-        ? {
-          name: tool.name,
-          mode: tool.mode,
-        }
-        : tool.mode === "callback"
-          ? {
-            name: tool.name,
-            description: tool.description,
-            mode: tool.mode,
-            inputSchema: schemaToJSON(tool.inputSchema, "input"),
-            callback: tool.callback,
+    let interval = minimum;
+    try {
+      while (true) {
+        const raw = await this.client.readTurnResult(this.id, this.context, scope.signal);
+        await this.driveTools(raw.turn.toolCalls, scope.signal);
+        const result = resultOf<TOutput>(this, raw, this.admission);
+        if (isTerminalTurnStatus(result.status)) {
+          if (result.status === "failed" || result.status === "cancelled") {
+            throw new TurnExecutionError(result);
           }
-          : {
-            name: tool.name,
-            description: tool.description,
-            mode: tool.mode,
-            inputSchema: schemaToJSON(tool.inputSchema, "input"),
-          }),
-    mcpServers: definition.mcpServers?.map((server) => ({
-        ...server,
-        allowedTools: server.allowedTools === undefined
-          ? undefined
-          : new Set(server.allowedTools),
-        timeouts: server.timeouts === undefined ? undefined : { ...server.timeouts },
-      })),
-    providerTools: definition.providerTools?.map((tool) => ({
-        type: tool.type,
-        webSearch: {
-          maxUses: tool.webSearch.maxUses,
-          allowedDomains: tool.webSearch.allowedDomains === undefined
-            ? undefined
-            : [...tool.webSearch.allowedDomains],
-          blockedDomains: tool.webSearch.blockedDomains === undefined
-            ? undefined
-            : [...tool.webSearch.blockedDomains],
-          userLocation: tool.webSearch.userLocation === undefined
-            ? undefined
-            : { ...tool.webSearch.userLocation },
-        },
-      })),
-    memory: definition.memory === undefined ? undefined : {
-      scope: definition.memory.scope,
-      context: definition.memory.context === undefined
-        ? undefined
-        : { ...definition.memory.context },
-    },
-    clientInterface: definition.clientInterface === undefined ? undefined : {
-      // The contract marks both sets uniqueItems, so the generated type is a
-      // Set and the SDK accepts any iterable to build one.
-      contextNames: definition.clientInterface.contextNames === undefined
-        ? undefined
-        : new Set(definition.clientInterface.contextNames),
-      toolNames: definition.clientInterface.toolNames === undefined
-        ? undefined
-        : new Set(definition.clientInterface.toolNames),
-    },
-    outputSchema,
-  };
+          return result;
+        }
+        await sleep(interval, scope.signal);
+        interval = Math.min(maximum, Math.max(minimum, interval === 0 ? 1 : interval * 2));
+      }
+    } catch (error) {
+      if (scope.timedOut()) {
+        throw new TurnTimeoutError(
+          "Timed out waiting for a durable Turn; recover it by ID",
+          this,
+          this.admission?.idempotencyKey,
+          { cause: error },
+        );
+      }
+      throw error;
+    } finally {
+      scope.dispose();
+    }
+  }
+
+  async *updates(options: StreamOptions = {}): AsyncGenerator<TurnUpdate<TOutput>> {
+    const scope = localAbortScope(options.signal, options.timeoutMs);
+    const reducer = new Reducer<TOutput>();
+    try {
+      let raw = await this.client.readTurnResult(this.id, this.context, scope.signal);
+      await this.driveTools(raw.turn.toolCalls, scope.signal);
+      let snapshot = snapshotOf<TOutput>(raw);
+      yield { snapshot };
+      if (isTerminalTurnStatus(snapshot.status)) return;
+
+      for await (const frame of this.client.turnFrames<TOutput>(this.id, this.context, {
+        signal: scope.signal,
+        timeoutMs: undefined,
+      })) {
+        reducer.apply(frame);
+        const reduced = reducer.snapshot();
+        const change = reduced.turnChanges
+          .filter((item) => item.turnId === this.id)
+          .sort((left, right) => right.revision - left.revision)[0];
+        if (change?.toolCalls) await this.driveTools(change.toolCalls, scope.signal);
+        snapshot = mergeStreamSnapshot(snapshot, reduced, this.id);
+        yield { snapshot };
+        if (change && isTerminalTurnStatus(change.status)) {
+          raw = await this.client.readTurnResult(this.id, this.context, scope.signal);
+          yield { snapshot: snapshotOf<TOutput>(raw) };
+          return;
+        }
+      }
+    } catch (error) {
+      if (scope.timedOut()) {
+        throw new TurnTimeoutError(
+          "Timed out following a durable Turn; recover it by ID",
+          this,
+          this.admission?.idempotencyKey,
+          { cause: error },
+        );
+      }
+      throw error;
+    } finally {
+      scope.dispose();
+    }
+  }
+
+  private async driveTools(toolCalls: ToolCallSummary[], signal?: AbortSignal): Promise<void> {
+    const pending = toolCalls.filter((call) => call.mode === "host"
+      && call.arguments !== undefined
+      && (call.status === "pending" || call.status === "running")
+      && !this.handledToolCallIds.has(call.id)
+      && this.handlers[call.name] !== undefined);
+    for (const call of pending) {
+      const handler = this.handlers[call.name];
+      if (!handler) continue;
+      const argumentsValue = call.arguments;
+      if (argumentsValue === undefined) continue;
+      this.handledToolCallIds.add(call.id);
+      const controller = new AbortController();
+      const abort = () => controller.abort(signal?.reason);
+      if (signal?.aborted) abort();
+      else signal?.addEventListener("abort", abort, { once: true });
+      let content: JsonValue | null = null;
+      let isError = false;
+      try {
+        const value = await handler(argumentsValue, {
+          turnId: this.id,
+          toolCallId: call.id,
+          signal: controller.signal,
+        });
+        content = value === undefined ? null : value;
+      } catch (error) {
+        isError = true;
+        content = { error: error instanceof Error ? error.message : "Host tool failed" };
+      } finally {
+        signal?.removeEventListener("abort", abort);
+      }
+      try {
+        await this.client.submitToolResults(
+          this.id,
+          this.context,
+          [{ toolCallId: call.id, content, isError: isError || undefined }],
+          signal,
+        );
+      } catch (error) {
+        this.handledToolCallIds.delete(call.id);
+        throw error;
+      }
+    }
+  }
 }
 
-/**
- * Renders a Session metadata patch.
- *
- * The wire accepts `null` to delete a key, but the generator flattens the
- * value's `string | null` union to `string`, so the deleting half of a patch
- * has no generated type to be expressed in. The runtime converter passes
- * `null` through unchanged, so the mismatch is a typing gap and this is the
- * one place that bridges it — callers keep {@link MetadataPatch} and never
- * have to drop to raw fetch to delete a key.
- */
-function updateSessionRequestToWire(options: UpdateSessionOptions): UpdateSessionRequest {
-  return { metadata: { ...options.metadata } } as unknown as UpdateSessionRequest;
-}
-
-function invocationRequestToWire<TOutput extends object>(
-  request: InvokeRequest<TOutput>,
-  idempotencyKey: string,
-): CreateInvocationRequest {
-  preflightInput(request.input);
-  // Checked here rather than in invoke() so the Agent stream path, which
-  // renders its own wire request, gets the same bounds.
-  validateContext(request.context);
+function turnRequest(
+  input: TurnInput,
+  options: AgentTurnOptions | InlineTurnOptions,
+  behavior: TurnBehaviorSelection,
+): CreateTurnRequest {
   return {
-    agentId: "agentId" in request ? request.agentId : undefined,
-    agentKey: "agentKey" in request ? request.agentKey : undefined,
-    tenantKey: request.tenantKey,
-    userKey: request.userKey,
-    triggeredBy: request.triggeredBy,
-    definitionRevision: request.definitionRevision,
-    overrides: request.overrides === undefined
-      ? undefined
-      : agentDefinitionOverridesToWire(request.overrides),
-    session: request.session,
-    retention: request.retention === undefined
-      ? undefined
-      : { ttlSeconds: request.retention.ttlSeconds },
-    compaction: request.compaction === undefined
-      ? undefined
-      : {
-          triggerTokens: request.compaction.triggerTokens,
-          model: request.compaction.model === undefined
-            ? undefined
-            : normalizeModel(request.compaction.model),
-        },
-    authorizationContext: request.authorizationContext === undefined
-      ? undefined
-      : { ...request.authorizationContext },
-    metadata: request.metadata === undefined ? undefined : { ...request.metadata },
-    idempotencyKey,
-    onBudgetExhausted: request.onBudgetExhausted,
-    input: typeof request.input === "string"
-      ? request.input
-      : request.input.map((block) => inputBlockToWire(block)),
-    mcpServerHeaders: request.mcpServerHeaders?.map((entry) => ({
-      name: entry.name,
-      headers: { ...entry.headers },
-    })),
-    context: request.context?.map((item) => ({ ...item })),
-    providerKeys: request.providerKeys,
-    webhook: request.webhook === undefined ? undefined : {
-      url: request.webhook.url,
-      // The wire contract marks the event set uniqueItems, so the generated
-      // type is a Set and order never reaches the Runtime.
-      events: request.webhook.events === undefined
-        ? undefined
-        : new Set(request.webhook.events),
-    },
+    tenantKey: options.tenant,
+    userKey: options.user,
+    idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
+    behavior,
+    memory: options.memory as TurnMemorySelection | undefined,
+    conversation: options.conversation ? generatedConversation(options.conversation, options) : undefined,
+    limits: options.limits ? { ...options.limits } : undefined,
+    input,
+    metadata: options.metadata ? { ...options.metadata } : undefined,
   };
 }
 
-/**
- * Checks one Agent Definition on its own content. Installation state, the App
- * signing key, budgets, provider keys, and model lifecycle are checked again
- * when a turn is admitted.
- */
-function validateAgentDefinition<TOutput extends object>(
-  definition: AgentDefinition<TOutput>,
-): void {
-  normalizeModel(definition.model);
-  if (definition.instructions !== undefined && !definition.instructions.trim()) {
-    throw new NvokenError("validation", "instructions cannot be blank");
+function generatedConversation(
+  selection: ConversationSelection,
+  context: TurnAccessContext,
+): TurnConversation {
+  if ("id" in selection && selection.id !== undefined) {
+    return { mode: "continue", conversationId: selection.id, ifActive: "reject" };
   }
-  validateToolChoice(definition.toolChoice);
+  return {
+    mode: "continue_or_create",
+    conversationKey: selection.key,
+    owner: selection.owner === "user"
+      ? { kind: "user", userKey: requireUser(context.user) }
+      : { kind: "tenant" },
+    ifActive: selection.ifActive ?? "reject",
+    retention: selection.retention,
+    compaction: selection.compaction,
+    metadata: selection.metadata ? { ...selection.metadata } : undefined,
+  };
 }
 
-/** `name` belongs to `named` mode and to nothing else. */
-function validateToolChoice(toolChoice: ToolChoice | undefined): void {
-  if (toolChoice === undefined) return;
-  if (toolChoice.mode === "named" && !toolChoice.name) {
-    throw new NvokenError("validation", "toolChoice mode named requires a tool name");
+function mergeConversationOptions(
+  bound: AgentConversationOptions | InlineConversationOptions,
+  options: ConversationTurnOptions,
+): AgentTurnOptions | InlineTurnOptions {
+  return {
+    tenant: bound.tenant,
+    user: bound.user,
+    memory: bound.memory as InlineMemorySelection | undefined,
+    conversation: "id" in bound && bound.id !== undefined
+      ? { id: bound.id }
+      : {
+          key: bound.key,
+          owner: bound.owner,
+          retention: bound.retention,
+          compaction: bound.compaction,
+          metadata: bound.metadata,
+          ifActive: bound.ifActive,
+        },
+    limits: mergeNarrowedLimits(bound.limits, options.limits),
+    idempotencyKey: options.idempotencyKey,
+    metadata: options.metadata,
+    timeoutMs: options.timeoutMs,
+    signal: options.signal,
+  };
+}
+
+function conversationIdentity(
+  options: AgentConversationOptions | InlineConversationOptions,
+): string {
+  if ("id" in options && options.id !== undefined) return `id:${options.id}`;
+  const owner = options.owner === "user" ? `user:${requireUser(options.user)}` : "tenant";
+  return `key:${options.tenant}:${owner}:${options.key}`;
+}
+
+function snapshotOf<TOutput extends object>(result: GeneratedTurnResult): TurnSnapshot<TOutput> {
+  const source = result.turn.behaviorSource;
+  return {
+    status: result.turn.status,
+    messages: result.messages,
+    text: result.outputText,
+    structuredOutput: result.turn.structuredOutput as TOutput | null,
+    behaviorSource: source?.kind === "agent_revision"
+      ? "agent_revision"
+      : source?.kind === "inline" ? "inline" : undefined,
+    agentId: source?.kind === "agent_revision" ? source.agentId : null,
+    agentRevisionId: source?.kind === "agent_revision" ? source.agentRevisionId : null,
+    memorySpaceId: result.turn.memorySpaceId,
+    conversationId: result.turn.conversationId,
+    contentExpiresAt: result.turn.contentExpiresAt,
+    stopReason: result.turn.stopReason,
+    error: result.turn.error,
+  };
+}
+
+function resultOf<TOutput extends object>(
+  turn: Turn<TOutput>,
+  result: GeneratedTurnResult,
+  admission: TurnResult<TOutput>["admission"],
+): TurnResult<TOutput> {
+  return { ...snapshotOf<TOutput>(result), turn, admission };
+}
+
+function mergeStreamSnapshot<TOutput extends object>(
+  previous: TurnSnapshot<TOutput>,
+  reduced: ReturnType<Reducer<TOutput>["snapshot"]>,
+  turnId: string,
+): TurnSnapshot<TOutput> {
+  const messages = reduced.messages.filter((message) => message.turnId === turnId);
+  const change = reduced.turnChanges
+    .filter((item) => item.turnId === turnId)
+    .sort((left, right) => right.revision - left.revision)[0];
+  const savedText = change?.status === "completed" && change.stopReason === "end_turn"
+    ? assistantText(messages)
+    : null;
+  return {
+    ...previous,
+    status: change?.status ?? previous.status,
+    messages: messages.length > 0 ? messages : previous.messages,
+    text: savedText ?? previous.text,
+    structuredOutput: (change?.structuredOutput as TOutput | null | undefined)
+      ?? previous.structuredOutput,
+    conversationId: change?.conversationId ?? previous.conversationId,
+    contentExpiresAt: change?.contentExpiresAt ?? previous.contentExpiresAt,
+    stopReason: change?.stopReason ?? previous.stopReason,
+    error: change?.error ?? previous.error,
+  };
+}
+
+function assistantText(messages: ConversationMessage[]): string | null {
+  const message = [...messages].reverse().find((item) => item.role === "assistant");
+  if (!message) return null;
+  const text = message.content
+    .filter((block): block is Extract<ConversationContentBlock, { type: "text" }> => (
+      block.type === "text"
+    ))
+    .map((block) => block.text)
+    .join("");
+  return text || null;
+}
+
+function generatedOwner(ownedBy?: AgentOwnedBy): GeneratedAgentOwner {
+  if (!ownedBy) return { kind: "app" };
+  return ownedBy.user === undefined
+    ? { kind: "tenant", tenantKey: ownedBy.tenant }
+    : { kind: "user", tenantKey: ownedBy.tenant, userKey: ownedBy.user };
+}
+
+function publicOwner(owner: GeneratedAgentOwner): AgentOwner {
+  if (owner.kind === "app") return { kind: "app" };
+  if (owner.kind === "tenant") return { kind: "tenant", tenant: owner.tenantKey };
+  return { kind: "user", tenant: owner.tenantKey, user: owner.userKey };
+}
+
+function ownerQuery(ownedBy?: AgentOwnedBy): {
+  ownerKind: "app" | "tenant" | "user";
+  tenantKey?: string;
+  userKey?: string;
+} {
+  if (!ownedBy) return { ownerKind: "app" };
+  return ownedBy.user === undefined
+    ? { ownerKind: "tenant", tenantKey: ownedBy.tenant }
+    : { ownerKind: "user", tenantKey: ownedBy.tenant, userKey: ownedBy.user };
+}
+
+function publicRevision<TOutput extends object>(
+  resource: AgentRevisionResource,
+): AgentRevision<TOutput> {
+  return {
+    id: resource.id,
+    agentId: resource.agentId,
+    revision: resource.revision,
+    behavior: Object.freeze({
+      instructions: resource.behavior.instructions,
+      model: resource.behavior.model,
+      tools: resource.behavior.tools?.map((tool) => ({ ...tool })),
+      limits: resource.behavior.limits ? { ...resource.behavior.limits } : undefined,
+      outputSchema: resource.behavior.outputSchema
+        ? { ...resource.behavior.outputSchema } as JsonSchema<TOutput>
+        : undefined,
+      memory: resource.behavior.memory ? { ...resource.behavior.memory } : undefined,
+    }),
+  };
+}
+
+function copyBehavior<TOutput extends object>(
+  behavior: BehaviorInput<TOutput>,
+): GeneratedBehaviorInput {
+  return {
+    instructions: behavior.instructions,
+    model: behavior.model,
+    tools: behavior.tools?.map((tool) => ({ ...tool })),
+    limits: behavior.limits ? { ...behavior.limits } : undefined,
+    outputSchema: behavior.outputSchema ? { ...behavior.outputSchema } : undefined,
+    memory: behavior.memory ? { ...behavior.memory } : undefined,
+  };
+}
+
+function copyInlineBehavior<TOutput extends object>(
+  behavior: InlineBehavior<TOutput>,
+): InlineBehavior<TOutput> {
+  return {
+    instructions: behavior.instructions,
+    model: behavior.model,
+    tools: behavior.tools?.map((tool) => ({ ...tool })),
+    limits: behavior.limits ? { ...behavior.limits } : undefined,
+    outputSchema: behavior.outputSchema ? { ...behavior.outputSchema } : undefined,
+    memory: behavior.memory ? { ...behavior.memory } : undefined,
+  };
+}
+
+function validateInlineBehavior<TOutput extends object>(
+  behavior: InlineBehavior<TOutput>,
+): void {
+  const memory = behavior.memory;
+  if (memory && memory.defaultScope !== "none") {
+    requireText(memory.namespace, "Inline behavior memory namespace");
   }
-  if (toolChoice.mode !== "named" && toolChoice.name !== undefined) {
+}
+
+function validateInlineDefaultMemory<TOutput extends object>(
+  behavior: InlineBehavior<TOutput>,
+  options: { user?: string; memory?: InlineMemorySelection },
+): void {
+  if (options.memory === undefined
+    && behavior.memory?.defaultScope === "user"
+    && !options.user) {
     throw new NvokenError(
       "validation",
-      `toolChoice mode ${toolChoice.mode} cannot name a tool`,
+      "User-scoped memory requires an explicit Turn user",
+      undefined,
+      "memory_user_required",
     );
   }
 }
 
-function validateAgentDefinitionOverrides<TOutput extends object>(
-  overrides: AgentDefinitionOverrides<TOutput> | undefined,
+function validateHandlerNames(
+  handlers: ToolHandlers,
+  tools: InlineBehavior["tools"],
 ): void {
-  if (overrides === undefined) return;
-  if (Object.keys(overrides).length === 0) {
-    throw new NvokenError("validation", "overrides require at least one member");
-  }
-  if (overrides.model !== undefined) normalizeModel(overrides.model);
-  validateToolChoice(overrides.toolChoice);
-  if (overrides.outputSchema !== undefined) {
-    preflightOutputSchema(schemaToJSON(overrides.outputSchema, "output"));
-  }
-}
-
-function agentDefinitionOverridesToWire<TOutput extends object>(
-  overrides: AgentDefinitionOverrides<TOutput>,
-): CreateInvocationRequest["overrides"] {
-  const outputSchema = overrides.outputSchema === undefined
-    ? undefined
-    : schemaToJSON(overrides.outputSchema, "output");
-  if (outputSchema !== undefined) preflightOutputSchema(outputSchema);
-  return {
-    model: overrides.model === undefined ? undefined : normalizeModel(overrides.model),
-    sampling: overrides.sampling === undefined ? undefined : { ...overrides.sampling },
-    reasoning: overrides.reasoning === undefined ? undefined : { ...overrides.reasoning },
-    toolChoice: overrides.toolChoice === undefined ? undefined : { ...overrides.toolChoice },
-    limits: overrides.limits,
-    outputSchema,
-  };
-}
-
-/** Checks the shape and uniqueness of per-turn MCP secret headers. The service
- * validates each name against the selected Agent Definition revision. */
-function validateMCPServerHeaders(
-  entries: readonly MCPServerHeaders[] | undefined,
-): void {
-  if (entries === undefined) return;
-  const seen = new Set<string>();
-  for (const entry of entries) {
-    if (!entry.name) {
-      throw new NvokenError("validation", "mcpServerHeaders require a server name");
-    }
-    if (Object.keys(entry.headers ?? {}).length === 0) {
-      throw new NvokenError(
-        "validation",
-        `mcpServerHeaders for ${entry.name} require at least one header`,
-      );
-    }
-    if (seen.has(entry.name)) {
-      throw new NvokenError(
-        "validation",
-        `mcpServerHeaders name ${entry.name} is repeated`,
-      );
-    }
-    seen.add(entry.name);
+  const localNames = new Set(
+    (tools ?? []).filter((tool) => tool.mode === "host").map((tool) => tool.name),
+  );
+  const unknown = Object.keys(handlers).filter((name) => !localNames.has(name));
+  if (unknown.length > 0) {
+    throw new NvokenError(
+      "validation",
+      `No inline host-tool contract exists for handler ${JSON.stringify(unknown[0])}`,
+      undefined,
+      "unknown_tool_handler",
+    );
   }
 }
 
-/**
- * The recorded context bounds the Runtime enforces. They are checked here so a
- * snapshot that cannot be admitted fails before a request is spent. The
- * per-Session limit of 16 distinct names is left to the service, which is the
- * only side that knows what a Session has already recorded.
- */
-const MAX_CONTEXT_ITEMS = 8;
-const MAX_CONTEXT_NAME_LENGTH = 64;
-const MAX_CONTEXT_CONTENT_BYTES = 8 * 1024;
-const MAX_CONTEXT_TOTAL_BYTES = 16 * 1024;
-const CONTEXT_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+const LIMIT_FIELDS = [
+  "totalTimeoutSeconds",
+  "activeTimeoutSeconds",
+  "waitingTimeoutSeconds",
+  "maxOutputTokens",
+  "maxEstimatedCostUsd",
+  "maxIterations",
+] as const satisfies readonly (keyof TurnLimits)[];
 
-function utf8Bytes(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
-
-/**
- * Checks the recorded context snapshots against the bounds the Runtime enforces
- * at admission.
- */
-function validateContext(items: readonly ContextItem[] | undefined): void {
-  if (items === undefined) return;
-  if (items.length > MAX_CONTEXT_ITEMS) {
-    throw new NvokenError("validation", `context accepts at most ${MAX_CONTEXT_ITEMS} items`);
+function mergeNarrowedLimits(
+  base: TurnLimits | undefined,
+  override: TurnLimits | undefined,
+): TurnLimits | undefined {
+  if (!base && !override) return undefined;
+  const merged: { -readonly [K in keyof TurnLimits]: TurnLimits[K] } = { ...base };
+  for (const field of LIMIT_FIELDS) {
+    const value = override?.[field];
+    if (value === undefined) continue;
+    const ceiling = base?.[field];
+    if (ceiling !== undefined && value > ceiling) {
+      throw new NvokenError(
+        "validation",
+        `${field} may narrow the Conversation limit but cannot raise it above ${ceiling}`,
+        undefined,
+        "limits_must_narrow",
+      );
+    }
+    merged[field] = value;
   }
-  const seen = new Set<string>();
-  let total = 0;
-  for (const item of items) {
-    if (item.name.length > MAX_CONTEXT_NAME_LENGTH || !CONTEXT_NAME_PATTERN.test(item.name)) {
-      throw new NvokenError(
-        "validation",
-        `context name ${item.name} must match ^[a-z][a-z0-9-]*$ and be at most ${MAX_CONTEXT_NAME_LENGTH} characters`,
-      );
-    }
-    if (seen.has(item.name)) {
-      throw new NvokenError("validation", `context name ${item.name} is repeated`);
-    }
-    seen.add(item.name);
-    if (item.tier !== "contextual" && item.tier !== "operator") {
-      throw new NvokenError(
-        "validation",
-        `context ${item.name} tier must be contextual or operator`,
-      );
-    }
-    if (!item.content) {
-      throw new NvokenError("validation", `context ${item.name} content cannot be empty`);
-    }
-    const bytes = utf8Bytes(item.content);
-    if (bytes > MAX_CONTEXT_CONTENT_BYTES) {
-      throw new NvokenError(
-        "validation",
-        `context ${item.name} content exceeds ${MAX_CONTEXT_CONTENT_BYTES} bytes`,
-      );
-    }
-    total += bytes;
-    if (total > MAX_CONTEXT_TOTAL_BYTES) {
-      throw new NvokenError(
-        "validation",
-        `context content totals more than ${MAX_CONTEXT_TOTAL_BYTES} bytes`,
-      );
-    }
-  }
+  return merged;
 }
 
-/**
- * Whether an Invocation has stopped for good. `incomplete` is one of the four:
- * a turn the runtime cut off at a budget is over, and a wait helper that
- * treated only `completed` as an ending would poll it forever.
- */
-function terminal(status: InvocationStatus): boolean {
-  return status === "completed"
-    || status === "incomplete"
-    || status === "failed"
-    || status === "cancelled";
+function copyHandlers(handlers: ToolHandlers): ToolHandlers {
+  return Object.freeze({ ...handlers });
 }
 
-function outputTextOrThrow<TOutput extends object>(result: AgentResult<TOutput>): string {
-  if (!result.text) throw new NoOutputTextError(result);
+function requiredText<TOutput extends object>(result: TurnResult<TOutput>): string {
+  if (result.text === null) throw new NoOutputTextError(result);
   return result.text;
 }
 
-function asEndedHandle<TOutput extends object>(
-  handle: InvocationHandle<TOutput>,
-): EndedInvocationHandle<TOutput> {
-  if (
-    !handle.idempotencyKey
-    || !handle.agentId
-    || handle.deduplicated === undefined
-    || !isOutcomeStatus(handle.status ?? "")
-  ) {
+function validateContext(
+  context: TurnAccessContext & { memory?: { scope: string } },
+  browser: boolean,
+): void {
+  if (!browser) requireText(context.tenant, "tenant");
+  if (context.user !== undefined) requireText(context.user, "user");
+  if (context.memory?.scope === "user" && !context.user) {
     throw new NvokenError(
-      "unexpected_response",
-      `Invocation ${handle.invocationId} completed without ended handle identity`,
+      "validation",
+      "User-scoped memory requires an explicit Turn user",
+      undefined,
+      "memory_user_required",
     );
   }
-  return handle as EndedInvocationHandle<TOutput>;
 }
 
-function streamFallbackAllowed(error: unknown): boolean {
-  return error instanceof NvokenError
-    && ["transport", "server", "rate_limit", "unexpected_response"].includes(error.category);
-}
-
-function waitSatisfied(
-  status: InvocationStatus,
-  until: NonNullable<WaitOptions["until"]>,
-): boolean {
-  if (until === "terminal") return terminal(status);
-  if (until === "actionable") return status === "waiting" || terminal(status);
-  return until.includes(status);
-}
-
-function schemaToJSON(
-  schema: InputSchema<object> | OutputSchema<object>,
-  direction: "input" | "output",
-): Record<string, unknown> {
-  if (isStandardJSONSchema(schema)) {
-    try {
-      const converted = schema["~standard"].jsonSchema[direction]({
-        target: "draft-2020-12",
-      });
-      const { $schema: _dialect, ...portable } = converted;
-      return portable;
-    } catch (error) {
-      throw new NvokenError(
-        "validation",
-        `The ${direction} schema could not be converted to JSON Schema`,
-        undefined,
-        "schema_conversion_failed",
-        undefined,
-        undefined,
-        undefined,
-        { cause: error },
-      );
-    }
+function requireUser(user: string | undefined): string {
+  if (!user) {
+    throw new NvokenError(
+      "validation",
+      "A user-owned resource requires an explicit Turn user",
+    );
   }
-  const { __nvokenType: _type, ...jsonSchema } = schema;
-  return jsonSchema;
+  return user;
 }
 
-function isStandardJSONSchema(
-  schema: InputSchema<object> | OutputSchema<object>,
-): schema is StandardJSONSchemaV1<object, unknown> | StandardJSONSchemaV1<unknown, object> {
-  const standard = (schema as { "~standard"?: unknown })["~standard"];
-  return Boolean(
-    standard
-    && typeof standard === "object"
-    && "jsonSchema" in standard,
-  );
+function requireText(value: string | undefined, label: string): void {
+  if (!value?.trim()) throw new NvokenError("validation", `${label} must not be blank`);
 }
 
-type NodeProcess = {
-  env?: Record<string, string | undefined>;
-  getBuiltinModule?: (id: string) => unknown;
-};
-
-function nodeProcess(): NodeProcess | undefined {
-  return (globalThis as { process?: NodeProcess }).process;
+function newIdempotencyKey(): string {
+  return `nvoken-${crypto.randomUUID()}`;
 }
 
-function environmentVariable(name: string): string | undefined {
-  return nodeProcess()?.env?.[name];
-}
-
-type FsModule = { readFileSync: (path: string, encoding: "utf8") => string };
-type PathModule = { resolve: (path: string) => string };
-
-function resolveEnvironment(envFile: string | false | undefined): Record<string, string> {
-  if (envFile === false) return {};
-  const proc = nodeProcess();
-  const fs = proc?.getBuiltinModule?.("node:fs") as FsModule | undefined;
-  const nodePath = proc?.getBuiltinModule?.("node:path") as PathModule | undefined;
-  if (!fs || !nodePath) {
-    // Runtimes without Node built-ins (browsers) cannot read the quickstart
-    // .env file. The default probe finds nothing; an explicit path is an error
-    // the caller should hear about rather than a silently ignored option.
-    if (typeof envFile === "string") {
-      throw new NvokenError(
-        "validation",
-        "envFile requires a Node.js runtime; pass envFile: false outside Node",
-      );
-    }
-    return {};
-  }
-  const path = nodePath.resolve(envFile ?? ".env");
-  let content: string;
-  try {
-    content = fs.readFileSync(path, "utf8");
-  } catch {
-    return {};
-  }
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
-  if (lines[0] !== QUICKSTART_ENV_MARKER) return {};
-  const allowed = new Set([
-    "NVOKEN_API_KEY",
-    "NVOKEN_BASE_URL",
-  ]);
-  const values: Record<string, string> = {};
-  for (const line of lines.slice(1)) {
-    const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line);
-    if (!match || !allowed.has(match[1])) continue;
-    values[match[1]] = unquoteEnvironmentValue(match[2]);
-  }
-  return values;
-}
-
-function unquoteEnvironmentValue(value: string): string {
-  const trimmed = value.trim();
-  if (
-    trimmed.length >= 2
-    && ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
-      || (trimmed.startsWith("'") && trimmed.endsWith("'")))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
-
-/**
- * Wraps a fetch so every round trip is reported, then hands back a fetch with
- * the same contract.
- *
- * The observer sees failures too, because a 503 and a request that never got a
- * response are the two things a production consumer most needs to tell apart,
- * and without this they look identical from outside. It never sees the body:
- * the response is returned unread so the client can decode it exactly once.
- * An observer that throws must not take down the call it was only watching.
- */
-function observedFetch(
-  transport: typeof globalThis.fetch,
-  onResponse: (observation: ResponseObservation) => void,
-): typeof globalThis.fetch {
-  return async (input, init) => {
-    const started = Date.now();
-    const method = init?.method
-      ?? (typeof input === "object" && "method" in input ? input.method : undefined)
-      ?? "GET";
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL ? input.toString() : input.url;
-    const report = (observation: ResponseObservation) => {
-      try {
-        onResponse(observation);
-      } catch {
-        // Observation is not part of the request's contract.
-      }
-    };
-    try {
-      const response = await transport(input, init);
-      report({ method, url, status: response.status, durationMs: Date.now() - started });
-      return response;
-    } catch (error) {
-      report({ method, url, status: 0, durationMs: Date.now() - started, error });
-      throw error;
-    }
+function contextHeaders(context: TurnAccessContext): Record<string, string> {
+  return {
+    ...(context.tenant ? { "X-Nvoken-Tenant-Key": context.tenant } : {}),
+    ...(context.user ? { "X-Nvoken-User-Key": context.user } : {}),
   };
 }
 
-/**
- * Resolves either accepted spelling of a model to the object form.
- *
- * The contract promises `"provider/id"` anywhere a model is named, split at
- * the first slash, so an id may contain slashes and a provider may not. The
- * wire already accepts both; normalizing here keeps that promise true for
- * callers of the handwritten types too.
- */
-export function normalizeModel(model: ModelInput): Model {
-  if (typeof model !== "string") {
-    validateModel(model);
-    return model;
-  }
-  const slash = model.indexOf("/");
-  const resolved = slash === -1
-    ? { provider: model, id: "" }
-    : { provider: model.slice(0, slash), id: model.slice(slash + 1) };
-  validateModel(resolved);
-  return resolved;
+function contextOverride(
+  context: TurnAccessContext,
+  signal?: AbortSignal,
+): (request: { init: RequestInit }) => Promise<RequestInit> {
+  return async ({ init }) => ({
+    ...init,
+    headers: { ...(init.headers as Record<string, string>), ...contextHeaders(context) },
+    signal,
+  });
 }
 
-function validateModel(model: Model): void {
-  if (!/^[a-z][a-z0-9_]*$/.test(model.provider) || !model.id) {
+function environmentVariable(name: string): string | undefined {
+  const processValue = (
+    globalThis as { process?: { env?: Record<string, string | undefined> } }
+  ).process;
+  return processValue?.env?.[name];
+}
+
+function validateRetryPolicy(retry: Required<RetryPolicy>): void {
+  if (!Number.isInteger(retry.maxAttempts)
+    || retry.maxAttempts < 1
+    || !Number.isFinite(retry.minDelayMs)
+    || retry.minDelayMs < 0
+    || !Number.isFinite(retry.maxDelayMs)
+    || retry.maxDelayMs < retry.minDelayMs) {
     throw new NvokenError(
       "validation",
-      'model requires a valid canonical provider and a non-empty id, as '
-        + '{provider, id} or "provider/id"',
+      "retry requires maxAttempts >= 1 and 0 <= minDelayMs <= maxDelayMs",
     );
   }
-}
-
-export async function normalizeError(error: unknown): Promise<NvokenError> {
-  if (error instanceof NvokenError) return error;
-  if (error instanceof ResponseError) {
-    const response = error.response;
-    let body: {
-      code?: string;
-      message?: string;
-      request_id?: string;
-      details?: Record<string, unknown>;
-    } = {};
-    try {
-      body = await response.clone().json() as typeof body;
-    } catch {
-      // Status and response headers still produce an actionable error.
-    }
-    const requestId = body.request_id ?? response.headers.get("x-request-id") ?? undefined;
-    if (response.status === 410 && body.code === "invocation_erased") {
-      const erasedAt = typeof body.details?.erased_at === "string"
-        ? new Date(body.details.erased_at)
-        : undefined;
-      return new InvocationErasedError(
-        body.message ?? "The Invocation content has been erased.",
-        typeof body.details?.invocation_id === "string"
-          ? body.details.invocation_id
-          : undefined,
-        erasedAt !== undefined && !Number.isNaN(erasedAt.getTime()) ? erasedAt : undefined,
-        requestId,
-        body.details,
-        { cause: error },
-      );
-    }
-    if (body.code === "session_invocation_active") {
-      return new SessionBusyError(
-        body.message ?? "This Session already has a nonterminal Invocation.",
-        typeof body.details?.invocation_id === "string"
-          ? body.details.invocation_id
-          : undefined,
-        isInvocationStatus(body.details?.status) ? body.details.status : undefined,
-        requestId,
-        body.details,
-      );
-    }
-    const category: ErrorCategory = response.status === 401
-      ? "authentication"
-      : response.status === 403
-        ? "permission"
-      : response.status === 400 || response.status === 422
-        ? "validation"
-        : response.status === 404
-          ? "not_found"
-          : response.status === 409
-            ? "conflict"
-            : response.status === 429
-              ? "rate_limit"
-              : response.status >= 500
-                ? "server"
-                : "unexpected_response";
-    return new NvokenError(
-      category,
-      body.message ?? `nvoken returned HTTP ${response.status}`,
-      response.status,
-      body.code,
-      requestId,
-      parseRetryAfter(response.headers.get("retry-after")),
-      body.details,
-      { cause: error },
-    );
-  }
-  if (error instanceof FetchError || error instanceof TypeError) {
-    return new NvokenError(
-      "transport",
-      "nvoken transport failed",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { cause: error },
-    );
-  }
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return new NvokenError(
-      "cancelled",
-      "local wait or request was cancelled",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { cause: error },
-    );
-  }
-  return new NvokenError(
-    "unexpected_response",
-    "unexpected nvoken client failure",
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    { cause: error },
-  );
-}
-
-/** Whether an SDK call failed because the requested resource was not found. */
-export function isNotFound(error: unknown): error is NvokenError {
-  return error instanceof NvokenError && error.category === "not_found";
-}
-
-function isInvocationStatus(value: unknown): value is InvocationStatus {
-  return value === "queued"
-    || value === "running"
-    || value === "waiting"
-    || value === "completed"
-    || value === "incomplete"
-    || value === "failed"
-    || value === "cancelled";
 }
 
 function retryable(error: NvokenError): boolean {
@@ -4903,30 +1401,29 @@ function retryable(error: NvokenError): boolean {
     || error.status === 504;
 }
 
-function parseRetryAfter(value: string | null): number | undefined {
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
-  const when = Date.parse(value);
-  return Number.isNaN(when) ? undefined : Math.max(0, when - Date.now());
-}
-
 function sleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    if (signal?.aborted) {
-      reject(new NvokenError("cancelled", "local wait or request was cancelled"));
-      return;
-    }
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new NvokenError("cancelled", "local wait or request was cancelled"));
-    };
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(abortError(signal)); return; }
+    const onAbort = () => { clearTimeout(timer); reject(abortError(signal)); };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
-      resolvePromise();
+      resolve();
     }, milliseconds);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+function abortError(signal?: AbortSignal): NvokenError {
+  return new NvokenError(
+    "cancelled",
+    "local wait or request was cancelled",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { cause: signal?.reason },
+  );
 }
 
 interface LocalAbortScope {
@@ -4935,7 +1432,10 @@ interface LocalAbortScope {
   dispose(): void;
 }
 
-function localAbortScope(signal: AbortSignal | undefined, timeoutMs: number | undefined): LocalAbortScope {
+function localAbortScope(
+  signal: AbortSignal | undefined,
+  timeoutMs: number | undefined,
+): LocalAbortScope {
   if (timeoutMs === undefined) {
     return { signal, timedOut: () => false, dispose: () => undefined };
   }
@@ -4943,23 +1443,86 @@ function localAbortScope(signal: AbortSignal | undefined, timeoutMs: number | un
     throw new NvokenError("validation", "timeoutMs must be a positive finite number");
   }
   const controller = new AbortController();
-  let timeoutElapsed = false;
-  const abortFromCaller = () => controller.abort(signal?.reason);
-  if (signal?.aborted) {
-    abortFromCaller();
-  } else {
-    signal?.addEventListener("abort", abortFromCaller, { once: true });
-  }
-  const timer = setTimeout(() => {
-    timeoutElapsed = true;
-    controller.abort();
-  }, timeoutMs);
+  let timedOut = false;
+  const abort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   return {
     signal: controller.signal,
-    timedOut: () => timeoutElapsed,
-    dispose: () => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abortFromCaller);
-    },
+    timedOut: () => timedOut,
+    dispose: () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); },
   };
+}
+
+function observedFetch(
+  fetch: typeof globalThis.fetch,
+  observe: (observation: ResponseObservation) => void,
+): typeof globalThis.fetch {
+  return async (input, init) => {
+    const started = Date.now();
+    try {
+      const response = await fetch(input, init);
+      observe({
+        method: init?.method ?? "GET",
+        url: String(input),
+        status: response.status,
+        durationMs: Date.now() - started,
+      });
+      return response;
+    } catch (error) {
+      observe({
+        method: init?.method ?? "GET",
+        url: String(input),
+        status: 0,
+        durationMs: Date.now() - started,
+        error,
+      });
+      throw error;
+    }
+  };
+}
+
+export function defineJsonSchema<T extends object>(schema: JsonSchema<T>): JsonSchema<T> {
+  return schema;
+}
+
+export function defineHostTool<TInput extends object = JsonObject>(
+  tool: Omit<HostToolContract, "inputSchema"> & { inputSchema: JsonSchema<TInput> },
+): HostToolContract {
+  return { ...tool, inputSchema: { ...tool.inputSchema } };
+}
+
+export function textBlock(text: string): Extract<InputBlock, { type: "text" }> {
+  return { type: "text", text };
+}
+
+export function imageBlock(
+  mediaType: "image/gif" | "image/jpeg" | "image/png" | "image/webp",
+  data: string,
+): ImageInputBlock {
+  return { type: "image", source: { mediaType, data } };
+}
+
+export function imageURLBlock(
+  url: string,
+  mediaType?: "image/gif" | "image/jpeg" | "image/png" | "image/webp",
+): ImageInputBlock {
+  return { type: "image", source: { url, mediaType } };
+}
+
+export function documentBlock(
+  mediaType: "application/pdf",
+  data: string,
+  title?: string,
+): DocumentInputBlock {
+  return { type: "document", source: { mediaType, data }, title };
+}
+
+export function documentURLBlock(
+  url: string,
+  title?: string,
+  mediaType?: "application/pdf",
+): DocumentInputBlock {
+  return { type: "document", source: { url, mediaType }, title };
 }

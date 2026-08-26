@@ -6,10 +6,10 @@ from scripts.check_go_frame_keys import contract_required, go_table
 
 TABLE = '''
 var requiredFrameKeys = map[string][]string{
-	"StreamResyncEvent": {"type", "session_id", "reason"},
+	"StreamResyncEvent": {"type", "conversation_id", "content_expires_at", "reason"},
 	// No ConnectionClosingEvent: this SDK never decodes one.
-	"InvocationChange": {
-		"invocation_id", "revision", "status", "terminal",
+	"TurnChange": {
+		"turn_id", "conversation_id", "content_expires_at", "revision", "status", "terminal",
 		"through_message_sequence", "error", "structured_output", "occurred_at",
 	},
 }
@@ -21,9 +21,16 @@ class GoTableTest(unittest.TestCase):
         self.assertEqual(
             go_table(TABLE),
             {
-                "StreamResyncEvent": ["type", "session_id", "reason"],
-                "InvocationChange": [
-                    "invocation_id",
+                "StreamResyncEvent": [
+                    "type",
+                    "conversation_id",
+                    "content_expires_at",
+                    "reason",
+                ],
+                "TurnChange": [
+                    "turn_id",
+                    "conversation_id",
+                    "content_expires_at",
                     "revision",
                     "status",
                     "terminal",
@@ -58,9 +65,9 @@ components:
       in: query
       required: false
   schemas:
-    InvocationChange:
+    TurnChange:
       type: object
-      required: [invocation_id, revision, status, terminal,
+      required: [turn_id, conversation_id, content_expires_at, revision, status, terminal,
                  through_message_sequence, error, structured_output, occurred_at]
       properties:
         nested:
@@ -69,7 +76,7 @@ components:
             - not_mine
     ConnectionClosingEvent:
       type: object
-      required: [type, session_id, reason]
+      required: [type, conversation_id, content_expires_at, reason]
     Trace:
       type: object
       required:
@@ -86,9 +93,11 @@ class ContractRequiredTest(unittest.TestCase):
 
     def test_reads_a_wrapped_flow_sequence(self) -> None:
         self.assertEqual(
-            self.required["InvocationChange"],
+            self.required["TurnChange"],
             [
-                "invocation_id",
+                "turn_id",
+                "conversation_id",
+                "content_expires_at",
                 "revision",
                 "status",
                 "terminal",
@@ -110,7 +119,7 @@ class ContractRequiredTest(unittest.TestCase):
 
     def test_ignores_a_nested_property_list(self) -> None:
         # A property's own `required` belongs to the property, not the schema.
-        self.assertNotIn("not_mine", self.required["InvocationChange"])
+        self.assertNotIn("not_mine", self.required["TurnChange"])
 
     def test_omits_a_schema_with_no_required(self) -> None:
         self.assertNotIn("Optional", self.required)

@@ -19,8 +19,8 @@
       "import": "./dist/index.js"
     },
     "./status": {
-      "types": "./dist/invocation-status.d.ts",
-      "import": "./dist/invocation-status.js"
+      "types": "./dist/turn-status.d.ts",
+      "import": "./dist/turn-status.js"
     },
     "./callback": {
       "types": "./dist/callback.d.ts",
@@ -60,16 +60,14 @@
     "dist/client-token.js",
     "dist/client.d.ts",
     "dist/client.js",
+    "dist/facade-types.d.ts",
+    "dist/facade-types.js",
     "dist/diagnostics.d.ts",
     "dist/diagnostics.js",
     "dist/examples/quickstart.js",
     "dist/generated",
     "dist/index.d.ts",
     "dist/index.js",
-    "dist/invocation-error.d.ts",
-    "dist/invocation-error.js",
-    "dist/invocation-status.d.ts",
-    "dist/invocation-status.js",
     "dist/media-preflight.d.ts",
     "dist/media-preflight.js",
     "dist/schema-preflight.d.ts",
@@ -78,6 +76,10 @@
     "dist/signed-delivery.js",
     "dist/stream.d.ts",
     "dist/stream.js",
+    "dist/turn-error.d.ts",
+    "dist/turn-error.js",
+    "dist/turn-status.d.ts",
+    "dist/turn-status.js",
     "dist/transcript.d.ts",
     "dist/transcript.js",
     "dist/version.d.ts",
@@ -98,7 +100,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json",
     "test": "node --test dist/test/*.test.js",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build && npm test"

@@ -15,6 +15,7 @@ check_facade_parity = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(check_facade_parity)
 
 load_operations = check_facade_parity.load_operations
+facade_parameters = check_facade_parity.facade_parameters
 spelling = check_facade_parity.spelling
 strip_prose = check_facade_parity.strip_prose
 
@@ -45,7 +46,7 @@ class StripProseTest(unittest.TestCase):
 
 class SpellingTest(unittest.TestCase):
     def test_go_capitalizes_and_keeps_id_uppercase(self) -> None:
-        self.assertEqual(spelling("go", "invocation_id"), "InvocationID")
+        self.assertEqual(spelling("go", "turn_id"), "TurnID")
 
     def test_typescript_is_lower_camel(self) -> None:
         self.assertEqual(spelling("typescript", "ended_since"), "endedSince")
@@ -59,11 +60,25 @@ class LoadOperationsTest(unittest.TestCase):
     def test_reads_the_contract(self) -> None:
         operations = load_operations()
         # Path-level and operation-level parameters both land on the operation.
-        self.assertIn("ended", operations["listInvocations"])
-        self.assertIn("cursor", operations["listInvocations"])
+        self.assertIn("ended", operations["listTurns"])
+        self.assertIn("cursor", operations["listTurns"])
         # A path parameter is positional in every facade, so it is not the
         # check's business.
-        self.assertNotIn("invocation_id", operations["getInvocation"])
+        self.assertNotIn("turn_id", operations["getTurn"])
+
+
+class FacadeParametersTest(unittest.TestCase):
+    def test_exact_resource_administration_stays_raw_only(self) -> None:
+        operations = load_operations()
+        self.assertEqual(facade_parameters("listTurns", operations["listTurns"]), [])
+
+    def test_workflow_facade_excludes_only_declared_transport_controls(self) -> None:
+        operations = load_operations()
+        parameters = facade_parameters("createTurn", operations["createTurn"])
+        self.assertIn("memory", parameters)
+        self.assertIn("conversation", parameters)
+        self.assertNotIn("mcp_server_headers", parameters)
+        self.assertNotIn("triggered_by", parameters)
 
 
 if __name__ == "__main__":

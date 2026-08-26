@@ -22,29 +22,19 @@ pub struct CallbackContext {
     /// path or query suffix on the endpoint URL is unsigned and belongs in
     /// logs, not in a dispatch decision.
     pub tool_name: String,
-    pub invocation_id: String,
-    pub session_id: String,
-    pub agent_key: String,
-    pub tenant_key: Option<String>,
+    pub turn_id: String,
+    pub conversation_id: Option<String>,
+    pub memory_space_id: Option<String>,
+    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub behavior_source: Value,
+    pub tenant_key: String,
+    pub user_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CallbackEnvelope {
     pub nvoken: CallbackContext,
-    /// What the Session was bound to at creation, in the host's own terms,
-    /// absent when it was created without one.
-    ///
-    /// It is a sibling of `nvoken` rather than a member of it, and the
-    /// placement is the rule: everything inside `nvoken` is a fact nvoken
-    /// minted or resolved, while this is a value the host asserted and nvoken
-    /// carried unchanged. Signing proves it reached the receiver as recorded,
-    /// not that it is true.
-    ///
-    /// A value repeated in tool input may only agree with this, never establish
-    /// it. The model writes the input; it does not write this.
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub authorization_context: HashMap<String, String>,
-    pub input: Value,
+    pub input: Option<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,11 +44,13 @@ pub struct VerifiedCallback {
     pub delivery_id: String,
     pub tool_call_id: String,
     pub tool_name: String,
-    /// The Session's authorization context, read off the signed body.
-    /// Authorize the delivery from this rather than from anything in
-    /// `envelope.input`, and treat a value that appears in both as agreement to
-    /// check rather than as a second source.
-    pub authorization_context: HashMap<String, String>,
+    pub turn_id: String,
+    pub conversation_id: Option<String>,
+    pub memory_space_id: Option<String>,
+    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub behavior_source: Value,
+    pub tenant_key: String,
+    pub user_key: Option<String>,
     pub key_id: String,
     pub key_version: u64,
     pub timestamp: SystemTime,
@@ -78,7 +70,7 @@ pub fn verify_callback(
     let delivery = verify_signed_delivery(key, headers, raw_body, now)?;
     let envelope: CallbackEnvelope =
         serde_json::from_slice(raw_body).map_err(DeliveryError::InvalidEnvelope)?;
-    if envelope.nvoken.schema_version != 1 {
+    if envelope.nvoken.schema_version != 2 {
         return Err(DeliveryError::UnsupportedSchemaVersion);
     }
     if envelope.nvoken.delivery_id != delivery.delivery_id
@@ -92,15 +84,27 @@ pub fn verify_callback(
     if envelope.nvoken.tool_name.is_empty() {
         return Err(DeliveryError::MissingToolName);
     }
+    if envelope.nvoken.turn_id.is_empty()
+        || envelope.nvoken.tenant_key.is_empty()
+        || !envelope.nvoken.behavior_source.is_object()
+    {
+        return Err(DeliveryError::InvalidAttribution);
+    }
     let tool_name = envelope.nvoken.tool_name.clone();
-    let authorization_context = envelope.authorization_context.clone();
+    let context = envelope.nvoken.clone();
     Ok(VerifiedCallback {
         envelope,
         raw_body: raw_body.to_vec(),
         delivery_id: delivery.delivery_id,
         tool_call_id: delivery.idempotency_key,
         tool_name,
-        authorization_context,
+        turn_id: context.turn_id,
+        conversation_id: context.conversation_id,
+        memory_space_id: context.memory_space_id,
+        content_expires_at: context.content_expires_at,
+        behavior_source: context.behavior_source,
+        tenant_key: context.tenant_key,
+        user_key: context.user_key,
         key_id: delivery.key_id,
         key_version: delivery.key_version,
         timestamp: delivery.timestamp,
@@ -144,7 +148,7 @@ pub fn callback_result(
 /// This trades away the fail-loud guarantee. nvoken marks an unacknowledged
 /// delivery failed once its retries are exhausted, so the turn always moves on.
 /// An acknowledged call instead waits under the host's responsibility, bounded
-/// only by the Invocation's `limits.waiting_timeout_seconds`. Acknowledge only
+/// only by the Turn's `limits.waiting_timeout_seconds`. Acknowledge only
 /// when something durable will settle the call.
 pub fn acknowledge_callback() -> CallbackReply {
     CallbackReply {

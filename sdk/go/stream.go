@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +15,8 @@ import (
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
+// StreamEvent is one decoded SSE frame. Data contains the exact target event
+// JSON, while ID is the durable resume cursor when the frame has one.
 type StreamEvent struct {
 	ID    string          `json:"id,omitempty"`
 	Type  string          `json:"type"`
@@ -23,36 +24,38 @@ type StreamEvent struct {
 	Retry time.Duration   `json:"retry,omitempty"`
 }
 
-// ErrStopStream ends a Session subscription from inside its consumer. The
-// unfiltered stream never ends on its own, so leaving it is the caller's
-// decision to make.
 var ErrStopStream = errors.New("stop reading the stream")
 
-type ReducedSnapshot struct {
-	Messages          []SessionMessage             `json:"messages"`
-	InvocationChanges []generated.InvocationChange `json:"invocation_changes"`
-	Previews          []StreamPreview              `json:"previews"`
-	Cursor            string                       `json:"cursor,omitempty"`
+type UpdatesOptions struct {
+	Cursor *string
+	Deltas *bool
 }
 
-// StreamPreview is one message the model is writing, accumulated from the
-// fragments of one content block. One field carries every kind of fragment,
-// because one accumulator handles all of them.
 type StreamPreview struct {
-	InvocationID string `json:"invocation_id"`
+	TurnID       string `json:"turn_id"`
 	Attempt      int64  `json:"attempt"`
-	// MessageID names the saved message this preview is building. It is the
-	// key: the handoff to the saved message updates a row that already has its
-	// permanent identity, rather than one row disappearing and another taking
-	// its place.
 	MessageID    string `json:"message_id"`
 	ContentIndex int    `json:"content_index"`
 	Kind         string `json:"kind"`
 	Delta        string `json:"delta"`
-	// ToolCallID and Name are present on tool_arguments previews and name the
-	// call the fragments belong to.
-	ToolCallID string `json:"tool_call_id,omitempty"`
-	Name       string `json:"name,omitempty"`
+	ToolCallID   string `json:"tool_call_id,omitempty"`
+	Name         string `json:"name,omitempty"`
+}
+
+type ReducedSnapshot struct {
+	Messages    []ConversationMessage `json:"messages"`
+	TurnChanges []TurnChange          `json:"turn_changes"`
+	Previews    []StreamPreview       `json:"previews"`
+	Cursor      string                `json:"cursor,omitempty"`
+}
+
+// TurnUpdate is the high-level reduced view yielded while following one Turn.
+// Previews are provisional deltas; Snapshot.Messages contains durable saved
+// messages and Snapshot becomes authoritative after the final point read.
+type TurnUpdate struct {
+	Snapshot TurnSnapshot
+	Previews []StreamPreview
+	Cursor   string
 }
 
 type streamPreviewKey struct {
@@ -60,22 +63,30 @@ type streamPreviewKey struct {
 	contentIndex int
 }
 
+// Reducer folds replayable durable frames and provisional previews into one
+// current view. Durable frames are idempotent by identity and revision.
 type Reducer struct {
-	messages            map[int64]SessionMessage
-	changes             map[string]generated.InvocationChange
-	previews            map[streamPreviewKey]StreamPreview
-	latestAttempts      map[string]int64
-	terminalInvocations map[string]struct{}
-	cursor              string
+	messages       map[int64]ConversationMessage
+	changes        map[string]TurnChange
+	previews       map[streamPreviewKey]StreamPreview
+	latestAttempts map[string]int64
+	terminalTurns  map[string]struct{}
+	cursor         string
 }
 
 func NewReducer() *Reducer {
 	return &Reducer{
-		messages:            make(map[int64]SessionMessage),
-		changes:             make(map[string]generated.InvocationChange),
-		previews:            make(map[streamPreviewKey]StreamPreview),
-		latestAttempts:      make(map[string]int64),
-		terminalInvocations: make(map[string]struct{}),
+		messages:       make(map[int64]ConversationMessage),
+		changes:        make(map[string]TurnChange),
+		previews:       make(map[streamPreviewKey]StreamPreview),
+		latestAttempts: make(map[string]int64),
+		terminalTurns:  make(map[string]struct{}),
+	}
+}
+
+func (r *Reducer) seed(messages []ConversationMessage) {
+	for _, message := range messages {
+		r.messages[message.Sequence] = message
 	}
 }
 
@@ -99,112 +110,99 @@ func (r *Reducer) Apply(event StreamEvent) error {
 		if err := json.Unmarshal(event.Data, &resync); err != nil {
 			return fmt.Errorf("decode stream resync: %w", err)
 		}
-		// An absent Invocation is scope: discard previews for the whole Session.
-		if resync.InvocationID == nil {
+		if resync.TurnID == nil {
 			clear(r.previews)
 			clear(r.latestAttempts)
 		} else {
-			r.discardPreviews(string(*resync.InvocationID))
+			r.discardPreviews(*resync.TurnID)
 		}
 		return nil
-	}
-	if event.Type != "transcript.update" {
-		return nil
-	}
-	if err := requireTranscriptUpdateKeys(event.Data); err != nil {
-		return err
-	}
-	var update generated.TranscriptUpdateEvent
-	if err := json.Unmarshal(event.Data, &update); err != nil {
-		return fmt.Errorf("decode transcript update: %w", err)
-	}
-	// Messages before changes, so a turn is never marked settled before its
-	// final message exists.
-	for _, message := range update.Messages {
-		r.messages[message.Sequence] = message
-		if message.Role == generated.SessionMessageRoleAssistant && message.InvocationID != nil {
-			r.discardPreviews(*message.InvocationID)
+	case "transcript.update":
+		if err := requireTranscriptUpdateKeys(event.Data); err != nil {
+			return err
 		}
-	}
-	for _, change := range update.InvocationChanges {
-		key := fmt.Sprintf("%s:%d", change.InvocationID, change.Revision)
-		r.changes[key] = change
-		if IsTurnOver(change) {
-			r.terminalInvocations[change.InvocationID] = struct{}{}
-			r.discardPreviews(change.InvocationID)
+		var update generated.TranscriptUpdateEvent
+		if err := json.Unmarshal(event.Data, &update); err != nil {
+			return fmt.Errorf("decode transcript update: %w", err)
 		}
-	}
-	if event.ID != "" {
-		r.cursor = event.ID
-	} else if update.Cursor != "" {
-		r.cursor = update.Cursor
+		// Messages land before terminal changes so a snapshot never settles a
+		// Turn before its final saved message is visible.
+		for _, message := range update.Messages {
+			r.messages[message.Sequence] = message
+			if message.TurnID != nil {
+				r.discardPreviews(*message.TurnID)
+			}
+		}
+		for _, change := range update.TurnChanges {
+			key := fmt.Sprintf("%s:%d", change.TurnID, change.Revision)
+			r.changes[key] = change
+			if change.Terminal {
+				r.terminalTurns[change.TurnID] = struct{}{}
+				r.discardPreviews(change.TurnID)
+			}
+		}
+		if event.ID != "" {
+			r.cursor = event.ID
+		} else if update.Cursor != "" {
+			r.cursor = update.Cursor
+		}
 	}
 	return nil
 }
 
-// Settled reports whether a change carrying a terminal status has arrived for
-// this turn. That is the terminal signal, and there is no other.
-func (r *Reducer) Settled(invocationID string) bool {
-	_, settled := r.terminalInvocations[invocationID]
-	return settled
+func (r *Reducer) Settled(turnID string) bool {
+	_, ok := r.terminalTurns[turnID]
+	return ok
 }
 
 func (r *Reducer) Snapshot() ReducedSnapshot {
-	messages := make([]SessionMessage, 0, len(r.messages))
+	messages := make([]ConversationMessage, 0, len(r.messages))
 	for _, message := range r.messages {
 		messages = append(messages, message)
 	}
 	sort.Slice(messages, func(i, j int) bool { return messages[i].Sequence < messages[j].Sequence })
-	changes := make([]generated.InvocationChange, 0, len(r.changes))
+	changes := make([]TurnChange, 0, len(r.changes))
 	for _, change := range r.changes {
 		changes = append(changes, change)
 	}
 	sort.Slice(changes, func(i, j int) bool {
-		if changes[i].InvocationID == changes[j].InvocationID {
+		if changes[i].TurnID == changes[j].TurnID {
 			return changes[i].Revision < changes[j].Revision
 		}
-		return changes[i].InvocationID < changes[j].InvocationID
+		return changes[i].TurnID < changes[j].TurnID
 	})
 	previews := make([]StreamPreview, 0, len(r.previews))
 	for _, preview := range r.previews {
 		previews = append(previews, preview)
 	}
 	sort.Slice(previews, func(i, j int) bool {
-		if previews[i].MessageID != previews[j].MessageID {
-			return previews[i].MessageID < previews[j].MessageID
+		if previews[i].MessageID == previews[j].MessageID {
+			return previews[i].ContentIndex < previews[j].ContentIndex
 		}
-		return previews[i].ContentIndex < previews[j].ContentIndex
+		return previews[i].MessageID < previews[j].MessageID
 	})
-	return ReducedSnapshot{
-		Messages:          messages,
-		InvocationChanges: changes,
-		Previews:          previews,
-		Cursor:            r.cursor,
-	}
+	return ReducedSnapshot{Messages: messages, TurnChanges: changes, Previews: previews, Cursor: r.cursor}
 }
 
 func (r *Reducer) appendPreview(delta generated.MessageDeltaEvent) {
-	invocationID := string(delta.InvocationID)
-	if _, terminal := r.terminalInvocations[invocationID]; terminal {
+	turnID := string(delta.TurnID)
+	if _, terminal := r.terminalTurns[turnID]; terminal {
 		return
 	}
-	if latest, ok := r.latestAttempts[invocationID]; ok {
+	if latest, ok := r.latestAttempts[turnID]; ok {
 		if delta.Attempt < latest {
 			return
 		}
 		if delta.Attempt > latest {
-			r.discardPreviews(invocationID)
+			r.discardPreviews(turnID)
 		}
 	}
-	r.latestAttempts[invocationID] = delta.Attempt
-	key := streamPreviewKey{
-		messageID:    string(delta.MessageID),
-		contentIndex: delta.ContentIndex,
-	}
+	r.latestAttempts[turnID] = delta.Attempt
+	key := streamPreviewKey{messageID: delta.MessageID, contentIndex: delta.ContentIndex}
 	preview := r.previews[key]
-	preview.InvocationID = invocationID
+	preview.TurnID = turnID
 	preview.Attempt = delta.Attempt
-	preview.MessageID = string(delta.MessageID)
+	preview.MessageID = delta.MessageID
 	preview.ContentIndex = delta.ContentIndex
 	preview.Kind = string(delta.Kind)
 	preview.Delta += delta.Delta
@@ -217,100 +215,59 @@ func (r *Reducer) appendPreview(delta generated.MessageDeltaEvent) {
 	r.previews[key] = preview
 }
 
-func (r *Reducer) discardPreviews(invocationID string) {
+func (r *Reducer) discardPreviews(turnID string) {
 	for key, preview := range r.previews {
-		if preview.InvocationID == invocationID {
+		if preview.TurnID == turnID {
 			delete(r.previews, key)
 		}
 	}
-	delete(r.latestAttempts, invocationID)
+	delete(r.latestAttempts, turnID)
 }
 
-// Stream follows this turn and returns once a change for it carries a terminal
-// status. It is the one stream, filtered to one Invocation.
-func (h *InvocationHandle) Stream(ctx context.Context, consume func(StreamEvent) error) error {
-	return h.StreamWithOptions(ctx, StreamOptions{}, consume)
-}
-
-func (h *InvocationHandle) StreamWithOptions(
-	ctx context.Context,
-	options StreamOptions,
-	consume func(StreamEvent) error,
-) error {
-	return h.client.readStream(ctx, "", h.InvocationID, options, func(event StreamEvent, reducer *Reducer) error {
-		if consume != nil {
-			if err := consume(event); err != nil {
-				return err
+// Updates follows this Turn as reduced snapshots, reconnecting from the last
+// durable cursor until its terminal change arrives or the consumer stops it
+// with ErrStopStream. Raw SSE frames remain available through Raw().
+func (t *Turn) Updates(ctx context.Context, options UpdatesOptions, consume func(TurnUpdate) error) error {
+	if err := t.validateAccess(); err != nil {
+		return err
+	}
+	current, err := t.Status(ctx)
+	if err != nil {
+		return turnWaitError(err, t)
+	}
+	if current.Resource.Status == generated.TurnStatusWaiting {
+		if _, err := t.settleHostTools(ctx, current.Resource.ToolCalls); err != nil {
+			return err
+		}
+	}
+	if consume != nil {
+		if err := consume(TurnUpdate{Snapshot: *current}); err != nil {
+			if errors.Is(err, ErrStopStream) {
+				return nil
 			}
+			return err
 		}
-		if reducer.Settled(h.InvocationID) {
-			return ErrStopStream
-		}
+	}
+	if current.Resource.EndedAt != nil {
 		return nil
-	})
-}
-
-// StreamSession subscribes to everything in a Session. It stays open while the
-// Session is idle and a turn started later appears on it, so it returns only
-// when the consumer says to stop with ErrStopStream, when the consumer fails,
-// or when the context ends.
-func (c *Client) StreamSession(ctx context.Context, sessionID string, consume func(StreamEvent, ReducedSnapshot) error) error {
-	return c.StreamSessionWithOptions(ctx, sessionID, StreamOptions{}, consume)
-}
-
-func (c *Client) StreamSessionWithOptions(
-	ctx context.Context,
-	sessionID string,
-	options StreamOptions,
-	consume func(StreamEvent, ReducedSnapshot) error,
-) error {
-	return c.readStream(ctx, sessionID, "", options, func(event StreamEvent, reducer *Reducer) error {
-		if consume != nil {
-			if err := consume(event, reducer.Snapshot()); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// readStream is the one read loop. It reconnects from its last durable cursor
-// on any connection end. A connection.closing frame says only that, and a
-// silent drop says nothing at all, so neither is a reason to stop.
-func (c *Client) readStream(
-	ctx context.Context,
-	sessionID string,
-	invocationID string,
-	options StreamOptions,
-	consume func(StreamEvent, *Reducer) error,
-) error {
+	}
 	reducer := NewReducer()
+	reducer.seed(current.Messages)
 	retryDelay := time.Second
 	for {
-		var response *http.Response
-		var err error
-		var cursor *generated.Cursor
+		cursor := options.Cursor
 		lastEventID := reducer.Snapshot().Cursor
-		if lastEventID == "" && options.Cursor != nil {
-			value := generated.Cursor(*options.Cursor)
-			cursor = &value
+		params := &generated.StreamTurnParams{Deltas: options.Deltas}
+		if lastEventID != "" {
+			params.LastEventID = &lastEventID
+		} else if cursor != nil {
+			value := generated.Cursor(*cursor)
+			params.Cursor = &value
 		}
-		if invocationID != "" {
-			params := &generated.StreamInvocationParams{Cursor: cursor, Deltas: options.Deltas}
-			if lastEventID != "" {
-				params.LastEventID = &lastEventID
-			}
-			response, err = c.raw.ClientInterface.StreamInvocation(ctx, generated.InvocationID(invocationID), params)
-		} else {
-			params := &generated.StreamSessionParams{Cursor: cursor, Deltas: options.Deltas}
-			if lastEventID != "" {
-				params.LastEventID = &lastEventID
-			}
-			response, err = c.raw.ClientInterface.StreamSession(ctx, generated.SessionID(sessionID), params)
-		}
+		response, err := t.client.raw.ClientInterface.StreamTurn(ctx, t.id, params, t.requestEditor())
 		if err != nil {
 			if err := waitForReconnect(ctx, retryDelay); err != nil {
-				return err
+				return turnWaitError(transportError(err), t)
 			}
 			continue
 		}
@@ -324,15 +281,52 @@ func (c *Client) readStream(
 				retryDelay = event.Retry
 			}
 			if len(event.Data) == 0 {
-				// A frame carrying only `retry:` is a control frame, not an
-				// event. The runtime opens every stream with one. Its
-				// bookkeeping is applied above; there is nothing to consume.
 				return nil
 			}
 			if err := reducer.Apply(event); err != nil {
 				return err
 			}
-			return consume(event, reducer)
+			if event.Type == "transcript.update" {
+				var update generated.TranscriptUpdateEvent
+				if err := json.Unmarshal(event.Data, &update); err != nil {
+					return fmt.Errorf("decode transcript update for tools: %w", err)
+				}
+				for _, change := range update.TurnChanges {
+					if change.TurnID != t.id {
+						continue
+					}
+					applyTurnChange(&current.Resource, change)
+					if change.Status == generated.TurnStatusWaiting && change.ToolCalls != nil {
+						if _, err := t.settleHostTools(ctx, *change.ToolCalls); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			reduced := reducer.Snapshot()
+			current.Messages = reduced.Messages
+			if consume != nil {
+				if err := consume(TurnUpdate{
+					Snapshot: *current,
+					Previews: reduced.Previews,
+					Cursor:   reduced.Cursor,
+				}); err != nil {
+					return err
+				}
+			}
+			if reducer.Settled(t.id) {
+				final, err := t.Status(ctx)
+				if err != nil {
+					return turnWaitError(err, t)
+				}
+				if consume != nil {
+					if err := consume(TurnUpdate{Snapshot: *final, Cursor: reduced.Cursor}); err != nil {
+						return err
+					}
+				}
+				return ErrStopStream
+			}
+			return nil
 		})
 		_ = response.Body.Close()
 		if errors.Is(err, ErrStopStream) {
@@ -342,8 +336,29 @@ func (c *Client) readStream(
 			return err
 		}
 		if err := waitForReconnect(ctx, retryDelay); err != nil {
-			return err
+			return turnWaitError(transportError(err), t)
 		}
+	}
+}
+
+func applyTurnChange(turn *TurnResource, change TurnChange) {
+	turn.Status = change.Status
+	turn.ConversationID = change.ConversationID
+	turn.ContentExpiresAt = change.ContentExpiresAt
+	turn.CreditBlock = change.CreditBlock
+	turn.Error = change.Error
+	turn.Provenance = change.Provenance
+	turn.StopReason = change.StopReason
+	turn.StructuredOutput = change.StructuredOutput
+	turn.StructuredOutputProvenance = change.StructuredOutputProvenance
+	turn.Usage = change.Usage
+	turn.UpdatedAt = change.OccurredAt
+	if change.ToolCalls != nil {
+		turn.ToolCalls = append([]ToolCallSummary(nil), (*change.ToolCalls)...)
+	}
+	if change.Terminal && turn.EndedAt == nil {
+		endedAt := change.OccurredAt
+		turn.EndedAt = &endedAt
 	}
 }
 
@@ -387,8 +402,7 @@ func readSSE(reader io.Reader, consume func(StreamEvent) error) error {
 		case "data":
 			data = append(data, value)
 		case "retry":
-			milliseconds, err := strconv.Atoi(value)
-			if err == nil && milliseconds >= 0 {
+			if milliseconds, err := strconv.Atoi(value); err == nil && milliseconds >= 0 {
 				event.Retry = time.Duration(milliseconds) * time.Millisecond
 			}
 		}
@@ -420,5 +434,3 @@ func waitForReconnect(ctx context.Context, delay time.Duration) error {
 		return nil
 	}
 }
-
-var _ = http.MethodGet

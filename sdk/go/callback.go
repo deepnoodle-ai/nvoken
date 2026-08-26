@@ -7,35 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 type CallbackEnvelope struct {
-	Nvoken struct {
-		SchemaVersion int    `json:"schema_version"`
-		DeliveryID    string `json:"delivery_id"`
-		ToolCallID    string `json:"tool_call_id"`
-		// ToolName is the tool this delivery is for. It is inside the signed
-		// body, so a receiver serving several tools dispatches on it directly.
-		// Any per-tool path or query suffix on the endpoint URL is unsigned and
-		// belongs in logs, not in a dispatch decision.
-		ToolName     string  `json:"tool_name"`
-		InvocationID string  `json:"invocation_id"`
-		SessionID    *string `json:"session_id"`
-		AgentKey     string  `json:"agent_key"`
-		TenantKey    *string `json:"tenant_key,omitempty"`
-	} `json:"nvoken"`
-	// AuthorizationContext is what the Session was bound to at creation, in the
-	// host's own terms, absent when it was created without one.
-	//
-	// It is a sibling of Nvoken rather than a member of it, and the placement is
-	// the rule: everything inside Nvoken is a fact nvoken minted or resolved,
-	// while this is a value the host asserted and nvoken carried unchanged.
-	// Signing proves it reached the receiver as recorded, not that it is true.
-	//
-	// A value repeated in tool input may only agree with this, never establish
-	// it. The model writes the input; it does not write this.
-	AuthorizationContext map[string]string `json:"authorization_context,omitempty"`
-	Input                json.RawMessage   `json:"input"`
+	Nvoken generated.ToolCallbackContext `json:"nvoken"`
+	Input  json.RawMessage               `json:"input"`
 }
 
 type VerifiedCallback struct {
@@ -44,14 +22,9 @@ type VerifiedCallback struct {
 	DeliveryID string
 	ToolCallID string
 	ToolName   string
-	// AuthorizationContext is the Session's authorization context, read off the
-	// signed body. Authorize the delivery from this rather than from anything in
-	// Envelope.Input, and treat a value that appears in both as agreement to
-	// check rather than as a second source.
-	AuthorizationContext map[string]string
-	KeyID                string
-	KeyVersion           int64
-	Timestamp            time.Time
+	KeyID      string
+	KeyVersion int64
+	Timestamp  time.Time
 }
 
 // VerifyCallback checks one tool-callback delivery and returns its signed
@@ -68,7 +41,7 @@ func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Tim
 	if err := json.Unmarshal(rawBody, &envelope); err != nil {
 		return VerifiedCallback{}, fmt.Errorf("decode verified callback: %w", err)
 	}
-	if envelope.Nvoken.SchemaVersion != 1 {
+	if envelope.Nvoken.SchemaVersion != 2 {
 		return VerifiedCallback{}, fmt.Errorf("unsupported callback schema version")
 	}
 	if envelope.Nvoken.DeliveryID != deliveryID || envelope.Nvoken.ToolCallID != toolCallID {
@@ -81,15 +54,14 @@ func VerifyCallback(key []byte, header http.Header, rawBody []byte, now time.Tim
 		return VerifiedCallback{}, fmt.Errorf("callback envelope is missing tool_name")
 	}
 	return VerifiedCallback{
-		Envelope:             envelope,
-		RawBody:              append([]byte(nil), rawBody...),
-		DeliveryID:           deliveryID,
-		ToolCallID:           toolCallID,
-		ToolName:             envelope.Nvoken.ToolName,
-		AuthorizationContext: envelope.AuthorizationContext,
-		KeyID:                delivery.KeyID,
-		KeyVersion:           delivery.KeyVersion,
-		Timestamp:            delivery.Timestamp,
+		Envelope:   envelope,
+		RawBody:    append([]byte(nil), rawBody...),
+		DeliveryID: deliveryID,
+		ToolCallID: toolCallID,
+		ToolName:   envelope.Nvoken.ToolName,
+		KeyID:      delivery.KeyID,
+		KeyVersion: delivery.KeyVersion,
+		Timestamp:  delivery.Timestamp,
 	}, nil
 }
 
@@ -119,12 +91,12 @@ func CallbackResult(content any, isError bool) (CallbackReply, error) {
 // AcknowledgeCallback accepts delivery without settling the ToolCall, for work
 // that will outlive this tool's reply deadline — its declared
 // timeout_seconds, or the App's default when it declares none. Settle it later
-// with Client.SubmitToolResults, reusing the delivery's ToolCall ID.
+// with Raw().SubmitHostToolResults, reusing the delivery's ToolCall ID.
 //
 // This trades away the fail-loud guarantee. nvoken marks an unacknowledged
 // delivery failed once its retries are exhausted, so the turn always moves on.
 // An acknowledged call instead waits under the host's responsibility, bounded
-// only by the Invocation's Limits.WaitingTimeoutSeconds. Acknowledge only when
+// only by the Turn's Limits.WaitingTimeoutSeconds. Acknowledge only when
 // something durable will settle the call.
 func AcknowledgeCallback() CallbackReply {
 	return CallbackReply{Status: http.StatusAccepted}

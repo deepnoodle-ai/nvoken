@@ -1,5 +1,5 @@
 {
-  "note": "One signing scheme, two delivery kinds. nvoken signs tool callbacks and Invocation webhooks identically, so a host that receives both verifies once and dispatches on what the verified body says. Every SDK verifies these exact bytes, which is what makes that one scheme rather than two that happen to agree today.",
+  "note": "One signing scheme, two delivery kinds. nvoken signs tool callbacks and Turn webhooks identically, so a host that receives both verifies once and dispatches on what the verified body says. Signing version v1 names the canonical HMAC framing; each body independently declares delivery schema version 2. Every SDK verifies these exact bytes, which is what makes that one scheme rather than two that happen to agree today.",
   "key": "0123456789abcdef0123456789abcdef",
   "now": 1784635200,
   "canonical_string": "v1.<delivery_id>.<timestamp>.<raw_body>",
@@ -12,15 +12,11 @@
       "callback": "the tool_call_id being settled",
       "webhook": "the delivery_id, which is also in the body"
     },
-    "note": "A receiver serving both endpoints holds two keys and must not try either against the other's deliveries."
+    "note": "A receiver serving both endpoints holds two keys and must not try either against the other's deliveries. Conversation-bound and standalone Turns use the same envelope; nullable coordinates state which resources the Turn selected."
   },
   "vectors": {
     "callback": {
       "tool_name": "open_ticket",
-      "authorization_context": {
-        "board": "brd_9f21"
-      },
-      "authorization_context_note": "A sibling of `nvoken`, not a member: everything under `nvoken` is a fact nvoken minted or resolved, and this is a value the host asserted at Session creation which nvoken carried unchanged. This vector's input repeats `board` on purpose — a value in tool input may only agree with the authorization context, never establish it, and a receiver that reads the board from `input` alone is reading something the model wrote.",
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
         "X-Nvoken-Delivery-ID": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
@@ -28,12 +24,12 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-        "X-Nvoken-Signature": "sha256=8a13868eec1744e1cb2afd21ed76711bb5b3c441ff1c47244c77688e3a4f9641"
+        "X-Nvoken-Signature": "sha256=54c304cae88f3f545b73cc4f8fc3ddcc73625895d9afe80047eb55a70e6bb7dc"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-42\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"turn_id\":\"turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"conversation_id\":\"conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"memory_space_id\":\"mspc_019b0a12-5b21-7c04-8ed2-0e07c1bdb302\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb330\",\"agent_revision_id\":\"arev_019b0a12-8d51-7f34-aed2-0e07c1bdb331\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"input\":{\"ticket\":\"A-42\"}}"
     },
     "webhook": {
-      "event": "invocation.ended",
+      "event": "turn.ended",
       "sequence": 2,
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
@@ -42,15 +38,12 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
-        "X-Nvoken-Signature": "sha256=1a248d1c9b7790ef36c7fd4fea689a987f65a75fd8b5f962c715f35fe1c6a486"
+        "X-Nvoken-Signature": "sha256=354f4e643800a773b5c22ca5c8383d16e557d64cc3f9ee0e573aa3e12aea5639"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329\",\"event\":\"invocation.ended\",\"sequence\":2,\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"session_id\":\"sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"invocation\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb329\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"conversation_id\":\"conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"memory_space_id\":\"mspc_019b0a12-5b21-7c04-8ed2-0e07c1bdb302\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"agent_019b0a12-8d51-7f34-aed2-0e07c1bdb330\",\"agent_revision_id\":\"arev_019b0a12-8d51-7f34-aed2-0e07c1bdb331\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
     },
     "standalone_callback": {
       "tool_name": "open_ticket",
-      "authorization_context": {
-        "board": "brd_9f21"
-      },
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
         "X-Nvoken-Delivery-ID": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32c",
@@ -58,12 +51,12 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32d",
-        "X-Nvoken-Signature": "sha256=baccc5fe3d017af9ab65a0260fbb33401d7753ba888dbfd82aa3b41543e08492"
+        "X-Nvoken-Signature": "sha256=b5bfe073f06896e3ea1326d6896164238d25cf0acc54451d882cf360d25ecff7"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32c\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb32d\",\"tool_name\":\"open_ticket\",\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"session_id\":null,\"content_expires_at\":null,\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"authorization_context\":{\"board\":\"brd_9f21\"},\"input\":{\"board\":\"brd_9f21\",\"ticket\":\"A-43\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32c\",\"tool_call_id\":\"call_019b0a12-8d51-7f34-aed2-0e07c1bdb32d\",\"tool_name\":\"open_ticket\",\"turn_id\":\"turn_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"input\":{\"ticket\":\"A-43\"}}"
     },
     "standalone_webhook": {
-      "event": "invocation.ended",
+      "event": "turn.ended",
       "sequence": 2,
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
@@ -72,9 +65,9 @@
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
         "X-Nvoken-Signing-Key-Version": "1",
         "Idempotency-Key": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f",
-        "X-Nvoken-Signature": "sha256=71962ee85d9d6f2ba37a415a30fd33d7ffd57e034cfae4c4fed0904982201084"
+        "X-Nvoken-Signature": "sha256=f7f02067b7ccb910532216229f3f073cc7e431fdd72de8c65ade7ba186a1c265"
       },
-      "body": "{\"nvoken\":{\"schema_version\":1,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f\",\"event\":\"invocation.ended\",\"sequence\":2,\"invocation_id\":\"inv_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"session_id\":null,\"content_expires_at\":\"2026-07-21T13:00:00Z\",\"agent_key\":\"support\",\"tenant_key\":\"acme\"},\"invocation\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb32f\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"turn_019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":\"2026-07-21T13:00:00Z\",\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
     }
   },
   "tampering": [

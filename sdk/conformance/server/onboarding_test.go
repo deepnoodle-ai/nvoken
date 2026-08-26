@@ -20,12 +20,13 @@ func TestOnboardingAdmitsThenStreams(t *testing.T) {
 
 	request, err := http.NewRequest(
 		http.MethodPost,
-		server.URL+"/v1/invocations",
+		server.URL+"/v1/turns",
 		strings.NewReader(`{
-			"agent_key":"support",
+			"tenant_key":"acme",
 			"idempotency_key":"onboarding-stream",
-			"input":"hello",
-			"model":{"provider":"openai","id":"gpt-test"}
+			"behavior":{"kind":"agent","agent":{"owner_kind":"app","agent_key":"support","revision":"current"}},
+			"conversation":{"mode":"new","owner":{"kind":"tenant"}},
+			"input":"hello"
 		}`),
 	)
 	if err != nil {
@@ -47,19 +48,19 @@ func TestOnboardingAdmitsThenStreams(t *testing.T) {
 		t.Fatalf("admit status = %d: %s", response.StatusCode, body)
 	}
 	var ack struct {
-		ID        string `json:"id"`
-		SessionID string `json:"session_id"`
+		ID             string `json:"id"`
+		ConversationID string `json:"conversation_id"`
 	}
 	if err := json.Unmarshal(body, &ack); err != nil {
 		t.Fatalf("decode acknowledgement %s: %v", body, err)
 	}
-	if ack.ID == "" || ack.SessionID == "" {
+	if ack.ID == "" || ack.ConversationID == "" {
 		t.Fatalf("acknowledgement did not name the turn: %s", body)
 	}
 
 	streamRequest, err := http.NewRequest(
 		http.MethodGet,
-		server.URL+"/v1/sessions/"+ack.SessionID+"/stream?invocation_id="+ack.ID,
+		server.URL+"/v1/turns/"+ack.ID+"/stream",
 		nil,
 	)
 	if err != nil {

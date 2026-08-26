@@ -33,10 +33,11 @@ func runMCPListTools(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	allowedTools := append([]string(nil), command.Strings("allowed-tool")...)
 	server := nvoken.MCPServer{
 		Name:         command.String("name"),
 		URL:          command.String("url"),
-		AllowedTools: append([]string(nil), command.Strings("allowed-tool")...),
+		AllowedTools: &allowedTools,
 	}
 	discoveryTimeout := command.Int("discovery-timeout")
 	callTimeout := command.Int("call-timeout")

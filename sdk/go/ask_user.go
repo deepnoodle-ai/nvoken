@@ -1,6 +1,10 @@
 package nvoken
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
+)
 
 // A structured question to the end user is a host tool, not a new resource.
 // The park/webhook/resume machinery already *is* "block until someone answers",
@@ -96,19 +100,22 @@ var askUserInputSchemaJSON = json.RawMessage(`{
   "additionalProperties": false
 }`)
 
-// AskUserTool is a ready-to-use host tool declaration. Attach a handler that
-// renders the question and returns an AskUserOutput.
-func AskUserTool(description string, handler ToolHandler) Tool {
+// AskUserTool is a ready-to-publish host tool contract. Bind the local handler
+// separately with Tool{Name: AskUserToolName, Handler: handler}.
+func AskUserTool(description string) generated.ToolDeclaration {
 	if description == "" {
 		description = "Ask the user a question and wait for their answer. " +
 			"Use it when a decision is genuinely theirs to make, not to " +
 			"confirm work you can verify yourself."
 	}
-	return Tool{
-		Mode:        ToolModeHost,
+	tool := generated.ToolDeclaration{}
+	if err := tool.FromHostToolDeclaration(generated.HostToolDeclaration{
 		Name:        AskUserToolName,
 		Description: description,
 		InputSchema: AskUserInputSchema(),
-		Handler:     handler,
+		Mode:        generated.ModeHost,
+	}); err != nil {
+		panic("nvoken: encode ask_user contract: " + err.Error())
 	}
+	return tool
 }

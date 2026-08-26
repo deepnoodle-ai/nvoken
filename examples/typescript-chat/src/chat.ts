@@ -3,22 +3,22 @@ import { createInterface } from "node:readline";
 
 import { Client, formatNvokenError } from "@deepnoodle/nvoken";
 
-const client = new Client();
-const sessionKey = process.env.NVOKEN_SESSION_KEY ?? `local-chat-${randomUUID()}`;
-await client.createAgentDefinition({
-  definitionKey: "typescript-local-chat",
+const baseUrl = process.env.NVOKEN_BASE_URL ?? "http://localhost:8080";
+const tenant = process.env.NVOKEN_TENANT_KEY ?? "local-chat";
+const conversationKey = process.env.NVOKEN_CONVERSATION_KEY ?? `local-chat-${randomUUID()}`;
+const client = new Client({ baseUrl });
+const agent = await client.agents.create({
+  key: `typescript-local-chat-${randomUUID()}`,
   name: "Local chat",
-  instructions: "Be concise, helpful, and remember relevant details across this chat.",
-  model: {
-    provider: (process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic") as "anthropic",
-    id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
-  },
+  instructions: "Be concise, helpful, and remember relevant details across this Conversation.",
+  model: `${process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic"}/${process.env.NVOKEN_MODEL ?? "claude-sonnet-5"}`,
   limits: { maxOutputTokens: 300 },
 });
-const chat = client.agent({
-  agentKey: "typescript-local-chat",
-  definitionKey: "typescript-local-chat",
-}).bindSession({ sessionKey });
+const chat = agent.conversation({
+  tenant,
+  key: conversationKey,
+  owner: "tenant",
+});
 
 const input = createInterface({
   input: process.stdin,
@@ -26,8 +26,8 @@ const input = createInterface({
   terminal: process.stdin.isTTY,
 });
 
-console.log(`Connected to ${client.configuration.basePath}`);
-console.log(`Session key: ${sessionKey}`);
+console.log(`Connected to ${baseUrl}`);
+console.log(`Conversation key: ${conversationKey}`);
 if (process.stdin.isTTY) {
   console.log("Type a message, or type exit to quit.\n");
   input.setPrompt("you> ");

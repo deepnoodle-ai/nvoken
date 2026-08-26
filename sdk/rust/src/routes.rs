@@ -1,4 +1,4 @@
 // Code generated from openapi/nvoken.yaml; DO NOT EDIT.
 
-pub const STREAM_INVOCATION: &str = "/v1/invocations/{invocation_id}/stream";
-pub const STREAM_SESSION: &str = "/v1/sessions/{session_id}/stream";
+pub const STREAM_CONVERSATION: &str = "/v1/conversations/{conversation_id}/stream";
+pub const STREAM_TURN: &str = "/v1/turns/{turn_id}/stream";

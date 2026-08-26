@@ -150,7 +150,7 @@ func runProviderKeyUsage(command *cli.Context) error {
 			usage.ID,
 			usage.Provider,
 			usage.Scope,
-			usage.Invocations,
+			usage.Turns,
 			inputTokens,
 			outputTokens,
 			lastUsed,

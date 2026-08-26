@@ -1,7 +1,5 @@
-use serde_json::json;
-
-use crate::client::{ErrorCategory, NvokenError};
 use crate::models;
+use crate::NvokenError;
 
 /// Media input limits mirroring the Runtime bounds. Format sniffing, pixel
 /// bounds, and per-model modality support stay Runtime-side.
@@ -271,17 +269,8 @@ fn media_type_string<T: serde::Serialize>(media_type: &T) -> String {
 }
 
 fn media_error(issue: MediaIssue) -> NvokenError {
-    NvokenError {
-        category: ErrorCategory::Validation,
-        message: format!("input is invalid: {}", issue.message),
-        status: None,
-        code: Some(MEDIA_PREFLIGHT_CODE.to_owned()),
-        request_id: None,
-        retry_after: None,
-        details: Some(json!({
-            "kind": "input_media",
-            "code": issue.code,
-            "path": issue.path,
-        })),
-    }
+    NvokenError::InvalidInput(format!(
+        "{MEDIA_PREFLIGHT_CODE}: {} at {} ({})",
+        issue.message, issue.path, issue.code
+    ))
 }

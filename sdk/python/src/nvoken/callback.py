@@ -24,17 +24,9 @@ class VerifiedCallback:
     on the endpoint URL is unsigned and belongs in logs, not in a dispatch
     decision.
 
-    ``authorization_context`` is what the Session was bound to at creation, in
-    the host's own terms, and is empty when it was created without one. It sits
-    beside ``nvoken`` in the envelope rather than inside it, and the placement is
-    the rule: everything inside ``nvoken`` is a fact nvoken minted or resolved,
-    while this is a value the host asserted and nvoken carried unchanged.
-    Signing proves it reached the receiver as recorded, not that it is true.
-
-    Authorize the delivery from it rather than from anything in
-    ``envelope["input"]``, and treat a value that appears in both as agreement
-    to check rather than as a second source. The model writes the input; it does
-    not write this.
+    The Turn, Conversation, MemorySpace, behavior, tenant, and actor coordinates
+    all come from inside the signed ``nvoken`` object. They describe the exact
+    admitted Turn and are independent of model-authored ``input``.
     """
 
     envelope: dict[str, Any]
@@ -42,7 +34,13 @@ class VerifiedCallback:
     delivery_id: str
     tool_call_id: str
     tool_name: str
-    authorization_context: dict[str, str]
+    turn_id: str
+    conversation_id: str | None
+    memory_space_id: str | None
+    content_expires_at: str | None
+    behavior_source: dict[str, Any]
+    tenant_key: str
+    user_key: str | None
     key_id: str
     key_version: int
     timestamp: datetime
@@ -65,7 +63,7 @@ def verify_callback(
     tool_call_id = delivery.idempotency_key
     envelope = json.loads(raw_body)
     context = envelope.get("nvoken", {})
-    if context.get("schema_version") != 1:
+    if context.get("schema_version") != 2:
         raise ValueError("unsupported callback schema version")
     if context.get("delivery_id") != delivery_id or context.get("tool_call_id") != tool_call_id:
         raise ValueError("callback identity header does not match signed body")
@@ -75,13 +73,24 @@ def verify_callback(
     tool_name = context.get("tool_name")
     if not tool_name:
         raise ValueError("callback envelope is missing tool_name")
+    turn_id = context.get("turn_id")
+    tenant_key = context.get("tenant_key")
+    behavior_source = context.get("behavior_source")
+    if not turn_id or not tenant_key or not isinstance(behavior_source, dict):
+        raise ValueError("callback envelope is missing Turn attribution")
     return VerifiedCallback(
         envelope=envelope,
         raw_body=bytes(raw_body),
         delivery_id=delivery_id,
         tool_call_id=tool_call_id,
         tool_name=tool_name,
-        authorization_context=dict(envelope.get("authorization_context") or {}),
+        turn_id=turn_id,
+        conversation_id=context.get("conversation_id"),
+        memory_space_id=context.get("memory_space_id"),
+        content_expires_at=context.get("content_expires_at"),
+        behavior_source=dict(behavior_source),
+        tenant_key=tenant_key,
+        user_key=context.get("user_key"),
         key_id=delivery.key_id,
         key_version=delivery.key_version,
         timestamp=delivery.timestamp,
@@ -123,7 +132,7 @@ def acknowledge_callback() -> CallbackReply:
     This trades away the fail-loud guarantee. nvoken marks an unacknowledged
     delivery failed once its retries are exhausted, so the turn always moves on.
     An acknowledged call instead waits under the host's responsibility, bounded
-    only by the Invocation's ``limits.waiting_timeout_seconds``. Acknowledge only
+    only by the Turn's ``limits.waiting_timeout_seconds``. Acknowledge only
     when something durable will settle the call.
     """
     return CallbackReply(status=202)

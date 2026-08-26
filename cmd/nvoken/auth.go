@@ -29,7 +29,7 @@ func registerAuthCommands(app *cli.App) {
 	group.Command("revoke").Description("Revoke the selected credential and remove its local profile").Use(requireAuth()).Run(runAuthRevoke)
 }
 
-// runAuthLogin is interactive unless this invocation explicitly received an
+// runAuthLogin is interactive unless this command execution explicitly received an
 // API key by flag or environment. A saved default profile never silently turns
 // a request to log into another Org into a verification of the old profile.
 func runAuthLogin(ctx *cli.Context) error {

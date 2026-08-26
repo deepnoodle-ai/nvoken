@@ -10,41 +10,49 @@ import (
 )
 
 type onboardingState struct {
-	mu             sync.Mutex
-	next           int
-	sessionsByID   map[string]*onboardingSession
-	sessionsByKey  map[string]*onboardingSession
-	invocations    map[string]map[string]any
-	idempotencyAck map[string]map[string]any
+	mu                 sync.Mutex
+	next               int
+	conversationsByID  map[string]*onboardingConversation
+	conversationsByKey map[string]*onboardingConversation
+	turns              map[string]map[string]any
+	turnMessages       map[string][]map[string]any
+	idempotencyAck     map[string]map[string]any
 }
 
-type onboardingSession struct {
-	id       string
-	key      string
-	agentID  string
-	agentKey string
-	messages []map[string]any
-	facts    map[string]string
+type onboardingConversation struct {
+	id        string
+	key       string
+	tenantKey string
+	owner     map[string]any
+	messages  []map[string]any
+	facts     map[string]string
 }
 
 type onboardingCreateRequest struct {
-	AgentKey       string          `json:"agent_key"`
-	SessionID      *string         `json:"session_id"`
-	SessionKey     *string         `json:"session_key"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	Input          json.RawMessage `json:"input"`
-	Model          struct {
-		Provider string `json:"provider"`
-		ID       string `json:"id"`
-	} `json:"model"`
+	TenantKey      string `json:"tenant_key"`
+	UserKey        string `json:"user_key"`
+	IdempotencyKey string `json:"idempotency_key"`
+	Behavior       struct {
+		Kind     string         `json:"kind"`
+		Agent    map[string]any `json:"agent"`
+		Behavior map[string]any `json:"behavior"`
+	} `json:"behavior"`
+	Conversation *struct {
+		Mode            string         `json:"mode"`
+		ConversationID  string         `json:"conversation_id"`
+		ConversationKey string         `json:"conversation_key"`
+		Owner           map[string]any `json:"owner"`
+	} `json:"conversation"`
+	Input json.RawMessage `json:"input"`
 }
 
 func newOnboardingState() *onboardingState {
 	return &onboardingState{
-		sessionsByID:   map[string]*onboardingSession{},
-		sessionsByKey:  map[string]*onboardingSession{},
-		invocations:    map[string]map[string]any{},
-		idempotencyAck: map[string]map[string]any{},
+		conversationsByID:  map[string]*onboardingConversation{},
+		conversationsByKey: map[string]*onboardingConversation{},
+		turns:              map[string]map[string]any{},
+		turnMessages:       map[string][]map[string]any{},
+		idempotencyAck:     map[string]map[string]any{},
 	}
 }
 
@@ -54,19 +62,20 @@ func (s *onboardingState) serve(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	switch {
+	case serveAgents(response, request):
 	case serveModels(response, request):
-	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
+	case request.URL.Path == "/v1/turns" && request.Method == http.MethodPost:
 		s.create(response, request)
-	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && strings.HasSuffix(request.URL.Path, "/result") && request.Method == http.MethodGet:
-		s.getInvocationResult(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/invocations/"), "/result"))
-	case strings.HasPrefix(request.URL.Path, "/v1/sessions/") && strings.HasSuffix(request.URL.Path, "/stream") && request.Method == http.MethodGet:
-		s.streamTurn(response, request.URL.Query().Get("invocation_id"))
-	case strings.HasPrefix(request.URL.Path, "/v1/invocations/") && request.Method == http.MethodGet:
-		s.getInvocation(response, strings.TrimPrefix(request.URL.Path, "/v1/invocations/"))
+	case strings.HasPrefix(request.URL.Path, "/v1/turns/") && strings.HasSuffix(request.URL.Path, "/result") && request.Method == http.MethodGet:
+		s.getTurnResult(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/turns/"), "/result"))
+	case strings.HasPrefix(request.URL.Path, "/v1/turns/") && strings.HasSuffix(request.URL.Path, "/stream") && request.Method == http.MethodGet:
+		s.streamTurn(response, strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/v1/turns/"), "/stream"))
+	case strings.HasPrefix(request.URL.Path, "/v1/turns/") && request.Method == http.MethodGet:
+		s.getTurn(response, strings.TrimPrefix(request.URL.Path, "/v1/turns/"))
 	case strings.HasSuffix(request.URL.Path, "/messages") && request.Method == http.MethodGet:
 		s.listMessages(response, request)
-	case strings.HasPrefix(request.URL.Path, "/v1/sessions/") && request.Method == http.MethodGet:
-		s.getSession(response, request)
+	case strings.HasPrefix(request.URL.Path, "/v1/conversations/") && request.Method == http.MethodGet:
+		s.getConversation(response, request)
 	default:
 		writeError(response, http.StatusNotFound, "not_found", "unknown onboarding route")
 	}
@@ -79,7 +88,9 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 		return
 	}
 	text, ok := onboardingInputText(input.Input)
-	if input.IdempotencyKey == "" || !ok {
+	validBehavior := input.Behavior.Kind == "agent" && len(input.Behavior.Agent) > 0 ||
+		input.Behavior.Kind == "inline" && len(input.Behavior.Behavior) > 0
+	if input.TenantKey == "" || input.IdempotencyKey == "" || !validBehavior || !ok {
 		writeError(response, http.StatusBadRequest, "invalid_request", "missing onboarding request fields")
 		return
 	}
@@ -92,26 +103,34 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 		s.writeAdmission(response, request, replay)
 		return
 	}
-	session, ok := s.resolveSession(input)
+	conversation, ok := s.resolveConversation(input)
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Session was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Conversation was not found")
 		return
 	}
 
 	s.next++
-	invocationID := onboardingID("invk", s.next)
+	turnID := onboardingID("turn", s.next)
 	createdAt := time.Date(2026, 7, 22, 12, 0, s.next%60, 0, time.UTC)
-	session.messages = append(session.messages, onboardingMessage(
-		session,
-		invocationID,
+	conversationID := ""
+	sequence := 1
+	if conversation != nil {
+		conversationID = conversation.id
+		sequence = len(conversation.messages) + 1
+	}
+	messages := []map[string]any{onboardingMessage(
+		conversationID,
+		turnID,
+		input.UserKey,
+		sequence,
 		"user",
 		text,
 		createdAt,
-	))
+	)}
 
 	status := "completed"
 	var failure any
-	if input.Model.ID == "invalid-model" {
+	if onboardingModelID(input) == "invalid-model" {
 		status = "failed"
 		failure = map[string]any{
 			"code":    "provider_error",
@@ -119,23 +138,30 @@ func (s *onboardingState) create(response http.ResponseWriter, request *http.Req
 			"details": map[string]any{"classification": "upstream_rejected"},
 		}
 	} else {
-		answer := onboardingAnswer(session, text)
-		session.messages = append(session.messages, onboardingMessage(
-			session,
-			invocationID,
+		answer := onboardingAnswer(conversation, text)
+		messages = append(messages, onboardingMessage(
+			conversationID,
+			turnID,
+			input.UserKey,
+			sequence+1,
 			"assistant",
 			answer,
 			createdAt.Add(time.Second),
 		))
 	}
-	s.invocations[invocationID] = onboardingInvocation(
-		invocationID,
-		session,
+	if conversation != nil {
+		conversation.messages = append(conversation.messages, messages...)
+	}
+	s.turnMessages[turnID] = messages
+	s.turns[turnID] = onboardingTurn(
+		turnID,
+		input,
+		conversationID,
 		status,
 		failure,
 		createdAt,
 	)
-	ack := onboardingInvocation(invocationID, session, "queued", nil, createdAt)
+	ack := onboardingTurn(turnID, input, conversationID, "queued", nil, createdAt)
 	ack["deduplicated"] = false
 	s.idempotencyAck[input.IdempotencyKey] = cloneMap(ack)
 	s.writeAdmission(response, request, ack)
@@ -152,17 +178,17 @@ func (s *onboardingState) writeAdmission(
 	writeJSON(response, http.StatusAccepted, ack)
 }
 
-// invocationStatus reads the settled status off a composed result, which is
+// turnStatus reads the settled status off a composed result, which is
 // what the change frame above reports.
-func invocationStatus(result map[string]any) any {
-	invocation, _ := result["invocation"].(map[string]any)
-	return invocation["status"]
+func turnStatus(result map[string]any) any {
+	turn, _ := result["turn"].(map[string]any)
+	return turn["status"]
 }
 
-// invocationStatusName is invocationStatus narrowed to the string the fixtures
+// turnStatusName is turnStatus narrowed to the string the fixtures
 // always store, for callers that have to classify it rather than echo it.
-func invocationStatusName(result map[string]any) string {
-	name, _ := invocationStatus(result).(string)
+func turnStatusName(result map[string]any) string {
+	name, _ := turnStatus(result).(string)
 	return name
 }
 
@@ -183,76 +209,93 @@ func onboardingInputText(raw json.RawMessage) (string, bool) {
 	return blocks.Content[0].Text, blocks.Content[0].Type == "text" && blocks.Content[0].Text != ""
 }
 
-func (s *onboardingState) resolveSession(input onboardingCreateRequest) (*onboardingSession, bool) {
-	if input.SessionID != nil {
-		session, ok := s.sessionsByID[*input.SessionID]
-		return session, ok
-	}
-	if input.SessionKey == nil || *input.SessionKey == "" {
-		session := &onboardingSession{
-			id:       onboardingID("sesn", s.next+1),
-			agentID:  onboardingID("agent", s.next+1),
-			agentKey: input.AgentKey,
-			facts:    map[string]string{},
-		}
-		s.sessionsByID[session.id] = session
-		return session, true
-	}
-	if session, ok := s.sessionsByKey[*input.SessionKey]; ok {
-		return session, true
-	}
-	session := &onboardingSession{
-		id:       onboardingID("sesn", s.next+1),
-		key:      *input.SessionKey,
-		agentID:  onboardingID("agent", s.next+1),
-		agentKey: input.AgentKey,
-		facts:    map[string]string{},
-	}
-	s.sessionsByID[session.id] = session
-	s.sessionsByKey[session.key] = session
-	return session, true
+func onboardingModelID(input onboardingCreateRequest) string {
+	behavior := input.Behavior.Behavior
+	model, _ := behavior["model"].(map[string]any)
+	value, _ := model["id"].(string)
+	return value
 }
 
-func (s *onboardingState) getInvocation(response http.ResponseWriter, invocationID string) {
+func (s *onboardingState) resolveConversation(input onboardingCreateRequest) (*onboardingConversation, bool) {
+	if input.Conversation == nil {
+		return nil, true
+	}
+	if input.Conversation.Mode == "continue" {
+		conversation, ok := s.conversationsByID[input.Conversation.ConversationID]
+		return conversation, ok
+	}
+	if input.Conversation.Mode == "new" {
+		conversation := &onboardingConversation{
+			id:        onboardingID("conv", s.next+1),
+			key:       input.Conversation.ConversationKey,
+			tenantKey: input.TenantKey,
+			owner:     input.Conversation.Owner,
+			facts:     map[string]string{},
+		}
+		s.conversationsByID[conversation.id] = conversation
+		if conversation.key != "" {
+			s.conversationsByKey[conversation.key] = conversation
+		}
+		return conversation, true
+	}
+	if input.Conversation.Mode != "continue_or_create" || input.Conversation.ConversationKey == "" {
+		return nil, false
+	}
+	if conversation, ok := s.conversationsByKey[input.Conversation.ConversationKey]; ok {
+		return conversation, true
+	}
+	conversation := &onboardingConversation{
+		id:        onboardingID("conv", s.next+1),
+		key:       input.Conversation.ConversationKey,
+		tenantKey: input.TenantKey,
+		owner:     input.Conversation.Owner,
+		facts:     map[string]string{},
+	}
+	s.conversationsByID[conversation.id] = conversation
+	s.conversationsByKey[conversation.key] = conversation
+	return conversation, true
+}
+
+func (s *onboardingState) getTurn(response http.ResponseWriter, turnID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	invocation, ok := s.invocations[invocationID]
+	turn, ok := s.turns[turnID]
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Invocation was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Turn was not found")
 		return
 	}
-	writeJSON(response, http.StatusOK, invocation)
+	writeJSON(response, http.StatusOK, turn)
 }
 
-func (s *onboardingState) getInvocationResult(response http.ResponseWriter, invocationID string) {
+func (s *onboardingState) getTurnResult(response http.ResponseWriter, turnID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	result, ok := s.invocationResult(invocationID)
+	result, ok := s.turnResult(turnID)
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Invocation was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Turn was not found")
 		return
 	}
 	writeJSON(response, http.StatusOK, result)
 }
 
 // streamTurn is the route an onboarding run actually consumes. The SDK
-// admits with a plain POST and then reads the Invocation stream, so serving SSE
+// admits with a plain POST and then reads the Turn stream, so serving SSE
 // on the acknowledgement alone left every newcomer path reading a 404 off the
 // route it opens next. The turn is already settled by the time it is admitted
 // here, so one result frame and the terminal end is the whole stream.
-func (s *onboardingState) streamTurn(response http.ResponseWriter, invocationID string) {
+func (s *onboardingState) streamTurn(response http.ResponseWriter, turnID string) {
 	s.mu.Lock()
-	result, ok := s.invocationResult(invocationID)
-	var sessionID string
+	result, ok := s.turnResult(turnID)
+	var conversationID any
 	if ok {
-		sessionID, _ = s.invocations[invocationID]["session_id"].(string)
+		conversationID = s.turns[turnID]["conversation_id"]
 	}
 	s.mu.Unlock()
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Invocation was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Turn was not found")
 		return
 	}
-	cursor := "onboarding-" + invocationID
+	cursor := "onboarding-" + turnID
 	response.Header().Set("Content-Type", "text/event-stream")
 	response.Header().Set("X-Request-ID", "req_019b0a12-8d51-7f34-aed2-0e07c1bdb329")
 	response.WriteHeader(http.StatusOK)
@@ -261,14 +304,17 @@ func (s *onboardingState) streamTurn(response http.ResponseWriter, invocationID 
 	// filtered stream closes right behind it without announcing anything.
 	messages, _ := result["messages"].([]any)
 	writeSSE(response, cursor, "transcript.update", map[string]any{
-		"type":       "transcript.update",
-		"session_id": sessionID,
-		"messages":   messages,
-		"invocation_changes": []any{map[string]any{
-			"invocation_id":            invocationID,
+		"type":               "transcript.update",
+		"conversation_id":    conversationID,
+		"content_expires_at": nil,
+		"messages":           messages,
+		"turn_changes": []any{map[string]any{
+			"turn_id":                  turnID,
+			"conversation_id":          conversationID,
+			"content_expires_at":       nil,
 			"revision":                 1,
-			"status":                   invocationStatus(result),
-			"terminal":                 terminalStatus(invocationStatusName(result)),
+			"status":                   turnStatus(result),
+			"terminal":                 terminalStatus(turnStatusName(result)),
 			"through_message_sequence": nil,
 			"error":                    nil,
 			"structured_output":        nil,
@@ -281,24 +327,17 @@ func (s *onboardingState) streamTurn(response http.ResponseWriter, invocationID 
 	}
 }
 
-func (s *onboardingState) invocationResult(invocationID string) (map[string]any, bool) {
-	invocation, ok := s.invocations[invocationID]
-	if !ok {
-		return nil, false
-	}
-	session, ok := s.sessionsByID[invocation["session_id"].(string)]
+func (s *onboardingState) turnResult(turnID string) (map[string]any, bool) {
+	turn, ok := s.turns[turnID]
 	if !ok {
 		return nil, false
 	}
 	messages := []any{}
 	var text strings.Builder
 	found := false
-	for _, message := range session.messages {
-		if message["invocation_id"] != invocationID {
-			continue
-		}
+	for _, message := range s.turnMessages[turnID] {
 		messages = append(messages, message)
-		if message["role"] != "assistant" {
+		if message["role"] != "assistant" || message["phase"] != "final_answer" {
 			continue
 		}
 		for _, block := range message["content"].([]any) {
@@ -313,30 +352,30 @@ func (s *onboardingState) invocationResult(invocationID string) (map[string]any,
 		}
 	}
 	var outputText any
-	if invocation["status"] == "completed" && found {
+	if turn["status"] == "completed" && found {
 		outputText = text.String()
 	}
 	return map[string]any{
-		"invocation":  invocation,
+		"turn":        turn,
 		"messages":    messages,
 		"output_text": outputText,
 	}, true
 }
 
 func (s *onboardingState) listMessages(response http.ResponseWriter, request *http.Request) {
-	sessionID := strings.TrimSuffix(
-		strings.TrimPrefix(request.URL.Path, "/v1/sessions/"),
+	conversationID := strings.TrimSuffix(
+		strings.TrimPrefix(request.URL.Path, "/v1/conversations/"),
 		"/messages",
 	)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	session, ok := s.sessionsByID[sessionID]
+	conversation, ok := s.conversationsByID[conversationID]
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Session was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Conversation was not found")
 		return
 	}
-	items := make([]any, len(session.messages))
-	for index, message := range session.messages {
+	items := make([]any, len(conversation.messages))
+	for index, message := range conversation.messages {
 		items[index] = message
 	}
 	writeJSON(response, http.StatusOK, map[string]any{
@@ -346,73 +385,87 @@ func (s *onboardingState) listMessages(response http.ResponseWriter, request *ht
 	})
 }
 
-func (s *onboardingState) getSession(response http.ResponseWriter, request *http.Request) {
-	sessionID := strings.TrimPrefix(request.URL.Path, "/v1/sessions/")
+func (s *onboardingState) getConversation(response http.ResponseWriter, request *http.Request) {
+	conversationID := strings.TrimPrefix(request.URL.Path, "/v1/conversations/")
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	session, ok := s.sessionsByID[sessionID]
+	conversation, ok := s.conversationsByID[conversationID]
 	if !ok {
-		writeError(response, http.StatusNotFound, "not_found", "Session was not found")
+		writeError(response, http.StatusNotFound, "not_found", "Conversation was not found")
 		return
 	}
 	writeJSON(response, http.StatusOK, map[string]any{
-		"id":                       session.id,
-		"agent_id":                 session.agentID,
-		"pinned_revision":          nil,
-		"tenant_key":               nil,
-		"session_key":              session.key,
-		"user_key":                 nil,
-		"forked_from":              nil,
-		"active_invocation_id":     nil,
-		"active_invocation_status": nil,
-		"compaction":               nil,
-		"retention":                nil,
-		"max_estimated_cost_usd":   nil,
-		"expires_at":               nil,
-		"metadata":                 nil,
-		"usage":                    nil,
-		"created_at":               "2026-07-22T12:00:00Z",
-		"updated_at":               "2026-07-22T12:00:01Z",
+		"id":                 conversation.id,
+		"tenant_key":         conversation.tenantKey,
+		"owner":              conversation.owner,
+		"conversation_key":   nullable(conversation.key != "", conversation.key),
+		"forked_from":        nil,
+		"active_turn_id":     nil,
+		"active_turn_status": nil,
+		"compaction":         nil,
+		"retention":          nil,
+		"expires_at":         nil,
+		"metadata":           nil,
+		"created_at":         "2026-07-22T12:00:00Z",
+		"updated_at":         "2026-07-22T12:00:01Z",
 	})
 }
 
 func onboardingMessage(
-	session *onboardingSession,
-	invocationID string,
+	conversationID string,
+	turnID string,
+	userKey string,
+	sequence int,
 	role string,
 	text string,
 	createdAt time.Time,
 ) map[string]any {
-	sequence := len(session.messages) + 1
-	return map[string]any{
-		"id":            onboardingID("smsg", sequence),
-		"session_id":    session.id,
-		"agent_id":      session.agentID,
-		"invocation_id": invocationID,
-		"user_key":      nil,
-		"sequence":      sequence,
-		"role":          role,
-		"content":       []any{map[string]any{"type": "text", "text": text}},
-		"created_at":    createdAt.Format(time.RFC3339),
+	message := map[string]any{
+		"id":                 onboardingID("msg", sequence),
+		"conversation_id":    nullable(conversationID != "", conversationID),
+		"content_expires_at": nil,
+		"agent_id":           agentID,
+		"turn_id":            turnID,
+		"user_key":           nullable(userKey != "", userKey),
+		"sequence":           sequence,
+		"role":               role,
+		"content":            []any{map[string]any{"type": "text", "text": text}},
+		"created_at":         createdAt.Format(time.RFC3339),
 	}
+	if role == "assistant" {
+		message["phase"] = "final_answer"
+	}
+	return message
 }
 
-func onboardingInvocation(
+func onboardingTurn(
 	id string,
-	session *onboardingSession,
+	input onboardingCreateRequest,
+	conversationID string,
 	status string,
 	failure any,
 	createdAt time.Time,
 ) map[string]any {
+	digest := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	behaviorSource := map[string]any{"kind": "inline", "digest": digest}
+	if input.Behavior.Kind == "agent" {
+		behaviorSource = map[string]any{
+			"kind": "agent_revision", "agent_id": agentID,
+			"agent_revision_id": agentRevisionID, "revision": 1,
+		}
+	}
 	return map[string]any{
 		"id":                           id,
-		"agent_id":                     session.agentID,
-		"agent_key":                    session.agentKey,
-		"session_id":                   session.id,
-		"user_key":                     nil,
-		"agent_definition_id":          onboardingID("def", 1),
-		"agent_definition_revision":    1,
-		"agent_definition":             nil,
+		"tenant_key":                   input.TenantKey,
+		"user_key":                     nullable(input.UserKey != "", input.UserKey),
+		"behavior_source":              behaviorSource,
+		"effective_behavior":           nil,
+		"effective_behavior_digest":    digest,
+		"conversation_id":              nullable(conversationID != "", conversationID),
+		"memory_space_id":              nil,
+		"memory":                       nil,
+		"content_expires_at":           nil,
+		"triggered_by":                 nil,
 		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
@@ -429,24 +482,31 @@ func onboardingInvocation(
 		"created_at":                   createdAt.Format(time.RFC3339),
 		"updated_at":                   createdAt.Add(time.Second).Format(time.RFC3339),
 		"ended_at":                     nullable(status != "queued" && status != "running" && status != "waiting", createdAt.Add(time.Second).Format(time.RFC3339)),
+		"tool_calls":                   []any{},
 	}
 }
 
-func onboardingAnswer(session *onboardingSession, input string) string {
+func onboardingAnswer(conversation *onboardingConversation, input string) string {
 	lower := strings.ToLower(input)
 	switch {
 	case strings.Contains(lower, "remember") && strings.Contains(lower, "code word") && strings.Contains(lower, "cedar"):
-		session.facts["code_word"] = "cedar"
+		if conversation != nil {
+			conversation.facts["code_word"] = "cedar"
+		}
 		return "Understood—your code word is cedar."
 	case strings.Contains(lower, "what is my code word"):
-		if value := session.facts["code_word"]; value != "" {
+		if conversation != nil && conversation.facts["code_word"] != "" {
+			value := conversation.facts["code_word"]
 			return value
 		}
 	case strings.Contains(lower, "remember") && strings.Contains(lower, "launch city") && strings.Contains(lower, "lisbon"):
-		session.facts["launch_city"] = "Lisbon"
+		if conversation != nil {
+			conversation.facts["launch_city"] = "Lisbon"
+		}
 		return "Understood—your launch city is Lisbon."
 	case strings.Contains(lower, "launch city"):
-		if value := session.facts["launch_city"]; value != "" {
+		if conversation != nil && conversation.facts["launch_city"] != "" {
+			value := conversation.facts["launch_city"]
 			return value
 		}
 	}

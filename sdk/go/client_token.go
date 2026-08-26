@@ -16,7 +16,7 @@ import (
 //
 // Short lifetimes are the whole safety story of handing a browser a bearer
 // token: the page refreshes from your backend on the schedule it already
-// refreshes its own session, and a leaked token is worth minutes.
+// refreshes its own authentication, and a leaked token is worth minutes.
 const ClientTokenLifetimeLimit = 15 * time.Minute
 
 // ClientTokenType is the required `typ` header.
@@ -48,24 +48,54 @@ type ClientTokenClaims struct {
 	// it as the runtime user constraint and never resolves it to a person, so
 	// prefer an internal id over an email address.
 	Subject string
-	// TenantKey scopes the token to one tenant. Empty means the App's default
-	// tenant.
+	// TenantKey scopes the token to one tenant.
 	TenantKey string
-	// AgentID or AgentKey names the Agent, and exactly one must be set.
-	AgentID  string
-	AgentKey string
-	// DefinitionRevision pins the Agent Definition revision this token was
-	// minted against, so a deploy mid-session cannot change what the browser
-	// is talking to. Zero leaves it to the Agent's own pin.
-	DefinitionRevision int64
-	// SessionID confines the token to one Session. Leaving it empty lets the
-	// browser reach every Session belonging to this user and Agent, which is
-	// what a session-list UI needs and a single-conversation UI does not.
-	SessionID string
+	// AgentID pins the exact Agent the browser may run.
+	AgentID string
+	// AgentRevisionID pins the exact immutable behavior the browser may run.
+	AgentRevisionID string
+	// MemoryAccess is the browser's closed memory grant.
+	MemoryAccess BrowserMemoryGrant
+	// ConversationAccess is the browser's closed Conversation grant.
+	ConversationAccess BrowserConversationGrant
 	// IssuedAt defaults to the current time.
 	IssuedAt time.Time
 	// Lifetime is required and may not exceed ClientTokenLifetimeLimit.
 	Lifetime time.Duration
+}
+
+// BrowserMemoryGrant is the memory authority carried by a client token.
+// A browser may use no memory or one user MemorySpace namespace; tenant-shared
+// memory remains server-side authority.
+type BrowserMemoryGrant struct {
+	Namespace string `json:"namespace,omitempty"`
+	Scope     string `json:"scope"`
+}
+
+func BrowserNoMemory() BrowserMemoryGrant { return BrowserMemoryGrant{Scope: "none"} }
+
+func BrowserUserMemory(namespace string) BrowserMemoryGrant {
+	return BrowserMemoryGrant{Scope: "user", Namespace: namespace}
+}
+
+// BrowserConversationGrant is the Conversation authority carried by a client
+// token: standalone Turns only, one exact Conversation, or any user-owned
+// Conversation for the token subject.
+type BrowserConversationGrant struct {
+	ConversationID string `json:"conversation_id,omitempty"`
+	Scope          string `json:"scope"`
+}
+
+func BrowserStandaloneOnly() BrowserConversationGrant {
+	return BrowserConversationGrant{Scope: "standalone_only"}
+}
+
+func BrowserExactConversation(id string) BrowserConversationGrant {
+	return BrowserConversationGrant{Scope: "exact", ConversationID: id}
+}
+
+func BrowserUserConversations() BrowserConversationGrant {
+	return BrowserConversationGrant{Scope: "user_conversations"}
 }
 
 // MintClientToken signs a browser grant with the App's client key.
@@ -96,22 +126,15 @@ func MintClientToken(privateKey ed25519.PrivateKey, claims ClientTokenClaims) (s
 		{"aud", clientTokenAudience},
 		{"iat", issuedAt.Unix()},
 		{"exp", issuedAt.Add(claims.Lifetime).Unix()},
+		{"contract_version", 2},
 	}
-	if claims.TenantKey != "" {
-		body = append(body, member{"tenant_key", claims.TenantKey})
-	}
-	if claims.AgentID != "" {
-		body = append(body, member{"agent_id", claims.AgentID})
-	}
-	if claims.AgentKey != "" {
-		body = append(body, member{"agent_key", claims.AgentKey})
-	}
-	if claims.DefinitionRevision > 0 {
-		body = append(body, member{"definition_revision", claims.DefinitionRevision})
-	}
-	if claims.SessionID != "" {
-		body = append(body, member{"session_id", claims.SessionID})
-	}
+	body = append(body, member{"tenant_key", claims.TenantKey})
+	body = append(body,
+		member{"agent_id", claims.AgentID},
+		member{"agent_revision_id", claims.AgentRevisionID},
+		member{"memory_access", claims.MemoryAccess},
+		member{"conversation_access", claims.ConversationAccess},
+	)
 	payload, err := orderedJSONError(body)
 	if err != nil {
 		return "", err
@@ -132,23 +155,38 @@ func (c ClientTokenClaims) validate() error {
 	if !canonicalClientClaim(c.Subject) {
 		return errors.New("nvoken: Subject is required, and must not be blank, padded, or over 255 characters")
 	}
-	if c.TenantKey != "" && !canonicalClientClaim(c.TenantKey) {
-		return errors.New("nvoken: TenantKey must not be blank, padded, or over 255 characters")
+	if !canonicalClientClaim(c.TenantKey) {
+		return errors.New("nvoken: TenantKey is required, and must not be blank, padded, or over 255 characters")
 	}
-	if (c.AgentID == "") == (c.AgentKey == "") {
-		return errors.New("nvoken: set exactly one of AgentID or AgentKey")
-	}
-	if c.AgentID != "" && !validStableID(c.AgentID, "agent") {
+	if !validStableID(c.AgentID, "agent") {
 		return fmt.Errorf("nvoken: AgentID %q is not an Agent id", c.AgentID)
 	}
-	if c.AgentKey != "" && !canonicalClientClaim(c.AgentKey) {
-		return errors.New("nvoken: AgentKey must not be blank, padded, or over 255 characters")
+	if !validStableID(c.AgentRevisionID, "arev") {
+		return fmt.Errorf("nvoken: AgentRevisionID %q is not an AgentRevision id", c.AgentRevisionID)
 	}
-	if c.DefinitionRevision < 0 {
-		return errors.New("nvoken: DefinitionRevision must not be negative")
+	switch c.MemoryAccess.Scope {
+	case "none":
+		if c.MemoryAccess.Namespace != "" {
+			return errors.New("nvoken: no-memory grant cannot name a namespace")
+		}
+	case "user":
+		if !canonicalClientClaim(c.MemoryAccess.Namespace) {
+			return errors.New("nvoken: user-memory grant requires a canonical namespace")
+		}
+	default:
+		return errors.New("nvoken: MemoryAccess must grant none or user memory")
 	}
-	if c.SessionID != "" && !validStableID(c.SessionID, "sess") {
-		return fmt.Errorf("nvoken: SessionID %q is not a Session id", c.SessionID)
+	switch c.ConversationAccess.Scope {
+	case "standalone_only", "user_conversations":
+		if c.ConversationAccess.ConversationID != "" {
+			return errors.New("nvoken: Conversation grant cannot carry an id for this scope")
+		}
+	case "exact":
+		if !validStableID(c.ConversationAccess.ConversationID, "conv") {
+			return fmt.Errorf("nvoken: ConversationID %q is not a Conversation id", c.ConversationAccess.ConversationID)
+		}
+	default:
+		return errors.New("nvoken: ConversationAccess must grant standalone_only, exact, or user_conversations")
 	}
 	if c.Lifetime <= 0 || c.Lifetime > ClientTokenLifetimeLimit {
 		return fmt.Errorf("nvoken: Lifetime must be positive and at most %s", ClientTokenLifetimeLimit)

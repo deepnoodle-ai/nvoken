@@ -18,7 +18,7 @@ const SignatureTimestampWindow = 5 * time.Minute
 // signedDelivery is one delivery whose signature has been checked, before its
 // body is interpreted.
 //
-// nvoken signs tool callbacks and Invocation webhooks the same way, so
+// nvoken signs tool callbacks and Turn webhooks the same way, so
 // everything up to and including the HMAC comparison lives here once rather
 // than in two copies that have to be kept in step. What differs is only what
 // the verified body then means: a callback settles a named ToolCall, a webhook

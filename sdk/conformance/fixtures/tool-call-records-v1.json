@@ -2,8 +2,8 @@
   "tool_calls": {
     "items": [
       {
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
         "content_expires_at": null,
         "mode": "builtin",
@@ -16,8 +16,8 @@
         "result_origin": "builtin"
       },
       {
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
         "content_expires_at": null,
         "mode": "host",
@@ -30,8 +30,8 @@
         "result_origin": null
       },
       {
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "content_expires_at": null,
         "mode": "callback",
@@ -49,8 +49,8 @@
         "result_origin": "callback"
       },
       {
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "content_expires_at": null,
         "mode": "mcp",
@@ -63,8 +63,8 @@
         "result_origin": "mcp"
       },
       {
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a",
         "content_expires_at": null,
         "mode": "callback",
@@ -86,28 +86,33 @@
     "next_cursor": null
   },
   "callback_wire": {
-    "content_type": "application/vnd.nvoken.tool-callback+json; version=1",
+    "content_type": "application/vnd.nvoken.tool-callback+json; version=2",
     "signature_payload": "v1.<delivery_id>.<timestamp>.<raw_body>",
     "idempotency_key": "tool_call_id",
     "request": {
       "nvoken": {
-        "schema_version": 1,
+        "schema_version": 2,
         "delivery_id": "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb328",
         "tool_call_id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "tool_name": "create_ticket",
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-        "agent_key": "support",
-        "tenant_key": "acme"
-      },
-      "authorization_context": {
-        "workspace": "wks_3d80"
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "memory_space_id": null,
+        "content_expires_at": null,
+        "behavior_source": {
+          "kind": "agent_revision",
+          "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
+          "agent_revision_id": "arev_019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+          "revision": 1
+        },
+        "tenant_key": "acme",
+        "user_key": "alice"
       },
       "input": {
         "title": "Customer needs a refund"
       }
     },
-    "authorization_context_note": "A sibling of `nvoken`, not a member. Everything under `nvoken` is a fact nvoken minted or resolved; this is what the host asserted when the Session was created, carried unchanged. Authorize the delivery from it, and treat a value that also appears in `input` as agreement to check rather than as a second source — the model writes the input.",
+    "authorization_note": "Authorize from the signed resolved facts under `nvoken`: tenant, actor, behavior, memory, Conversation, and Turn. The unsigned model-written `input` is never authority.",
     "reply": {
       "content": {
         "ticket_id": "T-1042"
@@ -124,11 +129,11 @@
     "max_content_depth": 32,
     "max_attempts": 5,
     "acknowledgement": {
-      "note": "A 202 with an empty body accepts delivery without settling the ToolCall. The call then waits under the host's responsibility, bounded only by the Invocation's waiting_timeout_seconds, and is settled later through tool-results reusing this tool_call_id.",
+      "note": "A 202 with an empty body accepts delivery without settling the ToolCall. The call then waits under the host's responsibility, bounded only by the Turn's waiting_timeout_seconds, and is settled later through tool-results reusing this tool_call_id.",
       "status": 202,
       "body": "",
       "delivery_outcome": "acknowledged",
-      "settled_by": "POST /v1/invocations/{invocation_id}/tool-results",
+      "settled_by": "POST /v1/turns/{turn_id}/tool-results",
       "settled_result_origin": "host"
     },
     "delivery_outcomes": [
@@ -141,7 +146,7 @@
     "fail_loud_applies_to": "unacknowledged delivery exhaustion"
   },
   "result_origin": {
-    "note": "The component that committed the result. Null until a ToolCall has one. `callback` is an inline callback reply; `host` covers every settlement through POST /v1/invocations/{id}/tool-results, including an acknowledged callback settled later.",
+    "note": "The component that committed the result. Null until a ToolCall has one. `callback` is an inline callback reply; `host` covers every settlement through POST /v1/turns/{id}/tool-results, including an acknowledged callback settled later.",
     "values": [
       "builtin",
       "callback",

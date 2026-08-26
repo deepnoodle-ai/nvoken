@@ -14,7 +14,7 @@
  * `toolkit` ask_user, so an agent already written against that needs no
  * translation layer.
  */
-import type { HostTool } from "./client.js";
+import type { HostToolContract } from "./facade-types.js";
 
 /** The well-known name. No `nvoken_` prefix: the host executes it, not the runtime. */
 export const ASK_USER_TOOL_NAME = "ask_user";
@@ -101,19 +101,12 @@ const DEFAULT_DESCRIPTION =
   "Ask the user a question and wait for their answer. Use it when a decision "
   + "is genuinely theirs to make, not to confirm work you can verify yourself.";
 
-/**
- * A ready-to-use host tool declaration. Supply a handler that renders the
- * question and resolves to an {@link AskUserOutput}.
- */
-export function askUserTool(
-  handler: (input: AskUserInput) => AskUserOutput | Promise<AskUserOutput>,
-  description: string = DEFAULT_DESCRIPTION,
-): HostTool<AskUserInput & Record<string, never>> {
+/** A ready-to-publish contract. Bind its local handler separately with bindTools(). */
+export function askUserTool(description: string = DEFAULT_DESCRIPTION): HostToolContract {
   return {
     mode: "host",
     name: ASK_USER_TOOL_NAME,
     description,
-    inputSchema: ASK_USER_INPUT_SCHEMA as unknown as Record<string, unknown>,
-    handler: (input) => handler(input) as never,
+    inputSchema: ASK_USER_INPUT_SCHEMA,
   };
 }

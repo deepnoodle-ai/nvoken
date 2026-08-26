@@ -1,29 +1,41 @@
 {
   "version": 1,
-  "note": "Recorded application context is per-Invocation Session history, not part of the Agent Definition. It travels at the top level of a create request, the Invocation echoes the accepted pre-deduplication list, and the transcript stores each snapshot as a typed reminder block.",
+  "note": "Recorded application context is per-Turn Conversation history, not part of reusable Agent behavior. It travels at the top level of Turn admission, the Turn echoes the accepted pre-deduplication list, and the transcript stores each snapshot as a typed reminder block.",
   "limits": {
     "items": 8,
     "name_characters": 64,
     "content_bytes": 8192,
     "total_content_bytes": 16384,
-    "session_names": 16
+    "conversation_names": 16
   },
   "name_pattern": "^[a-z][a-z0-9-]*$",
   "tiers": ["contextual", "operator"],
   "reserved_prefix": "app-",
   "runtime_only_checks": [
-    "A Session may record at most 16 distinct context names over its lifetime.",
-    "A byte-identical resend of a name, tier, and content adds no transcript message, while the Invocation still echoes the pre-deduplication list it accepted.",
-    "Compaction projects the latest covered copy of each name after the summary without adding Session messages."
+    "A Conversation may record at most 16 distinct context names over its lifetime.",
+    "A byte-identical resend of a name, tier, and content adds no transcript message, while the Turn still echoes the pre-deduplication list it accepted.",
+    "Compaction projects the latest covered copy of each name after the summary without adding Conversation messages."
   ],
-  "excluded_from_agent_definition": ["context"],
+  "excluded_from_behavior": ["context"],
   "accepted": {
     "id": "recorded-context",
     "note": "Names omit the reserved app- prefix on the request; the transcript and the model see it added.",
     "request": {
-      "agent_key": "support",
-      "session_key": "ticket-483",
+      "tenant_key": "acme",
       "idempotency_key": "recorded-context",
+      "behavior": {
+        "kind": "agent",
+        "agent": {
+          "owner_kind": "app",
+          "agent_key": "support",
+          "revision": "current"
+        }
+      },
+      "conversation": {
+        "mode": "continue_or_create",
+        "conversation_key": "ticket-483",
+        "owner": { "kind": "tenant" }
+      },
       "input": "Can I refund the duplicate charge?",
       "context": [
         {

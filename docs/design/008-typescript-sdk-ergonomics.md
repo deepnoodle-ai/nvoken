@@ -1,9 +1,7 @@
 # TypeScript SDK ergonomics and public terminology
 
-**Status:** Accepted terminology and facade direction; not implemented. The
-standalone execution contract and the four-SDK `start()` and `bindSession()`
-foundations shipped in 0.29.0 under the current Agent Definition, Agent,
-Session, and Invocation model.
+**Status:** Accepted; implementation in progress against the published
+Agent, AgentRevision, MemorySpace, Conversation, and Turn contract.
 
 **Date:** 2026-08-24
 
@@ -11,7 +9,7 @@ Session, and Invocation model.
 and review of shared behavior, private Agents, independent memory ownership,
 inline behavior, and optional Conversation continuity.
 
-**Reviewed version:** `@deepnoodle/nvoken` 0.29.0 at `3045dc4b`
+**Pre-cutover reference:** `@deepnoodle/nvoken` 0.29.0 at `3045dc4b`
 
 **Scope:** The handwritten TypeScript facade and the coordinated public
 contract vocabulary it requires. Equivalent workflows in Go, Python, and Rust
@@ -131,6 +129,11 @@ type MemorySelection =
   | { scope: "none" }
   | { scope: "user"; namespace?: string }
   | { scope: "tenant"; namespace?: string };
+
+type InlineMemorySelection =
+  | { scope: "none" }
+  | { scope: "user"; namespace: string }
+  | { scope: "tenant"; namespace: string };
 ```
 
 - `user` partitions memory by the bound user.
@@ -150,8 +153,9 @@ An AgentRevision may declare a default memory selection so common calls do not
 repeat policy. The policy selects a space; the Agent does not own that space.
 An explicit Turn option overrides the default. Inline behavior may make the
 same selection without creating an Agent. Stored Agent defaults derive omitted
-namespaces from immutable Agent ID; inline user or tenant memory uses an
-explicit namespace in examples while its type-level requirement remains open.
+namespaces from immutable Agent ID. Inline user or tenant memory has no stored
+Agent identity to derive from, so its SDK type requires an explicit namespace;
+exact transports enforce the same rule at admission.
 
 Ordinary SDK calls may lazily resolve or create a MemorySpace during Turn
 admission. Exact and administrative APIs expose MemorySpace IDs and lifecycle
@@ -546,7 +550,7 @@ interface AgentTurnOptions extends RunnerTurnOptions {
 interface InlineTurnOptions extends RunnerTurnOptions {
   tenant: string;
   user?: string;
-  memory?: MemorySelection;
+  memory?: InlineMemorySelection;
   conversation?: ConversationSelection;
   limits?: NarrowedTurnLimits;
 }
@@ -599,15 +603,22 @@ type ConversationSelection =
       owner: "tenant" | "user";
     } & ConversationCreateOptions);
 
-interface ConversationContext {
+interface AgentConversationContext {
   tenant: string;
   user?: string;
   memory?: MemorySelection;
   limits?: NarrowedTurnLimits;
 }
 
-type AgentConversationOptions = ConversationContext & ConversationSelection;
-type InlineConversationOptions = ConversationContext & ConversationSelection;
+interface InlineConversationContext {
+  tenant: string;
+  user?: string;
+  memory?: InlineMemorySelection;
+  limits?: NarrowedTurnLimits;
+}
+
+type AgentConversationOptions = AgentConversationContext & ConversationSelection;
+type InlineConversationOptions = InlineConversationContext & ConversationSelection;
 
 interface ConversationTurnOptions extends RunnerTurnOptions {
   limits?: NarrowedTurnLimits;
@@ -912,7 +923,7 @@ selected different behavior or memory.
 The lock is process-local convenience, not a distributed guarantee. Exact
 cross-process conflict behavior remains the server's responsibility.
 
-## Current implementation versus accepted target
+## Pre-cutover implementation versus accepted target
 
 | Area | 0.29.0 | Accepted target |
 | --- | --- | --- |
@@ -930,9 +941,9 @@ cross-process conflict behavior remains the server's responsibility.
 | Public execution nouns | Session and Invocation | Conversation and Turn everywhere |
 | Results and streaming | `AgentResult`, `InvocationHandle`, raw-first streams | One Turn/TurnResult facade, render-safe updates, raw under `raw()` |
 
-Current behavior remains the truth until the coordinated breaking release.
-Examples in this document are target API, not compatibility aliases or claims
-about 0.29.0.
+The left column records 0.29.0 as migration evidence. It is not a compatibility
+requirement. The published hard-cut contract already uses the target column;
+the handwritten SDKs and CLI move to it in the same breaking release.
 
 ## Delivery order
 
@@ -1016,15 +1027,15 @@ about 0.29.0.
 - Hiding exact request semantics from callers that intentionally choose
   `raw()`.
 
-## Open implementation questions
+## Closed implementation decisions
 
-- **Browser idempotency:** whether user-scoped browser keys use
-  `(tenant_id, user_key, idempotency_key)` while trusted host keys remain
-  tenant-scoped, or use another explicit subject namespace.
-- **Anonymous revision compatibility:** whether access-token re-exchange always
-  selects Agent `current` or requires the new revision's client-interface
-  contract digest to match the visitor's existing UI contract.
-- **Inline memory typing:** whether inline user/tenant memory requires an
-  explicit namespace in the SDK type system or fails at admission when omitted.
-- **Fork ownership:** whether a fork of a user-owned Conversation remains owned
-  by that user, may explicitly become tenant-owned, or follows the caller.
+- Browser idempotency keys are scoped by tenant and bound user. Trusted-host
+  keys remain tenant-scoped.
+- A new anonymous-token exchange selects the Agent's current revision only when
+  that exact revision still satisfies the full anonymous eligibility policy.
+  Existing access tokens remain pinned to their exact revision.
+- Inline user and tenant memory requires an explicit namespace in handwritten
+  facade types and at wire admission.
+- Conversation fork always states the target owner explicitly. Source lineage
+  never supplies ownership, and authorization must cover both source and
+  target.

@@ -12,59 +12,53 @@ interface LookupOrderInput {
   orderId: string;
 }
 
-const lookupOrder = defineHostTool({
+const lookupOrder = defineHostTool<LookupOrderInput>({
+  mode: "host",
   name: "lookup_order",
   description: "Look up one order by ID.",
   inputSchema: defineJsonSchema<LookupOrderInput>({
     type: "object",
-    properties: {
-      orderId: { type: "string" },
-    },
+    properties: { orderId: { type: "string" } },
     required: ["orderId"],
     additionalProperties: false,
   }),
-  async handler(input) {
-    assert.equal(input.orderId, "order-42");
-    return {
-      orderId: input.orderId,
-      state: "shipped",
-      estimatedDelivery: "tomorrow",
-    };
-  },
 });
 
 try {
   const runId = randomUUID();
+  const tenant = `agent-tools-${runId}`;
   const client = new Client();
-  const agentKey = `agent-tools-${runId}`;
-  await client.createAgentDefinition({
-    definitionKey: agentKey,
+  const support = (await client.agents.create({
+    key: `order-support-${runId}`,
     name: "Order support",
+    ownedBy: { tenant },
     instructions: [
       "Use lookup_order for order questions.",
-      "Remember durable Session context between turns.",
+      "Remember relevant details from the Conversation.",
     ].join(" "),
-    model: {
-      provider: (process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic") as "anthropic",
-      id: process.env.NVOKEN_MODEL ?? "claude-sonnet-5",
+    model: `${process.env.NVOKEN_MODEL_PROVIDER ?? "anthropic"}/${process.env.NVOKEN_MODEL ?? "claude-sonnet-5"}`,
+    tools: [lookupOrder],
+  })).bindTools({
+    lookup_order: async (input: LookupOrderInput, context) => {
+      assert.equal(input.orderId, "order-42");
+      return {
+        orderId: input.orderId,
+        state: "shipped",
+        estimatedDelivery: "tomorrow",
+        idempotencyKey: context.toolCallId,
+      };
     },
-    tools: [lookupOrder],
-  });
-  // Declared from its keys, with this process's handler for the tool the
-  // Definition declares. The record is created on first use.
-  const support = client.agent({
-    agentKey,
-    definitionKey: agentKey,
-    tools: [lookupOrder],
-  });
-  const chat = support.bindSession({
-    sessionKey: `order-chat-${runId}`,
   });
 
-  const first = await chat.text(
+  const chat = support.conversation({
+    tenant,
+    key: `order-chat-${runId}`,
+    owner: "tenant",
+  });
+
+  console.log(await chat.text(
     "Look up order-42. Say its state and estimated delivery.",
-  );
-  console.log(first);
+  ));
 
   const second = await chat.text(
     "What was the estimated delivery? Do not call the tool again.",

@@ -13,15 +13,14 @@ import (
 )
 
 const (
-	agentID       = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
-	sessionID     = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-	invocationID  = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-	waitID        = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
-	toolCallID    = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
-	definitionID  = "def_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
-	definitionKey = "support"
-	exactModelID  = "experimental/model?variant=雪%#1"
-	allocationID  = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
+	agentID         = "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320"
+	agentRevisionID = "arev_019b0a12-8d51-7f34-aed2-0e07c1bdb329"
+	conversationID  = "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+	turnID          = "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+	waitID          = "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb328"
+	toolCallID      = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+	exactModelID    = "experimental/model?variant=雪%#1"
+	allocationID    = "alloc_019b0a12-8d51-7f34-aed2-0e07c1bdb330"
 )
 
 type state struct {
@@ -33,7 +32,7 @@ type state struct {
 	credentialAdmissions int
 	rateLimitAttempts    int
 	streamAttempts       int
-	lastInvocationFilter string
+	lastTurnID           string
 	lastResumeCursor     string
 	lastResumeSource     string
 	lastStatuses         []string
@@ -74,7 +73,7 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.credentialAdmissions = 0
 		s.rateLimitAttempts = 0
 		s.streamAttempts = 0
-		s.lastInvocationFilter = ""
+		s.lastTurnID = ""
 		s.lastResumeCursor = ""
 		s.lastResumeSource = ""
 		s.lastStatuses = nil
@@ -87,17 +86,17 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		writeJSON(response, http.StatusOK, map[string]any{
-			"admission_attempts":     s.admissionAttempts,
-			"result_attempts":        s.resultAttempts,
-			"cancel_attempts":        s.cancelAttempts,
-			"interrupt_attempts":     s.interruptAttempts,
-			"credential_admissions":  s.credentialAdmissions,
-			"stream_attempts":        s.streamAttempts,
-			"last_invocation_filter": s.lastInvocationFilter,
-			"last_resume_cursor":     s.lastResumeCursor,
-			"last_resume_source":     s.lastResumeSource,
-			"last_statuses":          s.lastStatuses,
-			"last_deltas":            s.lastDeltas,
+			"admission_attempts":    s.admissionAttempts,
+			"result_attempts":       s.resultAttempts,
+			"cancel_attempts":       s.cancelAttempts,
+			"interrupt_attempts":    s.interruptAttempts,
+			"credential_admissions": s.credentialAdmissions,
+			"stream_attempts":       s.streamAttempts,
+			"last_turn_id":          s.lastTurnID,
+			"last_resume_cursor":    s.lastResumeCursor,
+			"last_resume_source":    s.lastResumeSource,
+			"last_statuses":         s.lastStatuses,
+			"last_deltas":           s.lastDeltas,
 		})
 		return
 	}
@@ -111,17 +110,19 @@ func (s *state) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	case serveModels(response, request):
 	case serveMCP(response, request):
 	case serveCredits(response, request):
-	case createAgentDefinition(response, request):
-	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodPost:
-		s.createInvocation(response, request)
-	case request.URL.Path == "/v1/invocations" && request.Method == http.MethodGet:
-		s.listInvocations(response, request)
-	case strings.HasPrefix(request.URL.Path, "/v1/invocations/"):
-		s.invocation(response, request)
-	case request.URL.Path == "/v1/sessions" && request.Method == http.MethodGet:
-		s.listSessions(response, request)
-	case strings.HasPrefix(request.URL.Path, "/v1/sessions/"):
-		s.session(response, request)
+	case serveMemorySpaces(response, request):
+	case request.URL.Path == "/v1/turns" && request.Method == http.MethodPost:
+		s.createTurn(response, request)
+	case request.URL.Path == "/v1/turns" && request.Method == http.MethodGet:
+		s.listTurns(response, request)
+	case strings.HasPrefix(request.URL.Path, "/v1/turns/"):
+		s.turn(response, request)
+	case request.URL.Path == "/v1/conversations" && request.Method == http.MethodPost:
+		s.createConversation(response, request)
+	case request.URL.Path == "/v1/conversations" && request.Method == http.MethodGet:
+		s.listConversations(response, request)
+	case strings.HasPrefix(request.URL.Path, "/v1/conversations/"):
+		s.conversation(response, request)
 	default:
 		writeError(response, http.StatusNotFound, "not_found", "unknown conformance route")
 	}
@@ -166,14 +167,14 @@ func money(amount string) map[string]any {
 
 func creditAccount() map[string]any {
 	return map[string]any{
-		"tenant_key":              nil,
-		"allocated":               money("25.000000"),
-		"used":                    money("3.250000"),
-		"held":                    money("1.500000"),
-		"available":               money("20.250000"),
-		"budget_hold_invocations": 2,
-		"created_at":              "2026-08-01T00:00:00Z",
-		"updated_at":              "2026-08-08T12:00:00Z",
+		"tenant_key":        nil,
+		"allocated":         money("25.000000"),
+		"used":              money("3.250000"),
+		"held":              money("1.500000"),
+		"available":         money("20.250000"),
+		"budget_hold_turns": 2,
+		"created_at":        "2026-08-01T00:00:00Z",
+		"updated_at":        "2026-08-08T12:00:00Z",
 	}
 }
 
@@ -184,37 +185,84 @@ func creditAllocation() map[string]any {
 	}
 }
 
+func serveMemorySpaces(response http.ResponseWriter, request *http.Request) bool {
+	const memorySpaceID = "mspc_019b0a12-8d51-7f34-aed2-0e07c1bdb340"
+	resource := func() map[string]any {
+		return map[string]any{
+			"id": memorySpaceID, "tenant_key": "acme", "scope": "tenant",
+			"user_key": nil, "namespace": "support-team", "retention_ttl_seconds": nil,
+			"expires_at": nil, "erased_at": nil,
+			"created_at": "2026-07-21T12:00:00Z", "updated_at": "2026-07-21T12:00:00Z",
+		}
+	}
+	switch request.URL.Path {
+	case "/v1/memory-spaces":
+		switch request.Method {
+		case http.MethodPost:
+			var body struct {
+				TenantKey string         `json:"tenant_key"`
+				Selector  map[string]any `json:"selector"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+				body.TenantKey == "" || body.Selector["scope"] == nil || body.Selector["namespace"] == nil {
+				writeError(response, http.StatusBadRequest, "invalid_request", "MemorySpace did not round-trip")
+				return true
+			}
+			value := resource()
+			value["tenant_key"] = body.TenantKey
+			value["scope"] = body.Selector["scope"]
+			value["namespace"] = body.Selector["namespace"]
+			value["user_key"] = body.Selector["user_key"]
+			writeJSON(response, http.StatusOK, value)
+		case http.MethodGet:
+			writeJSON(response, http.StatusOK, map[string]any{
+				"items": []any{resource()}, "has_more": false, "next_cursor": nil,
+			})
+		default:
+			return false
+		}
+		return true
+	case "/v1/memory-spaces/" + memorySpaceID:
+		switch request.Method {
+		case http.MethodGet:
+			writeJSON(response, http.StatusOK, resource())
+		case http.MethodDelete:
+			value := resource()
+			value["erased_at"] = "2026-07-21T12:05:00Z"
+			writeJSON(response, http.StatusOK, value)
+		default:
+			return false
+		}
+		return true
+	default:
+		return false
+	}
+}
+
 func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 	switch request.URL.Path {
 	case "/v1/agents":
 		if request.Method == http.MethodPost {
 			var body struct {
-				TenantKey      *string `json:"tenant_key"`
-				AgentKey       string  `json:"agent_key"`
-				Name           string  `json:"name"`
-				DefinitionID   string  `json:"definition_id"`
-				DefinitionKey  string  `json:"definition_key"`
-				PinnedRevision *int    `json:"pinned_revision"`
+				AgentKey     string         `json:"agent_key"`
+				Name         string         `json:"name"`
+				Owner        map[string]any `json:"owner"`
+				Instructions string         `json:"instructions"`
+				Model        map[string]any `json:"model"`
 			}
-			// The Definition arrives under exactly one of its two spellings,
-			// and both name the single Definition this server knows.
-			err := json.NewDecoder(request.Body).Decode(&body)
-			namedByID := body.DefinitionID == definitionID
-			namedByKey := body.DefinitionKey == definitionKey
-			if err != nil || body.AgentKey != "support" || namedByID == namedByKey {
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+				body.AgentKey == "" || body.Instructions == "" ||
+				body.Owner["kind"] == nil || body.Model["id"] == nil {
 				writeError(response, http.StatusBadRequest, "invalid_request", "Agent did not round-trip")
 				return true
 			}
 			value := agent()
-			value["tenant_key"] = body.TenantKey
-			// name defaults to the Agent key, as the runtime does.
+			value["agent_key"] = body.AgentKey
+			value["name"] = nullable(body.Name != "", body.Name)
 			if body.Name == "" {
-				body.Name = body.AgentKey
+				value["name"] = body.AgentKey
 			}
-			value["name"] = body.Name
-			if body.PinnedRevision != nil {
-				value["pinned_revision"] = *body.PinnedRevision
-			}
+			value["owner"] = body.Owner
 			writeJSON(response, http.StatusCreated, value)
 			return true
 		}
@@ -239,19 +287,10 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 		switch request.Method {
 		case http.MethodGet:
 			writeJSON(response, http.StatusOK, agent())
-		case http.MethodPatch:
-			var patch map[string]any
-			if err := json.NewDecoder(request.Body).Decode(&patch); err != nil || len(patch) == 0 {
-				writeError(response, http.StatusBadRequest, "invalid_request", "Agent update did not round-trip")
-				return true
-			}
-			value := agent()
-			for key, item := range patch {
-				value[key] = item
-			}
-			writeJSON(response, http.StatusOK, value)
 		case http.MethodDelete:
-			response.WriteHeader(http.StatusNoContent)
+			value := agent()
+			value["archived_at"] = "2026-07-21T12:05:00Z"
+			writeJSON(response, http.StatusOK, value)
 		default:
 			return false
 		}
@@ -260,7 +299,33 @@ func serveAgents(response http.ResponseWriter, request *http.Request) bool {
 		if request.Method != http.MethodPost {
 			return false
 		}
-		response.WriteHeader(http.StatusNoContent)
+		writeJSON(response, http.StatusOK, agent())
+		return true
+	case "/v1/agents/" + agentID + "/revisions":
+		switch request.Method {
+		case http.MethodGet:
+			writeJSON(response, http.StatusOK, map[string]any{
+				"items": []any{agentRevision()}, "has_more": false, "next_cursor": nil,
+			})
+		case http.MethodPost:
+			var behavior map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&behavior); err != nil ||
+				behavior["instructions"] == nil || behavior["model"] == nil {
+				writeError(response, http.StatusBadRequest, "invalid_request", "Agent revision did not round-trip")
+				return true
+			}
+			value := agentRevision()
+			value["behavior"] = behavior
+			writeJSON(response, http.StatusCreated, value)
+		default:
+			return false
+		}
+		return true
+	case "/v1/agents/" + agentID + "/revisions/1":
+		if request.Method != http.MethodGet {
+			return false
+		}
+		writeJSON(response, http.StatusOK, agentRevision())
 		return true
 	default:
 		return false
@@ -303,8 +368,8 @@ func serveMCP(response http.ResponseWriter, request *http.Request) bool {
 	return true
 }
 
-// conformanceMCPServer carries no headers. A reusable Agent Definition is
-// durable configuration, so secrets arrive separately in mcp_server_headers,
+// conformanceMCPServer carries no headers. A reusable Agent revision is
+// durable behavior, so secrets arrive separately in mcp_server_headers,
 // or in the discovery request.
 type conformanceMCPServer struct {
 	Name         string   `json:"name"`
@@ -321,7 +386,7 @@ func (s conformanceMCPServer) valid() bool {
 		s.Headers == nil
 }
 
-// conformanceMCPServerHeaders is one entry of the per-Invocation secret headers.
+// conformanceMCPServerHeaders is one entry of the per-Turn secret headers.
 type conformanceMCPServerHeaders struct {
 	Name    string            `json:"name"`
 	Headers map[string]string `json:"headers"`
@@ -468,66 +533,21 @@ func catalogModel(provider, modelID, displayName string) map[string]any {
 	}
 }
 
-// conformanceDefinition is the execution configuration an Invocation nests
-// under agent_definition and resource creation sends on its own.
-type conformanceDefinition struct {
-	DefinitionKey string                 `json:"definition_key"`
-	Name          string                 `json:"name"`
-	Instructions  string                 `json:"instructions"`
-	Model         map[string]string      `json:"model"`
-	MCPServers    []conformanceMCPServer `json:"mcp_servers"`
-	Sampling      *struct {
-		Temperature *float64 `json:"temperature"`
-	} `json:"sampling"`
-	Reasoning *struct {
-		Effort       *string `json:"effort"`
-		BudgetTokens *int    `json:"budget_tokens"`
-	} `json:"reasoning"`
-}
-
 type conformanceMCPHeaders = conformanceMCPServerHeaders
 
-// createAgentDefinition creates one stable Agent Definition resource.
-func createAgentDefinition(response http.ResponseWriter, request *http.Request) bool {
-	if request.URL.Path != "/v1/agent-definitions" || request.Method != http.MethodPost {
-		return false
-	}
-	var definition conformanceDefinition
-	if err := json.NewDecoder(request.Body).Decode(&definition); err != nil ||
-		definition.DefinitionKey == "" || definition.Name == "" ||
-		definition.Model["provider"] == "" || definition.Model["id"] == "" {
-		writeError(response, http.StatusBadRequest, "invalid_request", "Agent Definition did not round-trip")
-		return true
-	}
-	if len(definition.MCPServers) > 0 &&
-		(len(definition.MCPServers) != 1 || !definition.MCPServers[0].valid()) {
-		writeError(response, http.StatusBadRequest, "invalid_request", "MCP server declaration did not round-trip")
-		return true
-	}
-	resolved := map[string]any{
-		"definition_key": definition.DefinitionKey,
-		"name":           definition.Name,
-		"model":          definition.Model,
-	}
-	if definition.Instructions != "" {
-		resolved["instructions"] = definition.Instructions
-	}
-	resolved["id"] = definitionID
-	resolved["revision"] = 1
-	resolved["created_at"] = "2026-08-08T12:00:00Z"
-	resolved["updated_at"] = "2026-08-08T12:00:00Z"
-	writeJSON(response, http.StatusCreated, resolved)
-	return true
-}
-
-func (s *state) createInvocation(response http.ResponseWriter, request *http.Request) {
+func (s *state) createTurn(response http.ResponseWriter, request *http.Request) {
 	var body struct {
-		AgentID        string `json:"agent_id"`
-		AgentKey       string `json:"agent_key"`
+		TenantKey      string `json:"tenant_key"`
+		UserKey        string `json:"user_key"`
 		IdempotencyKey string `json:"idempotency_key"`
-		Session        *struct {
+		Behavior       struct {
+			Kind     string         `json:"kind"`
+			Agent    map[string]any `json:"agent"`
+			Behavior map[string]any `json:"behavior"`
+		} `json:"behavior"`
+		Conversation *struct {
 			IfActive string `json:"if_active"`
-		} `json:"session"`
+		} `json:"conversation"`
 		ProviderKeys []struct {
 			Provider string `json:"provider"`
 			Source   string `json:"source"`
@@ -542,9 +562,9 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid conformance admission")
 		return
 	}
-	provesSupersession := strings.Contains(body.IdempotencyKey, "lost-ack") ||
+	provesSuperconversation := strings.Contains(body.IdempotencyKey, "lost-ack") ||
 		body.IdempotencyKey == "cli-answer"
-	if provesSupersession && (body.Session == nil || body.Session.IfActive != "supersede") {
+	if provesSuperconversation && (body.Conversation == nil || body.Conversation.IfActive != "supersede") {
 		writeError(response, http.StatusBadRequest, "invalid_request", "if_active did not round-trip")
 		return
 	}
@@ -557,8 +577,10 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 			return
 		}
 	}
-	if (body.AgentID == "") == (body.AgentKey == "") {
-		writeError(response, http.StatusBadRequest, "invalid_request", "exactly one Agent identity is required")
+	validBehavior := body.Behavior.Kind == "agent" && len(body.Behavior.Agent) > 0 ||
+		body.Behavior.Kind == "inline" && len(body.Behavior.Behavior) > 0
+	if body.TenantKey == "" || !validBehavior {
+		writeError(response, http.StatusBadRequest, "invalid_request", "one behavior source and tenant are required")
 		return
 	}
 	if len(body.MCPServerHeaders) > 0 &&
@@ -582,12 +604,12 @@ func (s *state) createInvocation(response http.ResponseWriter, request *http.Req
 	if attempt == 1 && disconnect(response) {
 		return
 	}
-	admission := invocation("queued")
+	admission := turn("queued")
 	admission["deduplicated"] = attempt > 1
 	writeJSON(response, http.StatusAccepted, admission)
 }
 
-func (s *state) listInvocations(response http.ResponseWriter, request *http.Request) {
+func (s *state) listTurns(response http.ResponseWriter, request *http.Request) {
 	if !validAgentFilter(request.URL.Query()) {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid Agent filter")
 		return
@@ -597,14 +619,14 @@ func (s *state) listInvocations(response http.ResponseWriter, request *http.Requ
 	s.mu.Unlock()
 	cursor := request.URL.Query().Get("cursor")
 	writeJSON(response, http.StatusOK, map[string]any{
-		"items":       []any{invocation("completed")},
+		"items":       []any{turn("completed")},
 		"has_more":    cursor == "",
-		"next_cursor": nullable(cursor == "", "invocations-page-2"),
+		"next_cursor": nullable(cursor == "", "turns-page-2"),
 	})
 }
 
-func (s *state) invocation(response http.ResponseWriter, request *http.Request) {
-	remainder := strings.TrimPrefix(request.URL.Path, "/v1/invocations/")
+func (s *state) turn(response http.ResponseWriter, request *http.Request) {
+	remainder := strings.TrimPrefix(request.URL.Path, "/v1/turns/")
 	if strings.HasSuffix(remainder, "/stream") && request.Method == http.MethodGet {
 		s.stream(response, request)
 		return
@@ -622,8 +644,8 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 			return
 		}
 		writeJSON(response, http.StatusAccepted, map[string]any{
-			"invocation_id":      invocationID,
-			"session_id":         sessionID,
+			"turn_id":            turnID,
+			"conversation_id":    conversationID,
 			"content_expires_at": nil,
 			"status":             "queued",
 			"results": []any{map[string]any{
@@ -636,14 +658,14 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 	if strings.HasSuffix(remainder, "/result") && request.Method == http.MethodGet {
-		writeJSON(response, http.StatusOK, invocationResult())
+		writeJSON(response, http.StatusOK, turnResult())
 		return
 	}
 	if strings.HasSuffix(remainder, "/cancel") && request.Method == http.MethodPost {
 		s.mu.Lock()
 		s.cancelAttempts++
 		s.mu.Unlock()
-		writeJSON(response, http.StatusOK, invocation("cancelled"))
+		writeJSON(response, http.StatusOK, turn("cancelled"))
 		return
 	}
 	if strings.HasSuffix(remainder, "/interrupt") && request.Method == http.MethodPost {
@@ -652,7 +674,7 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 		s.mu.Unlock()
 		// A graceful stop settles completed and says why, which is what
 		// separates it from cancellation on the wire.
-		interrupted := invocation("completed")
+		interrupted := turn("completed")
 		interrupted["stop_reason"] = "interrupted"
 		writeJSON(response, http.StatusOK, interrupted)
 		return
@@ -669,7 +691,7 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 	case "conflict":
 		writeError(response, http.StatusConflict, "idempotency_conflict", "request conflicts with durable state")
 	case "failed":
-		writeJSON(response, http.StatusOK, invocationWithID("failed", "failed"))
+		writeJSON(response, http.StatusOK, turnWithID("failed", "failed"))
 	case "rate-limit":
 		s.mu.Lock()
 		s.rateLimitAttempts++
@@ -680,16 +702,16 @@ func (s *state) invocation(response http.ResponseWriter, request *http.Request) 
 			writeError(response, http.StatusTooManyRequests, "rate_limited", "slow down")
 			return
 		}
-		writeJSON(response, http.StatusOK, invocation("completed"))
+		writeJSON(response, http.StatusOK, turn("completed"))
 	case "rate-limit-always":
 		response.Header().Set("Retry-After", "1")
 		writeError(response, http.StatusTooManyRequests, "rate_limited", "slow down")
 	case "server-error":
 		writeError(response, http.StatusServiceUnavailable, "unavailable", "try later")
 	case waitID:
-		writeJSON(response, http.StatusOK, invocationWithID(waitID, "waiting"))
+		writeJSON(response, http.StatusOK, turnWithID(waitID, "waiting"))
 	default:
-		writeJSON(response, http.StatusOK, invocation("completed"))
+		writeJSON(response, http.StatusOK, turn("completed"))
 	}
 }
 
@@ -697,21 +719,21 @@ func toolCallRecords() map[string]any {
 	return map[string]any{
 		"items": []any{
 			map[string]any{
-				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
+				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb324", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 				"result_origin": "builtin",
 			},
 			map[string]any{
-				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
+				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 				"result_origin": nil,
 			},
 			map[string]any{
-				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
+				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb326", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
@@ -719,7 +741,7 @@ func toolCallRecords() map[string]any {
 				"delivery":      map[string]any{"outcome": "succeeded", "attempts": 2, "last_http_status": 200},
 			},
 			map[string]any{
-				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
+				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb327", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
@@ -729,7 +751,7 @@ func toolCallRecords() map[string]any {
 			// and the result arrived later through tool-results, so the origin
 			// is host even though the mode is callback.
 			map[string]any{
-				"invocation_id": invocationID, "session_id": sessionID, "content_expires_at": nil,
+				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
 				"id": "call_019b0a12-8d51-7f34-aed2-0e07c1bdb32a", "mode": "callback",
 				"name": "run_migration", "status": "completed", "iteration": 3,
 				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
@@ -742,22 +764,65 @@ func toolCallRecords() map[string]any {
 	}
 }
 
-func (s *state) listSessions(response http.ResponseWriter, request *http.Request) {
+func (s *state) createConversation(response http.ResponseWriter, request *http.Request) {
+	var body struct {
+		TenantKey       string         `json:"tenant_key"`
+		ConversationKey string         `json:"conversation_key"`
+		Owner           map[string]any `json:"owner"`
+		Metadata        map[string]any `json:"metadata"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+		body.TenantKey == "" || body.Owner["kind"] == nil {
+		writeError(response, http.StatusBadRequest, "invalid_request", "Conversation did not round-trip")
+		return
+	}
+	value := conversation()
+	value["tenant_key"] = body.TenantKey
+	value["owner"] = body.Owner
+	if body.ConversationKey != "" {
+		value["conversation_key"] = body.ConversationKey
+	}
+	if body.Metadata != nil {
+		value["metadata"] = body.Metadata
+	}
+	writeJSON(response, http.StatusCreated, value)
+}
+
+func (s *state) listConversations(response http.ResponseWriter, request *http.Request) {
 	if !validAgentFilter(request.URL.Query()) {
 		writeError(response, http.StatusBadRequest, "invalid_request", "invalid Agent filter")
 		return
 	}
 	cursor := request.URL.Query().Get("cursor")
 	writeJSON(response, http.StatusOK, map[string]any{
-		"items":       []any{session()},
+		"items":       []any{conversation()},
 		"has_more":    cursor == "",
-		"next_cursor": nullable(cursor == "", "sessions-page-2"),
+		"next_cursor": nullable(cursor == "", "conversations-page-2"),
 	})
 }
 
-func (s *state) session(response http.ResponseWriter, request *http.Request) {
-	path := strings.TrimPrefix(request.URL.Path, "/v1/sessions/")
+func (s *state) conversation(response http.ResponseWriter, request *http.Request) {
+	path := strings.TrimPrefix(request.URL.Path, "/v1/conversations/")
 	switch {
+	case strings.HasSuffix(path, "/fork") && request.Method == http.MethodPost:
+		var body struct {
+			FromMessageID   string         `json:"from_message_id"`
+			ConversationKey string         `json:"conversation_key"`
+			Owner           map[string]any `json:"owner"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
+			body.FromMessageID == "" || body.Owner["kind"] == nil {
+			writeError(response, http.StatusBadRequest, "invalid_request", "Conversation fork did not round-trip")
+			return
+		}
+		value := conversation()
+		value["owner"] = body.Owner
+		value["conversation_key"] = body.ConversationKey
+		value["forked_from"] = map[string]any{
+			"conversation_id": conversationID,
+			"message_id":      body.FromMessageID,
+		}
+		writeJSON(response, http.StatusCreated, value)
 	case strings.HasSuffix(path, "/stream") && request.Method == http.MethodGet:
 		s.stream(response, request)
 	case strings.HasSuffix(path, "/transcript") && request.Method == http.MethodGet:
@@ -766,7 +831,7 @@ func (s *state) session(response http.ResponseWriter, request *http.Request) {
 		writeJSON(response, http.StatusOK, map[string]any{
 			"items": []any{map[string]any{
 				"id":             "cmp_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
-				"invocation_id":  invocationID,
+				"turn_id":        turnID,
 				"covers_through": 2,
 				"status":         "applied",
 				"failure_class":  nil,
@@ -798,17 +863,30 @@ func (s *state) session(response http.ResponseWriter, request *http.Request) {
 			"has_more":    cursor == "",
 			"next_cursor": nullable(cursor == "", nextCursor),
 		})
+	case request.Method == http.MethodPatch:
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil || len(body) == 0 {
+			writeError(response, http.StatusBadRequest, "invalid_request", "Conversation update did not round-trip")
+			return
+		}
+		value := conversation()
+		for key, item := range body {
+			value[key] = item
+		}
+		writeJSON(response, http.StatusOK, value)
+	case request.Method == http.MethodDelete:
+		response.WriteHeader(http.StatusNoContent)
 	case request.Method == http.MethodGet:
-		writeJSON(response, http.StatusOK, session())
+		writeJSON(response, http.StatusOK, conversation())
 	default:
 		writeError(response, http.StatusMethodNotAllowed, "invalid_request", "method not allowed")
 	}
 }
 
-// stream is the one stream. Three attempts walk a reader through the whole
-// contract: a connection that just drops, one that rotates, and one that
-// delivers the terminal change. A filtered reader leaves on that change; an
-// unfiltered one keeps reading, because the stream is a subscription.
+// stream serves both public scopes. Three attempts walk a reader through a
+// connection that just drops, one that rotates, and one that delivers the
+// terminal change. A Turn stream ends after that change; a Conversation stream
+// stays a subscription and receives an idle close hint.
 func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	s.mu.Lock()
 	s.streamAttempts++
@@ -827,10 +905,11 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 		s.lastResumeSource = ""
 	}
 	s.lastDeltas = request.URL.Query().Get("deltas")
-	s.lastInvocationFilter = request.URL.Query().Get("invocation_id")
-	if strings.HasPrefix(request.URL.Path, "/v1/invocations/") {
-		s.lastInvocationFilter = strings.TrimSuffix(
-			strings.TrimPrefix(request.URL.Path, "/v1/invocations/"),
+	isTurnStream := strings.HasPrefix(request.URL.Path, "/v1/turns/")
+	s.lastTurnID = ""
+	if isTurnStream {
+		s.lastTurnID = strings.TrimSuffix(
+			strings.TrimPrefix(request.URL.Path, "/v1/turns/"),
 			"/stream",
 		)
 	}
@@ -852,7 +931,7 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 	if attempt == 2 {
 		writeSSE(response, "", "connection.closing", map[string]any{
 			"type":               "connection.closing",
-			"session_id":         sessionID,
+			"conversation_id":    conversationID,
 			"content_expires_at": nil,
 			"reason":             "rotate",
 		})
@@ -863,12 +942,15 @@ func (s *state) stream(response http.ResponseWriter, request *http.Request) {
 		writeSSE(response, "", "message.delta", messageDelta())
 	}
 	writeSSE(response, "cursor-2", "transcript.update", secondTranscriptUpdate())
-	// Nothing is running now. An unfiltered reader is told the connection is
-	// being reclaimed, which means reconnect when you next need to read; a
-	// filtered one already left on the terminal change above.
+	if isTurnStream {
+		flusher.Flush()
+		return
+	}
+	// Nothing is running now. A Conversation reader is told the idle
+	// connection is being reclaimed and can reconnect when it next needs data.
 	writeSSE(response, "", "connection.closing", map[string]any{
 		"type":               "connection.closing",
-		"session_id":         sessionID,
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"reason":             "idle",
 	})
@@ -900,25 +982,31 @@ func acknowledgedLimits() map[string]any {
 	}
 }
 
-func invocation(status string) map[string]any {
-	return invocationWithID(invocationID, status)
+func turn(status string) map[string]any {
+	return turnWithID(turnID, status)
 }
 
-func invocationWithID(id string, status string) map[string]any {
+func turnWithID(id string, status string) map[string]any {
 	endedAt := any(nil)
 	if status == "completed" || status == "cancelled" || status == "failed" {
 		endedAt = "2026-07-21T12:00:03Z"
 	}
 	value := map[string]any{
-		"id":                           id,
-		"agent_id":                     agentID,
-		"agent_key":                    "support",
-		"session_id":                   sessionID,
+		"id":         id,
+		"tenant_key": "acme",
+		"behavior_source": map[string]any{
+			"kind":              "agent_revision",
+			"agent_id":          agentID,
+			"agent_revision_id": agentRevisionID,
+			"revision":          1,
+		},
+		"effective_behavior":           agentRevision()["behavior"],
+		"effective_behavior_digest":    "sha256:4242424242424242424242424242424242424242424242424242424242424242",
+		"conversation_id":              conversationID,
+		"memory_space_id":              nil,
+		"memory":                       nil,
 		"content_expires_at":           nil,
 		"user_key":                     nil,
-		"definition_id":                definitionID,
-		"definition_revision":          1,
-		"definition":                   nil,
 		"context":                      nil,
 		"status":                       status,
 		"stop_reason":                  nullableStopReason(status),
@@ -932,11 +1020,11 @@ func invocationWithID(id string, status string) map[string]any {
 		"metadata":                     nil,
 		"limits":                       map[string]any{"total_timeout_seconds": 300, "active_timeout_seconds": 120, "waiting_timeout_seconds": 180, "max_iterations": 16},
 		"active_execution_ms":          250,
-		"waiting_execution_ms":         0,
 		"deadline_at":                  "2026-07-21T12:05:00Z",
 		"created_at":                   "2026-07-21T12:00:00Z",
 		"updated_at":                   "2026-07-21T12:00:03Z",
 		"ended_at":                     endedAt,
+		"tool_calls":                   []any{},
 	}
 	if status == "waiting" {
 		value["tool_calls"] = []any{map[string]any{
@@ -952,7 +1040,7 @@ func invocationWithID(id string, status string) map[string]any {
 	return value
 }
 
-// A stop reason exists only on a completed Invocation; every other status
+// A stop reason exists only on a completed Turn; every other status
 // carries null, and clients that decode it must accept both shapes.
 func nullableStopReason(status string) any {
 	if status == "completed" {
@@ -961,10 +1049,10 @@ func nullableStopReason(status string) any {
 	return nil
 }
 
-func invocationResult() map[string]any {
-	// The composed Invocation carries a populated structured output so every
+func turnResult() map[string]any {
+	// The composed Turn carries a populated structured output so every
 	// client proves the renamed fields against real values, not null.
-	composed := invocation("completed")
+	composed := turn("completed")
 	composed["structured_output"] = map[string]any{"answer": "world"}
 	composed["structured_output_provenance"] = map[string]any{
 		"source":        "tool_call",
@@ -972,48 +1060,32 @@ func invocationResult() map[string]any {
 		"schema_sha256": "abababababababababababababababababababababababababababababababab",
 	}
 	return map[string]any{
-		"invocation": composed,
+		"turn": composed,
 		"messages": []any{
 			firstMessage(),
 			firstResultAssistantMessage(),
 			secondResultAssistantMessage(),
 		},
-		"output_text": "The charge was duplicated.\n\nA refund is queued.",
+		"output_text": "A refund is queued.",
 	}
 }
 
-func session() map[string]any {
+func conversation() map[string]any {
 	return map[string]any{
-		"id":                       sessionID,
-		"agent_id":                 agentID,
-		"pinned_revision":          nil,
-		"tenant_key":               "acme",
-		"session_key":              "ticket-A-42",
-		"user_key":                 "agent-smith",
-		"forked_from":              nil,
-		"active_invocation_id":     nil,
-		"active_invocation_status": nil,
-		"credit_block":             nil,
-		"context": map[string]any{
-			"estimated_tokens":      12,
-			"context_window_tokens": 128000,
-			"model": map[string]any{
-				"provider": "openai",
-				"id":       "gpt-test",
-			},
-		},
-		"compaction": nil,
+		"id":                 conversationID,
+		"tenant_key":         "acme",
+		"owner":              map[string]any{"kind": "user", "user_key": "agent-smith"},
+		"conversation_key":   "ticket-A-42",
+		"forked_from":        nil,
+		"active_turn_id":     nil,
+		"active_turn_status": nil,
+		"compaction":         nil,
 		"retention": map[string]any{
 			"ttl_seconds": 86400,
 		},
 		"expires_at": "2026-07-22T12:00:03Z",
 		"metadata": map[string]any{
 			"title": "Refund policy",
-		},
-		"usage": map[string]any{
-			"input_tokens":  9,
-			"output_tokens": 3,
-			"model_calls":   2,
 		},
 		"created_at": "2026-07-21T12:00:00Z",
 		"updated_at": "2026-07-21T12:00:03Z",
@@ -1022,15 +1094,31 @@ func session() map[string]any {
 
 func agent() map[string]any {
 	return map[string]any{
-		"id":              agentID,
-		"tenant_key":      nil,
-		"agent_key":       "support",
-		"name":            "Support",
-		"definition_id":   definitionID,
-		"pinned_revision": nil,
+		"id":               agentID,
+		"agent_key":        "support",
+		"name":             "Support",
+		"owner":            map[string]any{"kind": "app"},
+		"current_revision": 1,
+		"created_at":       "2026-07-21T12:00:00Z",
+		"updated_at":       "2026-07-21T12:00:00Z",
+		"archived_at":      nil,
+	}
+}
+
+func agentRevision() map[string]any {
+	return map[string]any{
+		"id":       agentRevisionID,
+		"agent_id": agentID,
+		"revision": 1,
+		"behavior": map[string]any{
+			"instructions": "Be concise and helpful.",
+			"model": map[string]any{
+				"provider": "openai",
+				"id":       "gpt-test",
+			},
+		},
+		"behavior_sha256": "sha256:4242424242424242424242424242424242424242424242424242424242424242",
 		"created_at":      "2026-07-21T12:00:00Z",
-		"updated_at":      "2026-07-21T12:00:00Z",
-		"archived_at":     nil,
 	}
 }
 
@@ -1044,11 +1132,11 @@ func validAgentFilter(query url.Values) bool {
 
 func firstMessage() map[string]any {
 	return map[string]any{
-		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-		"session_id":         sessionID,
+		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
-		"invocation_id":      invocationID,
+		"turn_id":            turnID,
 		"user_key":           nil,
 		"sequence":           1,
 		"role":               "user",
@@ -1060,15 +1148,15 @@ func firstMessage() map[string]any {
 // secondMessageID is the assistant message the preview below is building. The
 // preview carries it, so the handoff to the saved message updates a row that
 // already has its permanent identity.
-const secondMessageID = "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
+const secondMessageID = "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324"
 
 func secondMessage() map[string]any {
 	return map[string]any{
 		"id":                 secondMessageID,
-		"session_id":         sessionID,
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
-		"invocation_id":      invocationID,
+		"turn_id":            turnID,
 		"user_key":           nil,
 		"sequence":           2,
 		"role":               "assistant",
@@ -1079,14 +1167,15 @@ func secondMessage() map[string]any {
 
 func firstResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
-		"session_id":         sessionID,
+		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
-		"invocation_id":      invocationID,
+		"turn_id":            turnID,
 		"user_key":           nil,
 		"sequence":           2,
 		"role":               "assistant",
+		"phase":              "commentary",
 		"content": []any{
 			map[string]any{"type": "text", "text": "The charge was"},
 			map[string]any{"type": "tool_use", "id": "call_fixture", "name": "lookup", "input": map[string]any{}},
@@ -1098,14 +1187,15 @@ func firstResultAssistantMessage() map[string]any {
 
 func secondResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
-		"session_id":         sessionID,
+		"id":                 "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
-		"invocation_id":      invocationID,
+		"turn_id":            turnID,
 		"user_key":           nil,
 		"sequence":           3,
 		"role":               "assistant",
+		"phase":              "final_answer",
 		"content":            []any{map[string]any{"type": "text", "text": "A refund is queued."}},
 		"created_at":         "2026-07-21T12:00:03Z",
 	}
@@ -1133,8 +1223,8 @@ func terminalStatus(status string) bool {
 
 func change(revision int, status string, sequence int, occurredAt string) map[string]any {
 	return map[string]any{
-		"invocation_id":                invocationID,
-		"session_id":                   sessionID,
+		"turn_id":                      turnID,
+		"conversation_id":              conversationID,
 		"content_expires_at":           nil,
 		"revision":                     revision,
 		"status":                       status,
@@ -1151,42 +1241,42 @@ func change(revision int, status string, sequence int, occurredAt string) map[st
 
 func firstSnapshot() map[string]any {
 	return map[string]any{
-		"messages":           []any{firstMessage()},
-		"invocation_changes": []any{firstChange()},
-		"has_more":           false,
-		"cursor":             "cursor-1",
-		"next_page_token":    nil,
+		"messages":        []any{firstMessage()},
+		"turn_changes":    []any{firstChange()},
+		"has_more":        false,
+		"cursor":          "cursor-1",
+		"next_page_token": nil,
 	}
 }
 
 func firstTranscriptUpdate() map[string]any {
 	return map[string]any{
 		"type":               "transcript.update",
-		"session_id":         sessionID,
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"messages":           []any{firstMessage()},
-		"invocation_changes": []any{firstChange()},
+		"turn_changes":       []any{firstChange()},
 		"cursor":             "cursor-1",
 	}
 }
 
 func secondSnapshot() map[string]any {
 	return map[string]any{
-		"messages":           []any{firstMessage(), secondMessage()},
-		"invocation_changes": []any{firstChange(), secondChange()},
-		"has_more":           false,
-		"cursor":             "cursor-2",
-		"next_page_token":    nil,
+		"messages":        []any{firstMessage(), secondMessage()},
+		"turn_changes":    []any{firstChange(), secondChange()},
+		"has_more":        false,
+		"cursor":          "cursor-2",
+		"next_page_token": nil,
 	}
 }
 
 func secondTranscriptUpdate() map[string]any {
 	return map[string]any{
 		"type":               "transcript.update",
-		"session_id":         sessionID,
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"messages":           []any{firstMessage(), secondMessage()},
-		"invocation_changes": []any{firstChange(), secondChange()},
+		"turn_changes":       []any{firstChange(), secondChange()},
 		"cursor":             "cursor-2",
 	}
 }
@@ -1196,9 +1286,9 @@ func secondTranscriptUpdate() map[string]any {
 func messageDelta() map[string]any {
 	return map[string]any{
 		"type":               "message.delta",
-		"session_id":         sessionID,
+		"conversation_id":    conversationID,
 		"content_expires_at": nil,
-		"invocation_id":      invocationID,
+		"turn_id":            turnID,
 		"attempt":            1,
 		"message_id":         secondMessageID,
 		"content_index":      0,

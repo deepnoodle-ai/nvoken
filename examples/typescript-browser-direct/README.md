@@ -1,77 +1,56 @@
 # TypeScript browser-direct example
 
-A page that talks to nvoken itself, and the backend that authorizes it.
+A page that talks to nvoken directly, plus the backend boundaries that
+authorize it.
 
-Most integrations put a server in the middle: the browser calls your API, your
-API calls nvoken, and your server holds the connection open for the length of
-the turn. Browser-direct removes that server from the path. Your backend mints
-a short-lived grant; the page admits and streams its own turns.
+`src/backend.ts`:
 
-What that buys you is the thing your server no longer has to do. Nothing of
-yours has to stay alive for the length of a turn, so a slow model is not a slow
-request of yours, and a closed tab costs the turn nothing.
+- authenticates the host application's user;
+- mints a short-lived token pinned to one tenant, user, AgentRevision,
+  Conversation, and memory namespace;
+- verifies signed schema-v2 Turn webhooks and folds them by monotonic sequence.
 
-## The two halves
+`src/page.ts`:
 
-`src/backend.ts` runs on your server and does exactly two things:
+- obtains that token from the host backend;
+- admits and follows Turns without exposing a machine credential;
+- recovers a Turn by ID after reload;
+- reads retained Conversation messages through `raw()`.
 
-- **Mints a client token** for the signed-in user. The subject comes from your
-  own session, never from the request body — a token minted from a user id the
-  caller supplied is a token any caller can mint for any user.
-- **Receives the Invocation webhook.** On this path it is not an optimization.
-  The browser holds the stream, so your backend never observes settlement any
-  other way; if a tab closes mid-turn, the webhook is the only thing that tells
-  you the turn ended and what it cost.
+The backend is deliberately not a proxy for model execution. A slow model does
+not hold one of the host application's requests open, and closing the page does
+not cancel durable work.
 
-`src/page.ts` ships to the browser and holds a client token and nothing else.
-No API key, no signing key, no secret of any kind. Everything it can do is what
-the token names.
+## Configure the backend
 
-It is written as a bare `fetch` handler and a bare module so it runs anywhere —
-Workers, Deno, Bun, Node. In a React Router app the token route is a
-resource-route `action`, the webhook route is another, and `src/page.ts` is what
-a component calls; none of the nvoken code changes.
-
-## Setting it up
-
-Generate a keypair and register its public half in one step:
+Generate and register a browser client keypair, then keep the private seed on
+the backend:
 
 ```bash
 nvoken client-key generate <app-id> --name web
 ```
 
-That prints the key id and the private seed, once. Both belong in your
-backend's environment:
+The example expects:
 
 ```bash
 NVOKEN_APP_ID='app_…'
 NVOKEN_CLIENT_KEY_ID='ckey_…'
-NVOKEN_CLIENT_PRIVATE_KEY='<base64 seed>'
-NVOKEN_WEBHOOK_SECRET='<the App webhook signing secret>'
+NVOKEN_CLIENT_PRIVATE_KEY='<base64 Ed25519 seed>'
+NVOKEN_AGENT_ID='agent_…'
+NVOKEN_AGENT_REVISION_ID='arev_…'
+NVOKEN_WEBHOOK_SECRET='<webhook signing secret>'
 ```
 
-The App also needs browser access enabled with your page's exact origin, and
-the Agent Definition needs a `client_interface` — nvoken refuses a client token
-for a Definition that never declared one.
+Resolve the Conversation ID from the signed-in user's host-owned record. The
+token grants exactly that Conversation. Its subject and tenant also come from
+the authenticated session, never from request-body claims.
 
-## What to copy and what to decide
-
-Copy the shape. Decide the resource scope.
-
-The browser route ceiling is fixed by nvoken and cannot be selected in the
-token. The lifetime and Session pin remain host decisions. This example asks for ten
-minutes rather than the fifteen-minute maximum, because the page refreshes well
-before expiry and the extra five buy nothing. It leaves `sessionId` unset
-because the page lists conversations; a single-conversation UI should set it,
-and then the token cannot reach any other Session even if the page is
-compromised.
-
-## Building
+## Build
 
 ```bash
 npm install
 npm run build
 ```
 
-This example type-checks rather than running: the interesting parts need a
-registered App, a signed-in user, and a browser.
+This example type-checks rather than running: the stubs must be connected to a
+real authentication session and durable host database.

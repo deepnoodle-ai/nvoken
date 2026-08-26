@@ -30,8 +30,7 @@ cp openapi/nvoken.yaml "$SPEC"
 #
 # The contract now says at most one instead, as an allOf of `not` clauses,
 # because a browser token names the Agent and sends neither field. That shape
-# needs no stripping: the mutually exclusive Session fields have always been
-# written this way and every generator already tolerates it.
+# needs no stripping, and every generator already tolerates it.
 
 # oapi-codegen reserves ClientInterface for its generated transport interface.
 # The contract also has a ClientInterface schema for browser authorization, so
@@ -86,23 +85,17 @@ rm -rf sdk/typescript/src/generated
 mkdir -p sdk/typescript/src/generated
 cp -R "$WORK/typescript/src/." sdk/typescript/src/generated/
 
+# OpenAPI Generator emits TurnInput's array arm with a call to
+# `instanceOfInputBlock`, but composed union models do not get that predicate.
+# Decode each array member through the generated union decoder instead.
+python3 sdk/scripts/fix_typescript_turn_input.py \
+  sdk/typescript/src/generated/models/TurnInput.ts
+
 # OpenAPI Generator treats the contract's outbound webhook as a Runtime client
 # operation and emits a broken DefaultApi sender. SDK users receive callbacks;
 # they do not invoke the receiver. Keep the generated callback models, but drop
 # this synthetic client surface.
 rm -f sdk/typescript/src/generated/apis/DefaultApi.ts
-
-# openapi-generator's typescript-fetch templates assume every oneOf array
-# element type exports an `instanceOf*` discriminator guard, but a oneOf with
-# no discriminator property (InputBlock, itself a 3-way oneOf) never gets one
-# generated. InvocationInput.ts references the missing export and fails to
-# compile. InputBlockFromJSONTyped/ToJSONTyped already dispatch structurally,
-# so the guard is redundant; strip it.
-perl -0pi -e '
-  s/import \{\n\s*instanceOfInputBlock,\n/import {\n/;
-  s/(\s*)if \(json\.every\(item => instanceOfInputBlock\(item\)\)\) \{\n\s*(return json\.map\(value => InputBlockFromJSONTyped\(value, true\)\);)\n\s*\}\n/$1$2\n/;
-  s/(\s*)if \(value\.every\(item => instanceOfInputBlock\(item\)\)\) \{\n\s*(return value\.map\(value => InputBlockToJSON\(value as InputBlock\)\);)\n\s*\}\n/$1$2\n/;
-' sdk/typescript/src/generated/models/InvocationInput.ts
 
 rm -rf sdk/python/src/nvoken_generated
 mkdir -p sdk/python/src
@@ -127,7 +120,7 @@ perl -0pi -e 's/^pub mod default_api;\n//m' sdk/rust/src/apis/mod.rs
 # "missing field `type`" or "missing field `mode`", and every one it encodes
 # carries the discriminator twice. The exact literal field on each closed
 # branch already discriminates these unions.
-for model in session_content_block citation tool_declaration session_stream_event; do
+for model in conversation_content_block citation tool_declaration conversation_stream_event turn_conversation; do
   perl -0pi -e '
     die "no internal tag in '"${model}"'; update sdk/scripts/generate.sh\n"
       unless s/#\[serde\(tag = "(?:type|mode)"\)\]/#[serde(untagged)]/;

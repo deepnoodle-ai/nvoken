@@ -6,7 +6,6 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	mathrand "math/rand/v2"
 	"net/http"
@@ -37,43 +36,29 @@ func (p RetryPolicy) normalized() RetryPolicy {
 }
 
 type Client struct {
-	raw     *generated.ClientWithResponses
-	retry   RetryPolicy
-	locks   *sessionLockTable
-	baseURL string
-	apiKey  string
-	http    *http.Client
-	scope   Scope
+	raw               *generated.ClientWithResponses
+	retry             RetryPolicy
+	conversationLocks *conversationLockTable
 }
 
-// Scope narrows every request a Client makes to one tenant, one end user, or
-// both. Anything outside it is reported as not found, so an id that arrives
-// from the wrong place cannot be acted on — which is what lets one app-wide
-// credential serve a whole application without an ownership check written at
-// every call site. A scope may only narrow: naming a tenant the credential is
-// not bound to is refused rather than silently returning nothing.
-type Scope struct {
-	TenantKey string
-	UserKey   string
-}
-
-// Scoped returns a Client that stamps this scope on every request it makes.
-// The receiver is unchanged, so a scoped client can be handed to the part of
-// an application that handles one tenant's or one end user's work while the
-// unscoped one keeps doing administrative reads.
-func (c *Client) Scoped(scope Scope) (*Client, error) {
-	if strings.TrimSpace(scope.TenantKey) == "" && strings.TrimSpace(scope.UserKey) == "" {
-		return nil, fmt.Errorf("a scope requires a tenant key, a user key, or both")
-	}
-	return newClient(c.baseURL, c.apiKey, c.http, c.retry, scope, c.locks)
-}
-
-// Scope reports the scope this Client stamps, zero-valued when it stamps none.
-func (c *Client) Scope() Scope { return c.scope }
-
-type sessionLockTable struct {
+type conversationLockTable struct {
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
+}
+
+func newConversationLockTable() *conversationLockTable {
+	return &conversationLockTable{locks: make(map[string]*sync.Mutex)}
+}
+
+func (t *conversationLockTable) lock(key string) *sync.Mutex {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if existing := t.locks[key]; existing != nil {
+		return existing
+	}
+	created := &sync.Mutex{}
+	t.locks[key] = created
+	return created
 }
 
 type ClientOption func(*clientOptions)
@@ -81,7 +66,6 @@ type ClientOption func(*clientOptions)
 type clientOptions struct {
 	httpClient *http.Client
 	retry      RetryPolicy
-	scope      Scope
 }
 
 func WithHTTPClient(client *http.Client) ClientOption {
@@ -90,12 +74,6 @@ func WithHTTPClient(client *http.Client) ClientOption {
 
 func WithRetryPolicy(policy RetryPolicy) ClientOption {
 	return func(options *clientOptions) { options.retry = policy }
-}
-
-// WithScope narrows the client at construction, for the common case where an
-// application makes one client per tenant rather than deriving them.
-func WithScope(scope Scope) ClientOption {
-	return func(options *clientOptions) { options.scope = scope }
 }
 
 func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error) {
@@ -109,7 +87,7 @@ func NewClient(baseURL, apiKey string, options ...ClientOption) (*Client, error)
 	for _, option := range options {
 		option(&config)
 	}
-	return newClient(baseURL, apiKey, config.httpClient, config.retry, config.scope, nil)
+	return newClient(baseURL, apiKey, config.httpClient, config.retry)
 }
 
 func newClient(
@@ -117,18 +95,10 @@ func newClient(
 	apiKey string,
 	httpClient *http.Client,
 	retry RetryPolicy,
-	scope Scope,
-	locks *sessionLockTable,
 ) (*Client, error) {
 	requestEditor := func(_ context.Context, request *http.Request) error {
 		request.Header.Set("Authorization", "Bearer "+apiKey)
 		request.Header.Set("User-Agent", "nvoken-go/"+Version)
-		if scope.TenantKey != "" {
-			request.Header.Set("X-Nvoken-Tenant-Key", scope.TenantKey)
-		}
-		if scope.UserKey != "" {
-			request.Header.Set("X-Nvoken-User-Key", scope.UserKey)
-		}
 		return nil
 	}
 	raw, err := generated.NewClientWithResponses(
@@ -139,21 +109,480 @@ func newClient(
 	if err != nil {
 		return nil, fmt.Errorf("create generated client: %w", err)
 	}
-	if locks == nil {
-		locks = &sessionLockTable{locks: make(map[string]*sync.Mutex)}
-	}
 	return &Client{
-		raw:     raw,
-		retry:   retry.normalized(),
-		locks:   locks,
-		baseURL: baseURL,
-		apiKey:  apiKey,
-		http:    httpClient,
-		scope:   scope,
+		raw:               raw,
+		retry:             retry.normalized(),
+		conversationLocks: newConversationLockTable(),
 	}, nil
 }
 
 func (c *Client) Raw() *generated.ClientWithResponses { return c.raw }
+
+func (c *Client) ListAdmissions(ctx context.Context, params *ListAdmissionsParams) (*AdmissionAttemptList, error) {
+	response, err := c.raw.ListAdmissionsWithResponse(ctx, params)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return response.JSON200, nil
+}
+
+func (c *Client) SummarizeAdmissions(ctx context.Context, params *SummarizeAdmissionsParams) (*AdmissionSummary, error) {
+	response, err := c.raw.SummarizeAdmissionsWithResponse(ctx, params)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return response.JSON200, nil
+}
+
+func (c *Client) ListTenants(ctx context.Context, params *ListTenantsParams) (*TenantList, error) {
+	response, err := c.raw.ListTenantsWithResponse(ctx, params)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return response.JSON200, nil
+}
+
+func (c *Client) DeleteTenant(ctx context.Context, id string) error {
+	response, err := c.raw.DeleteTenantWithResponse(ctx, id)
+	if err != nil {
+		return transportError(err)
+	}
+	if response.StatusCode() != http.StatusNoContent {
+		return errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return nil
+}
+
+// Agent resolves one Agent key now. App ownership is the unmarked common
+// case; pass one AgentLookupOptions for a tenant- or user-owned Agent.
+func (c *Client) Agent(ctx context.Context, key string, options ...AgentLookupOptions) (*Agent, error) {
+	if strings.TrimSpace(key) == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
+	}
+	if len(options) > 1 {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent accepts at most one options value"}
+	}
+	owner := AgentOwner{}
+	if len(options) == 1 {
+		owner = options[0].OwnedBy
+	}
+	kind, tenant, user, err := agentOwnerCoordinates(owner)
+	if err != nil {
+		return nil, err
+	}
+	params := &generated.ListAgentsParams{
+		OwnerKind: kind,
+		TenantKey: optionalString(tenant),
+		UserKey:   optionalString(user),
+		AgentKey:  &key,
+	}
+	list, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentList], error) {
+		response, callErr := c.raw.ListAgentsWithResponse(ctx, params)
+		if callErr != nil {
+			return callResult[generated.AgentList]{}, callErr
+		}
+		return callResult[generated.AgentList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(list.Items) == 0 {
+		return nil, &Error{Category: ErrorNotFound, Status: http.StatusNotFound, Message: "Agent not found"}
+	}
+	return &Agent{client: c, value: list.Items[0]}, nil
+}
+
+// Agents returns the management collection. Runnable hot paths normally use
+// Client.Agent directly.
+func (c *Client) Agents() *Agents { return &Agents{client: c} }
+
+type Agents struct{ client *Client }
+
+func (a *Agents) GetByID(ctx context.Context, id string) (*Agent, error) {
+	value, err := callReplaySafe(ctx, a.client.retry, true, func() (callResult[generated.Agent], error) {
+		response, callErr := a.client.raw.GetAgentWithResponse(ctx, id)
+		if callErr != nil {
+			return callResult[generated.Agent]{}, callErr
+		}
+		return callResult[generated.Agent]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Agent{client: a.client, value: *value}, nil
+}
+
+func (a *Agents) List(ctx context.Context, options ListAgentsOptions) (*AgentPage, error) {
+	kind, tenant, user, err := agentOwnerCoordinates(options.OwnedBy)
+	if err != nil {
+		return nil, err
+	}
+	params := &generated.ListAgentsParams{
+		OwnerKind:       kind,
+		TenantKey:       optionalString(tenant),
+		UserKey:         optionalString(user),
+		IncludeArchived: &options.Archived,
+	}
+	if options.Cursor != "" {
+		cursor := generated.Cursor(options.Cursor)
+		params.Cursor = &cursor
+	}
+	if options.Limit > 0 {
+		limit := generated.Limit(options.Limit)
+		params.Limit = &limit
+	}
+	page, err := callReplaySafe(ctx, a.client.retry, true, func() (callResult[generated.AgentList], error) {
+		response, callErr := a.client.raw.ListAgentsWithResponse(ctx, params)
+		if callErr != nil {
+			return callResult[generated.AgentList]{}, callErr
+		}
+		return callResult[generated.AgentList]{
+			Value:  response.JSON200,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := &AgentPage{HasMore: page.HasMore, NextCursor: page.NextCursor}
+	result.Items = make([]*Agent, 0, len(page.Items))
+	for _, item := range page.Items {
+		result.Items = append(result.Items, &Agent{client: a.client, value: item})
+	}
+	return result, nil
+}
+
+func (a *Agents) Create(ctx context.Context, options CreateAgentOptions) (*Agent, error) {
+	if strings.TrimSpace(options.Key) == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
+	}
+	if options.Behavior.OutputSchema != nil {
+		if err := PreflightOutputSchema(*options.Behavior.OutputSchema); err != nil {
+			return nil, err
+		}
+	}
+	idempotencyKey := options.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = generatedIdempotencyKey()
+	}
+	owner, err := encodeAgentOwner(options.OwnedBy)
+	if err != nil {
+		return nil, err
+	}
+	behavior := options.Behavior.generated()
+	body := generated.CreateAgentRequest{
+		AgentKey:     options.Key,
+		Instructions: behavior.Instructions,
+		Limits:       behavior.Limits,
+		Memory:       behavior.Memory,
+		Model:        behavior.Model,
+		Name:         optionalString(options.Name),
+		OutputSchema: behavior.OutputSchema,
+		Owner:        owner,
+		Tools:        behavior.Tools,
+	}
+	value, err := callReplaySafe(ctx, a.client.retry, true, func() (callResult[generated.Agent], error) {
+		response, callErr := a.client.raw.CreateAgentWithResponse(
+			ctx,
+			&generated.CreateAgentParams{IdempotencyKey: idempotencyKey},
+			body,
+		)
+		if callErr != nil {
+			return callResult[generated.Agent]{}, callErr
+		}
+		return callResult[generated.Agent]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Agent{client: a.client, value: *value}, nil
+}
+
+func (c *Client) Inline(behavior Behavior) *InlineRunner {
+	return &InlineRunner{client: c, behavior: behavior}
+}
+
+// Turn constructs a local recovery handle. The first remote operation checks
+// visibility using the credential and explicit access coordinates.
+func (c *Client) Turn(id string, access TurnAccess) *Turn {
+	return &Turn{
+		client:    c,
+		id:        id,
+		access:    access,
+		toolState: newToolExecutionState(),
+	}
+}
+
+func (c *Client) startTurn(
+	ctx context.Context,
+	input TurnInput,
+	behavior *generated.TurnBehaviorSelection,
+	options TurnOptions,
+	tools map[string]Tool,
+) (*Turn, error) {
+	if strings.TrimSpace(options.TenantKey) == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "Turn tenant key is required"}
+	}
+	idempotencyKey := options.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = generatedIdempotencyKey()
+	}
+	wireInput, err := encodeTurnInput(input)
+	if err != nil {
+		return nil, err
+	}
+	wireMemory, err := encodeMemorySelection(options.Memory)
+	if err != nil {
+		return nil, err
+	}
+	if options.Memory != nil && options.Memory.Scope == "user" && strings.TrimSpace(options.UserKey) == "" {
+		return nil, &Error{Category: ErrorValidation, Message: "user memory requires a Turn user"}
+	}
+	wireConversation, err := encodeConversationSelection(options.Conversation)
+	if err != nil {
+		return nil, err
+	}
+	body := generated.CreateTurnRequest{
+		Behavior:       behavior,
+		Conversation:   wireConversation,
+		IdempotencyKey: idempotencyKey,
+		Input:          wireInput,
+		Limits:         options.Limits,
+		Memory:         wireMemory,
+		TenantKey:      &options.TenantKey,
+	}
+	if options.UserKey != "" {
+		body.UserKey = &options.UserKey
+	}
+	if len(options.Metadata) != 0 {
+		metadata := generated.Metadata(options.Metadata)
+		body.Metadata = &metadata
+	}
+	value, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Turn], error) {
+		response, callErr := c.raw.CreateTurnWithResponse(ctx, &generated.CreateTurnParams{}, body)
+		if callErr != nil {
+			return callResult[generated.Turn]{}, callErr
+		}
+		return callResult[generated.Turn]{
+			Value:  response.JSON202,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, turnAdmissionError(err, idempotencyKey)
+	}
+	deduplicated := value.Deduplicated != nil && *value.Deduplicated
+	return &Turn{
+		client:         c,
+		id:             value.ID,
+		access:         TurnAccess{TenantKey: options.TenantKey, UserKey: options.UserKey},
+		idempotencyKey: idempotencyKey,
+		admission:      &TurnAdmission{IdempotencyKey: idempotencyKey, Deduplicated: deduplicated},
+		tools:          bindToolMap(nil, mapValues(tools)),
+		toolState:      newToolExecutionState(),
+		wait:           options.Wait,
+	}, nil
+}
+
+func encodeTurnInput(input TurnInput) (generated.TurnInput, error) {
+	switch value := input.(type) {
+	case string:
+		if strings.TrimSpace(value) == "" {
+			return generated.TurnInput{}, &Error{Category: ErrorValidation, Message: "Turn input is required"}
+		}
+		wire := generated.TurnInput{}
+		if err := wire.FromTurnInput0(value); err != nil {
+			return generated.TurnInput{}, validationError("encode Turn input", err)
+		}
+		return wire, nil
+	case []InputBlock:
+		if len(value) == 0 {
+			return generated.TurnInput{}, &Error{Category: ErrorValidation, Message: "Turn input blocks are required"}
+		}
+		if err := PreflightInputBlocks(value); err != nil {
+			return generated.TurnInput{}, err
+		}
+		blocks := make([]generated.InputBlock, 0, len(value))
+		for _, block := range value {
+			encoded, err := json.Marshal(block.wire())
+			if err != nil {
+				return generated.TurnInput{}, validationError("encode Turn input block", err)
+			}
+			var wireBlock generated.InputBlock
+			if err := json.Unmarshal(encoded, &wireBlock); err != nil {
+				return generated.TurnInput{}, validationError("encode Turn input block", err)
+			}
+			blocks = append(blocks, wireBlock)
+		}
+		wire := generated.TurnInput{}
+		if err := wire.FromTurnInput1(blocks); err != nil {
+			return generated.TurnInput{}, validationError("encode Turn input blocks", err)
+		}
+		return wire, nil
+	default:
+		return generated.TurnInput{}, &Error{Category: ErrorValidation, Message: "Turn input must be a string or []InputBlock"}
+	}
+}
+
+func mapValues(tools map[string]Tool) []Tool {
+	values := make([]Tool, 0, len(tools))
+	for _, tool := range tools {
+		values = append(values, tool)
+	}
+	return values
+}
+
+func agentOwnerCoordinates(owner AgentOwner) (generated.AgentOwnerKind, string, string, error) {
+	switch owner.kind {
+	case agentOwnerApp:
+		if owner.tenant != "" || owner.user != "" {
+			return "", "", "", &Error{Category: ErrorValidation, Message: "App-owned Agent cannot carry tenant or user coordinates"}
+		}
+		return generated.AgentOwnerKindApp, "", "", nil
+	case agentOwnerTenant:
+		if strings.TrimSpace(owner.tenant) == "" {
+			return "", "", "", &Error{Category: ErrorValidation, Message: "tenant-owned Agent requires a tenant"}
+		}
+		if owner.user != "" {
+			return "", "", "", &Error{Category: ErrorValidation, Message: "tenant-owned Agent cannot carry a user"}
+		}
+		return generated.AgentOwnerKindTenant, owner.tenant, "", nil
+	case agentOwnerUser:
+		if strings.TrimSpace(owner.tenant) == "" || strings.TrimSpace(owner.user) == "" {
+			return "", "", "", &Error{Category: ErrorValidation, Message: "user-owned Agent requires both tenant and user"}
+		}
+		return generated.AgentOwnerKindUser, owner.tenant, owner.user, nil
+	default:
+		return "", "", "", &Error{Category: ErrorValidation, Message: "unknown Agent owner kind"}
+	}
+}
+
+func encodeAgentOwner(owner AgentOwner) (generated.AgentOwner, error) {
+	kind, tenant, user, err := agentOwnerCoordinates(owner)
+	if err != nil {
+		return generated.AgentOwner{}, err
+	}
+	wire := generated.AgentOwner{}
+	switch kind {
+	case generated.AgentOwnerKindApp:
+		err = wire.FromAppAgentOwner(generated.AppAgentOwner{Kind: generated.AppAgentOwnerKindApp})
+	case generated.AgentOwnerKindTenant:
+		err = wire.FromTenantAgentOwner(generated.TenantAgentOwner{Kind: generated.TenantAgentOwnerKindTenant, TenantKey: tenant})
+	case generated.AgentOwnerKindUser:
+		err = wire.FromUserAgentOwner(generated.UserAgentOwner{Kind: generated.UserAgentOwnerKindUser, TenantKey: tenant, UserKey: user})
+	}
+	if err != nil {
+		return generated.AgentOwner{}, validationError("encode Agent owner", err)
+	}
+	return wire, nil
+}
+
+func encodeMemorySelection(selection *MemorySelection) (*generated.TurnMemorySelection, error) {
+	if selection == nil {
+		return nil, nil
+	}
+	wire := generated.TurnMemorySelection{}
+	var err error
+	switch selection.Scope {
+	case "none":
+		err = wire.FromNoTurnMemory(generated.NoTurnMemory{Scope: generated.NoTurnMemoryScopeNone})
+	case "tenant":
+		namespace := optionalString(selection.Namespace)
+		err = wire.FromTenantTurnMemory(generated.TenantTurnMemory{Scope: generated.TenantTurnMemoryScopeTenant, Namespace: namespace})
+	case "user":
+		namespace := optionalString(selection.Namespace)
+		err = wire.FromUserTurnMemory(generated.UserTurnMemory{Scope: generated.UserTurnMemoryScopeUser, Namespace: namespace})
+	default:
+		return nil, &Error{Category: ErrorValidation, Message: "memory scope must be none, tenant, or user"}
+	}
+	if err != nil {
+		return nil, validationError("encode memory selection", err)
+	}
+	return &wire, nil
+}
+
+func encodeConversationSelection(selection *ConversationSelection) (*generated.TurnConversation, error) {
+	if selection == nil {
+		return nil, nil
+	}
+	count := 0
+	if selection.ID != "" {
+		count++
+	}
+	if selection.Key != "" {
+		count++
+	}
+	if count != 1 {
+		return nil, &Error{Category: ErrorValidation, Message: "Conversation selection requires exactly one of ID or Key"}
+	}
+	wire := generated.TurnConversation{}
+	var err error
+	if selection.ID != "" {
+		err = wire.FromContinueTurnConversation(generated.ContinueTurnConversation{
+			ConversationID: selection.ID,
+			Mode:           generated.Continue,
+		})
+	} else {
+		owner := generated.ConversationOwner{}
+		switch selection.Owner.kind {
+		case conversationOwnerTenant:
+			err = owner.FromTenantConversationOwner(generated.TenantConversationOwner{Kind: generated.TenantConversationOwnerKindTenant})
+		case conversationOwnerUser:
+			if strings.TrimSpace(selection.Owner.user) == "" {
+				return nil, &Error{Category: ErrorValidation, Message: "user-owned Conversation requires a user"}
+			}
+			err = owner.FromUserConversationOwner(generated.UserConversationOwner{Kind: generated.UserConversationOwnerKindUser, UserKey: selection.Owner.user})
+		default:
+			return nil, &Error{Category: ErrorValidation, Message: "unknown Conversation owner kind"}
+		}
+		if err != nil {
+			return nil, validationError("encode Conversation owner", err)
+		}
+		var metadata *generated.ConversationMetadata
+		if len(selection.Metadata) != 0 {
+			value := generated.ConversationMetadata(selection.Metadata)
+			metadata = &value
+		}
+		err = wire.FromContinueOrCreateTurnConversation(generated.ContinueOrCreateTurnConversation{
+			ConversationKey: selection.Key,
+			Metadata:        metadata,
+			Mode:            generated.ContinueOrCreate,
+			Owner:           owner,
+		})
+	}
+	if err != nil {
+		return nil, validationError("encode Conversation selection", err)
+	}
+	return &wire, nil
+}
 
 type callResult[T any] struct {
 	Value  *T
@@ -240,775 +669,6 @@ func responseHeader(response *http.Response) http.Header {
 	return response.Header
 }
 
-func (c *Client) Invoke(ctx context.Context, request InvokeRequest) (*InvocationHandle, error) {
-	if request.IdempotencyKey == "" {
-		request.IdempotencyKey = generatedIdempotencyKey()
-	}
-	body, err := request.encoded()
-	if err != nil {
-		if sdkError, ok := err.(*Error); ok {
-			return nil, sdkError
-		}
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	invocation, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
-		response, callErr := c.raw.CreateInvocationWithBodyWithResponse(
-			ctx,
-			&generated.CreateInvocationParams{},
-			"application/json",
-			bytes.NewReader(body),
-		)
-		if callErr != nil {
-			return callResult[generated.Invocation]{}, callErr
-		}
-		value := response.JSON202
-		if true {
-		}
-		return callResult[generated.Invocation]{
-			Value:  value,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &InvocationHandle{
-		client:         c,
-		InvocationID:   invocation.ID,
-		IdempotencyKey: request.IdempotencyKey,
-		SessionID:      invocation.SessionID,
-		AgentID:        agentIDOrEmpty(invocation.AgentID),
-		Status:         invocation.Status,
-		Deduplicated:   invocation.Deduplicated,
-		DeadlineAt:     invocation.DeadlineAt,
-	}, nil
-}
-
-func (c *Client) Invocation(invocationID string) *InvocationHandle {
-	return &InvocationHandle{client: c, InvocationID: invocationID}
-}
-
-// CreateAgentDefinition creates a stable App-owned Agent Definition resource,
-// or returns the one DefinitionKey already names.
-//
-// The key is unique within the App, so this is ensure-shaped: restating an
-// existing definition returns it rather than creating a second, and a key
-// already held by a different definition is a conflict naming the resource to
-// update instead. That makes it safe to call on every deploy without a
-// caller-invented idempotency key — see CreateAgentDefinitionOptions for when
-// you still want one.
-func (c *Client) CreateAgentDefinition(
-	ctx context.Context,
-	definition AgentDefinition,
-	options CreateAgentDefinitionOptions,
-) (*AgentDefinitionResource, error) {
-	if definition.DefinitionKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition key is required"}
-	}
-	body, err := definitionBody(definition, true)
-	if err != nil {
-		return nil, err
-	}
-	resource, _, err := c.createAgentDefinition(ctx, body, options.IdempotencyKey)
-	return resource, err
-}
-
-// definitionBody encodes one definition for the wire. withKey keeps
-// definition_key, which a create needs and a replacement may not send.
-func definitionBody(definition AgentDefinition, withKey bool) ([]byte, error) {
-	encoded, err := definition.encoded(withKey)
-	if err != nil {
-		if sdkError, ok := err.(*Error); ok {
-			return nil, sdkError
-		}
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	body, err := json.Marshal(encoded)
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	return body, nil
-}
-
-// createAgentDefinition also reports whether this call minted the resource,
-// which the status carries and the body does not: 201 for a create, 200 for a
-// restatement that resolved to what already existed.
-func (c *Client) createAgentDefinition(
-	ctx context.Context,
-	body []byte,
-	idempotencyKey string,
-) (*AgentDefinitionResource, bool, error) {
-	created := false
-	resource, err := callReplaySafe(
-		ctx,
-		c.retry,
-		true,
-		func() (callResult[generated.AgentDefinitionResource], error) {
-			response, callErr := c.raw.CreateAgentDefinitionWithBodyWithResponse(
-				ctx,
-				&generated.CreateAgentDefinitionParams{IdempotencyKey: optionalString(idempotencyKey)},
-				"application/json",
-				bytes.NewReader(body),
-			)
-			if callErr != nil {
-				return callResult[generated.AgentDefinitionResource]{}, callErr
-			}
-			// A restated definition answers 200 with the existing resource
-			// rather than 201, which is the ordinary deploy-time outcome and
-			// not an error.
-			created = response.JSON201 != nil
-			value := response.JSON201
-			if value == nil {
-				value = response.JSON200
-			}
-			return callResult[generated.AgentDefinitionResource]{
-				Value:  value,
-				Status: response.StatusCode(),
-				Header: responseHeader(response.HTTPResponse),
-				Body:   response.Body,
-			}, nil
-		},
-	)
-	if err != nil {
-		return nil, false, err
-	}
-	return resource, created, nil
-}
-
-func (c *Client) GetAgentDefinition(ctx context.Context, id string) (*AgentDefinitionResource, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
-		response, err := c.raw.GetAgentDefinitionWithResponse(ctx, id)
-		if err != nil {
-			return callResult[generated.AgentDefinitionResource]{}, err
-		}
-		return callResult[generated.AgentDefinitionResource]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) GetAgentDefinitionRevision(
-	ctx context.Context,
-	id string,
-	revision int64,
-) (*AgentDefinitionResource, error) {
-	if revision < 1 {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent Definition revision must be positive"}
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
-		response, err := c.raw.GetAgentDefinitionRevisionWithResponse(ctx, id, revision)
-		if err != nil {
-			return callResult[generated.AgentDefinitionResource]{}, err
-		}
-		return callResult[generated.AgentDefinitionResource]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) ListAgentDefinitions(
-	ctx context.Context,
-	options ListAgentDefinitionsOptions,
-) (*AgentDefinitionResourceList, error) {
-	params := &generated.ListAgentDefinitionsParams{
-		IncludeArchived: options.IncludeArchived,
-		Cursor:          options.Cursor,
-		Limit:           options.Limit,
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResourceList], error) {
-		response, err := c.raw.ListAgentDefinitionsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.AgentDefinitionResourceList]{}, err
-		}
-		return callResult[generated.AgentDefinitionResourceList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// UpdateAgentDefinition publishes the next revision of an Agent Definition,
-// replacing the whole resource. Pass the definition you read, changed:
-//
-//	current, err := client.GetAgentDefinition(ctx, id)
-//	definition, err := nvoken.AgentDefinitionFromResource(current)
-//	definition.Instructions = "Be concise and warm."
-//	next, err := client.UpdateAgentDefinition(ctx, id, definition,
-//		nvoken.UpdateAgentDefinitionOptions{ExpectedRevision: current.Revision})
-//
-// A field left at its zero value is cleared, not kept, which is why starting
-// from AgentDefinitionFromResource rather than restating the definition by
-// hand is the safe habit.
-//
-// Replacement is ensure-shaped: a definition already matching the current
-// revision publishes nothing and returns that revision unchanged. So this is
-// safe to call with contents you are not sure differ — see SyncDefinitions,
-// which is that call in a loop.
-func (c *Client) UpdateAgentDefinition(
-	ctx context.Context,
-	id string,
-	definition AgentDefinition,
-	options UpdateAgentDefinitionOptions,
-) (*AgentDefinitionResource, error) {
-	if options.ExpectedRevision < 0 {
-		return nil, &Error{Category: ErrorValidation, Message: "expected Agent Definition revision must be positive, or AnyDefinitionRevision"}
-	}
-	body, err := definitionBody(definition, false)
-	if err != nil {
-		return nil, err
-	}
-	resource, _, err := c.updateAgentDefinition(ctx, id, body, options.ExpectedRevision)
-	return resource, err
-}
-
-// updateAgentDefinition also reports whether a revision was published, which
-// the status carries and the body does not: 201 for a published revision, 200
-// for a request the current revision already satisfied.
-func (c *Client) updateAgentDefinition(
-	ctx context.Context,
-	id string,
-	body []byte,
-	expectedRevision int64,
-) (*AgentDefinitionResource, bool, error) {
-	ifMatch := "*"
-	if expectedRevision != AnyDefinitionRevision {
-		ifMatch = fmt.Sprintf("\"%d\"", expectedRevision)
-	}
-	published := false
-	resource, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentDefinitionResource], error) {
-		response, callErr := c.raw.UpdateAgentDefinitionWithBodyWithResponse(
-			ctx,
-			id,
-			&generated.UpdateAgentDefinitionParams{IfMatch: ifMatch},
-			"application/json",
-			bytes.NewReader(body),
-		)
-		if callErr != nil {
-			return callResult[generated.AgentDefinitionResource]{}, callErr
-		}
-		published = response.JSON201 != nil
-		value := response.JSON201
-		if value == nil {
-			value = response.JSON200
-		}
-		return callResult[generated.AgentDefinitionResource]{
-			Value:  value,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, false, err
-	}
-	return resource, published, nil
-}
-
-// SyncDefinitions makes nvoken hold exactly the definitions given, publishing
-// a revision only where one differs.
-//
-// This is a write-only loop: nothing is read back and nothing is compared
-// here. Both write paths are ensure-shaped, so nvoken decides what moved —
-// which matters because it canonicalizes a definition before comparing it, and
-// a caller reproducing that comparison would be maintaining a second copy of
-// the rule, in another language, free to disagree the first time either side
-// gains a field.
-//
-// Each definition costs one call, or two when its contents changed: the create
-// conflict names the resource to replace, so nothing has to be looked up.
-//
-// It is sequential and stops at the first error, which is the useful behavior
-// for a deploy step. A key held by an archived Definition is one of those
-// errors rather than an outcome: restoring it is a decision, not a sync.
-func (c *Client) SyncDefinitions(
-	ctx context.Context,
-	definitions []AgentDefinition,
-) ([]DefinitionSync, error) {
-	results := make([]DefinitionSync, 0, len(definitions))
-	for _, definition := range definitions {
-		if definition.DefinitionKey == "" {
-			return results, &Error{Category: ErrorValidation, Message: "Agent Definition key is required"}
-		}
-		createBody, err := definitionBody(definition, true)
-		if err != nil {
-			return results, err
-		}
-		resource, created, err := c.createAgentDefinition(ctx, createBody, "")
-		if err == nil {
-			// The create either minted the resource or resolved to one already
-			// holding these exact contents. Either way nvoken now holds them.
-			outcome := DefinitionCreated
-			if !created {
-				outcome = DefinitionUnchanged
-			}
-			results = append(results, DefinitionSync{
-				DefinitionKey: definition.DefinitionKey,
-				Outcome:       outcome,
-				Definition:    resource,
-			})
-			continue
-		}
-		var conflict *Error
-		if !errors.As(err, &conflict) || conflict.Code != "agent_definition_key_conflict" {
-			return results, err
-		}
-		// The conflict names the resource holding the key, so the replacement
-		// it points at needs no lookup first.
-		id, _ := conflict.Details["definition_id"].(string)
-		if id == "" {
-			return results, err
-		}
-		updateBody, err := definitionBody(definition, false)
-		if err != nil {
-			return results, err
-		}
-		// AnyDefinitionRevision, because nothing was read: the conflict proves
-		// the resource exists and differs, not which revision it is at.
-		resource, published, updateErr := c.updateAgentDefinition(ctx, id, updateBody, AnyDefinitionRevision)
-		if updateErr != nil {
-			return results, updateErr
-		}
-		outcome := DefinitionUpdated
-		if !published {
-			// Someone else published these contents between the two calls.
-			outcome = DefinitionUnchanged
-		}
-		results = append(results, DefinitionSync{
-			DefinitionKey: definition.DefinitionKey,
-			Outcome:       outcome,
-			Definition:    resource,
-		})
-	}
-	return results, nil
-}
-
-func (c *Client) ArchiveAgentDefinition(ctx context.Context, id string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.ArchiveAgentDefinitionWithResponse(ctx, id)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) RestoreAgentDefinition(ctx context.Context, id string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.RestoreAgentDefinitionWithResponse(ctx, id)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) GetInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
-		response, err := c.raw.GetInvocationWithResponse(ctx, invocationID)
-		if err != nil {
-			return callResult[generated.Invocation]{}, err
-		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-// DeleteInvocation erases the private content of a terminal standalone
-// Invocation. Conversation-bound Invocations must be erased with their whole
-// Session, and nonterminal standalone work must settle first.
-func (c *Client) DeleteInvocation(ctx context.Context, invocationID string) error {
-	_, err := callReplaySafe(ctx, c.retry, false, func() (callResult[struct{}], error) {
-		response, callErr := c.raw.DeleteInvocationWithResponse(ctx, invocationID)
-		if callErr != nil {
-			return callResult[struct{}]{}, callErr
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) GetInvocationResult(ctx context.Context, invocationID string) (*InvocationResult, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationResult], error) {
-		response, err := c.raw.GetInvocationResultWithResponse(ctx, invocationID)
-		if err != nil {
-			return callResult[generated.InvocationResult]{}, err
-		}
-		return callResult[generated.InvocationResult]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-func (c *Client) GetInvocationTimeline(ctx context.Context, invocationID string) (*InvocationTimeline, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationTimeline], error) {
-		response, err := c.raw.GetInvocationTimelineWithResponse(ctx, invocationID)
-		if err != nil {
-			return callResult[generated.InvocationTimeline]{}, err
-		}
-		return callResult[generated.InvocationTimeline]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// ListInvocationTraces reads the hosted agent traces associated with one
-// Invocation. The durable Invocation timeline remains the execution authority.
-func (c *Client) ListInvocationTraces(
-	ctx context.Context,
-	invocationID string,
-	options ObservationListOptions,
-) (*TraceList, error) {
-	params := &generated.ListInvocationTracesParams{
-		Cursor: options.Cursor,
-		Limit:  options.Limit,
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TraceList], error) {
-		response, err := c.raw.ListInvocationTracesWithResponse(ctx, invocationID, params)
-		if err != nil {
-			return callResult[generated.TraceList]{}, err
-		}
-		return callResult[generated.TraceList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// ListInvocationLogs reads the bounded operational logs associated with one
-// Invocation. Prompt, response, and tool payload content is not exposed here.
-func (c *Client) ListInvocationLogs(
-	ctx context.Context,
-	invocationID string,
-	options ObservationListOptions,
-) (*InvocationLogList, error) {
-	params := &generated.ListInvocationLogsParams{
-		Cursor:  options.Cursor,
-		Limit:   options.Limit,
-		TraceID: options.TraceID,
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationLogList], error) {
-		response, err := c.raw.ListInvocationLogsWithResponse(ctx, invocationID, params)
-		if err != nil {
-			return callResult[generated.InvocationLogList]{}, err
-		}
-		return callResult[generated.InvocationLogList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// GetTrace reads one hosted trace after the service re-establishes access from
-// its Invocation association. Possession of a trace ID alone grants no access.
-func (c *Client) GetTrace(ctx context.Context, traceID string) (*Trace, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Trace], error) {
-		response, err := c.raw.GetTraceWithResponse(ctx, traceID)
-		if err != nil {
-			return callResult[generated.Trace]{}, err
-		}
-		return callResult[generated.Trace]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) ListAdmissions(
-	ctx context.Context,
-	params *ListAdmissionsParams,
-) (*AdmissionAttemptList, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AdmissionAttemptList], error) {
-		response, err := c.raw.ListAdmissionsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.AdmissionAttemptList]{}, err
-		}
-		return callResult[generated.AdmissionAttemptList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) SummarizeAdmissions(
-	ctx context.Context,
-	params *SummarizeAdmissionsParams,
-) (*AdmissionSummary, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AdmissionSummary], error) {
-		response, err := c.raw.SummarizeAdmissionsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.AdmissionSummary]{}, err
-		}
-		return callResult[generated.AdmissionSummary]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) ListTenants(
-	ctx context.Context,
-	params *ListTenantsParams,
-) (*TenantList, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TenantList], error) {
-		response, err := c.raw.ListTenantsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.TenantList]{}, err
-		}
-		return callResult[generated.TenantList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) DeleteTenant(ctx context.Context, tenantID string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, callErr := c.raw.DeleteTenantWithResponse(ctx, tenantID)
-		if callErr != nil {
-			return callResult[struct{}]{}, callErr
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) CancelInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
-		response, err := c.raw.CancelInvocationWithResponse(ctx, invocationID)
-		if err != nil {
-			return callResult[generated.Invocation]{}, err
-		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-// InterruptInvocation stops an Invocation gracefully and keeps its work. The
-// turn settles `completed` with stop reason `interrupted` once it reaches an
-// execution seam, so the messages it already produced stay in the Session.
-// CancelInvocation is the discarding stop.
-func (c *Client) InterruptInvocation(ctx context.Context, invocationID string) (*Invocation, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Invocation], error) {
-		response, err := c.raw.InterruptInvocationWithResponse(ctx, invocationID)
-		if err != nil {
-			return callResult[generated.Invocation]{}, err
-		}
-		return callResult[generated.Invocation]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-// ResumeInvocation raises the one exhausted turn-level ceiling on a budget-held
-// Invocation. The service validates that exactly the exhausted limit changed
-// and that its replacement is above both the previous limit and usage so far.
-func (c *Client) ResumeInvocation(
-	ctx context.Context,
-	invocationID string,
-	limits Limits,
-) (*Invocation, error) {
-	body, err := json.Marshal(struct {
-		Limits Limits `json:"limits"`
-	}{Limits: limits})
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	return callReplaySafe(ctx, c.retry, false, func() (callResult[generated.Invocation], error) {
-		response, err := c.raw.ResumeInvocationWithBodyWithResponse(
-			ctx,
-			invocationID,
-			"application/json",
-			bytes.NewReader(body),
-		)
-		if err != nil {
-			return callResult[generated.Invocation]{}, err
-		}
-		return callResult[generated.Invocation]{
-			Value:  response.JSON202,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// CreateNudge appends steering to a running Invocation without ending it.
-// The turn keeps everything it has already produced — the difference from
-// supersession, which rewinds — and the model sees the input at its next
-// execution seam rather than immediately.
-//
-// Input the turn never reaches is marked `expired` when the Invocation
-// settles; nvoken never re-homes it onto a later turn, so re-sending missed
-// direction as the next Invocation's input is the caller's decision to make.
-func (c *Client) CreateNudge(
-	ctx context.Context,
-	invocationID string,
-	request NudgeRequest,
-) (*NudgeAcknowledgement, error) {
-	if strings.TrimSpace(request.Content) == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "nudge content is required"}
-	}
-	body, err := json.Marshal(struct {
-		Content        string `json:"content"`
-		IdempotencyKey string `json:"idempotency_key,omitempty"`
-	}{Content: request.Content, IdempotencyKey: request.IdempotencyKey})
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	// Replay-safe only with a key: without one a retried POST would stage the
-	// same direction twice.
-	replaySafe := request.IdempotencyKey != ""
-	return callReplaySafe(ctx, c.retry, replaySafe, func() (callResult[generated.NudgeAcknowledgement], error) {
-		response, callErr := c.raw.CreateNudgeWithBodyWithResponse(
-			ctx,
-			invocationID,
-			"application/json",
-			bytes.NewReader(body),
-		)
-		if callErr != nil {
-			return callResult[generated.NudgeAcknowledgement]{}, callErr
-		}
-		return callResult[generated.NudgeAcknowledgement]{
-			Value:  response.JSON202,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// ListNudges reads the staged queue in the order the turn will consume
-// it, ended rows included. It is the reconciliation source for a surface
-// that shows queued direction.
-func (c *Client) ListNudges(
-	ctx context.Context,
-	invocationID string,
-	options ListNudgesOptions,
-) (*NudgeList, error) {
-	params := &generated.ListNudgesParams{
-		Status: options.Status,
-		Cursor: options.Cursor,
-		Limit:  options.Limit,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.NudgeList], error) {
-		response, callErr := c.raw.ListNudgesWithResponse(ctx, invocationID, params)
-		if callErr != nil {
-			return callResult[generated.NudgeList]{}, callErr
-		}
-		return callResult[generated.NudgeList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// ListToolCalls reads durable execution records in discovery order. Inputs and
-// results remain in the Session transcript. Callback records include retained
-// delivery outcome metadata.
-func (c *Client) ListToolCalls(
-	ctx context.Context,
-	invocationID string,
-	options ListToolCallsOptions,
-) (*ToolCallList, error) {
-	params := &generated.ListToolCallsParams{
-		Cursor: options.Cursor,
-		Limit:  options.Limit,
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.ToolCallList], error) {
-		response, err := c.raw.ListToolCallsWithResponse(ctx, invocationID, params)
-		if err != nil {
-			return callResult[generated.ToolCallList]{}, err
-		}
-		return callResult[generated.ToolCallList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// CancelNudge withdraws staged input the turn has not taken. Input the
-// executor already drained is reported as a conflict rather than removed from
-// a transcript it is already part of.
-func (c *Client) CancelNudge(
-	ctx context.Context,
-	invocationID string,
-	nudgeID string,
-) (*Nudge, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Nudge], error) {
-		response, err := c.raw.CancelNudgeWithResponse(ctx, invocationID, nudgeID)
-		if err != nil {
-			return callResult[generated.Nudge]{}, err
-		}
-		return callResult[generated.Nudge]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
 func (c *Client) ListModels(
 	ctx context.Context,
 	options ListModelsOptions,
@@ -1039,7 +699,7 @@ func (c *Client) ListModels(
 }
 
 // ListMCPTools discovers the tools a remote MCP server projects. Headers are a
-// separate argument because MCPServer is durable Agent Definition
+// separate argument because MCPServer is durable AgentRevision
 // configuration and therefore carries no secrets; these are used for this one
 // discovery request and never stored.
 func (c *Client) ListMCPTools(
@@ -1098,17 +758,24 @@ func (c *Client) GetModel(ctx context.Context, model Model) (*ModelDescriptor, e
 	})
 }
 
+func generatedModelProvider(provider ModelProvider) (generated.ModelProvider, error) {
+	if strings.TrimSpace(provider) == "" {
+		return "", fmt.Errorf("model provider is required")
+	}
+	return generated.ModelProvider(provider), nil
+}
+
 func generatedMCPServer(server MCPServer) generated.MCPServer {
 	result := generated.MCPServer{
 		Name: server.Name,
 		URL:  server.URL,
 	}
-	if server.Transport != "" {
-		transport := generated.MCPServerTransport(server.Transport)
+	if server.Transport != nil {
+		transport := *server.Transport
 		result.Transport = &transport
 	}
 	if server.AllowedTools != nil {
-		allowedTools := append([]string(nil), server.AllowedTools...)
+		allowedTools := append([]string(nil), (*server.AllowedTools)...)
 		result.AllowedTools = &allowedTools
 	}
 	if server.Timeouts != nil {
@@ -1118,20 +785,6 @@ func generatedMCPServer(server MCPServer) generated.MCPServer {
 		}
 	}
 	return result
-}
-
-func (c *Client) SubmitToolResults(ctx context.Context, invocationID string, results []ToolResult) (*ToolResultResponse, error) {
-	body, err := generatedToolResults(results)
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SubmitHostToolResultsResponse], error) {
-		response, callErr := c.raw.SubmitHostToolResultsWithResponse(ctx, invocationID, body)
-		if callErr != nil {
-			return callResult[generated.SubmitHostToolResultsResponse]{}, callErr
-		}
-		return callResult[generated.SubmitHostToolResultsResponse]{Value: response.JSON202, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, nil
-	})
 }
 
 func (c *Client) GetCurrentIdentity(ctx context.Context) (*CurrentIdentity, error) {
@@ -1599,66 +1252,6 @@ func (c *Client) GetApp(ctx context.Context, appID string) (*App, error) {
 }
 
 // ListMemories browses or searches durable memories for one Agent and scope.
-func (c *Client) ListMemories(ctx context.Context, options ListMemoriesOptions) (*MemoryList, error) {
-	params := &generated.ListMemoriesParams{
-		AgentID:    options.AgentID,
-		TenantKey:  options.TenantKey,
-		UserKey:    options.UserKey,
-		Query:      options.Query,
-		SearchMode: options.SearchMode,
-		Kind:       options.Kind,
-		Cursor:     options.Cursor,
-		Limit:      options.Limit,
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.MemoryList], error) {
-		response, err := c.raw.ListMemoriesWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.MemoryList]{}, err
-		}
-		return callResult[generated.MemoryList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// GetMemory reads one durable memory by its opaque ID.
-func (c *Client) GetMemory(ctx context.Context, memoryID string) (*Memory, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Memory], error) {
-		response, err := c.raw.GetMemoryWithResponse(ctx, memoryID)
-		if err != nil {
-			return callResult[generated.Memory]{}, err
-		}
-		return callResult[generated.Memory]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// DeleteMemory erases one durable memory and its derived search projection.
-func (c *Client) DeleteMemory(ctx context.Context, memoryID string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.DeleteMemoryWithResponse(ctx, memoryID)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
 
 func (c *Client) ListApps(ctx context.Context, options ListAppsOptions) (*AppList, error) {
 	var status *generated.ListAppsParamsStatus
@@ -2032,709 +1625,6 @@ func (c *Client) UpdateOrg(ctx context.Context, orgID, displayName string) (*Org
 	})
 }
 
-func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentResource, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
-		response, err := c.raw.GetAgentWithResponse(ctx, agentID)
-		if err != nil {
-			return callResult[generated.Agent]{}, err
-		}
-		return callResult[generated.Agent]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// CreateAgent deliberately creates or resolves one tenant-scoped Agent
-// instance. Repeating the same tenant/key/Definition tuple is a safe upsert.
-func (c *Client) CreateAgent(ctx context.Context, input CreateAgentInput) (*AgentResource, error) {
-	if input.AgentKey == "" {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent key is required"}
-	}
-	if (input.DefinitionID == "") == (input.DefinitionKey == "") {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "Supply exactly one of Agent Definition ID and Definition key",
-		}
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
-		response, err := c.raw.CreateAgentWithResponse(ctx, generated.CreateAgentJSONRequestBody{
-			TenantKey:      input.TenantKey,
-			AgentKey:       input.AgentKey,
-			Name:           optionalString(input.Name),
-			DefinitionID:   optionalString(input.DefinitionID),
-			DefinitionKey:  optionalString(input.DefinitionKey),
-			PinnedRevision: input.PinnedRevision,
-		})
-		if err != nil {
-			return callResult[generated.Agent]{}, err
-		}
-		value := response.JSON201
-		if value == nil {
-			value = response.JSON200
-		}
-		return callResult[generated.Agent]{
-			Value:  value,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) UpdateAgent(ctx context.Context, agentID string, input UpdateAgentInput) (*AgentResource, error) {
-	if input.Name == nil && input.PinnedRevision == nil && !input.ClearPinnedRevision {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent update requires a name or revision pin"}
-	}
-	if input.PinnedRevision != nil && input.ClearPinnedRevision {
-		return nil, &Error{Category: ErrorValidation, Message: "Agent revision pin cannot be set and cleared together"}
-	}
-	body := make(map[string]any)
-	if input.Name != nil {
-		body["name"] = *input.Name
-	}
-	if input.PinnedRevision != nil {
-		body["pinned_revision"] = *input.PinnedRevision
-	} else if input.ClearPinnedRevision {
-		body["pinned_revision"] = nil
-	}
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return nil, &Error{Category: ErrorValidation, Message: err.Error(), Cause: err}
-	}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Agent], error) {
-		response, err := c.raw.UpdateAgentWithBodyWithResponse(
-			ctx,
-			agentID,
-			"application/json",
-			bytes.NewReader(encoded),
-		)
-		if err != nil {
-			return callResult[generated.Agent]{}, err
-		}
-		return callResult[generated.Agent]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-func (c *Client) ArchiveAgent(ctx context.Context, agentID string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.ArchiveAgentWithResponse(ctx, agentID)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) RestoreAgent(ctx context.Context, agentID string) error {
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.RestoreAgentWithResponse(ctx, agentID)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-func (c *Client) ListAgents(ctx context.Context, options ListAgentsOptions) (*AgentList, error) {
-	params := &generated.ListAgentsParams{
-		TenantKey:       options.TenantKey,
-		AgentKey:        options.AgentKey,
-		DefinitionID:    options.DefinitionID,
-		IncludeArchived: options.IncludeArchived,
-		Cursor:          options.Cursor,
-		Limit:           options.Limit,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.AgentList], error) {
-		response, err := c.raw.ListAgentsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.AgentList]{}, err
-		}
-		return callResult[generated.AgentList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &AgentList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
-	}, nil
-}
-
-func (c *Client) ListInvocations(ctx context.Context, options ListInvocationsOptions) (*InvocationList, error) {
-	return c.listInvocations(ctx, options, nil, nil)
-}
-
-func (c *Client) listInvocations(
-	ctx context.Context,
-	options ListInvocationsOptions,
-	ended *bool,
-	endedSince *time.Time,
-) (*InvocationList, error) {
-	statuses := append([]InvocationStatus(nil), options.Statuses...)
-	if options.Status != nil {
-		statuses = append(statuses, *options.Status)
-	}
-	var statusFilter *[]InvocationStatus
-	if len(statuses) != 0 {
-		statusFilter = &statuses
-	}
-	params := &generated.ListInvocationsParams{
-		TenantKey:          options.TenantKey,
-		DefaultTenant:      options.DefaultTenant,
-		UserKey:            options.UserKey,
-		SessionID:          options.SessionID,
-		AgentID:            options.AgentID,
-		AgentKey:           options.AgentKey,
-		Status:             statusFilter,
-		ParentInvocationID: options.ParentInvocationID,
-		Ended:              ended,
-		EndedSince:         endedSince,
-		Cursor:             options.Cursor,
-		Limit:              options.Limit,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.InvocationList], error) {
-		response, err := c.raw.ListInvocationsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.InvocationList]{}, err
-		}
-		return callResult[generated.InvocationList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &InvocationList{
-		HasMore:         result.HasMore,
-		Items:           result.Items,
-		NextCursor:      result.NextCursor,
-		CompleteThrough: result.CompleteThrough,
-	}, nil
-}
-
-// ListEndedInvocations reads one page of the reconciliation feed: turns that
-// ended, oldest first by the moment they ended. Walk it and append by ID.
-//
-// This is the backstop for settlement. invocation.ended webhooks are delivered
-// at least once, so a delivery that never lands leaves a turn nobody settles —
-// silently, since nothing errors and the only evidence is a ledger row that was
-// never written. Reading this to the end is how you find out. ListInvocations
-// cannot stand in: it is newest-first over current state, so a turn ending
-// mid-page moves under the caller and a terminal status filter gives a set with
-// no position in it.
-//
-// NextCursor is always set here, including on an empty page, so a consumer that
-// catches up keeps its place without special-casing. Keep calling while
-// HasMore; when it is false you are caught up.
-//
-// CompleteThrough is the instant the feed is complete to. Turns that ended
-// after it are held back until their settling transactions are certainly
-// visible, because a turn appearing behind the cursor is one you never see
-// again. It is also the value to alarm on: one that stops advancing means
-// settlement has stalled rather than that nothing ended.
-//
-// There is deliberately no auto-paging helper. The cursor is the one thing that
-// has to survive the process, and hiding it is how a consumer loses its place;
-// store it yourself between pages.
-func (c *Client) ListEndedInvocations(ctx context.Context, options ListEndedInvocationsOptions) (*InvocationList, error) {
-	ended := true
-	return c.listInvocations(ctx, ListInvocationsOptions{
-		TenantKey:          options.TenantKey,
-		DefaultTenant:      options.DefaultTenant,
-		UserKey:            options.UserKey,
-		SessionID:          options.SessionID,
-		AgentID:            options.AgentID,
-		AgentKey:           options.AgentKey,
-		Status:             options.Status,
-		Statuses:           options.Statuses,
-		ParentInvocationID: options.ParentInvocationID,
-		Cursor:             options.Cursor,
-		Limit:              options.Limit,
-	}, &ended, options.EndedSince)
-}
-
-func (c *Client) ListSessions(ctx context.Context, options ListSessionsOptions) (*SessionList, error) {
-	params := &generated.ListSessionsParams{
-		TenantKey:     options.TenantKey,
-		DefaultTenant: options.DefaultTenant,
-		UserKey:       options.UserKey,
-		AgentID:       options.AgentID,
-		AgentKey:      options.AgentKey,
-		SessionKey:    options.SessionKey,
-		Cursor:        options.Cursor,
-		Limit:         options.Limit,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionList], error) {
-		response, err := c.raw.ListSessionsWithResponse(ctx, params)
-		if err != nil {
-			return callResult[generated.SessionList]{}, err
-		}
-		return callResult[generated.SessionList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &SessionList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
-	}, nil
-}
-
-// CreateSession creates a Session with zero Invocations and optional
-// host-asserted starting history. Without a SessionKey every call creates a
-// fresh Session, so the call is only retried when a keyed upsert makes replay
-// safe.
-func (c *Client) CreateSession(ctx context.Context, options CreateSessionOptions) (*Session, error) {
-	body := generated.CreateSessionJSONRequestBody{
-		AgentID:    options.AgentID,
-		AgentKey:   options.AgentKey,
-		TenantKey:  options.TenantKey,
-		UserKey:    options.UserKey,
-		SessionKey: options.SessionKey,
-	}
-	if options.SessionOptions != nil {
-		sessionOptions, err := options.SessionOptions.generated()
-		if err != nil {
-			return nil, err
-		}
-		body.SessionOptions = sessionOptions
-	}
-	if len(options.SeedMessages) > 0 {
-		seedMessages := make([]generated.SeedMessage, len(options.SeedMessages))
-		for index, seed := range options.SeedMessages {
-			content := generated.SeedMessageContent{}
-			if err := content.FromSeedMessageContent0(seed.Content); err != nil {
-				return nil, err
-			}
-			seedMessages[index] = generated.SeedMessage{
-				Role:    seed.Role,
-				Content: content,
-			}
-		}
-		body.SeedMessages = &seedMessages
-	}
-	return callReplaySafe(ctx, c.retry, options.SessionKey != nil, func() (callResult[generated.Session], error) {
-		response, err := c.raw.CreateSessionWithResponse(ctx, body)
-		if err != nil {
-			return callResult[generated.Session]{}, err
-		}
-		return callResult[generated.Session]{Value: response.JSON201, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-// ForkSession copies source history through an inclusive message into a new
-// Session. The source is unchanged, and the child starts with no usage or
-// compaction summary. Without a SessionKey every call creates a fresh child.
-func (c *Client) ForkSession(
-	ctx context.Context,
-	sourceSessionID string,
-	options ForkSessionOptions,
-) (*Session, error) {
-	if (options.FromMessageID == nil) == (options.FromSequence == nil) {
-		return nil, fmt.Errorf("fork session requires exactly one message ID or sequence")
-	}
-	fromMessage := generated.ForkSessionRequest_FromMessage{}
-	if options.FromMessageID != nil {
-		if err := fromMessage.FromSessionMessageID(*options.FromMessageID); err != nil {
-			return nil, err
-		}
-	} else if err := fromMessage.FromForkSessionRequestFromMessage1(*options.FromSequence); err != nil {
-		return nil, err
-	}
-	body := generated.ForkSessionJSONRequestBody{
-		FromMessage: fromMessage,
-		SessionKey:  options.SessionKey,
-	}
-	if options.SessionOptions != nil {
-		sessionOptions, err := options.SessionOptions.generatedFork()
-		if err != nil {
-			return nil, err
-		}
-		body.SessionOptions = sessionOptions
-	}
-	return callReplaySafe(ctx, c.retry, options.SessionKey != nil, func() (callResult[generated.Session], error) {
-		response, err := c.raw.ForkSessionWithResponse(ctx, sourceSessionID, body)
-		if err != nil {
-			return callResult[generated.Session]{}, err
-		}
-		return callResult[generated.Session]{
-			Value:  response.JSON201,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-}
-
-// DeleteSession erases a Session and everything under it: its Invocations,
-// transcript, checkpoints, tool calls, artifacts, and undelivered
-// webhooks. The erasure is immediate and irreversible.
-//
-// A Session holding a nonterminal Invocation is refused with
-// session_invocation_active unless options set Force. Erasure skips
-// settlement — the Invocation is removed rather than ended, so it records no
-// terminal status and emits no invocation.ended webhook — which is why a
-// caller that bills or reconciles on settlement must cancel first and wait for
-// the final state.
-//
-// Force erases anyway, over a live turn. It is for erasing on an end user's
-// behalf, where removing the transcript now outranks keeping a settled record:
-// a deletion request has to be honoured, and a refusal thrown into that path
-// leaves it unhonoured.
-//
-// An unknown or out-of-scope Session is not found, so a retry after a lost
-// response can treat that as already-done.
-//
-// This is not account erasure by itself: nvoken keeps no account tombstone, so
-// a caller honouring a deletion request must stop admitting work for the
-// tenant before paginating and deleting.
-func (c *Client) DeleteSession(
-	ctx context.Context,
-	sessionID string,
-	options ...DeleteSessionOption,
-) error {
-	settings := deleteSessionSettings{}
-	for _, option := range options {
-		option(&settings)
-	}
-	params := &generated.DeleteSessionParams{}
-	if settings.force {
-		force := true
-		params.Force = &force
-	}
-	// Deletion is idempotent by shape — a repeat is not-found rather than a
-	// second erasure — so it is safe to replay.
-	_, err := callReplaySafe(ctx, c.retry, true, func() (callResult[struct{}], error) {
-		response, err := c.raw.DeleteSessionWithResponse(ctx, sessionID, params)
-		if err != nil {
-			return callResult[struct{}]{}, err
-		}
-		result := callResult[struct{}]{
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}
-		if result.Status == http.StatusNoContent {
-			result.Value = &struct{}{}
-		}
-		return result, nil
-	})
-	return err
-}
-
-type deleteSessionSettings struct{ force bool }
-
-// DeleteSessionOption configures one erasure.
-type DeleteSessionOption func(*deleteSessionSettings)
-
-// WithForceDelete erases a Session even when it holds a nonterminal
-// Invocation, discarding that turn's settlement.
-func WithForceDelete() DeleteSessionOption {
-	return func(settings *deleteSessionSettings) { settings.force = true }
-}
-
-// UpdateSession merges a metadata patch into a Session: a present key
-// replaces, an explicit null deletes, and an unmentioned key survives. Merging
-// rather than replacing is what stops independent writers — a title UI and
-// correlation tooling — from silently discarding each other's keys.
-func (c *Client) UpdateSession(
-	ctx context.Context,
-	sessionID string,
-	metadata map[string]*string,
-) (*Session, error) {
-	body := generated.UpdateSessionJSONRequestBody{Metadata: &metadata}
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Session], error) {
-		response, err := c.raw.UpdateSessionWithResponse(ctx, sessionID, body)
-		if err != nil {
-			return callResult[generated.Session]{}, err
-		}
-		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-func (c *Client) GetSession(ctx context.Context, sessionID string) (*Session, error) {
-	return callReplaySafe(ctx, c.retry, true, func() (callResult[generated.Session], error) {
-		response, err := c.raw.GetSessionWithResponse(ctx, sessionID)
-		if err != nil {
-			return callResult[generated.Session]{}, err
-		}
-		return callResult[generated.Session]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-}
-
-func (c *Client) ListSessionMessages(ctx context.Context, sessionID string, options MessageListOptions) (*SessionMessageList, error) {
-	params := &generated.ListSessionMessagesParams{Cursor: options.Cursor, Limit: options.Limit, Order: options.Order}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionMessageList], error) {
-		response, err := c.raw.ListSessionMessagesWithResponse(ctx, sessionID, params)
-		if err != nil {
-			return callResult[generated.SessionMessageList]{}, err
-		}
-		return callResult[generated.SessionMessageList]{Value: response.JSON200, Status: response.StatusCode(), Header: responseHeader(response.HTTPResponse), Body: response.Body}, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &SessionMessageList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
-	}, nil
-}
-
-// ListSessionCompactions returns newest-first immutable records for applied
-// and fell-through summary passes. Only applied records affect model context.
-func (c *Client) ListSessionCompactions(
-	ctx context.Context,
-	sessionID string,
-	options CompactionListOptions,
-) (*SessionCompactionList, error) {
-	params := &generated.ListSessionCompactionsParams{
-		Cursor: options.Cursor,
-		Limit:  options.Limit,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.SessionCompactionList], error) {
-		response, err := c.raw.ListSessionCompactionsWithResponse(ctx, sessionID, params)
-		if err != nil {
-			return callResult[generated.SessionCompactionList]{}, err
-		}
-		return callResult[generated.SessionCompactionList]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &SessionCompactionList{
-		HasMore:    result.HasMore,
-		Items:      result.Items,
-		NextCursor: result.NextCursor,
-	}, nil
-}
-
-func (c *Client) GetTranscript(ctx context.Context, sessionID string, options TranscriptOptions) (*TranscriptSnapshot, error) {
-	params := &generated.GetSessionTranscriptParams{
-		Cursor:    options.Cursor,
-		PageToken: options.PageToken,
-		Limit:     options.Limit,
-		Tail:      options.Tail,
-	}
-	result, err := callReplaySafe(ctx, c.retry, true, func() (callResult[generated.TranscriptSnapshot], error) {
-		response, err := c.raw.GetSessionTranscriptWithResponse(ctx, sessionID, params)
-		if err != nil {
-			return callResult[generated.TranscriptSnapshot]{}, err
-		}
-		return callResult[generated.TranscriptSnapshot]{
-			Value:  response.JSON200,
-			Status: response.StatusCode(),
-			Header: responseHeader(response.HTTPResponse),
-			Body:   response.Body,
-		}, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &TranscriptSnapshot{
-		HasMore:           result.HasMore,
-		InvocationChanges: result.InvocationChanges,
-		Messages:          result.Messages,
-		NextPageToken:     result.NextPageToken,
-		Cursor:            result.Cursor,
-	}, nil
-}
-
-func (c *Client) DrainTranscript(
-	ctx context.Context,
-	sessionID string,
-	cursor *string,
-	limit *int,
-) (*TranscriptDrain, error) {
-	drain := &TranscriptDrain{}
-	var pageToken *string
-	for {
-		page, err := c.GetTranscript(ctx, sessionID, TranscriptOptions{
-			Cursor:    cursor,
-			PageToken: pageToken,
-			Limit:     limit,
-		})
-		if err != nil {
-			return nil, err
-		}
-		drain.Messages = append(drain.Messages, page.Messages...)
-		drain.InvocationChanges = append(
-			drain.InvocationChanges,
-			page.InvocationChanges...,
-		)
-		drain.Cursor = page.Cursor
-		if !page.HasMore {
-			if drain.Cursor == "" {
-				return nil, &Error{
-					Category: ErrorUnexpectedResponse,
-					Message:  "transcript drain returned no resume cursor",
-				}
-			}
-			return drain, nil
-		}
-		if page.NextPageToken == nil || *page.NextPageToken == "" {
-			return nil, &Error{
-				Category: ErrorUnexpectedResponse,
-				Message:  "transcript page has_more without next_page_token",
-			}
-		}
-		cursor = nil
-		pageToken = page.NextPageToken
-	}
-}
-
-func (c *Client) GetSessionByKey(
-	ctx context.Context,
-	sessionKey string,
-	options ListSessionsOptions,
-) (*Session, error) {
-	options.SessionKey = &sessionKey
-	limit := 2
-	options.Limit = &limit
-	page, err := c.ListSessions(ctx, options)
-	if err != nil {
-		return nil, err
-	}
-	switch len(page.Items) {
-	case 0:
-		return nil, &Error{
-			Category: ErrorNotFound,
-			Message:  fmt.Sprintf("Session key %q was not found", sessionKey),
-		}
-	case 1:
-		return &page.Items[0], nil
-	default:
-		return nil, &Error{
-			Category: ErrorConflict,
-			Message:  fmt.Sprintf("Session key %q matched more than one Session", sessionKey),
-		}
-	}
-}
-
-func (c *Client) EachInvocation(
-	ctx context.Context,
-	options ListInvocationsOptions,
-	consume func(Invocation) error,
-) error {
-	options.Cursor = nil
-	for {
-		page, err := c.ListInvocations(ctx, options)
-		if err != nil {
-			return err
-		}
-		for _, item := range page.Items {
-			if err := consume(item); err != nil {
-				return err
-			}
-		}
-		if !page.HasMore {
-			return nil
-		}
-		if page.NextCursor == nil || *page.NextCursor == "" {
-			return &Error{
-				Category: ErrorUnexpectedResponse,
-				Message:  "Invocation page has_more without next_cursor",
-			}
-		}
-		options.Cursor = page.NextCursor
-	}
-}
-
-func (c *Client) EachSession(
-	ctx context.Context,
-	options ListSessionsOptions,
-	consume func(Session) error,
-) error {
-	options.Cursor = nil
-	for {
-		page, err := c.ListSessions(ctx, options)
-		if err != nil {
-			return err
-		}
-		for _, item := range page.Items {
-			if err := consume(item); err != nil {
-				return err
-			}
-		}
-		if !page.HasMore {
-			return nil
-		}
-		if page.NextCursor == nil || *page.NextCursor == "" {
-			return &Error{
-				Category: ErrorUnexpectedResponse,
-				Message:  "Session page has_more without next_cursor",
-			}
-		}
-		options.Cursor = page.NextCursor
-	}
-}
-
-func (c *Client) EachSessionMessage(
-	ctx context.Context,
-	sessionID string,
-	options MessageListOptions,
-	consume func(SessionMessage) error,
-) error {
-	options.Cursor = nil
-	for {
-		page, err := c.ListSessionMessages(ctx, sessionID, options)
-		if err != nil {
-			return err
-		}
-		for _, item := range page.Items {
-			if err := consume(item); err != nil {
-				return err
-			}
-		}
-		if !page.HasMore {
-			return nil
-		}
-		if page.NextCursor == nil || *page.NextCursor == "" {
-			return &Error{
-				Category: ErrorUnexpectedResponse,
-				Message:  "message page has_more without next_cursor",
-			}
-		}
-		options.Cursor = page.NextCursor
-	}
-}
-
 func (c *Client) EachProviderKey(
 	ctx context.Context,
 	options ListProviderKeysOptions,
@@ -2762,189 +1652,6 @@ func (c *Client) EachProviderKey(
 		}
 		options.Cursor = page.NextCursor
 	}
-}
-
-type InvocationHandle struct {
-	client           *Client
-	InvocationID     string           `json:"invocation_id"`
-	IdempotencyKey   string           `json:"idempotency_key,omitempty"`
-	SessionID        *string          `json:"session_id"`
-	ContentExpiresAt *time.Time       `json:"content_expires_at,omitempty"`
-	AgentID          string           `json:"agent_id,omitempty"`
-	Status           InvocationStatus `json:"status,omitempty"`
-	Deduplicated     *bool            `json:"deduplicated,omitempty"`
-	DeadlineAt       *time.Time       `json:"deadline_at,omitempty"`
-}
-
-func (h *InvocationHandle) Refresh(ctx context.Context) (*Invocation, error) {
-	invocation, err := h.client.GetInvocation(ctx, h.InvocationID)
-	if err == nil {
-		h.SessionID = invocation.SessionID
-		h.ContentExpiresAt = invocation.ContentExpiresAt
-		h.AgentID = agentIDOrEmpty(invocation.AgentID)
-		h.Status = invocation.Status
-		h.DeadlineAt = invocation.DeadlineAt
-	}
-	return invocation, err
-}
-
-func (h *InvocationHandle) Wait(ctx context.Context, options WaitOptions) (*Invocation, error) {
-	options = options.normalized()
-	if options.Until != WaitUntilTerminal && options.Until != WaitUntilActionable {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  fmt.Sprintf("unsupported wait condition %q", options.Until),
-		}
-	}
-	if options.Timeout < 0 {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "wait timeout cannot be negative",
-		}
-	}
-	if options.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, options.Timeout)
-		defer cancel()
-	}
-	delay := options.MinPollInterval
-	for {
-		invocation, err := h.Refresh(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if waitSatisfied(invocation.Status, options.Until) {
-			return invocation, nil
-		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, transportError(ctx.Err())
-		case <-timer.C:
-		}
-		delay *= 2
-		if delay > options.MaxPollInterval {
-			delay = options.MaxPollInterval
-		}
-	}
-}
-
-// Result reads the composed InvocationResult at any status: the
-// authoritative Invocation, this Invocation's canonical messages, and the
-// output_text projection.
-func (h *InvocationHandle) Result(ctx context.Context) (*InvocationResult, error) {
-	result, err := h.client.GetInvocationResult(ctx, h.InvocationID)
-	if err == nil {
-		h.SessionID = result.Invocation.SessionID
-		h.ContentExpiresAt = result.Invocation.ContentExpiresAt
-		h.AgentID = agentIDOrEmpty(result.Invocation.AgentID)
-		h.Status = result.Invocation.Status
-	}
-	return result, err
-}
-
-// ListMessages returns this Invocation's canonical messages from the
-// composed result read.
-func (h *InvocationHandle) ListMessages(ctx context.Context) ([]SessionMessage, error) {
-	result, err := h.Result(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return result.Messages, nil
-}
-
-// Text returns the completed turn's canonical assistant text. It fails
-// with ErrorUnexpectedResponse when the wire output_text is null or the
-// empty string: the wire keeps those distinct, but this helper
-// deliberately treats both as "no useful answer". Read Result directly
-// to observe the distinction.
-func (h *InvocationHandle) OutputText(ctx context.Context) (string, error) {
-	result, err := h.Result(ctx)
-	if err != nil {
-		return "", err
-	}
-	if result.OutputText == nil || *result.OutputText == "" {
-		return "", &Error{
-			Category: ErrorUnexpectedResponse,
-			Message:  "Invocation " + h.InvocationID + " has no canonical assistant text",
-		}
-	}
-	return *result.OutputText, nil
-}
-
-func (h *InvocationHandle) SubmitToolResults(ctx context.Context, results []ToolResult) (*ToolResultResponse, error) {
-	response, err := h.client.SubmitToolResults(ctx, h.InvocationID, results)
-	if err == nil {
-		h.Status = response.Status
-	}
-	return response, err
-}
-
-func (h *InvocationHandle) Cancel(ctx context.Context) (*Invocation, error) {
-	invocation, err := h.client.CancelInvocation(ctx, h.InvocationID)
-	if err == nil {
-		h.SessionID = invocation.SessionID
-		h.ContentExpiresAt = invocation.ContentExpiresAt
-		h.AgentID = agentIDOrEmpty(invocation.AgentID)
-		h.Status = invocation.Status
-	}
-	return invocation, err
-}
-
-func (h *InvocationHandle) Interrupt(ctx context.Context) (*Invocation, error) {
-	invocation, err := h.client.InterruptInvocation(ctx, h.InvocationID)
-	if err == nil {
-		h.SessionID = invocation.SessionID
-		h.ContentExpiresAt = invocation.ContentExpiresAt
-		h.AgentID = agentIDOrEmpty(invocation.AgentID)
-		h.Status = invocation.Status
-	}
-	return invocation, err
-}
-
-// Nudge appends steering to this running turn. It is not an interrupt: the
-// model sees the input at the next execution seam, and nothing in flight is
-// aborted for it.
-func (h *InvocationHandle) Nudge(ctx context.Context, content string) (*NudgeAcknowledgement, error) {
-	return h.client.CreateNudge(ctx, h.InvocationID, NudgeRequest{Content: content})
-}
-
-// NudgeWith is Nudge with an idempotency key, so a retried call stages the
-// direction once.
-func (h *InvocationHandle) NudgeWith(ctx context.Context, request NudgeRequest) (*NudgeAcknowledgement, error) {
-	return h.client.CreateNudge(ctx, h.InvocationID, request)
-}
-
-func (h *InvocationHandle) ListNudges(ctx context.Context, options ListNudgesOptions) (*NudgeList, error) {
-	return h.client.ListNudges(ctx, h.InvocationID, options)
-}
-
-func (h *InvocationHandle) ListToolCalls(ctx context.Context, options ListToolCallsOptions) (*ToolCallList, error) {
-	return h.client.ListToolCalls(ctx, h.InvocationID, options)
-}
-
-func (h *InvocationHandle) CancelNudge(ctx context.Context, nudgeID string) (*Nudge, error) {
-	return h.client.CancelNudge(ctx, h.InvocationID, nudgeID)
-}
-
-func (h *InvocationHandle) WaitForAction(ctx context.Context, options WaitOptions) (*Invocation, error) {
-	options.Until = WaitUntilActionable
-	return h.Wait(ctx, options)
-}
-
-func (h *InvocationHandle) WaitForResult(ctx context.Context, options WaitOptions) (*InvocationResult, error) {
-	invocation, err := h.Wait(ctx, options)
-	if err != nil {
-		return nil, err
-	}
-	if invocation.Status != InvocationCompleted {
-		return nil, &Error{
-			Category: ErrorConflict,
-			Message:  invocationEndedMessage(h.InvocationID, invocation),
-		}
-	}
-	return h.Result(ctx)
 }
 
 func generatedIdempotencyKey() string {

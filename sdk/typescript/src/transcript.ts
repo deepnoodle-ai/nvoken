@@ -1,10 +1,9 @@
-// Imported from the generated modules rather than the barrel deliberately,
-// for the reason `invocation-status.ts` gives: this subpath has to stay
-// reachable without pulling the runtime client in. `StreamPreview` comes from
+// Imported from the generated modules rather than the barrel deliberately, so
+// this subpath stays reachable without pulling the runtime client in. `StreamPreview` comes from
 // `stream.js`, which does import the client — but only as a type, so the
 // import is erased and nothing of the client survives into the bundle.
-import type { SessionCompaction } from "./generated/models/SessionCompaction.js";
-import type { SessionMessage } from "./generated/models/SessionMessage.js";
+import type { ConversationCompaction } from "./generated/models/ConversationCompaction.js";
+import type { ConversationMessage } from "./generated/models/ConversationMessage.js";
 import type { StreamPreview } from "./stream.js";
 
 /**
@@ -126,7 +125,7 @@ export type RenderedBlock = {
   contentIndex: number;
 };
 
-export type RenderedMessage<M = SessionMessage> = {
+export type RenderedMessage<M = ConversationMessage> = {
   message: M;
   visible: RenderedBlock[];
   toolCalls: Map<string, RenderedToolCall>;
@@ -186,7 +185,7 @@ export function foldMessages<M extends HasContent>(messages: M[]): RenderedMessa
 
 export type TranscriptEntry =
   | { kind: "message"; key: string; rendered: RenderedMessage }
-  | { kind: "compaction"; key: string; compaction: SessionCompaction };
+  | { kind: "compaction"; key: string; compaction: ConversationCompaction };
 
 export type TranscriptMessageEntry = Extract<TranscriptEntry, { kind: "message" }>;
 
@@ -195,7 +194,7 @@ export type TranscriptMessageEntry = Extract<TranscriptEntry, { kind: "message" 
  *
  * A compaction never edits the canonical transcript — it replaces the private
  * projection the model is given from that point back — so it belongs in the
- * reading order as a boundary, not as a message. `coversThrough` is the last
+ * reading order as a boundary, not as a message. `throughSequence` is the last
  * canonical sequence a pass folded away, so the marker goes before the first
  * message past it: the messages above are what the model now sees only as a
  * summary. A pass whose boundary lands on a message the fold dropped still
@@ -203,11 +202,11 @@ export type TranscriptMessageEntry = Extract<TranscriptEntry, { kind: "message" 
  */
 export function buildTranscript(
   rendered: readonly RenderedMessage[],
-  compactions: readonly SessionCompaction[],
+  compactions: readonly ConversationCompaction[],
 ): TranscriptEntry[] {
   const ordered = [...compactions].sort(
     (left, right) =>
-      left.coversThrough - right.coversThrough ||
+      left.throughSequence - right.throughSequence ||
       left.createdAt.getTime() - right.createdAt.getTime(),
   );
   const entries: TranscriptEntry[] = [];
@@ -215,7 +214,7 @@ export function buildTranscript(
   const flush = (before?: number) => {
     while (
       index < ordered.length &&
-      (before === undefined || ordered[index].coversThrough < before)
+      (before === undefined || ordered[index].throughSequence < before)
     ) {
       entries.push({ kind: "compaction", key: ordered[index].id, compaction: ordered[index] });
       index += 1;
@@ -238,7 +237,7 @@ export type PreviewBlock = {
 /** One in-flight assistant turn, shaped like the message it will become. */
 export type PreviewRow = {
   key: string;
-  invocationId: string;
+  turnId: string;
   blocks: PreviewBlock[];
 };
 
@@ -257,24 +256,24 @@ export type PreviewRow = {
  * arguments names a call whose result is not written yet, and showing a
  * half-typed argument object reads as noise, so it is counted and dropped.
  *
- * Previews for an Invocation that has already settled are dropped. The
+ * Previews for a Turn that has already settled are dropped. The
  * Reducer clears them itself on the terminal change, but only for the statuses
  * its version knows; filtering here means a status it has not learned yet
  * cannot leave a ghost row streaming under a finished turn.
  */
 export function groupPreviews(
   previews: StreamPreview[],
-  settledInvocations: ReadonlySet<string> = new Set(),
+  settledTurns: ReadonlySet<string> = new Set(),
 ): PreviewRow[] {
   const rows = new Map<string, PreviewRow>();
   for (const preview of previews) {
-    if (settledInvocations.has(preview.invocationId)) continue;
+    if (settledTurns.has(preview.turnId)) continue;
     if (preview.kind !== "text" && preview.kind !== "thinking") continue;
     if (!preview.delta.trim()) continue;
     const key = preview.messageId;
     const row = rows.get(key) ?? {
       key,
-      invocationId: preview.invocationId,
+      turnId: preview.turnId,
       blocks: [],
     };
     row.blocks.push({

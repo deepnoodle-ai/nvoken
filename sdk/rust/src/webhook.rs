@@ -5,6 +5,7 @@ use std::time::SystemTime;
 use async_trait::async_trait;
 use http::HeaderMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::models;
 use crate::signed_delivery::{
@@ -21,28 +22,31 @@ pub struct WebhookContext {
     /// Answering such a delivery successfully would settle a transition the
     /// host in fact ignored.
     pub event: models::WebhookEvent,
-    /// Counts transitions within one Invocation, from 1. See
+    /// Counts transitions within one Turn, from 1. See
     /// [`VerifiedWebhook::supersedes`] for what a receiver does with it.
     pub sequence: i64,
-    pub invocation_id: String,
-    pub session_id: String,
-    pub agent_key: String,
-    pub tenant_key: Option<String>,
+    pub turn_id: String,
+    pub conversation_id: Option<String>,
+    pub memory_space_id: Option<String>,
+    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub behavior_source: Value,
+    pub tenant_key: String,
+    pub user_key: Option<String>,
 }
 
 /// A pointer to the turn, not a projection of it.
 ///
 /// It carries no transcript content, tool arguments, structured output, usage,
-/// provenance, or failure message: read `Client::get_invocation` or
-/// `Client::get_invocation_result` for anything beyond what is here.
+/// provenance, or failure message: read the authoritative Turn or TurnResult
+/// for anything beyond what is here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebhookSubject {
-    pub status: models::InvocationStatus,
+    pub status: models::TurnStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stop_reason: Option<models::InvocationStopReason>,
+    pub stop_reason: Option<models::TurnStopReason>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_code: Option<String>,
-    /// The host tools the turn is parked on, on `invocation.waiting` only.
+    /// The host tools the turn is parked on, on `turn.waiting` only.
     /// Tools nvoken delivers itself are absent: they are not work the host has
     /// been handed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -53,17 +57,17 @@ pub struct WebhookSubject {
     pub credit_block: Option<models::CreditBlock>,
 }
 
-/// The signed body of one Invocation webhook.
+/// The signed body of one Turn webhook.
 ///
 /// It mirrors [`crate::CallbackEnvelope`]: everything nvoken asserts sits under
 /// `nvoken`, and the subject of the delivery sits beside it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebhookEnvelope {
     pub nvoken: WebhookContext,
-    pub invocation: WebhookSubject,
+    pub turn: WebhookSubject,
 }
 
-/// One Invocation webhook whose signature has been checked.
+/// One Turn webhook whose signature has been checked.
 #[derive(Debug, Clone)]
 pub struct VerifiedWebhook {
     pub envelope: WebhookEnvelope,
@@ -73,8 +77,13 @@ pub struct VerifiedWebhook {
     /// per-event suffix; that belongs in logs, not in a dispatch decision.
     pub event: models::WebhookEvent,
     pub sequence: i64,
-    pub invocation_id: String,
-    pub session_id: String,
+    pub turn_id: String,
+    pub conversation_id: Option<String>,
+    pub memory_space_id: Option<String>,
+    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub behavior_source: Value,
+    pub tenant_key: String,
+    pub user_key: Option<String>,
     pub key_id: String,
     pub key_version: u64,
     pub timestamp: SystemTime,
@@ -82,13 +91,13 @@ pub struct VerifiedWebhook {
 
 impl VerifiedWebhook {
     /// Reports whether this delivery describes a later transition of its
-    /// Invocation than the one already applied.
+    /// Turn than the one already applied.
     ///
     /// Delivery is at least once, so the same transition can arrive twice and a
     /// redelivery can land after a later one. Keep the highest sequence applied
-    /// per Invocation and fold only what supersedes it; a receiver that applies
+    /// per Turn and fold only what supersedes it; a receiver that applies
     /// whichever arrived last rolls its own state backwards. Pass 0 for an
-    /// Invocation nothing has been applied for yet.
+    /// Turn nothing has been applied for yet.
     ///
     /// This is also the dedup: a repeat carries a sequence already applied, so
     /// nothing further is needed to make handling idempotent. Answer it with
@@ -99,7 +108,7 @@ impl VerifiedWebhook {
     }
 }
 
-/// Checks one Invocation webhook delivery and returns its signed body.
+/// Checks one Turn webhook delivery and returns its signed body.
 ///
 /// It shares its signature scheme with [`crate::verify_callback`], so a host
 /// that receives both implements verification once and dispatches on what the
@@ -117,7 +126,7 @@ pub fn verify_webhook(
     let delivery = verify_signed_delivery(key, headers, raw_body, now)?;
     let envelope: WebhookEnvelope =
         serde_json::from_slice(raw_body).map_err(DeliveryError::InvalidEnvelope)?;
-    if envelope.nvoken.schema_version != 1 {
+    if envelope.nvoken.schema_version != 2 {
         return Err(DeliveryError::UnsupportedSchemaVersion);
     }
     // The idempotency key on a webhook is the delivery id, so both headers pin
@@ -130,11 +139,23 @@ pub fn verify_webhook(
     if envelope.nvoken.sequence < 1 {
         return Err(DeliveryError::InvalidWebhookSequence);
     }
+    if envelope.nvoken.turn_id.is_empty()
+        || envelope.nvoken.tenant_key.is_empty()
+        || !envelope.nvoken.behavior_source.is_object()
+    {
+        return Err(DeliveryError::InvalidAttribution);
+    }
+    let context = envelope.nvoken.clone();
     Ok(VerifiedWebhook {
-        event: envelope.nvoken.event,
-        sequence: envelope.nvoken.sequence,
-        invocation_id: envelope.nvoken.invocation_id.clone(),
-        session_id: envelope.nvoken.session_id.clone(),
+        event: context.event,
+        sequence: context.sequence,
+        turn_id: context.turn_id,
+        conversation_id: context.conversation_id,
+        memory_space_id: context.memory_space_id,
+        content_expires_at: context.content_expires_at,
+        behavior_source: context.behavior_source,
+        tenant_key: context.tenant_key,
+        user_key: context.user_key,
         envelope,
         raw_body: raw_body.to_vec(),
         delivery_id: delivery.delivery_id,
@@ -147,7 +168,7 @@ pub fn verify_webhook(
 /// The HTTP answer to one webhook delivery.
 ///
 /// nvoken ignores the response body, so only the status carries meaning, and no
-/// answer ever affects the Invocation the webhook describes.
+/// answer ever affects the Turn the webhook describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WebhookReply {
     pub status: u16,
@@ -162,8 +183,8 @@ pub fn accept_webhook() -> WebhookReply {
 /// transition right now — its store was unreachable, or it is shedding load.
 ///
 /// Retries are bounded, so a receiver that answers this forever still ends with
-/// a transition nobody recorded; `Client::list_ended_invocations` is the
-/// backstop that finds those.
+/// a transition nobody recorded; listing ended Turns through `Client::raw` is
+/// the backstop that finds those.
 pub fn retry_webhook() -> WebhookReply {
     WebhookReply { status: 503 }
 }
@@ -221,7 +242,7 @@ pub struct WebhookDelivery {
     pub cause: Option<String>,
 }
 
-/// Answers an Invocation-webhook endpoint. It is [`crate::CallbackReceiver`]'s
+/// Answers a Turn-webhook endpoint. It is [`crate::CallbackReceiver`]'s
 /// twin — same key table, same reply discipline — because nvoken signs both
 /// deliveries the same way.
 ///
@@ -240,7 +261,7 @@ pub struct WebhookDelivery {
 /// | handler returned `Err` | 503 | the receiver could not record it, so ask for it again |
 ///
 /// **Ordering stays yours.** Delivery is at least once and out of order, so the
-/// highest applied `sequence` per Invocation has to be read and written in the
+/// highest applied `sequence` per Turn has to be read and written in the
 /// same transaction as the state it guards — which is the host's transaction,
 /// not one this kit can open. Call [`VerifiedWebhook::supersedes`] inside it. A
 /// superseded delivery is still a delivery: record nothing and return `Ok`, so

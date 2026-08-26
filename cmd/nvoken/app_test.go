@@ -103,12 +103,12 @@ func TestRuntimeCommandUsesSavedProfile(t *testing.T) {
 	var authorization string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authorization = r.Header.Get("Authorization")
-		if r.URL.Path != "/v1/sessions" {
+		if r.URL.Path != "/v1/conversations" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"items":[]}`))
+		_, _ = w.Write([]byte(`{"items":[],"has_more":false,"next_cursor":null}`))
 	}))
 	defer server.Close()
 
@@ -124,16 +124,19 @@ func TestRuntimeCommandUsesSavedProfile(t *testing.T) {
 
 	resetActiveAuth()
 	result := newApp().Test(t,
-		cli.TestArgs("--credentials-file", path, "--output", "json", "session", "list"),
+		cli.TestArgs("--credentials-file", path, "--output", "json", "conversation", "list"),
 	)
 	if !result.Success() {
-		t.Fatalf("session list: %v\nstdout: %s\nstderr: %s", result.Err, result.Stdout, result.Stderr)
+		t.Fatalf("conversation list: %v\nstdout: %s\nstderr: %s", result.Err, result.Stdout, result.Stderr)
 	}
 	if authorization != "Bearer profile-token" {
 		t.Fatalf("Authorization = %q", authorization)
 	}
-	if !strings.Contains(result.Stdout, `"items":[]`) {
-		t.Fatalf("JSON output = %s", result.Stdout)
+	var output struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(result.Stdout), &output); err != nil || len(output.Items) != 0 {
+		t.Fatalf("JSON output = %s, err = %v", result.Stdout, err)
 	}
 }
 

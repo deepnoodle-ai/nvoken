@@ -2,930 +2,642 @@ package nvoken
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
-// AgentOptions declares one tenant's Agent. Nothing here reaches the server
-// when the Agent is constructed: (TenantKey, AgentKey) names the record and
-// DefinitionKey names the Agent Definition it follows, so the first use — or
-// an explicit Ensure — creates the record if it is missing. Supply AgentID
-// instead to name a record that already exists.
-//
-// Tools register this process's handlers; their declarations live on the
-// Agent's versioned Agent Definition.
-type AgentOptions struct {
-	AgentID   string
-	AgentKey  string
-	TenantKey *string
-	// DefinitionKey is the definition_key of the Agent Definition this Agent
-	// follows. DefinitionID is the same pointer by opaque ID; supply at
-	// most one, and only alongside AgentKey.
-	DefinitionKey string
-	DefinitionID  string
-	// PinnedRevision holds this instance to one Definition revision. Leave it
-	// nil to follow the latest, which is what makes revising the Definition
-	// the rollout.
-	PinnedRevision *int64
-	// Name is the display name recorded at creation. It defaults to AgentKey.
-	Name  string
-	Tools []Tool
-	// MCPServerHeaders carries per-turn secret headers for the MCP servers this
-	// Agent declares. They stay outside the Agent Definition so no reusable
-	// revision depends on a secret.
-	MCPServerHeaders  []MCPServerHeaders
-	ProviderKeys      []ProviderKeySelection
-	Webhook           *WebhookTarget
-	OnBudgetExhausted BudgetExhaustionBehavior
-}
-
-type AgentInvocationOptions struct {
-	IdempotencyKey       string
-	DefinitionRevision   *int64
-	Overrides            *AgentDefinitionOverrides
-	Session              *InvocationSession
-	Retention            *SessionRetention
-	Compaction           *ContextCompaction
-	AuthorizationContext map[string]string
-	TriggeredBy          *InvocationTrigger
-	// UserKey says who this turn is for. Per-call rather than per-Agent,
-	// because one Agent serves many end users; the first turn on a Session
-	// fixes it and later turns inherit it.
-	UserKey           *string
-	IfActive          IfActivePolicy
-	OnBudgetExhausted BudgetExhaustionBehavior
-	Webhook           *WebhookTarget
-	// Context carries the application state snapshots to record ahead of this
-	// turn's input. Per-call rather than per-Agent, because a snapshot is what
-	// changes between turns while the Agent Definition stays fixed.
-	Context []ContextItem
-	// Metadata is opaque host correlation data recorded on this Invocation.
-	// Per-call rather than per-Agent: it is immutable and material to
-	// idempotency, so an Agent-level default would make two otherwise distinct
-	// calls conflict.
-	Metadata                     map[string]string
-	Wait                         WaitOptions
-	LeaveWaitingOnMissingHandler bool
-}
-
-type AgentResult struct {
-	Handle           *InvocationHandle
-	Invocation       Invocation
-	Messages         []SessionMessage
-	OutputText       *string
-	StructuredOutput json.RawMessage
-	Raw              *InvocationResult
-}
-
-type AgentStreamEvent struct {
-	Handle *InvocationHandle
-	Event  StreamEvent
-}
-
-type MissingToolHandlerError struct {
-	InvocationID        string
-	ToolName            string
-	InvocationCancelled bool
-	CancelError         error
-}
-
-func (e *MissingToolHandlerError) Error() string {
-	action := "left waiting"
-	if e.InvocationCancelled {
-		action = "cancelled"
-	}
-	return fmt.Sprintf(
-		"Invocation %s is waiting for unhandled tool %q and was %s",
-		e.InvocationID,
-		e.ToolName,
-		action,
-	)
-}
-
-func (e *MissingToolHandlerError) Unwrap() error {
-	return e.CancelError
-}
-
-type NoOutputTextError struct {
-	InvocationID string
-	ResultKind   string
-}
-
-func (e *NoOutputTextError) Error() string {
-	return fmt.Sprintf(
-		"Invocation %s completed with %s, not text",
-		e.InvocationID,
-		e.ResultKind,
-	)
-}
-
+// Agent is a remotely resolved Agent and a directly runnable local handle.
 type Agent struct {
-	client  *Client
-	options AgentOptions
-	// hostTools serves the calls this Agent answers locally. callbackTools
-	// names the ones nvoken delivers over HTTPS instead: those can appear in a
-	// waiting Invocation's pending calls once the endpoint has acknowledged a
-	// delivery without settling it, and they are answered by whatever accepted
-	// that acknowledgement, not from here. It is now a fallback for a server
-	// too old to stamp `mode` on a summary; see runsLocally.
-	hostTools     map[string]Tool
-	callbackTools map[string]struct{}
-
-	// mu guards record, and serializes the creation itself so concurrent
-	// first uses of one declared Agent make one create between them.
-	mu     sync.Mutex
-	record *AgentResource
+	client *Client
+	value  AgentResource
+	tools  map[string]Tool
 }
 
-// runsLocally reports whether a pending call is this caller's to execute.
-//
-// The call's own mode is the authority, not what this Agent happens to
-// declare: an Invocation running a server-owned Agent Definition can park on
-// callback tools this object never listed, and answering those here would run
-// work nvoken is already delivering elsewhere.
-//
-// A server too old to send mode leaves it empty, where a name check is all
-// there is. Fall back to it rather than treating every call as somebody
-// else's, which would leave the turn parked forever.
-func (a *Agent) runsLocally(call ToolCallSummary) bool {
-	if call.Mode != "" {
-		return call.Mode == ToolCallModeHost
-	}
-	_, isCallback := a.callbackTools[call.Name]
-	return !isCallback
+func (a *Agent) Resource() AgentResource { return a.value }
+
+func (a *Agent) BindTools(tools ...Tool) *Agent {
+	clone := *a
+	clone.tools = bindToolMap(a.tools, tools)
+	return &clone
 }
 
-func (c *Client) Agent(options AgentOptions) (*Agent, error) {
-	return NewAgent(c, options)
+func (a *Agent) Conversation(options ConversationOptions) *Conversation {
+	return newConversation(a.client, a, options)
 }
 
-func NewAgent(client *Client, options AgentOptions) (*Agent, error) {
-	if client == nil {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "Agent client is required",
-		}
+func (a *Agent) Start(ctx context.Context, input TurnInput, options TurnOptions) (*Turn, error) {
+	selector := generated.AgentSelector{}
+	revision := generated.AgentRevisionSelector{}
+	if err := revision.FromAgentRevisionSelector0(generated.AgentRevisionSelector0("current")); err != nil {
+		return nil, validationError("encode current Agent revision", err)
 	}
-	if (options.AgentID == "") == (options.AgentKey == "") {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "Supply exactly one of Agent ID and Agent key",
-		}
+	if err := selector.FromAgentSelectorByID(generated.AgentSelectorByID{
+		AgentID:  a.value.ID,
+		Revision: revision,
+	}); err != nil {
+		return nil, validationError("encode Agent selection", err)
 	}
-	if options.DefinitionKey != "" && options.DefinitionID != "" {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "Supply at most one of Definition key and Agent Definition ID",
-		}
+	behavior := generated.TurnBehaviorSelection{}
+	if err := behavior.FromAgentTurnBehavior(generated.AgentTurnBehavior{
+		Agent: selector,
+		Kind:  generated.AgentTurnBehaviorKindAgent,
+	}); err != nil {
+		return nil, validationError("encode Agent behavior", err)
 	}
-	if options.AgentID != "" && (options.DefinitionKey != "" || options.DefinitionID != "") {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message: "An Agent named by ID already names its record; the Definition" +
-				" belongs to a declaration by Agent key",
-		}
-	}
-	hostTools := make(map[string]Tool)
-	callbackTools := make(map[string]struct{})
-	for _, tool := range options.Tools {
-		switch tool.Mode {
-		case ToolModeHost:
-			hostTools[tool.Name] = tool
-		case ToolModeCallback:
-			callbackTools[tool.Name] = struct{}{}
-		}
-	}
-	return &Agent{
-		client:        client,
-		options:       options,
-		hostTools:     hostTools,
-		callbackTools: callbackTools,
-	}, nil
+	return a.client.startTurn(ctx, input, &behavior, options, a.tools)
 }
 
-// Ensure creates this Agent's server record if it is missing and returns it.
-//
-// Creation never mutates: the same keys backed by the same Definition resolve
-// onto the existing record, a different Definition is agent_key_conflict, an
-// archived record is agent_archived, and a declared PinnedRevision that the
-// record does not follow is refused rather than quietly ignored. A first use
-// calls this for you; call it directly to create the record at a moment you
-// choose, or to read back what the server holds.
-func (a *Agent) Ensure(ctx context.Context) (*AgentResource, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.record != nil {
-		return a.record, nil
-	}
-	if a.options.DefinitionKey != "" || a.options.DefinitionID != "" {
-		record, err := a.client.CreateAgent(ctx, CreateAgentInput{
-			TenantKey:      a.options.TenantKey,
-			AgentKey:       a.options.AgentKey,
-			Name:           a.options.Name,
-			DefinitionID:   a.options.DefinitionID,
-			DefinitionKey:  a.options.DefinitionKey,
-			PinnedRevision: a.options.PinnedRevision,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if err := a.verifyDeclaration(record); err != nil {
-			return nil, err
-		}
-		a.record = record
-		return record, nil
-	}
-	if a.options.AgentID != "" {
-		record, err := a.client.GetAgent(ctx, a.options.AgentID)
-		if err != nil {
-			return nil, err
-		}
-		a.record = record
-		return record, nil
-	}
-	return nil, &Error{
-		Category: ErrorValidation,
-		Message: "Agent " + a.options.AgentKey + " cannot be created without knowing" +
-			" which Agent Definition it follows: declare a Definition key, or" +
-			" declare an Agent ID for a record that already exists",
-	}
-}
-
-// Refresh re-reads the record from the server.
-func (a *Agent) Refresh(ctx context.Context) (*AgentResource, error) {
-	ensured, err := a.Ensure(ctx)
+func (a *Agent) Run(ctx context.Context, input TurnInput, options TurnOptions) (*TurnResult, error) {
+	turn, err := a.Start(ctx, input, options)
 	if err != nil {
 		return nil, err
 	}
-	record, err := a.client.GetAgent(ctx, ensured.ID)
-	if err != nil {
-		return nil, err
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.record = record
-	return record, nil
+	return turn.Result(ctx)
 }
 
-// Resource returns the server record once Ensure or a first use has run.
-func (a *Agent) Resource() *AgentResource {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.record
-}
-
-// ID returns the record's ID once it is known, and otherwise the declared one.
-func (a *Agent) ID() string {
-	if record := a.Resource(); record != nil {
-		return record.ID
-	}
-	return a.options.AgentID
-}
-
-// verifyDeclaration refuses a record that contradicts the declaration.
-// Creation resolves on the Definition pointer, which the server already
-// guards; the pin is the remaining substantive field, and a declaration naming
-// a revision the record does not follow would otherwise run configuration the
-// caller never asked for. A differing Name is cosmetic and is left alone.
-func (a *Agent) verifyDeclaration(record *AgentResource) error {
-	declared := a.options.PinnedRevision
-	if declared == nil {
-		return nil
-	}
-	if record.PinnedRevision != nil && *record.PinnedRevision == *declared {
-		return nil
-	}
-	following := "latest"
-	if record.PinnedRevision != nil {
-		following = fmt.Sprintf("revision %d", *record.PinnedRevision)
-	}
-	return &Error{
-		Category: ErrorConflict,
-		Status:   409,
-		Code:     "agent_pin_conflict",
-		Message: fmt.Sprintf(
-			"Agent %s follows %s, not the declared revision %d",
-			record.AgentKey, following, *declared,
-		),
-		Details: map[string]any{"agent_id": record.ID},
-	}
-}
-
-// ready creates the record before the turn that needs it, and only when the
-// declaration says how. An Agent named by ID, or by Agent key alone, is one
-// the caller has said already exists: admitting it directly keeps the turn at
-// one round trip and lets the server answer for a key that names nothing.
-func (a *Agent) ready(ctx context.Context) error {
-	if a.options.DefinitionKey == "" && a.options.DefinitionID == "" {
-		return nil
-	}
-	_, err := a.Ensure(ctx)
-	return err
-}
-
-func (a *Agent) Start(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (*InvocationHandle, error) {
-	if err := a.ready(ctx); err != nil {
-		return nil, err
-	}
-	return a.client.Invoke(ctx, a.request(input, options))
-}
-
-// request composes the Agent identity with one call's steering and secrets. It
-// is the single place a per-call option reaches the wire, so the conformance
-// suite can pin the whole admitted body without a server.
-func (a *Agent) request(input string, options AgentInvocationOptions) InvokeRequest {
-	onBudgetExhausted := options.OnBudgetExhausted
-	if onBudgetExhausted == "" {
-		onBudgetExhausted = a.options.OnBudgetExhausted
-	}
-	// The record's ID wins once it is known, so a declared Agent stops being
-	// re-resolved by key on every turn.
-	agentID, agentKey := a.options.AgentID, a.options.AgentKey
-	if record := a.Resource(); record != nil {
-		agentID, agentKey = record.ID, ""
-	}
-	request := InvokeRequest{
-		AgentID:              agentID,
-		AgentKey:             agentKey,
-		TenantKey:            a.options.TenantKey,
-		Session:              options.Session,
-		Retention:            options.Retention,
-		Compaction:           options.Compaction,
-		AuthorizationContext: options.AuthorizationContext,
-		UserKey:              options.UserKey,
-		TriggeredBy:          options.TriggeredBy,
-		IdempotencyKey:       options.IdempotencyKey,
-		DefinitionRevision:   options.DefinitionRevision,
-		Overrides:            options.Overrides,
-		OnBudgetExhausted:    onBudgetExhausted,
-		Input:                input,
-		MCPServerHeaders:     a.options.MCPServerHeaders,
-		ProviderKeys:         a.options.ProviderKeys,
-		// A per-call target overrides the agent default so one Agent can
-		// webhook different endpoints without a second Agent.
-		Webhook:  webhookTarget(options.Webhook, a.options.Webhook),
-		Context:  options.Context,
-		Metadata: options.Metadata,
-	}
-	return request
-}
-
-func (a *Agent) Stream(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-	consume func(AgentStreamEvent) error,
-) (*InvocationHandle, error) {
-	handle, err := a.Start(ctx, input, options)
-	if err != nil {
-		return nil, err
-	}
-	submitted := make(map[string]struct{})
-	err = handle.Stream(ctx, func(event StreamEvent) error {
-		if consume != nil {
-			if err := consume(AgentStreamEvent{
-				Handle: handle,
-				Event:  event,
-			}); err != nil {
-				return err
-			}
-		}
-		// A turn that stopped for your tools says so on a change. Reading the
-		// composed Invocation only once one arrives is both cheaper than
-		// refreshing on every frame and durable: the change replays on
-		// reconnect, so a turn that parked while you were away still parks
-		// when you return.
-		if !waitingChange(event, handle.InvocationID) {
-			return nil
-		}
-		invocation, err := handle.Refresh(ctx)
-		if err != nil {
-			return err
-		}
-		if invocation.Status != InvocationWaiting {
-			return nil
-		}
-		_, err = a.dispatchWaiting(
-			ctx,
-			handle,
-			invocation,
-			submitted,
-			options.LeaveWaitingOnMissingHandler,
-		)
-		return err
-	})
-	return handle, err
-}
-
-func (a *Agent) Run(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (*AgentResult, error) {
-	result, _, err := a.runWithHandle(ctx, input, options)
-	return result, err
-}
-
-func (a *Agent) runWithHandle(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (*AgentResult, *InvocationHandle, error) {
-	handle, err := a.Stream(ctx, input, options, nil)
-	if err != nil && !recoverThroughAuthoritativeRead(err) {
-		return nil, handle, err
-	}
-	if handle == nil {
-		return nil, nil, err
-	}
-	result, settleErr := a.settleByRead(ctx, handle, options)
-	if settleErr != nil {
-		return nil, handle, settleErr
-	}
-	agentResult, resultErr := newAgentResult(handle, result)
-	return agentResult, handle, resultErr
-}
-
-func (a *Agent) Text(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (string, error) {
+func (a *Agent) Text(ctx context.Context, input TurnInput, options TurnOptions) (string, error) {
 	result, err := a.Run(ctx, input, options)
 	if err != nil {
 		return "", err
 	}
-	return a.textFromResult(result)
+	if result.OutputText == nil {
+		return "", &NoOutputTextError{TurnID: result.Resource.ID}
+	}
+	return *result.OutputText, nil
 }
 
-func (a *Agent) textFromResult(result *AgentResult) (string, error) {
-	if result.OutputText != nil && *result.OutputText != "" {
-		return *result.OutputText, nil
+func (a *Agent) Publish(ctx context.Context, behavior Behavior, options PublishOptions) (*AgentRevision, error) {
+	if behavior.OutputSchema != nil {
+		if err := PreflightOutputSchema(*behavior.OutputSchema); err != nil {
+			return nil, err
+		}
 	}
-	resultKind := "no assistant output"
-	if len(result.StructuredOutput) > 0 && string(result.StructuredOutput) != "null" {
-		resultKind = "structured output"
-	} else if len(a.options.Tools) > 0 {
-		resultKind = "tool-only output"
+	idempotencyKey := options.IdempotencyKey
+	if strings.TrimSpace(idempotencyKey) == "" {
+		idempotencyKey = generatedIdempotencyKey()
 	}
-	return "", &NoOutputTextError{
-		InvocationID: result.Handle.InvocationID,
-		ResultKind:   resultKind,
+	wireBehavior := behavior.generated()
+	value, err := callReplaySafe(ctx, a.client.retry, true, func() (callResult[generated.AgentRevision], error) {
+		response, callErr := a.client.raw.PublishAgentRevisionWithResponse(
+			ctx,
+			a.value.ID,
+			&generated.PublishAgentRevisionParams{IdempotencyKey: idempotencyKey},
+			wireBehavior,
+		)
+		if callErr != nil {
+			return callResult[generated.AgentRevision]{}, callErr
+		}
+		return callResult[generated.AgentRevision]{
+			Value:  response.JSON201,
+			Status: response.StatusCode(),
+			Header: responseHeader(response.HTTPResponse),
+			Body:   response.Body,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
 	}
+	a.value.CurrentRevision = value.Revision
+	return value, nil
 }
 
-func (a *Agent) BindSession(binding SessionBinding, options SessionOptions) (*BoundSession, error) {
-	if (binding.SessionID == "") == (binding.SessionKey == "") {
-		return nil, &Error{
-			Category: ErrorValidation,
-			Message:  "exactly one of SessionID or SessionKey is required",
+func (a *Agent) Archive(ctx context.Context) (*Agent, error) {
+	response, err := a.client.raw.ArchiveAgentWithResponse(ctx, a.value.ID)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	a.value = *response.JSON200
+	return a, nil
+}
+
+func (a *Agent) Restore(ctx context.Context) (*Agent, error) {
+	response, err := a.client.raw.RestoreAgentWithResponse(ctx, a.value.ID)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	a.value = *response.JSON200
+	return a, nil
+}
+
+// InlineRunner runs immutable behavior without creating an Agent.
+type InlineRunner struct {
+	client   *Client
+	behavior Behavior
+	tools    map[string]Tool
+}
+
+func (r *InlineRunner) BindTools(tools ...Tool) *InlineRunner {
+	clone := *r
+	clone.tools = bindToolMap(r.tools, tools)
+	return &clone
+}
+
+func (r *InlineRunner) Conversation(options ConversationOptions) *Conversation {
+	return newConversation(r.client, r, options)
+}
+
+func (r *InlineRunner) Start(ctx context.Context, input TurnInput, options TurnOptions) (*Turn, error) {
+	if r.behavior.OutputSchema != nil {
+		if err := PreflightOutputSchema(*r.behavior.OutputSchema); err != nil {
+			return nil, err
 		}
 	}
-	key := "id:" + binding.SessionID
-	if binding.SessionID == "" {
-		tenant := "default"
-		if a.options.TenantKey != nil {
-			tenant = *a.options.TenantKey
+	if err := validateInlineMemorySelection(options.Memory); err != nil {
+		return nil, err
+	}
+	behavior := generated.TurnBehaviorSelection{}
+	if err := behavior.FromInlineTurnBehavior(generated.InlineTurnBehavior{
+		Behavior: r.behavior.generated(),
+		Kind:     generated.InlineTurnBehaviorKindInline,
+	}); err != nil {
+		return nil, validationError("encode inline behavior", err)
+	}
+	return r.client.startTurn(ctx, input, &behavior, options, r.tools)
+}
+
+func (r *InlineRunner) Run(ctx context.Context, input TurnInput, options TurnOptions) (*TurnResult, error) {
+	turn, err := r.Start(ctx, input, options)
+	if err != nil {
+		return nil, err
+	}
+	return turn.Result(ctx)
+}
+
+func (r *InlineRunner) Text(ctx context.Context, input TurnInput, options TurnOptions) (string, error) {
+	result, err := r.Run(ctx, input, options)
+	if err != nil {
+		return "", err
+	}
+	if result.OutputText == nil {
+		return "", &NoOutputTextError{TurnID: result.Resource.ID}
+	}
+	return *result.OutputText, nil
+}
+
+type runnable interface {
+	Start(context.Context, TurnInput, TurnOptions) (*Turn, error)
+	Run(context.Context, TurnInput, TurnOptions) (*TurnResult, error)
+	Text(context.Context, TurnInput, TurnOptions) (string, error)
+}
+
+// Conversation fixes continuity, actor, memory, and maximum limits. Calls
+// through one handle are serialized in this process.
+type Conversation struct {
+	runner  runnable
+	options ConversationOptions
+	mu      *sync.Mutex
+}
+
+func newConversation(client *Client, runner runnable, options ConversationOptions) *Conversation {
+	bound := cloneConversationOptions(options)
+	key := "id:" + bound.Selection.ID
+	if bound.Selection.ID == "" {
+		owner := "tenant"
+		if bound.Selection.Owner.kind == conversationOwnerUser {
+			owner = "user:" + bound.Selection.Owner.user
 		}
-		key = "key:" + tenant + ":" + binding.SessionKey
+		key = "key:" + bound.TenantKey + ":" + owner + ":" + bound.Selection.Key
 	}
-	// The table is shared with any scoped client derived from this one, so two
-	// views of the same Session serialize against each other rather than each
-	// keeping its own idea of the lock.
-	a.client.locks.mu.Lock()
-	lock := a.client.locks.locks[key]
-	if lock == nil {
-		lock = &sync.Mutex{}
-		a.client.locks.locks[key] = lock
+	return &Conversation{runner: runner, options: bound, mu: client.conversationLocks.lock(key)}
+}
+
+func (c *Conversation) Start(ctx context.Context, input TurnInput, options ...ConversationTurnOptions) (*Turn, error) {
+	turnOptions, err := c.turnOptions(options)
+	if err != nil {
+		return nil, err
 	}
-	a.client.locks.mu.Unlock()
-	return &BoundSession{
-		agent:      a,
-		lock:       lock,
-		sessionID:  binding.SessionID,
-		sessionKey: binding.SessionKey,
-		options:    options,
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.runner.Start(ctx, input, turnOptions)
+}
+
+func (c *Conversation) Run(ctx context.Context, input TurnInput, options ...ConversationTurnOptions) (*TurnResult, error) {
+	turnOptions, err := c.turnOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.runner.Run(ctx, input, turnOptions)
+}
+
+func (c *Conversation) Text(ctx context.Context, input TurnInput, options ...ConversationTurnOptions) (string, error) {
+	turnOptions, err := c.turnOptions(options)
+	if err != nil {
+		return "", err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.runner.Text(ctx, input, turnOptions)
+}
+
+func (c *Conversation) turnOptions(options []ConversationTurnOptions) (TurnOptions, error) {
+	if len(options) > 1 {
+		return TurnOptions{}, &Error{Category: ErrorValidation, Message: "Conversation call accepts at most one options value"}
+	}
+	result := TurnOptions{
+		TenantKey:    c.options.TenantKey,
+		UserKey:      c.options.UserKey,
+		Conversation: cloneConversationSelection(&c.options.Selection),
+		Memory:       cloneMemorySelection(c.options.Memory),
+		Limits:       cloneLimits(c.options.Limits),
+	}
+	if len(options) == 0 {
+		return result, nil
+	}
+	result.IdempotencyKey = options[0].IdempotencyKey
+	result.Metadata = cloneStringMap(options[0].Metadata)
+	result.Wait = options[0].Wait
+	limits, err := narrowConversationLimits(c.options.Limits, options[0].Limits)
+	if err != nil {
+		return TurnOptions{}, err
+	}
+	result.Limits = limits
+	return result, nil
+}
+
+// Turn is a recovery handle. Constructing it performs no request.
+type Turn struct {
+	client         *Client
+	id             string
+	access         TurnAccess
+	idempotencyKey string
+	admission      *TurnAdmission
+	tools          map[string]Tool
+	toolState      *toolExecutionState
+	wait           WaitOptions
+}
+
+func (t *Turn) ID() string { return t.id }
+
+func (t *Turn) IdempotencyKey() string { return t.idempotencyKey }
+
+func (t *Turn) BindTools(tools ...Tool) *Turn {
+	clone := *t
+	clone.tools = bindToolMap(t.tools, tools)
+	return &clone
+}
+
+func (t *Turn) Status(ctx context.Context) (*TurnSnapshot, error) {
+	if err := t.validateAccess(); err != nil {
+		return nil, err
+	}
+	response, err := t.client.raw.GetTurnResultWithResponse(ctx, t.id, t.requestEditor())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return &TurnSnapshot{
+		Resource:   response.JSON200.Turn,
+		Messages:   response.JSON200.Messages,
+		OutputText: response.JSON200.OutputText,
 	}, nil
 }
 
-func (a *Agent) settleByRead(
-	ctx context.Context,
-	handle *InvocationHandle,
-	options AgentInvocationOptions,
-) (*InvocationResult, error) {
-	submitted := make(map[string]struct{})
+func (t *Turn) Result(ctx context.Context) (*TurnResult, error) {
+	interval := t.wait.PollInterval
+	if interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
 	for {
-		invocation, err := handle.WaitForAction(ctx, options.Wait)
+		current, err := t.Status(ctx)
 		if err != nil {
-			return nil, err
+			return nil, turnWaitError(err, t)
 		}
-		if invocation.Status == InvocationWaiting {
-			dispatched, err := a.dispatchWaiting(
-				ctx,
-				handle,
-				invocation,
-				submitted,
-				options.LeaveWaitingOnMissingHandler,
-			)
+		if current.Resource.Status == generated.TurnStatusWaiting {
+			settled, err := t.settleHostTools(ctx, current.Resource.ToolCalls)
 			if err != nil {
 				return nil, err
 			}
-			if !dispatched {
-				timer := time.NewTimer(50 * time.Millisecond)
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					return nil, transportError(ctx.Err())
-				case <-timer.C:
-				}
-			}
-			continue
-		}
-		if invocation.Status != InvocationCompleted {
-			return nil, &Error{
-				Category: ErrorConflict,
-				Code:     invocationFailureCode(invocation),
-				Message:  invocationEndedMessage(handle.InvocationID, invocation),
+			if settled {
+				continue
 			}
 		}
-		return handle.Result(ctx)
+		if current.Resource.EndedAt != nil {
+			result := &TurnResult{TurnSnapshot: *current, Turn: t, Admission: t.admission}
+			if current.Resource.Status == generated.TurnStatusFailed || current.Resource.Status == generated.TurnStatusCancelled {
+				return nil, &TurnExecutionError{Result: result}
+			}
+			return result, nil
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, turnWaitError(transportError(ctx.Err()), t)
+		case <-timer.C:
+		}
 	}
 }
 
-func (a *Agent) dispatchWaiting(
-	ctx context.Context,
-	handle *InvocationHandle,
-	invocation *Invocation,
-	submitted map[string]struct{},
-	leaveWaiting bool,
-) (bool, error) {
-	answerable := AnswerableToolCalls(invocation)
-	if len(answerable) == 0 {
-		return false, nil
-	}
-	results := make([]ToolResult, 0, len(answerable))
-	for _, pending := range answerable {
-		if _, alreadySubmitted := submitted[pending.ID]; alreadySubmitted {
+func (t *Turn) settleHostTools(ctx context.Context, calls []ToolCallSummary) (bool, error) {
+	results := make([]toolResult, 0)
+	for _, call := range calls {
+		if call.Mode != generated.ToolCallModeHost || call.Arguments == nil {
 			continue
 		}
-		if !a.runsLocally(pending) {
-			continue
-		}
-		tool, ok := a.hostTools[pending.Name]
+		tool, ok := t.tools[call.Name]
 		if !ok || tool.Handler == nil {
-			missing := &MissingToolHandlerError{
-				InvocationID: handle.InvocationID,
-				ToolName:     pending.Name,
-			}
-			if !leaveWaiting {
-				_, missing.CancelError = handle.Cancel(ctx)
-				missing.InvocationCancelled = missing.CancelError == nil
-			}
-			return false, missing
+			continue
 		}
-		content, err := tool.Handler(ctx, toolCallArguments(pending))
-		result := ToolResult{
-			ToolCallID: pending.ID,
-			Content:    content,
-		}
+		result, err := t.toolState.resolve(ctx, t.id, call, tool.Handler)
 		if err != nil {
-			result.Content = map[string]any{
-				"error": err.Error(),
-				"type":  fmt.Sprintf("%T", err),
-			}
-			result.IsError = true
+			return false, err
 		}
 		results = append(results, result)
 	}
 	if len(results) == 0 {
 		return false, nil
 	}
-	if _, err := handle.SubmitToolResults(ctx, results); err != nil {
+	if _, err := t.submitToolResults(ctx, results); err != nil {
 		return false, err
-	}
-	for _, result := range results {
-		submitted[result.ToolCallID] = struct{}{}
 	}
 	return true, nil
 }
 
-type SessionBinding struct {
-	SessionID  string
-	SessionKey string
+func narrowConversationLimits(base, override *Limits) (*Limits, error) {
+	if override == nil {
+		return cloneLimits(base), nil
+	}
+	if base == nil {
+		return cloneLimits(override), nil
+	}
+	result := *cloneLimits(base)
+	for _, pair := range []struct {
+		name     string
+		base     **int
+		override *int
+	}{
+		{"active timeout", &result.ActiveTimeoutSeconds, override.ActiveTimeoutSeconds},
+		{"max iterations", &result.MaxIterations, override.MaxIterations},
+		{"max output tokens", &result.MaxOutputTokens, override.MaxOutputTokens},
+		{"total timeout", &result.TotalTimeoutSeconds, override.TotalTimeoutSeconds},
+		{"waiting timeout", &result.WaitingTimeoutSeconds, override.WaitingTimeoutSeconds},
+	} {
+		if pair.override == nil {
+			continue
+		}
+		if *pair.base != nil && *pair.override > **pair.base {
+			return nil, &Error{Category: ErrorValidation, Message: "Conversation call cannot widen " + pair.name}
+		}
+		value := *pair.override
+		*pair.base = &value
+	}
+	if override.MaxEstimatedCostUsd != nil {
+		if result.MaxEstimatedCostUsd != nil && *override.MaxEstimatedCostUsd > *result.MaxEstimatedCostUsd {
+			return nil, &Error{Category: ErrorValidation, Message: "Conversation call cannot widen max estimated cost"}
+		}
+		value := *override.MaxEstimatedCostUsd
+		result.MaxEstimatedCostUsd = &value
+	}
+	return &result, nil
 }
 
-type BoundSession struct {
-	agent      *Agent
-	lock       *sync.Mutex
-	sessionID  string
-	sessionKey string
-	options    SessionOptions
-}
-
-func (s *BoundSession) Start(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (*InvocationHandle, error) {
-	if err := s.bind(&options); err != nil {
+func (t *Turn) submitToolResults(ctx context.Context, results []toolResult) (*generated.SubmitHostToolResultsResponse, error) {
+	if err := t.validateAccess(); err != nil {
 		return nil, err
 	}
-	s.lock.Lock()
-	handle, err := s.agent.Start(ctx, input, options)
+	body := generated.SubmitHostToolResultsRequest{}
+	body.Results = make([]struct {
+		Content    interface{}          `json:"content"`
+		IsError    *bool                `json:"is_error,omitempty"`
+		ToolCallID generated.ToolCallID `json:"tool_call_id"`
+	}, 0, len(results))
+	for _, result := range results {
+		var isError *bool
+		if result.IsError {
+			value := true
+			isError = &value
+		}
+		body.Results = append(body.Results, struct {
+			Content    interface{}          `json:"content"`
+			IsError    *bool                `json:"is_error,omitempty"`
+			ToolCallID generated.ToolCallID `json:"tool_call_id"`
+		}{
+			Content:    result.Content,
+			IsError:    isError,
+			ToolCallID: result.ToolCallID,
+		})
+	}
+	response, err := t.client.raw.SubmitHostToolResultsWithResponse(ctx, t.id, body, t.requestEditor())
 	if err != nil {
-		s.lock.Unlock()
-		return nil, err
+		return nil, transportError(err)
 	}
-	go s.releaseWhenTerminal(handle, options.Wait)
-	return handle, nil
+	if response.JSON202 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return response.JSON202, nil
 }
 
-func (s *BoundSession) Run(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (*AgentResult, error) {
-	if err := s.bind(&options); err != nil {
-		return nil, err
+func (t *Turn) validateAccess() error {
+	if strings.TrimSpace(t.access.TenantKey) == "" {
+		return &Error{Category: ErrorValidation, Message: "Turn tenant key is required"}
 	}
-	s.lock.Lock()
-	result, handle, err := s.agent.runWithHandle(ctx, input, options)
-	if err != nil && handle != nil {
-		go s.releaseWhenTerminal(handle, options.Wait)
-	} else {
-		s.lock.Unlock()
-	}
-	return result, err
-}
-
-func (s *BoundSession) Text(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-) (string, error) {
-	result, err := s.Run(ctx, input, options)
-	if err != nil {
-		return "", err
-	}
-	return s.agent.textFromResult(result)
-}
-
-func (s *BoundSession) Stream(
-	ctx context.Context,
-	input string,
-	options AgentInvocationOptions,
-	consume func(AgentStreamEvent) error,
-) (*InvocationHandle, error) {
-	if err := s.bind(&options); err != nil {
-		return nil, err
-	}
-	s.lock.Lock()
-	handle, err := s.agent.Stream(ctx, input, options, consume)
-	if err != nil && handle != nil {
-		go s.releaseWhenTerminal(handle, options.Wait)
-	} else {
-		s.lock.Unlock()
-	}
-	return handle, err
-}
-
-func (s *BoundSession) bind(options *AgentInvocationOptions) error {
-	if options.Session != nil {
-		return &Error{
-			Category: ErrorValidation,
-			Message:  "bound Session calls cannot override their Session",
-		}
-	}
-	sessionOptions := &InvocationSessionOptions{
-		PinnedRevision: s.options.PinnedRevision,
-		OnConflict:     s.options.OnConflict,
-	}
-	if sessionOptions.PinnedRevision == nil && sessionOptions.OnConflict == "" {
-		sessionOptions = nil
-	}
-	if s.sessionID != "" {
-		options.Session = &InvocationSession{
-			Mode:     InvocationSessionContinue,
-			ID:       &s.sessionID,
-			IfActive: options.IfActive,
-			Options:  sessionOptions,
-		}
-	} else {
-		options.Session = &InvocationSession{
-			Mode:     InvocationSessionContinueOrCreate,
-			Key:      &s.sessionKey,
-			IfActive: options.IfActive,
-			Options:  sessionOptions,
-		}
-	}
-	options.Retention = s.options.Retention
-	options.Compaction = s.options.Compaction
-	options.AuthorizationContext = s.options.AuthorizationContext
 	return nil
 }
 
-func (s *BoundSession) releaseWhenTerminal(
-	handle *InvocationHandle,
-	options WaitOptions,
-) {
-	options.Timeout = 0
-	options.Until = WaitUntilTerminal
-	for {
-		_, err := handle.Wait(context.Background(), options)
-		if err == nil {
-			s.lock.Unlock()
-			return
+func (t *Turn) requestEditor() generated.RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		if t.access.TenantKey != "" {
+			request.Header.Set("X-Nvoken-Tenant-Key", t.access.TenantKey)
 		}
-		time.Sleep(time.Second)
-	}
-}
-
-func DecodeStructuredOutput[T any](result *AgentResult) (T, error) {
-	var value T
-	if result == nil || len(result.StructuredOutput) == 0 ||
-		string(result.StructuredOutput) == "null" {
-		return value, &NoOutputTextError{
-			ResultKind: "no structured output",
+		if t.access.UserKey != "" {
+			request.Header.Set("X-Nvoken-User-Key", t.access.UserKey)
 		}
+		return nil
 	}
-	if err := json.Unmarshal(result.StructuredOutput, &value); err != nil {
-		return value, fmt.Errorf("decode structured output: %w", err)
-	}
-	return value, nil
 }
 
-func newAgentResult(
-	handle *InvocationHandle,
-	result *InvocationResult,
-) (*AgentResult, error) {
-	structured, err := json.Marshal(result.Invocation.StructuredOutput)
-	if err != nil {
-		return nil, fmt.Errorf("encode structured output: %w", err)
-	}
-	if result.Invocation.StructuredOutput == nil {
-		structured = nil
-	}
-	return &AgentResult{
-		Handle:           handle,
-		Invocation:       result.Invocation,
-		Messages:         result.Messages,
-		OutputText:       result.OutputText,
-		StructuredOutput: structured,
-		Raw:              result,
-	}, nil
+type toolExecutionState struct {
+	mu      sync.Mutex
+	results map[string]toolResult
+	running map[string]chan struct{}
 }
 
-func recoverThroughAuthoritativeRead(err error) bool {
-	var typed *Error
-	if !errors.As(err, &typed) {
-		return false
+func newToolExecutionState() *toolExecutionState {
+	return &toolExecutionState{
+		results: make(map[string]toolResult),
+		running: make(map[string]chan struct{}),
 	}
-	return typed.Category == ErrorTransport || typed.Category == ErrorServer
 }
 
-func invocationFailureCode(invocation *Invocation) string {
-	if invocation.Error == nil {
-		return ""
-	}
-	return string(invocation.Error.Code)
-}
-
-// invocationEndedMessage explains an ending that was not the answer asked for.
-// An `incomplete` turn carries no error, so its stop reason is the only thing
-// that names the budget that stopped it.
-func invocationEndedMessage(invocationID string, invocation *Invocation) string {
-	if invocation.StopReason != nil {
-		return fmt.Sprintf(
-			"Invocation %s ended with status %s (%s)",
-			invocationID, invocation.Status, *invocation.StopReason,
-		)
-	}
-	return fmt.Sprintf("Invocation %s ended with status %s", invocationID, invocation.Status)
-}
-
-// webhookTarget prefers the per-call target and falls back to the Agent's.
-func webhookTarget(perCall, agentDefault *WebhookTarget) *WebhookTarget {
-	if perCall != nil {
-		return perCall
-	}
-	return agentDefault
-}
-
-// AnswerToolCallsOptions configures one unattended answering pass.
-type AnswerToolCallsOptions struct {
-	// Claim runs before each tool. Returning false skips that call — use it to
-	// take an execution lease keyed by the ToolCall ID, so a streaming reader
-	// and this worker cannot both start the same non-idempotent tool.
-	Claim func(context.Context, ToolCallSummary) (bool, error)
-	// LeaveWaitingOnMissingHandler reports an error rather than skipping a call
-	// this Agent has no handler for. The default skips, because an unattended
-	// worker is often one of several answering different tools.
-	LeaveWaitingOnMissingHandler bool
-}
-
-// AnswerToolCalls answers the host tool calls a parked Invocation is
-// waiting on, without streaming it.
-//
-// This is the unattended path. An Invocation's webhook target receives a signed
-// invocation.waiting post when the turn parks, and a worker calls this to
-// finish it, so a turn makes progress with nobody watching. The same handlers
-// still serve an attached reader — the first accepted result per call wins, so
-// the two coexist rather than being a per-deployment choice.
-//
-// Acknowledge the webhook before calling this. Webhook delivery uses a
-// 10-second request timeout while a host tool budget is minutes, so a receiver
-// that executes tools inline has its delivery marked failed and retried while
-// the work is still running. Verify the signature, enqueue, return 2xx, and
-// call this from the worker.
-//
-// Fence side effects with Claim. First-accepted-result deduplicates the
-// transcript; it does not stop two processes from both beginning a call. An
-// attached reader and this worker can race, and webhooks are
-// at-least-once, so two deliveries can race each other.
-//
-// Reports how many results were submitted. Zero means the Invocation was no
-// longer waiting or every call was claimed elsewhere — both ordinary outcomes.
-func (a *Agent) AnswerToolCalls(
+func (s *toolExecutionState) resolve(
 	ctx context.Context,
-	invocationID string,
-	options AnswerToolCallsOptions,
-) (int, error) {
-	invocation, err := a.client.GetInvocation(ctx, invocationID)
-	if err != nil {
-		return 0, err
-	}
-	answerable := AnswerableToolCalls(invocation)
-	if invocation.Status != InvocationWaiting || len(answerable) == 0 {
-		return 0, nil
-	}
-	handle := a.client.Invocation(invocationID)
-	results := make([]ToolResult, 0, len(answerable))
-	for _, pending := range answerable {
-		if !a.runsLocally(pending) {
-			continue
+	turnID string,
+	call ToolCallSummary,
+	handler ToolHandler,
+) (toolResult, error) {
+	for {
+		s.mu.Lock()
+		if result, ok := s.results[call.ID]; ok {
+			s.mu.Unlock()
+			return result, nil
 		}
-		tool, ok := a.hostTools[pending.Name]
-		if !ok || tool.Handler == nil {
-			if options.LeaveWaitingOnMissingHandler {
-				return 0, &MissingToolHandlerError{
-					InvocationID: invocationID,
-					ToolName:     pending.Name,
-				}
-			}
-			continue
-		}
-		if options.Claim != nil {
-			claimed, err := options.Claim(ctx, pending)
-			if err != nil {
-				return 0, err
-			}
-			if !claimed {
+		if done := s.running[call.ID]; done != nil {
+			s.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return toolResult{}, transportError(ctx.Err())
+			case <-done:
 				continue
 			}
 		}
-		content, err := tool.Handler(ctx, toolCallArguments(pending))
-		result := ToolResult{ToolCallID: pending.ID, Content: content}
-		if err != nil {
-			result.Content = map[string]any{
-				"error": err.Error(),
-				"type":  fmt.Sprintf("%T", err),
-			}
+		done := make(chan struct{})
+		s.running[call.ID] = done
+		s.mu.Unlock()
+
+		content, handlerErr := handler(ctx, *call.Arguments, TurnToolContext{
+			TurnID:     turnID,
+			ToolCallID: call.ID,
+		})
+		result := toolResult{ToolCallID: call.ID, Content: content}
+		if handlerErr != nil {
 			result.IsError = true
+			result.Content = map[string]any{"error": handlerErr.Error()}
 		}
-		results = append(results, result)
+
+		s.mu.Lock()
+		s.results[call.ID] = result
+		delete(s.running, call.ID)
+		close(done)
+		s.mu.Unlock()
+		return result, nil
 	}
-	if len(results) == 0 {
-		return 0, nil
-	}
-	if _, err := handle.SubmitToolResults(ctx, results); err != nil {
-		return 0, err
-	}
-	return len(results), nil
 }
 
-// waitingChange reports whether a transcript.update carries a change parking
-// this turn on your tools.
-func waitingChange(event StreamEvent, invocationID string) bool {
-	if event.Type != "transcript.update" {
-		return false
+func validateInlineMemorySelection(selection *MemorySelection) error {
+	if selection == nil || selection.Scope == "none" {
+		return nil
 	}
-	var update generated.TranscriptUpdateEvent
-	if json.Unmarshal(event.Data, &update) != nil {
-		return false
+	if (selection.Scope == "tenant" || selection.Scope == "user") && strings.TrimSpace(selection.Namespace) == "" {
+		return &Error{Category: ErrorValidation, Message: "inline tenant and user memory require an explicit namespace"}
 	}
-	for _, change := range update.InvocationChanges {
-		if change.InvocationID == invocationID && change.Status == generated.InvocationStatusWaiting {
-			return true
+	return nil
+}
+
+func cloneConversationOptions(options ConversationOptions) ConversationOptions {
+	return ConversationOptions{
+		TenantKey: options.TenantKey,
+		UserKey:   options.UserKey,
+		Selection: *cloneConversationSelection(&options.Selection),
+		Memory:    cloneMemorySelection(options.Memory),
+		Limits:    cloneLimits(options.Limits),
+	}
+}
+
+func cloneConversationSelection(selection *ConversationSelection) *ConversationSelection {
+	if selection == nil {
+		return nil
+	}
+	return &ConversationSelection{
+		ID:       selection.ID,
+		Key:      selection.Key,
+		Owner:    selection.Owner,
+		Metadata: cloneAnyMap(selection.Metadata),
+	}
+}
+
+func cloneMemorySelection(selection *MemorySelection) *MemorySelection {
+	if selection == nil {
+		return nil
+	}
+	clone := *selection
+	return &clone
+}
+
+func cloneLimits(limits *Limits) *Limits {
+	if limits == nil {
+		return nil
+	}
+	clone := *limits
+	clone.ActiveTimeoutSeconds = cloneInt(limits.ActiveTimeoutSeconds)
+	clone.MaxEstimatedCostUsd = cloneFloat32(limits.MaxEstimatedCostUsd)
+	clone.MaxIterations = cloneInt(limits.MaxIterations)
+	clone.MaxOutputTokens = cloneInt(limits.MaxOutputTokens)
+	clone.TotalTimeoutSeconds = cloneInt(limits.TotalTimeoutSeconds)
+	clone.WaitingTimeoutSeconds = cloneInt(limits.WaitingTimeoutSeconds)
+	return &clone
+}
+
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+func cloneFloat32(value *float32) *float32 {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(values))
+	for key, value := range values {
+		clone[key] = value
+	}
+	return clone
+}
+
+func cloneAnyMap(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(values))
+	for key, value := range values {
+		clone[key] = cloneJSONValue(value)
+	}
+	return clone
+}
+
+func cloneJSONValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneAnyMap(value)
+	case []any:
+		clone := make([]any, len(value))
+		for index, item := range value {
+			clone[index] = cloneJSONValue(item)
 		}
+		return clone
+	case map[string]string:
+		return cloneStringMap(value)
+	default:
+		return value
 	}
-	return false
+}
+
+func bindToolMap(existing map[string]Tool, additions []Tool) map[string]Tool {
+	bound := make(map[string]Tool, len(existing)+len(additions))
+	for name, tool := range existing {
+		bound[name] = tool
+	}
+	for _, tool := range additions {
+		bound[tool.Name] = tool
+	}
+	return bound
+}
+
+func validationError(message string, err error) error {
+	return &Error{Category: ErrorValidation, Message: fmt.Sprintf("%s: %v", message, err), Cause: err}
 }

@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "description": "Wire shapes for independent behavior, memory, Conversation, actor, and Turn selection. Four independently written request builders converge here so a field one binding spells differently is a failing test rather than a silently dropped option.",
+  "conversation_options": {
+    "retention_only": {
+      "retention": {
+        "ttl_seconds": 86400
+      }
+    },
+    "every_member": {
+      "compaction": {
+        "trigger_tokens": 32768
+      },
+      "retention": {
+        "ttl_seconds": 3600
+      },
+      "metadata": {
+        "surface": "web"
+      }
+    }
+  },
+  "retention_bounds": {
+    "min_ttl_seconds": 3600,
+    "max_ttl_seconds": 2592000
+  },
+  "turn_metadata": {
+    "board": "brand-2026",
+    "surface": "web"
+  },
+  "metadata_bounds": {
+    "max_entries": 16,
+    "max_key_bytes": 64,
+    "max_value_bytes": 512
+  },
+  "metadata_update": {
+    "request": {
+      "metadata": {
+        "title": "Refund policy"
+      }
+    },
+    "note": "A Conversation update stores the complete metadata object supplied by the caller. Omitted metadata is unchanged; `\"metadata\": null` is not an update shape."
+  },
+  "agent_turn_request": {
+    "note": "The complete request body each SDK's high-level App-owned Agent binding produces for input `hello` and idempotency key `conformance`.",
+    "web_search_metadata_unbound": {
+      "tenant_key": "acme",
+      "idempotency_key": "conformance",
+      "behavior": {
+        "kind": "agent",
+        "agent": {
+          "agent_id": "agent_019b0a12-0000-7000-8000-000000000006",
+          "revision": "current"
+        }
+      },
+      "on_budget_exhausted": "hold",
+      "input": "hello",
+      "metadata": {
+        "board": "brand-2026",
+        "surface": "web"
+      },
+      "memory": { "scope": "none" }
+    }
+  },
+  "provider_tools": {
+    "defaults": [
+      {
+        "type": "web_search",
+        "web_search": {}
+      }
+    ],
+    "configured": [
+      {
+        "type": "web_search",
+        "web_search": {
+          "max_uses": 5,
+          "allowed_domains": [
+            "example.com",
+            "docs.example.com"
+          ],
+          "user_location": {
+            "city": "Austin",
+            "region": "Texas",
+            "country": "US",
+            "timezone": "America/Chicago"
+          }
+        }
+      }
+    ]
+  }
+}

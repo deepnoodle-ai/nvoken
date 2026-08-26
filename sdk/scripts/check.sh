@@ -47,8 +47,8 @@ npm ci --prefix sdk/typescript
 npm run build --prefix sdk/typescript
 npm test --prefix sdk/typescript
 python3 sdk/scripts/check_package_files.py
-npm ci --prefix examples/typescript-invoke-showcase
-npm run build --prefix examples/typescript-invoke-showcase
+npm ci --prefix examples/typescript-turn-showcase
+npm run build --prefix examples/typescript-turn-showcase
 npm ci --prefix examples/typescript-agent-tools
 npm run build --prefix examples/typescript-agent-tools
 npm ci --prefix examples/typescript-chat

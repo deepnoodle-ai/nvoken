@@ -30,17 +30,12 @@ than shipping.
 Do not hand-edit generated transports. The exact generated paths are listed in
 `CONTRIBUTING.md` and enforced by `make sdk-generate-check`.
 
-`sdk/scripts/generate.sh` generates from a copy of the snapshot with one
-constraint removed. The contract states Agent Definition exclusivity as a
-constraint-only `oneOf` on `CreateInvocationRequest`: two branches carrying
-`required` and `not` and no properties. No generator handles that shape.
-openapi-generator's Java generators drop the model outright, so TypeScript,
-Python, and Rust silently lose `CreateInvocationRequest`, and the Rust generator
-additionally aborts. oapi-codegen keeps the model but turns it into an opaque
-`json.RawMessage` union. Each facade enforces the exclusivity itself before
-building a request. The script fails loudly if the constraint moves, so an
-upstream edit to that block surfaces as a generation failure rather than a
-silent behavior change.
+`sdk/scripts/generate.sh` generates from an isolated copy of the snapshot. It
+renames the browser `ClientInterface` schema only in the Go generator input,
+because oapi-codegen reserves that name for its transport interface. It also
+repairs a small set of discriminator unions emitted incorrectly by the Rust
+generator. JSON names and the committed public contract remain unchanged, and
+every workaround fails loudly if the expected generated shape moves.
 
 Handwritten facade code belongs in the language package outside its generated
 directory. Preserve these cross-language reliability rules:
@@ -52,7 +47,7 @@ directory. Preserve these cross-language reliability rules:
   [The streaming protocol](../reference/streaming-protocol.md) for the frames,
   their durability, and the shared reducer);
 - preserve ToolCall IDs when submitting results;
-- treat local wait cancellation and remote Invocation cancellation as different
+- treat local wait cancellation and remote Turn cancellation as different
   operations;
 - verify callback signatures against the raw body before parsing it.
 

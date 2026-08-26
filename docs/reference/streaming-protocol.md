@@ -1,13 +1,12 @@
 # The streaming protocol
 
-**Status:** Descriptive. This is how the protocol behaves today. As of step C
-of [design 004](../design/004-protocol-end-state.md), today and the end state
-are the same thing for the stream: one route, one saved frame, one terminal
-signal, one preview frame, one cursor.
+**Status:** Descriptive. This is how the published protocol behaves today:
+two scopes, one saved frame, one terminal signal, one preview frame, and an
+opaque cursor that can cross from a bound Turn stream to its Conversation.
 **Verified against:** the runtime's stream handler, the contract in
 [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml), and the four SDK
 implementations in this repository.
-**Date:** 2026-08-14
+**Date:** 2026-08-26
 **Authority:** The runtime is the authority. Where this document and the
 runtime disagree, the runtime is right and this document is stale.
 
@@ -21,24 +20,29 @@ If you are consuming nvoken through an SDK, read
 [Streaming & recovery](https://nvoken.com/docs/guides/streaming-and-recovery)
 instead. It is shorter and answers the questions callers actually have.
 
-## One route
+## Two scopes, two routes
 
 ```
-GET /v1/sessions/{session_id}/stream
+GET /v1/turns/{turn_id}/stream
+GET /v1/conversations/{conversation_id}/stream
 ```
 
-Parameters: `cursor` resumes from a durable position, `invocation_id` narrows
-every frame to one turn, `deltas=false` turns previews off.
+Both routes accept `cursor`. The Turn route also accepts `deltas=false` to
+turn previews off and `Last-Event-ID` as a cursor when the query parameter is
+absent. The Conversation route is a durable subscription to current and future
+Turns and does not accept a Turn filter.
 
-Admission is a separate request. `POST /v1/invocations` returns the turn and
+Admission is a separate request. `POST /v1/turns` returns the turn and
 that response is the acknowledgment; then you open the stream. The separation
 is what makes retries safe: if the admission response is lost you retry the
-exact body and idempotency key, and once you hold an `invocation_id` no
+exact body and idempotency key, and once you hold a `turn_id` no
 reconnect can create a second turn.
 
-The filter is a filter, not a second endpoint. Cursors are Session-scoped, so a
-position taken from a filtered read resumes an unfiltered one and the other way
-round.
+Use the Turn route for one execution, including a standalone Turn with no
+public Conversation. It carries only that Turn and closes after its terminal
+change. Use the Conversation route when you want an idle subscription that
+also receives Turns created later. A cursor from a conversation-bound Turn is
+accepted by its Conversation stream; a standalone Turn cursor is not.
 
 ## Streams, connections, and scope
 
@@ -47,12 +51,12 @@ cursor; a connection is one HTTP response reading it for a while. Losing that
 distinction is the most common way to misread this protocol, so the vocabulary
 here is deliberate.
 
-**Unfiltered, the stream is a subscription.** One connection follows every turn
-in the Session, interleaved, and it stays open while the Session is idle. A
+**A Conversation stream is a subscription.** One connection follows every turn
+in the Conversation, interleaved, and it stays open while the Conversation is idle. A
 turn started later by anyone appears on it. There is nothing to poll.
 
-**Filtered, it delivers one turn and closes.** Pass `invocation_id` and the
-server hangs up once that turn's terminal change has gone out. It says nothing
+**A Turn stream delivers one turn and closes.** The server hangs up once that
+Turn's terminal change has gone out. It says nothing
 on the way out, because a client following the exit rule has already left.
 
 **Connections are disposable; the stream is not.** A connection ends by
@@ -73,7 +77,7 @@ application.
 
 **The lifecycle of one connection**, in order: it opens with or without a
 cursor; the server writes the `retry: 1000` opener; saved state replays, from
-the cursor if one was given and otherwise from the Session origin; the
+the cursor if one was given and otherwise from the selected scope's origin; the
 connection goes live, interleaving durable frames with previews; and it ends
 with `connection.closing` or a silent drop. From the client's side the whole algorithm
 is one loop: connect, fold frames, remember the last durable `id`, reconnect
@@ -96,6 +100,13 @@ in a transcript travel as descriptor blocks, carrying media type, size, and
 alone and keeps the stream cheap to fan out to many readers. It also means a
 client cannot render described media from the stream by itself; retrieving the
 bytes is outside the protocol today, recorded as I13.
+
+Every frame carries `conversation_id` and `content_expires_at`. A
+Conversation-bound frame carries its Conversation ID and has no content expiry.
+A standalone Turn has no Conversation ID; it receives a non-null expiry after
+settlement, and its frames and messages carry that same authority boundary.
+This lets clients discard private content on schedule without first resolving
+another resource.
 
 ## Durable and ephemeral frames
 
@@ -144,9 +155,10 @@ against the real runtime.
 
 ### `transcript.update`
 
-Ordered `messages` and `invocation_changes`, plus a `cursor` in the payload
-that matches the SSE `id`. Filtered by `invocation_id`, both arrays carry only
-that turn's rows.
+Ordered `messages` and `turn_changes`, plus `conversation_id`,
+`content_expires_at`, and a `cursor` in the payload that matches the SSE `id`.
+On a Turn stream both arrays carry only that Turn's rows. On a Conversation
+stream they may interleave rows from multiple Turns.
 
 Empty pages are not sent. The server advances its internal watermark but only
 writes a frame when there is at least one message or change, so every
@@ -155,12 +167,11 @@ writes a frame when there is at least one message or change, so every
 Apply messages before lifecycle changes from the same frame. Otherwise a UI can
 show a turn as complete before its final message exists.
 
-**A turn is over when a change for it carries a terminal status.** That is the
+**A turn is over when a change for it carries `terminal: true`.** That is the
 terminal signal, and there is no other. It is durable, so it replays on
 reconnect like every other change, at any cursor: a turn that settled while you
 were away is still settled when you return, with no re-emission machinery
-anywhere. Read `GET /v1/invocations/{invocation_id}` if you want the composed
-result.
+anywhere. Read `GET /v1/turns/{turn_id}/result` if you want the composed result.
 
 A change carries the facts a status alone leaves open: `terminal` for whether
 this change is the ending, `stop_reason` for a turn that stopped short,
@@ -171,11 +182,11 @@ A client can recover from the change stream alone.
 
 Read `terminal` rather than testing `status` against a set of your own. There
 are eight statuses and four are terminal, so the mistake worth designing out is
-encoding the other four — `budget_hold`, a turn stopped on spending capacity with
-its deadlines on hold, is not an ending, and a turn wrongly believed finished
-is one nobody settles or reattaches to. Each SDK also exports the predicate:
-`isTurnOver` in TypeScript, `IsTurnOver` in Go, `is_turn_over` in Python and
-Rust, over `isTerminalStatus` / `IsTerminalStatus` / `is_terminal_status`.
+encoding the other four — `budget_hold`, a turn stopped on spending capacity
+with its deadlines on hold, is not an ending, and a turn wrongly believed
+finished is one nobody settles or reattaches to. TypeScript, Python, and Rust
+export `isTurnOver`, `is_turn_over`, and `is_turn_over`, respectively. Go
+callers read the required `TurnChange.Terminal` field directly.
 
 `terminal` describes the change, not the turn. A replayed `running` change
 stays `false` after the turn has ended, which is what keeps the rule above —
@@ -226,12 +237,13 @@ Discard accumulated preview text and wait for durable frames. The server drains
 the transcript immediately after sending a resync, so the replacement is
 already on its way.
 
-`invocation_id` is present on a filtered stream and absent on an unfiltered
-one. Absent is scope: discard previews for the whole Session. It is an absent
+`turn_id` is present when only one Turn's previews are void and absent when
+every preview in a Conversation is void. Absent is scope: discard previews for
+the whole Conversation. It is an absent
 field rather than a null identifier, because a null identifier is scope wearing
 an identifier's name.
 
-You never receive this frame when `deltas=false`, because the server only
+The Turn route never emits this frame when `deltas=false`, because the server only
 subscribes to the live bus when previews are enabled and resyncs originate from
 that subscription.
 
@@ -266,18 +278,18 @@ The rules, in the order a client should apply them:
 
 1. **Accumulate** by `(message_id, content_index)`. Append `delta` to that
    entry, whatever its `kind`.
-2. **Discard on attempt increase.** A higher `attempt` for an Invocation means
+2. **Discard on attempt increase.** A higher `attempt` for a Turn means
    execution was claimed again after recovery. Everything provisional from
    earlier attempts is dead. Ignore deltas from a lower attempt than the
    highest one seen.
-3. **Discard on resync.** Scoped to one Invocation, or the whole Session when
-   `invocation_id` is absent.
+3. **Discard on resync.** Scoped to one Turn, or the whole Conversation when
+   `turn_id` is absent.
 4. **Discard when the saved message lands.** A durable message supersedes the
    preview that was building it.
 5. **Discard on terminal status**, and refuse later previews for that
-   Invocation. A settled turn cannot produce more provisional output.
+   Turn. A settled turn cannot produce more provisional output.
 
-`attempt` is the durable anchor. It appears on the delta and on the Invocation
+`attempt` is the durable anchor. It appears on the delta and on the Turn
 itself, so a client can discard stale output even across a reconnect where it
 never saw the resync frame.
 
@@ -287,7 +299,7 @@ whether a turn succeeded.
 ## The reducer
 
 Any consumer that renders a live transcript needs the same fold: durable
-messages by sequence, lifecycle changes by `(invocation_id, revision)`,
+messages by sequence, lifecycle changes by `(turn_id, revision)`,
 previews by `(message_id, content_index)`, plus the resume cursor and the set
 of turns a terminal change has arrived for. This repository implements it four
 times:
@@ -312,10 +324,11 @@ in four unrelated tests. See
 
 The whole protocol, from a client's chair:
 
-1. Admit with `POST /v1/invocations`, idempotency key attached. The response
+1. Admit with `POST /v1/turns`, idempotency key attached. The response
    acknowledges the turn.
-2. Open `GET /v1/sessions/{id}/stream`, with `cursor` if resuming and
-   `invocation_id` if following one turn.
+2. Open `GET /v1/turns/{id}/stream` to follow that Turn, with `cursor` if
+   resuming. Open `GET /v1/conversations/{id}/stream` instead when you want a
+   subscription that remains alive for later Turns.
 3. Fold: append messages by `sequence`; append changes and fold by highest
    `revision`; accumulate `message.delta` by `(message_id, content_index)`.
    Discard previews on attempt increase, on resync, when the saved message
@@ -324,7 +337,7 @@ The whole protocol, from a client's chair:
    connection end, reconnect with your cursor: immediately on `rotate`, lazily
    on `idle`, after widening your buffer on `slow_consumer`, immediately on a
    silent drop.
-5. Read the Invocation if you want the composed result.
+5. Read `GET /v1/turns/{id}/result` if you want the composed result.
 
 One loop, one exit condition, one reconnect rule.
 
@@ -335,7 +348,7 @@ other is where most of this protocol's remaining friction lives, and the
 reducer only covers the first third of it.
 
 The nvoken console is a worked example. It is not public, but it runs the
-TypeScript SDK in the browser against the Session stream, and every claim in
+TypeScript SDK in the browser against the Conversation stream, and every claim in
 this section came from it.
 
 ### Five kinds of state, five update rules
@@ -343,10 +356,10 @@ this section came from it.
 | State | Keyed by | Arrives on | Rule |
 | --- | --- | --- | --- |
 | Message | `sequence` | `transcript.update.messages` | Append. The stream never re-sends one. |
-| Lifecycle change | `(invocation_id, revision)` | `transcript.update.invocation_changes` | Append to a log, then fold to the highest revision to get current state. |
+| Lifecycle change | `(turn_id, revision)` | `transcript.update.turn_changes` | Append to a log, then fold to the highest revision to get current state. |
 | Preview | `(message_id, content_index)` | `message.delta` | Concatenate, then discard wholesale on any of the five triggers above. |
-| Tool call | `tool_use.id` | opened by one message, closed by a later one; status on `invocation_changes.tool_calls` | Retroactively update a message you already rendered. |
-| Compaction | not streamed at all | `GET /v1/sessions/{id}/compactions` | Fetch separately, interleave by `covers_through`. |
+| Tool call | `tool_use.id` | opened by one message, closed by a later one; status on `turn_changes.tool_calls` | Retroactively update a message you already rendered. |
+| Compaction | not streamed at all | `GET /v1/conversations/{id}/compactions` | Fetch separately, interleave by `covers_through`. |
 
 Only the first is a plain append. That is the whole problem.
 
@@ -386,7 +399,7 @@ messages before lifecycle changes within a frame.
 
 They can still split across frames when a page fills on messages alone: a turn
 that produced more messages than your `limit` spends the whole budget on them
-and the changes follow. So a client testing "is this Invocation still active"
+and the changes follow. So a client testing "is this Turn still active"
 can still say yes for a beat after the answer is on screen, and the fix is to
 wait for the change rather than to re-derive completion from block inspection.
 
@@ -404,15 +417,15 @@ last assistant message.
 
 ### Reconciling two sources of truth
 
-A live client holds two claims about what the Session is doing:
+A live client holds two claims about what the Conversation is doing:
 
 1. **The stream.** Authoritative, and now a subscription, so a turn started by
    anyone else appears on the connection that is already open.
-2. **A local claim.** After your own `createInvocation` returns, you know a turn
+2. **A local claim.** After your own `createTurn` returns, you know a turn
    exists before any stream frame proves it. Without holding that claim, a
    composer drops back to idle for a beat and invites the user to send twice.
 
-There used to be a third, a periodic Session read, because the stream hung up
+There used to be a third, a periodic Conversation read, because the stream hung up
 whenever no turn was running. The subscription removes it.
 
 ## Tool calls
@@ -427,7 +440,7 @@ A tool call reaches you four ways at once:
    the answering message carries a `tool_result` block naming it by
    `tool_use_id`. This is the durable record and it arrives in
    `transcript.update` messages.
-2. **As a status.** The Invocation moves to `waiting`, which other APIs call
+2. **As a status.** The Turn moves to `waiting`, which other APIs call
    `requires_action`. Nothing is executing. The turn is parked.
 3. **As lifecycle state.** Every lifecycle change carries `tool_calls`, one
    entry per call in the turn with `id`, `name`, `mode`, `status`, and
@@ -440,7 +453,7 @@ A tool call reaches you four ways at once:
 4. **As live texture.** `message.delta` frames of kind `tool_arguments` show
    the model writing the call, lossy and disposable like every preview.
 
-To advance the turn, `POST /v1/invocations/{id}/tool-results` with each
+To advance the turn, `POST /v1/turns/{id}/tool-results` with each
 `tool_call_id` returned verbatim. The turn returns to `queued` and picks up
 where it left off. A partial batch leaves it waiting.
 
@@ -483,9 +496,10 @@ A connection that carried nothing for its whole lifetime is reclaimed as
 `idle`; one that carried traffic rotates. Both mean reconnect, and the
 difference is only how soon.
 
-`deltas=false` turns off previews and nothing else. Replay, resumption, and
-termination are unchanged. You also stop receiving `stream.resync`, since there
-are no previews to invalidate.
+On a Turn stream, `deltas=false` turns off previews and nothing else. Replay,
+resumption, and termination are unchanged. You also stop receiving
+`stream.resync`, since there are no previews to invalidate. Conversation
+streams always include the live preview path.
 
 Previews travel over a separate fan-out bus, not the database. In a
 single-process deployment that bus is in memory. Across processes it is Redis,
@@ -494,24 +508,22 @@ and the daemon refuses to start in `cloud_tasks` execution mode without
 durable frames with no previews. Durable frames never depend on the bus.
 
 Per connected client per poll tick the server issues one transcript query and
-nothing else. It used to issue two more: an Invocation re-read for every
-changed page, and a nonterminal-Invocation probe to derive the terminal
-condition the stream no longer has.
+nothing else. Terminal closure on the Turn route is driven by the durable
+change it already read, not by a second Turn lookup.
 
 ## Errors are not frames
 
 There is no `error` frame in this protocol.
 
 Authentication, authorization, validation, and admission failures are ordinary
-JSON HTTP error responses with the usual status codes. On the streaming route
+JSON HTTP error responses with the usual status codes. On either streaming route
 they are written before the SSE response begins, so a client must check the
-response status before it starts parsing. An `invocation_id` that names a turn
-in another Session is resolved before the stream opens and answered with
-`404 not_found`.
+response status before it starts parsing. A Turn or Conversation outside the
+caller's scope is answered with `404 not_found`.
 
 Failures after the stream is open cannot be reported in band. The server logs
 the reason and closes the connection. Reconnect and reconcile by reading the
-Invocation. This is why every SDK ends with an authoritative read rather than
+Turn. This is why every SDK ends with an authoritative read rather than
 trusting the stream to have told it everything.
 
 ## Rough edges
@@ -549,8 +561,8 @@ changes; a delta carries `emitted_at`; admission records carry `attempted_at`.
 The resource-versus-event split explains two of them. It does not explain four.
 
 **N9. `pending` and `queued` are the same state in sibling enums.**
-`ToolCallStatus.pending` and `InvocationStatus.queued` both mean not started.
-Meanwhile `InvocationStatus.waiting` means blocked on tool calls, which is
+`ToolCallStatus.pending` and `TurnStatus.queued` both mean not started.
+Meanwhile `TurnStatus.waiting` means blocked on tool calls, which is
 exactly what a reader who just learned `pending` will assume `pending` means.
 
 **N11. Booleans use three conventions.** `is_error` and `is_partial` take a
@@ -573,8 +585,8 @@ structured output or a provenance that is itself structured.
 Everything a client hits building a live transcript out of an append-only
 stream. Each item names where the nvoken console absorbs the cost today.
 
-**I3. `invocation_changes` advertises state and delivers history.** The reducer
-keys by `(invocation_id, revision)` and returns every revision it has seen, so
+**I3. `turn_changes` advertises state and delivers history.** The reducer
+keys by `(turn_id, revision)` and returns every revision it has seen, so
 every consumer folds it again to get current state (`activity.ts`,
 `latestChanges`). Either the snapshot should expose the fold, or the field
 should be named for the log it is.
@@ -602,7 +614,7 @@ runtime's snake_case. The console therefore types blocks as
 `{ type?: string; [key: string]: unknown }` and reads every field through a
 dual-name accessor (`transcript-model.ts`, `blockField`).
 
-**I12. A local claim has no place in the model.** Between `createInvocation`
+**I12. A local claim has no place in the model.** Between `createTurn`
 returning and the stream's first frame for that turn, nothing in the protocol
 says it is live. A client that does not synthesize that state shows an idle
 composer over a running turn and invites a second send.
@@ -633,15 +645,14 @@ exceed it and error the stream. The other three have no such limit. Media does
 not contribute, since transcript content describes images and documents rather
 than inlining them.
 
-**C11. Filtered reads start at the Session origin.** A filtered stream opened
-without a cursor drains the whole Session transcript and discards everything
-belonging to other turns. It is correct and it costs the same scan the old
-Invocation stream did; a start cursor derived from the turn's own first row
-would make it proportional to the turn.
+**C11. A Turn stream still scans its durable carrier from the Turn's first
+row.** That carrier is intentionally hidden for a standalone Turn, and the
+route filters every emitted frame to the selected Turn. The public semantics
+are direct even though the storage scan remains transcript-backed.
 
 ### Conformance coverage
 
-**T4. No fixture exercises an unfiltered subscription across turns.** The
+**T4. No fixture exercises a Conversation subscription across turns.** The
 shared server's stream ends after three attempts, so nothing pins the behavior
 that a turn started later arrives on a connection that was already open. Python
 tests it against a local fake; the other three do not test it at all.
@@ -651,7 +662,7 @@ tests it against a local fake; the other three do not test it at all.
 In this repository:
 
 - [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml). The contract snapshot.
-  The frame schema is `SessionStreamEvent`.
+  The frame schema is `ConversationStreamEvent`.
 - [`docs/design/004-protocol-end-state.md`](../design/004-protocol-end-state.md).
   The end state this document now describes, and the path that got here.
 - [`docs/guides/sdk-development.md`](../guides/sdk-development.md). How a
@@ -665,7 +676,7 @@ In this repository:
 The nvoken console, not public, is the only production client that builds a
 live transcript. Its transcript model does block folding, tool call indexing,
 and preview grouping; its activity layer reconciles stream state with a local
-claim; its session hook owns stream lifecycle and the compaction fetches of I9.
+claim; its conversation hook owns stream lifecycle and the compaction fetches of I9.
 
 Product documentation:
 
