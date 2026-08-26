@@ -1,6 +1,9 @@
 # The end-state protocol
 
-**Status:** Standing target, and reached. This is the artifact
+**Status:** Standing target. The frame-vocabulary collapse was reached on
+2026-08-14. Standalone execution later justified distinct Turn and Conversation
+stream scopes, and the accepted terminology cutover is not implemented. This is
+the artifact
 [DIRECTION](DIRECTION.md) calls for: the protocol we would design today with no
 installed base. Part 1 is what every later change to the streaming protocol and
 the contract is measured against. It changes only by a decision recorded here,
@@ -8,6 +11,8 @@ never by drift. Part 2 was the path, and all three of its steps landed on
 2026-08-14; it is kept as the record of how this was sequenced.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
+**Revised:** 2026-08-25 to apply the accepted Conversation and Turn public
+vocabulary without changing the streaming mechanics.
 **Applies to:** `openapi/nvoken.yaml` and the runtime behind it; the SDKs,
 conformance fixtures, and reference documentation in this repository.
 **Reading order:** [DIRECTION](DIRECTION.md) says why this document exists.
@@ -31,10 +36,10 @@ matters, because Part 2 must not damage any of it.
   frames carry a cursor, ephemeral frames do not, resume is an explicit
   position, disconnecting cancels nothing, and any number of readers can
   sit anywhere in the log without affecting the turn or each other.
-- **Admission is separate from streaming.** `POST /v1/invocations` with a
+- **Admission is separate from streaming.** `POST /v1/turns` with a
   JSON body and an idempotency key, then follow by ID. A lost response is
   retried with the same body and key, and once a client holds an
-  `invocation_id` no reconnect can create a second turn.
+  `turn_id` no reconnect can create a second Turn.
 - **Previews are provisional and lossy by design.** They travel a separate
   bus, are never stored, never replayed, and are discarded on attempt
   increase, on resync, when the durable message lands, and at terminal
@@ -57,22 +62,32 @@ matters, because Part 2 must not damage any of it.
 
 Everything below is what changes.
 
-### One stream
+### One stream model, two resource scopes
 
-There is one streaming route:
+There are two routes with the same frame vocabulary and reducer:
 
 ```
-GET /v1/sessions/{session_id}/stream
+GET /v1/turns/{turn_id}/stream
+GET /v1/conversations/{conversation_id}/stream
 ```
 
-Parameters: `cursor` resumes from a durable position, `invocation_id`
-filters the stream to one turn, `deltas=false` turns previews off.
+On both routes, `cursor` resumes from a durable position and `deltas=false`
+turns previews off. Cursors are opaque. A Conversation-bound Turn cursor is
+Conversation-scoped and remains interoperable with its Conversation stream. A
+standalone Turn cursor binds to that Turn and cannot be used on a Conversation
+stream.
 
-The Invocation stream and the Session transcript stream were always one
-log. Cursors are Session-scoped on both current routes and a position from
-either resumes the other, so the separate Invocation route was a filtered
-view shipped as an endpoint with its own vocabulary. The filter becomes a
-parameter.
+The currently implemented Invocation stream and Session transcript stream were
+originally two views of one Conversation log. The first protocol collapse made
+the per-Turn view a filter on the Conversation stream. Standalone Turns later
+removed that assumption: a Turn may have no public Conversation at all.
+
+The two target scopes now earn separate routes. A Turn stream follows one
+durable execution, whether standalone or Conversation-bound, and closes after
+its terminal change. A Conversation stream is a durable subscription to its
+messages and Turns, remains open while idle, and contains no Turn filter. The
+routes share frames and reducer behavior; they do not pretend every Turn has a
+Conversation.
 
 The inline `POST` streaming form is gone. It was the one entry point that
 was harmful rather than redundant: it required the deployment front end to
@@ -81,8 +96,8 @@ buffers it, and all four of our SDKs refused to use it. Admission is the
 plain JSON `POST`, and the admission response is the acknowledgment, so
 the `invocation.accepted` frame goes with it.
 
-**The stream is a subscription.** A connection to the unfiltered stream
-stays open while the Session is idle, keepalives and all, and a turn
+**The Conversation stream is a subscription.** A connection to it
+stays open while the Conversation is idle, keepalives and all, and a Turn
 started later by anyone appears on it. The server remains free to shed
 idle connections, but shedding is a connection event with a name (see
 `connection.closing` below), never a statement that the stream is over. Today's
@@ -90,9 +105,8 @@ protocol hangs up when no turn is running, and the only production client
 compensates with a 15 second poll. A protocol whose steady state is
 polling has a stream in name only.
 
-On a filtered stream, the server closes the connection after delivering
-the turn's terminal change. A client following the exit rule has already
-left.
+On a Turn stream, the server closes the connection after delivering the Turn's
+terminal change. A client following the exit rule has already left.
 
 ### One frame vocabulary
 
@@ -113,8 +127,8 @@ vocabulary, plus one composed convenience a resource read already
 provides.
 
 **`transcript.update`** carries `cursor`, `messages`, and
-`invocation_changes`. Messages append by `sequence` and are never re-sent.
-Changes are an append log keyed by `(invocation_id, revision)`; fold to
+`turn_changes`. Messages append by `sequence` and are never re-sent.
+Changes are an append log keyed by `(turn_id, revision)`; fold to
 the highest revision for current state. Within one frame, apply messages
 before changes, so a turn is never marked settled before its final message
 exists.
@@ -126,14 +140,14 @@ the only one. It is durable, so it replays on reconnect like any other
 change; no special re-emission machinery is needed, and the current
 guarantee that a settled turn re-yields its result becomes an ordinary
 property of replay. A client that wants the composed result reads
-`GET /v1/invocations/{id}`.
+`GET /v1/turns/{id}`.
 
-There is no full Invocation projection on the stream and no live re-read
+There is no full Turn projection on the stream and no live re-read
 at write time. Changes carry deltas of lifecycle state; reads carry
-snapshots. This also deletes a per-page Invocation query the server pays
+snapshots. This also deletes a per-page Turn query the server pays
 today for every connected client.
 
-**`message.delta`** is the one preview frame. Fields: `invocation_id`,
+**`message.delta`** is the one preview frame. Fields: `turn_id`,
 `attempt`, `message_id`, `content_index`, `kind`, `delta`, and for tool
 arguments `tool_call_id` and `name`, denormalized on every frame so a lost
 frame cannot orphan a fragment. `kind` is an open enum: `text`,
@@ -153,14 +167,14 @@ identity: one model iteration produces exactly one message, so
 when the durable message with that ID lands, and on the terminal change.
 
 **`tool_call.progress`** is the second preview frame, with replace
-semantics rather than append, per design 003 area 11: `invocation_id`,
+semantics rather than append, per design 003 area 11: `turn_id`,
 `attempt`, `tool_call_id`, and a snapshot where each frame wholly replaces
 the previous one. A dropped frame needs no resync because the next frame
 carries the entire current state. Never stored, never replayed.
 
 **`stream.resync`** means live delivery lost previews. It carries a
 `reason` (open enum, `live_delivery_gap` today) and an optional
-`invocation_id`; absent means discard previews for the whole stream.
+`turn_id`; absent means discard previews for the whole stream.
 Optional, not required-and-nullable: an absent field is scope, a null
 identifier was scope wearing an identifier's name.
 
@@ -184,13 +198,14 @@ spelling.
 
 ### One schema family
 
-`Invocation`, `Session`, `Message`, `TranscriptUpdate`: each exists once.
+`Turn`, `Conversation`, `Message`, `TranscriptUpdate`: each exists once.
 There are no `Browser*` projections and no response unions.
 
-Which fields a caller receives is decided by its credential, so the
-contract says exactly that: audience-restricted fields (Agent and user
-identity, copy origin, host provenance, `credit_block`) are optional,
-marked with their audience, and omitted from responses to browser tokens.
+Some fields are absent because the Turn does not have them: inline behavior has
+no Agent identity, and standalone work has no Conversation identity. Other
+fields are audience-restricted. Agent and user identity, copy origin, host
+provenance, and `credit_block` are marked with their audience and omitted from
+responses to browser tokens.
 A stranger holding only the contract can decode every payload, because
 omission needs no discriminator. Today's design fails its own first
 property: `InvocationResponse` is a union of two structurally overlapping
@@ -247,10 +262,12 @@ is in scope only because the collapse makes it free.
 
 The whole protocol, from a client's chair:
 
-1. Admit with `POST /v1/invocations`, idempotency key attached. The
-   response acknowledges the turn.
-2. Open `GET /v1/sessions/{id}/stream`, with `cursor` if resuming and
-   `invocation_id` if following one turn.
+1. Admit with `POST /v1/turns`, idempotency key attached. The response
+   acknowledges the Turn.
+2. Open `GET /v1/turns/{id}/stream`, with `cursor` if resuming. A client
+   observing retained continuity instead opens
+   `GET /v1/conversations/{id}/stream`; it uses the same frame reducer but a
+   Conversation-scoped cursor.
 3. Fold: append messages by `sequence`; append changes and fold by highest
    `revision`; accumulate `message.delta` by `(message_id, content_index)`;
    hold the latest `tool_call.progress` per call. Discard previews on
@@ -260,7 +277,7 @@ The whole protocol, from a client's chair:
    connection end, reconnect with your cursor: immediately on `rotate`,
    lazily on `idle`, after widening your buffer on `slow_consumer`,
    immediately on a silent drop.
-5. Read the Invocation if you want the composed result.
+5. Read the Turn if you want the composed result.
 
 One loop, one exit condition, one reconnect rule.
 
@@ -268,7 +285,7 @@ One loop, one exit condition, one reconnect rule.
 
 | Surface | Today | End state |
 | --- | --- | --- |
-| Streaming routes | 3 | 1 |
+| Streaming routes | 3 | 2 justified scopes |
 | Frame types | 8 | 5 |
 | Durable frame types | 4 | 1 |
 | Schema families | 2 | 1 |
@@ -286,6 +303,15 @@ and did not serve: the protocol says each thing once.
 
 This part is the smaller problem, and unlike Part 1 it is allowed to
 change as we learn.
+
+The steps below retain the Session and Invocation names that were public when
+they landed. The later terminology cutover renames the surviving resources and
+fields without reopening the streaming decisions those steps implemented.
+Standalone execution did supersede one route-count decision: a Turn with no
+public Session could not use the consolidated Session stream, so the
+per-Invocation route returned as an independently scoped stream and the
+Session route lost its Invocation filter. The public rename carries that
+settled shape forward as Turn and Conversation streams.
 
 ### The rule for every step
 
@@ -370,8 +396,8 @@ rewrite of fixtures and guides happens once, against the final shapes.
 Choices this document makes that no earlier document made, recorded so a
 later reader knows they were deliberate:
 
-1. **The stream is a subscription.** Design 003 deferred what the Session
-   stream is; Part 1 answers it. Idle disconnection becomes a named
+1. **The Conversation stream is a subscription.** Design 003 deferred what
+   that stream is; Part 1 answers it. Idle disconnection becomes a named
    connection event, `idle`, that a deployment may send and a client
    reconnects from lazily. The 15 second poll dies.
 2. **`iteration` leaves the preview identity.** `message_id` is required
@@ -396,6 +422,13 @@ later reader knows they were deliberate:
    deleted rather than reworded. Nothing else moves: the reasons, the
    absent cursor, and the client rule are as decision 4 and the frame
    vocabulary above describe them.
+7. **Turn and Conversation streams are separate scopes** (2026-08-25).
+   Standalone Turns cannot be filtered through a Conversation they do not
+   have. The Turn route follows one execution and closes at terminal state;
+   the Conversation route subscribes across current and future Turns and may
+   remain idle. They share one frame vocabulary. A Conversation-bound Turn
+   cursor remains interoperable with its Conversation stream; a standalone
+   Turn cursor is necessarily Turn-scoped.
 
 ## Related
 
@@ -405,6 +438,9 @@ later reader knows they were deliberate:
   this document builds on. Its areas 1, 2, 9, 10, and 11 survive into the
   end state; its blessings of dual terminal signals and four cursor
   spellings do not.
+- [Design 008](008-typescript-sdk-ergonomics.md), the accepted Agent,
+  MemorySpace, Conversation, and Turn model whose stream projections use this
+  protocol.
 - [The streaming protocol](../reference/streaming-protocol.md), the
   description of today, and the source of the rough-edge IDs cited here.
 - [SDK and contract development](../guides/sdk-development.md), the sync
