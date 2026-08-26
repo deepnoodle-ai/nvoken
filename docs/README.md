@@ -14,11 +14,12 @@ Read it before proposing a change to either.
 - [CLI contract conformance](design/005-cli-contract-conformance.md)
 - [SDK write shape parity](design/006-sdk-write-shape-parity.md)
 - [One home for each host-supplied fact](design/007-host-supplied-context.md),
-  which retires the second write path to Session metadata, pins `user_key` to
-  the Session, and gives callback authorization a field of its own
+  the historical context-authority analysis that preceded the hard cut to
+  per-Turn actor attribution and signed resolved facts
 - [TypeScript SDK ergonomics and explicit facade surface](design/008-typescript-sdk-ergonomics.md),
-  which separates Agent lookup from provisioning and local tool handlers, then
-  makes Session, result, timeout, streaming, and raw-transport behavior explicit
+  the accepted facade: awaited Agent lookup, direct `start`/`run`/`text`,
+  independent behavior, memory, Conversation, and actor coordinates, and an
+  exact raw-transport escape hatch
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [Receiving signed deliveries](reference/callback-receivers.md) — the key

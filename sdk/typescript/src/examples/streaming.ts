@@ -1,21 +1,19 @@
-import { Client } from "../index.js";
+import { Client, isTerminalTurnStatus } from "../index.js";
 
-const agent = new Client().agent({
-	agentKey: "storyteller",
+const agent = await new Client().agent("storyteller");
+const turn = await agent.start("Tell me a tiny story.", {
+  tenant: process.env.NVOKEN_TENANT_KEY ?? "quickstart",
 });
 
-// One frame previews what the model is writing; `kind` says what it is. The
-// turn is over when a change carries a terminal status, and the stream ends
-// right behind it.
-for await (const event of agent.stream("Tell me a tiny story.")) {
-  if (event.type === "message.delta" && event.kind === "text") {
-    process.stdout.write(event.delta);
+let renderedText = "";
+for await (const update of turn.updates()) {
+  const text = update.snapshot.text;
+  if (text !== null && text !== renderedText) {
+    renderedText = text;
+    process.stdout.write(`${text}\n`);
   }
-  if (event.type === "transcript.update") {
-    for (const change of event.invocationChanges) {
-      if (change.status === "completed") {
-        console.log(`\n${change.usage?.outputTokens ?? 0} tokens`);
-      }
-    }
+
+  if (isTerminalTurnStatus(update.snapshot.status)) {
+    console.log(`turn ${turn.id}: ${update.snapshot.status}`);
   }
 }

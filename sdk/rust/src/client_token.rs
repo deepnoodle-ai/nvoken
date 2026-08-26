@@ -9,7 +9,7 @@ use ed25519_dalek::{Signer, SigningKey};
 ///
 /// Short lifetimes are the whole safety story of handing a browser a bearer
 /// token: the page refreshes from your backend on the schedule it already
-/// refreshes its own session, and a leaked token is worth minutes.
+/// refreshes its own authentication, and a leaked token is worth minutes.
 pub const CLIENT_TOKEN_LIFETIME_LIMIT: Duration = Duration::from_secs(900);
 
 /// The required `typ` header.
@@ -20,6 +20,7 @@ pub const CLIENT_TOKEN_LIFETIME_LIMIT: Duration = Duration::from_secs(900);
 pub const CLIENT_TOKEN_TYPE: &str = "nvoken-client+jwt";
 
 const AUDIENCE: &str = "nvoken";
+const CONTRACT_VERSION: i64 = 2;
 const MAX_CLAIM: usize = 255;
 
 /// What can go wrong minting a client token.
@@ -39,14 +40,56 @@ pub enum ClientTokenError {
     },
     #[error("{0} must not be blank, padded, or over 255 characters")]
     InvalidClaim(&'static str),
-    #[error("set exactly one of agent_id or agent_key")]
-    AgentNotNamed,
-    #[error("definition_revision must not be negative")]
-    NegativeDefinitionRevision,
+    #[error("{0} does not match its selected scope")]
+    InvalidAccess(&'static str),
     #[error("lifetime must be positive and at most {CLIENT_TOKEN_LIFETIME_LIMIT:?}")]
     InvalidLifetime,
     #[error("system clock is before the Unix epoch")]
     ClockBeforeEpoch,
+}
+
+/// The closed memory grant carried by a browser client token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClientTokenMemoryAccess {
+    None,
+    User { namespace: String },
+}
+
+impl ClientTokenMemoryAccess {
+    fn wire(&self) -> Result<serde_json::Value, ClientTokenError> {
+        match self {
+            Self::None => Ok(serde_json::json!({"scope": "none"})),
+            Self::User { namespace } if canonical(namespace) => Ok(serde_json::json!({
+                "namespace": namespace,
+                "scope": "user",
+            })),
+            Self::User { .. } => Err(ClientTokenError::InvalidAccess("memory_access")),
+        }
+    }
+}
+
+/// The closed Conversation grant carried by a browser client token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClientTokenConversationAccess {
+    StandaloneOnly,
+    Exact { conversation_id: String },
+    UserConversations,
+}
+
+impl ClientTokenConversationAccess {
+    fn wire(&self) -> Result<serde_json::Value, ClientTokenError> {
+        match self {
+            Self::StandaloneOnly => Ok(serde_json::json!({"scope": "standalone_only"})),
+            Self::UserConversations => Ok(serde_json::json!({"scope": "user_conversations"})),
+            Self::Exact { conversation_id } => {
+                valid_stable_id("conversation_id", conversation_id, "conv", "Conversation")?;
+                Ok(serde_json::json!({
+                    "conversation_id": conversation_id,
+                    "scope": "exact",
+                }))
+            }
+        }
+    }
 }
 
 /// What a host asserts when it lets a browser talk to nvoken directly.
@@ -65,18 +108,14 @@ pub struct ClientTokenClaims {
     /// runtime user constraint and never resolves it to a person, so prefer an
     /// internal id over an email address.
     pub subject: String,
-    /// Scopes the token to one tenant. `None` means the App's default tenant.
-    pub tenant_key: Option<String>,
-    /// Exactly one of `agent_id` or `agent_key` names the Agent.
-    pub agent_id: Option<String>,
-    pub agent_key: Option<String>,
-    /// Pins the Agent Definition revision this token was minted against, so a
-    /// deploy mid-session cannot change what the browser is talking to.
-    pub definition_revision: Option<i64>,
-    /// Confines the token to one Session. `None` lets the browser reach every
-    /// Session belonging to this user and Agent, which is what a session-list
-    /// UI needs and a single-conversation UI does not.
-    pub session_id: Option<String>,
+    /// Scopes the token to one tenant actor.
+    pub tenant_key: String,
+    /// Pins one exact Agent and immutable AgentRevision.
+    pub agent_id: String,
+    pub agent_revision_id: String,
+    /// Closed grants; neither is inferred from the other.
+    pub memory_access: ClientTokenMemoryAccess,
+    pub conversation_access: ClientTokenConversationAccess,
     /// Defaults to the current time.
     pub issued_at: Option<SystemTime>,
     /// Required, and at most [`CLIENT_TOKEN_LIFETIME_LIMIT`].
@@ -99,6 +138,8 @@ pub fn mint_client_token(
         .try_into()
         .map_err(|_| ClientTokenError::InvalidSigningKey)?;
     let signing_key = SigningKey::from_bytes(&seed);
+    let memory_access = claims.memory_access.wire()?;
+    let conversation_access = claims.conversation_access.wire()?;
     validate(claims)?;
 
     let issued_at = claims.issued_at.unwrap_or_else(SystemTime::now);
@@ -112,7 +153,7 @@ pub fn mint_client_token(
         ("typ", Value::Text(CLIENT_TOKEN_TYPE)),
         ("kid", Value::Owned(claims.key_id.clone())),
     ]);
-    let mut members: Vec<(&str, Value)> = vec![
+    let members: Vec<(&str, Value)> = vec![
         ("iss", Value::Owned(claims.app_id.clone())),
         ("sub", Value::Owned(claims.subject.clone())),
         ("aud", Value::Text(AUDIENCE)),
@@ -121,22 +162,16 @@ pub fn mint_client_token(
             "exp",
             Value::Number((issued + claims.lifetime.as_secs()) as i64),
         ),
+        ("contract_version", Value::Number(CONTRACT_VERSION)),
+        ("tenant_key", Value::Owned(claims.tenant_key.clone())),
+        ("agent_id", Value::Owned(claims.agent_id.clone())),
+        (
+            "agent_revision_id",
+            Value::Owned(claims.agent_revision_id.clone()),
+        ),
+        ("memory_access", Value::Json(memory_access)),
+        ("conversation_access", Value::Json(conversation_access)),
     ];
-    if let Some(tenant_key) = &claims.tenant_key {
-        members.push(("tenant_key", Value::Owned(tenant_key.clone())));
-    }
-    if let Some(agent_id) = &claims.agent_id {
-        members.push(("agent_id", Value::Owned(agent_id.clone())));
-    }
-    if let Some(agent_key) = &claims.agent_key {
-        members.push(("agent_key", Value::Owned(agent_key.clone())));
-    }
-    if let Some(revision) = claims.definition_revision.filter(|value| *value > 0) {
-        members.push(("definition_revision", Value::Number(revision)));
-    }
-    if let Some(session_id) = &claims.session_id {
-        members.push(("session_id", Value::Owned(session_id.clone())));
-    }
     let signing_input = format!(
         "{}.{}",
         URL_SAFE_NO_PAD.encode(header),
@@ -155,28 +190,16 @@ fn validate(claims: &ClientTokenClaims) -> Result<(), ClientTokenError> {
     if !canonical(&claims.subject) {
         return Err(ClientTokenError::InvalidClaim("subject"));
     }
-    if let Some(tenant_key) = &claims.tenant_key {
-        if !canonical(tenant_key) {
-            return Err(ClientTokenError::InvalidClaim("tenant_key"));
-        }
+    if !canonical(&claims.tenant_key) {
+        return Err(ClientTokenError::InvalidClaim("tenant_key"));
     }
-    if claims.agent_id.is_some() == claims.agent_key.is_some() {
-        return Err(ClientTokenError::AgentNotNamed);
-    }
-    if let Some(agent_id) = &claims.agent_id {
-        valid_stable_id("agent_id", agent_id, "agent", "Agent")?;
-    }
-    if let Some(agent_key) = &claims.agent_key {
-        if !canonical(agent_key) {
-            return Err(ClientTokenError::InvalidClaim("agent_key"));
-        }
-    }
-    if claims.definition_revision.is_some_and(|value| value < 0) {
-        return Err(ClientTokenError::NegativeDefinitionRevision);
-    }
-    if let Some(session_id) = &claims.session_id {
-        valid_stable_id("session_id", session_id, "sess", "Session")?;
-    }
+    valid_stable_id("agent_id", &claims.agent_id, "agent", "Agent")?;
+    valid_stable_id(
+        "agent_revision_id",
+        &claims.agent_revision_id,
+        "arev",
+        "AgentRevision",
+    )?;
     if claims.lifetime.is_zero() || claims.lifetime > CLIENT_TOKEN_LIFETIME_LIMIT {
         return Err(ClientTokenError::InvalidLifetime);
     }
@@ -212,6 +235,7 @@ enum Value {
     Text(&'static str),
     Owned(String),
     Number(i64),
+    Json(serde_json::Value),
 }
 
 /// Writes members in the order given rather than any order a map would impose.
@@ -235,6 +259,9 @@ fn ordered_json(members: &[(&str, Value)]) -> Vec<u8> {
                 encoded.push_str(&serde_json::to_string(text).expect("text is encodable"))
             }
             Value::Number(number) => encoded.push_str(&number.to_string()),
+            Value::Json(value) => {
+                encoded.push_str(&serde_json::to_string(value).expect("JSON is encodable"))
+            }
         }
     }
     encoded.push('}');

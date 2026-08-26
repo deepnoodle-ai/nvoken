@@ -14,7 +14,7 @@ SIGNATURE_TIMESTAMP_WINDOW = timedelta(minutes=5)
 class SignedDelivery:
     """One delivery whose signature has been checked, before its body is read.
 
-    nvoken signs tool callbacks and Invocation webhooks the same way, so
+    nvoken signs tool callbacks and Turn webhooks the same way, so
     everything up to and including the HMAC comparison lives here once rather
     than in two copies that have to be kept in step. What differs is only what
     the verified body then means: a callback settles a named ToolCall, a

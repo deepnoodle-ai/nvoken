@@ -1,76 +1,53 @@
-/**
- * The longest a client token may live. nvoken refuses anything longer, so this
- * is a ceiling rather than a suggestion.
- *
- * Short lifetimes are the whole safety story of handing a browser a bearer
- * token: the page refreshes from your backend on the schedule it already
- * refreshes its own session, and a leaked token is worth minutes.
- */
 export const CLIENT_TOKEN_LIFETIME_LIMIT_MS = 15 * 60 * 1_000;
-
-/**
- * The required `typ` header.
- *
- * You sign these with a keypair you own and may sign other things with the
- * same one. Without a type, `aud` is the only structural difference between a
- * browser grant and any other EdDSA JWT you mint.
- */
 export const CLIENT_TOKEN_TYPE = "nvoken-client+jwt";
 
 const CLIENT_TOKEN_AUDIENCE = "nvoken";
+const CLIENT_TOKEN_CONTRACT_VERSION = 2;
 const MAX_CLIENT_CLAIM = 255;
 
-/**
- * What a host asserts when it lets a browser talk to nvoken directly.
- *
- * Every field narrows what the browser can do. nvoken cannot second-guess a
- * signed claim — it trusts what you assert, exactly as it trusts your API key
- * — so the narrowing is yours to do, and `mintClientToken` refuses a grant
- * nvoken would refuse rather than handing you one that fails in a browser.
- */
+export type ClientTokenMemoryAccess =
+  | { scope: "none"; namespace?: never }
+  | { scope: "user"; namespace: string };
+
+export type ClientTokenConversationAccess =
+  | { scope: "standalone_only"; conversationId?: never }
+  | { scope: "exact"; conversationId: string }
+  | { scope: "user_conversations"; conversationId?: never };
+
+export const clientTokenMemory = {
+  none(): ClientTokenMemoryAccess {
+    return { scope: "none" };
+  },
+  user(namespace: string): ClientTokenMemoryAccess {
+    return { scope: "user", namespace };
+  },
+} as const;
+
+export const clientTokenConversations = {
+  standaloneOnly(): ClientTokenConversationAccess {
+    return { scope: "standalone_only" };
+  },
+  exact(conversationId: string): ClientTokenConversationAccess {
+    return { scope: "exact", conversationId };
+  },
+  userConversations(): ClientTokenConversationAccess {
+    return { scope: "user_conversations" };
+  },
+} as const;
+
 export interface ClientTokenClaims {
-  /** The App this token acts inside; becomes `iss`. */
   appId: string;
-  /** The registered client key that verifies this token; becomes `kid`. */
   keyId: string;
-  /**
-   * Identifies the end user to nvoken. Opaque: nvoken stores it as the runtime
-   * user constraint and never resolves it to a person, so prefer an internal
-   * id over an email address.
-   */
   subject: string;
-  /** Scopes the token to one tenant. Omitted means the App's default tenant. */
-  tenantKey?: string;
-  /** Exactly one of `agentId` or `agentKey` names the Agent. */
-  agentId?: string;
-  agentKey?: string;
-  /**
-   * Pins the Agent Definition revision this token was minted against, so a
-   * deploy mid-session cannot change what the browser is talking to.
-   */
-  definitionRevision?: number;
-  /**
-   * Confines the token to one Session. Omitting it lets the browser reach
-   * every Session belonging to this user and Agent, which is what a
-   * session-list UI needs and a single-conversation UI does not.
-   */
-  sessionId?: string;
-  /** Defaults to the current time. */
+  tenantKey: string;
+  agentId: string;
+  agentRevisionId: string;
+  memoryAccess: ClientTokenMemoryAccess;
+  conversationAccess: ClientTokenConversationAccess;
   issuedAt?: Date;
-  /** Required, and at most CLIENT_TOKEN_LIFETIME_LIMIT_MS. */
   lifetimeMs: number;
 }
 
-/**
- * Signs a browser grant with the App's client key.
- *
- * Call it in backend code, never in a browser. The private key is the App's
- * browser authority: a page holding it can mint any grant the ceiling allows,
- * for any user, which is the failure this whole trust class exists to avoid.
- *
- * `privateKey` is the 32-byte Ed25519 seed, exactly as
- * `nvoken client-key generate` prints it — base64-decode it and pass the bytes.
- */
 export async function mintClientToken(
   privateKey: Uint8Array,
   claims: ClientTokenClaims,
@@ -78,32 +55,35 @@ export async function mintClientToken(
   if (privateKey.byteLength !== 32) {
     throw new Error("nvoken: client key must be the 32-byte Ed25519 seed");
   }
-  validateClaims(claims);
+  const grants = validateClaims(claims);
   const issuedAt = Math.floor((claims.issuedAt?.getTime() ?? Date.now()) / 1_000);
-
   const header = orderedJson([
     ["alg", "EdDSA"],
     ["typ", CLIENT_TOKEN_TYPE],
     ["kid", claims.keyId],
   ]);
-  const members: Array<[string, unknown]> = [
+  const body = orderedJson([
     ["iss", claims.appId],
     ["sub", claims.subject],
     ["aud", CLIENT_TOKEN_AUDIENCE],
     ["iat", issuedAt],
     ["exp", issuedAt + Math.floor(claims.lifetimeMs / 1_000)],
-  ];
-  if (claims.tenantKey !== undefined) members.push(["tenant_key", claims.tenantKey]);
-  if (claims.agentId !== undefined) members.push(["agent_id", claims.agentId]);
-  if (claims.agentKey !== undefined) members.push(["agent_key", claims.agentKey]);
-  if (claims.definitionRevision) members.push(["definition_revision", claims.definitionRevision]);
-  if (claims.sessionId !== undefined) members.push(["session_id", claims.sessionId]);
-  const signingInput = `${base64Url(header)}.${base64Url(orderedJson(members))}`;
+    ["contract_version", CLIENT_TOKEN_CONTRACT_VERSION],
+    ["tenant_key", claims.tenantKey],
+    ["agent_id", claims.agentId],
+    ["agent_revision_id", claims.agentRevisionId],
+    ["memory_access", grants.memory],
+    ["conversation_access", grants.conversation],
+  ]);
+  const signingInput = `${base64Url(header)}.${base64Url(body)}`;
   const signature = await sign(privateKey, new TextEncoder().encode(signingInput));
   return `${signingInput}.${base64Url(signature)}`;
 }
 
-function validateClaims(claims: ClientTokenClaims): void {
+function validateClaims(claims: ClientTokenClaims): {
+  memory: Record<string, string>;
+  conversation: Record<string, string>;
+} {
   if (!validStableId(claims.appId, "app")) {
     throw new Error(`nvoken: appId ${JSON.stringify(claims.appId)} is not an App id`);
   }
@@ -111,49 +91,64 @@ function validateClaims(claims: ClientTokenClaims): void {
     throw new Error(`nvoken: keyId ${JSON.stringify(claims.keyId)} is not a client key id`);
   }
   if (!canonicalClaim(claims.subject)) {
-    throw new Error("nvoken: subject is required, and must not be blank, padded, or over 255 characters");
+    throw new Error("nvoken: subject must not be blank, padded, or over 255 characters");
   }
-  if (claims.tenantKey !== undefined && !canonicalClaim(claims.tenantKey)) {
+  if (!canonicalClaim(claims.tenantKey)) {
     throw new Error("nvoken: tenantKey must not be blank, padded, or over 255 characters");
   }
-  if ((claims.agentId === undefined) === (claims.agentKey === undefined)) {
-    throw new Error("nvoken: set exactly one of agentId or agentKey");
-  }
-  if (claims.agentId !== undefined && !validStableId(claims.agentId, "agent")) {
+  if (!validStableId(claims.agentId, "agent")) {
     throw new Error(`nvoken: agentId ${JSON.stringify(claims.agentId)} is not an Agent id`);
   }
-  if (claims.agentKey !== undefined && !canonicalClaim(claims.agentKey)) {
-    throw new Error("nvoken: agentKey must not be blank, padded, or over 255 characters");
+  if (!validStableId(claims.agentRevisionId, "arev")) {
+    throw new Error(
+      `nvoken: agentRevisionId ${JSON.stringify(claims.agentRevisionId)} is not an AgentRevision id`,
+    );
   }
-  if (claims.definitionRevision !== undefined &&
-      (!Number.isSafeInteger(claims.definitionRevision) || claims.definitionRevision < 0)) {
-    throw new Error("nvoken: definitionRevision must be a non-negative integer");
+  if (!Number.isSafeInteger(claims.lifetimeMs)
+    || claims.lifetimeMs <= 0
+    || claims.lifetimeMs > CLIENT_TOKEN_LIFETIME_LIMIT_MS) {
+    throw new Error(
+      `nvoken: lifetimeMs must be positive and at most ${CLIENT_TOKEN_LIFETIME_LIMIT_MS}`,
+    );
   }
-  if (claims.sessionId !== undefined && !validStableId(claims.sessionId, "sess")) {
-    throw new Error(`nvoken: sessionId ${JSON.stringify(claims.sessionId)} is not a Session id`);
+
+  const memory: Record<string, string> | undefined = claims.memoryAccess.scope === "none"
+    ? { scope: "none" }
+    : canonicalClaim(claims.memoryAccess.namespace)
+      ? { namespace: claims.memoryAccess.namespace, scope: "user" }
+      : undefined;
+  if (!memory) throw new Error("nvoken: memoryAccess does not match its selected scope");
+
+  let conversation: Record<string, string>;
+  if (claims.conversationAccess.scope === "exact") {
+    if (!validStableId(claims.conversationAccess.conversationId, "conv")) {
+      throw new Error(
+        `nvoken: conversationId ${JSON.stringify(claims.conversationAccess.conversationId)} is not a Conversation id`,
+      );
+    }
+    conversation = {
+      conversation_id: claims.conversationAccess.conversationId,
+      scope: "exact",
+    };
+  } else {
+    conversation = { scope: claims.conversationAccess.scope };
   }
-  if (!Number.isSafeInteger(claims.lifetimeMs) || claims.lifetimeMs <= 0 ||
-      claims.lifetimeMs > CLIENT_TOKEN_LIFETIME_LIMIT_MS) {
-    throw new Error(`nvoken: lifetimeMs must be positive and at most ${CLIENT_TOKEN_LIFETIME_LIMIT_MS}`);
-  }
+  return { memory, conversation };
 }
 
 function canonicalClaim(value: string): boolean {
-  return typeof value === "string" && value !== "" && value.trim() === value &&
-    [...value].length <= MAX_CLIENT_CLAIM;
+  return typeof value === "string"
+    && value !== ""
+    && value.trim() === value
+    && [...value].length <= MAX_CLIENT_CLAIM;
 }
 
 function validStableId(value: string, prefix: string): boolean {
-  return canonicalClaim(value) && value.startsWith(`${prefix}_`) && value.length > prefix.length + 1;
+  return canonicalClaim(value)
+    && value.startsWith(`${prefix}_`)
+    && value.length > prefix.length + 1;
 }
 
-/**
- * Writes members in the order given rather than whatever order an object
- * literal happens to carry. The published vector fixes that order so all four
- * SDKs mint the same bytes for the same claims; a verifier parses JSON and
- * does not care, but a byte-exact vector is only checkable if the order is
- * decided somewhere.
- */
 function orderedJson(members: Array<[string, unknown]>): Uint8Array {
   const body = members
     .map(([name, value]) => `${JSON.stringify(name)}:${JSON.stringify(value)}`)
@@ -161,12 +156,9 @@ function orderedJson(members: Array<[string, unknown]>): Uint8Array {
   return new TextEncoder().encode(`{${body}}`);
 }
 
-// WebCrypto imports an Ed25519 private key as PKCS#8, and a 32-byte seed is
-// that structure's payload. The prefix is the fixed DER header for
-// `PrivateKeyInfo` over `id-Ed25519`, so wrapping is a concatenation rather
-// than a dependency on an ASN.1 encoder.
 const PKCS8_ED25519_PREFIX = Uint8Array.from([
-  0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+  0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03,
+  0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
 ]);
 
 async function sign(seed: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
@@ -175,14 +167,19 @@ async function sign(seed: Uint8Array, message: Uint8Array): Promise<Uint8Array> 
   pkcs8.set(seed, PKCS8_ED25519_PREFIX.byteLength);
   let key: CryptoKey;
   try {
-    key = await globalThis.crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, { name: "Ed25519" }, false, ["sign"]);
-  } catch (cause) {
-    throw new Error(
-      "nvoken: this runtime's WebCrypto does not support Ed25519, which minting a client token requires",
-      { cause },
+    key = await globalThis.crypto.subtle.importKey(
+      "pkcs8",
+      pkcs8 as BufferSource,
+      { name: "Ed25519" },
+      false,
+      ["sign"],
     );
+  } catch (cause) {
+    throw new Error("nvoken: this runtime does not support Ed25519", { cause });
   }
-  return new Uint8Array(await globalThis.crypto.subtle.sign("Ed25519", key, message as BufferSource));
+  return new Uint8Array(
+    await globalThis.crypto.subtle.sign("Ed25519", key, message as BufferSource),
+  );
 }
 
 function base64Url(bytes: Uint8Array): string {

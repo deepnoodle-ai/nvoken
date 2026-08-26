@@ -1,6 +1,7 @@
 export * from "./client.js";
-export * from "./invocation-status.js";
-export * from "./diagnostics.js";
+export * from "./facade-types.js";
+export * from "./turn-error.js";
+export * from "./turn-status.js";
 export * from "./stream.js";
 export * from "./callback.js";
 export * from "./client-token.js";
@@ -40,14 +41,11 @@ export type {
   CreditAllocationList,
   AllocateCreditsResult,
   Money,
-  CreateSessionRequest,
-  ForkSessionRequest,
-  Invocation,
-  InvocationChange,
-  InvocationLog,
-  InvocationLogList,
-  InvocationResult,
-  InvocationStopReason,
+  ConversationCompaction,
+  ConversationContentBlock,
+  ConversationMessage,
+  ConversationMessageList,
+  ConversationStreamEvent,
   ModelCost,
   ModelControlCapabilities,
   ModelDescriptor,
@@ -59,32 +57,29 @@ export type {
   ModelReasoningEffortCapabilities,
   ModelSamplingCapabilities,
   ModelUsage,
-  Memory,
-  MemoryKind,
-  MemoryList,
-  MemorySearchMode,
+  MemorySpaceList,
   MintAppSigningKeyRequest,
   NudgeAcknowledgement,
   Nudge,
   NudgeList,
   NudgeStatus,
   ToolCallSummary,
-  CallbackDeliveryOutcome,
   ProviderKey,
   ProviderKeyList,
   ProviderKeyScope,
   ProviderKeyUsage,
-  Session,
-  SessionContext,
-  SessionMessage,
   ToolCall,
   ToolCallDelivery,
   ToolCallList,
   ToolCallMode,
   ToolCallStatus,
   TranscriptSnapshot,
+  TurnChange,
+  TurnList,
+  TurnLog,
+  TurnLogList,
+  TurnStopReason,
+  Trace,
+  TraceList,
 } from "./generated/models/index.js";
-// The value, not only the type: enumerating the statuses is how a host keeps
-// its own classification honest, and a type alone cannot be iterated.
-export { InvocationStatus } from "./generated/models/index.js";
 export * as raw from "./generated/index.js";

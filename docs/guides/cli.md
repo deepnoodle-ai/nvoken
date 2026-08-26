@@ -35,11 +35,10 @@ The CLI stores named endpoint and API-key profiles in
 Environment and flag credentials override a saved profile without rewriting the
 credentials file.
 
-`--scope-tenant-key` and `--scope-user-key` (or `NVOKEN_SCOPE_TENANT_KEY` and
-`NVOKEN_SCOPE_USER_KEY`) narrow every request of that invocation. An id outside
-the scope is reported as not found, which is what an operator wants when the id
-came from a ticket, a log line, or somebody else's paste. They may only narrow:
-a credential already bound to one tenant refuses a scope naming another.
+Runtime commands take tenant, user, Conversation, and MemorySpace coordinates
+explicitly where the operation needs them. There is no ambient scoped-client
+ladder: an Agent's owner, a Turn's actor, its Conversation, and its memory
+selection remain separate choices at the call site.
 
 ## Checking a deployment
 
@@ -64,16 +63,14 @@ exits non-zero, so a wait loop can branch on the exit code alone.
 description, positional-argument documentation, and flag documentation:
 
 ```bash
-nvoken invocation list --help
-nvoken session fork --help
+nvoken turn list --help
+nvoken conversation create --help
 nvoken usage records --help
 ```
 
 Text is the default human-readable output. Use `--json` (or `--output json`)
-for stable machine-readable output. A non-streaming command writes one JSON
-value; a streaming command writes one JSON object per line. Successful delete,
-archive, restore, and local-auth commands return an explicit receipt instead
-of succeeding silently.
+for stable machine-readable output. Successful delete, archive, restore, and
+local-auth commands return an explicit receipt instead of succeeding silently.
 
 List commands print `next_cursor<TAB>...` after their items when another page
 exists. Pass that opaque value back with `--cursor`; do not parse or modify it.
@@ -92,11 +89,6 @@ Provider names are extensible canonical identifiers. Commands accept the
 provider string advertised by `nvoken model list`; the server is authoritative
 about which providers are installed.
 
-Both stream commands accept `--cursor` to resume after the last durable frame.
-`invocation stream inv_...` follows one standalone or Session-bound turn and
-exits when it settles; `session stream sess_...` remains the whole-conversation
-subscription.
-
 ## Initialize an App
 
 `app init` registers an App, issues its full App key, and
@@ -113,7 +105,7 @@ command prints if a later provisioning step fails.
 
 Add `--browser` to configure browser-direct access and generate and register an
 Ed25519 client keypair. Supply every exact browser origin and the HTTPS webhook
-that receives browser-started Invocation events:
+that receives browser-started Turn events:
 
 ```bash
 nvoken app init support \
@@ -130,26 +122,23 @@ block; nvoken receives and retains only its public half.
 
 ## Complete nested requests
 
-Common operations have focused flags. The few API requests with substantial
-nested configuration also accept a complete JSON request through
-`--request-file`; use `-` to read stdin. Request-file mode is mutually exclusive
-with that command's ordinary request flags, so the request cannot be assembled
-from two ambiguous sources.
+Common operations have focused flags. Requests with substantial nested
+configuration accept a complete JSON body through `--file`; use `-` to read
+stdin.
 
 ```bash
-# Admit an Invocation with any current CreateInvocationRequest field.
-nvoken invoke --request-file invocation.json
+# Create an Agent with its first immutable behavior revision.
+nvoken agent create --file agent.json
 
-# Configure browser access, anonymous access, credit policy, or rate limits.
-nvoken app register --request-file app.json
-nvoken app update app_... --request-file app-update.json
+# Publish the next immutable behavior revision.
+nvoken agent publish agent_... --file behavior.json
 
-# Set nested Session options at creation or fork time.
-nvoken session create --request-file session.json
-nvoken session fork sess_... --request-file fork.json
+# Create a Conversation or resolve a MemorySpace exactly.
+nvoken conversation create --file conversation.json
+nvoken memory-space resolve --file memory-space.json
 
-# Settle up to 32 host ToolCalls together.
-nvoken tool-result submit inv_... --file results.json
+# Resume a budget-held Turn with narrowed limits.
+nvoken turn resume turn_... --file limits.json
 ```
 
 The request file is passed through the generated SDK transport after bounded

@@ -38,7 +38,7 @@ func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 			"access_token_expires_in_seconds":900,
 			"visitor_token":"visitor-2",
 			"visitor_token_expires_at":"2027-08-17T12:00:00Z",
-			"session_id":null
+			"conversation_id":null
 		}`))
 	}))
 	defer server.Close()

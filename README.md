@@ -41,23 +41,25 @@ export NVOKEN_API_KEY='<your API key>'
 import { Client } from "@deepnoodle/nvoken";
 
 const client = new Client();
-await client.createAgentDefinition({
-  definitionKey: "support",
+const agent = await client.agents.create({
+  key: "support",
   name: "Support",
   instructions: "Be concise and helpful.",
   model: "anthropic/claude-sonnet-5",
 });
-// Declared from its keys; the Agent creates its record on first use.
-const agent = client.agent({ agentKey: "support", definitionKey: "support" });
 
-console.log(await agent.text("Summarize the latest customer request."));
+console.log(await agent.text(
+  "Summarize the latest customer request.",
+  { tenant: "acme", user: "alice" },
+));
 ```
 
-An Agent is one type in every SDK: the server record and the object that runs
-its turns. Declaring it locally costs no round trip, `ensure()` creates or reads
-the record without mutating it, and `getAgent()` returns that same type already
-hydrated. Both creates are keyed and idempotent, so the snippet is safe to run
-twice.
+An Agent is stored, reusable, versioned behavior and is directly runnable in
+every SDK. App ownership is the default, so one Agent can serve every tenant;
+each Turn still states its tenant and optional user explicitly. Later code
+loads the same Agent with `await client.agent("support")`, while
+`client.agents` owns creation, ID lookup, and listing. The returned Agent owns
+publication, archive, restore, tool binding, and execution.
 
 See the [nvoken quickstart](https://nvoken.com/docs/quickstart) and the
 language-specific guides in [`sdk/`](sdk/).
@@ -75,28 +77,12 @@ uses `NVOKEN_BASE_URL` and `NVOKEN_API_KEY`, or named credential profiles:
 ```bash
 nvoken auth login --profile work --default
 nvoken model list
-nvoken agent-definition create --definition-key support --name Support \
-  --instructions "Be concise and helpful." \
-  --provider anthropic --model claude-sonnet-5
-nvoken agent create --agent-key support --definition-key support
-nvoken invoke --agent-key support "Hello"
+nvoken agent create --file support-agent.json
+nvoken agent lookup support
+nvoken turn start --agent-id agent_... --tenant acme "Hello"
 ```
 
 Use `nvoken --help` for the exact command surface.
-
-When one turn is triggered by another turn's ToolCall, preserve that cause and
-keep temporary transcript lifetime explicit:
-
-```bash
-nvoken invoke --agent-key researcher \
-  --parent-invocation-id inv_... --tool-call-id call_... \
-  "Investigate this branch"
-nvoken invocation list --parent-invocation-id null # top-level only
-```
-
-The child is standalone when no Session selector is supplied. Set top-level
-`retention` in an SDK request or a complete CLI request file when its private
-content needs a longer window.
 
 ## Repository layout
 

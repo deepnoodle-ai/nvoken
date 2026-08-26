@@ -5,14 +5,10 @@ import (
 	"testing"
 )
 
-// A required bool is the case that motivated this. `encoding/json` leaves an
-// absent member at its zero value, so a change that never carried `terminal`
-// decoded as "not the end of the turn" and was indistinguishable from one that
-// genuinely was not.
-func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
+func TestReducerRefusesTurnChangeMissingTerminal(t *testing.T) {
 	change := map[string]any{
-		"invocation_id":            "inv_1",
-		"session_id":               "sess_1",
+		"turn_id":                  "turn_1",
+		"conversation_id":          nil,
 		"content_expires_at":       nil,
 		"revision":                 1,
 		"status":                   "completed",
@@ -23,10 +19,10 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 	}
 	data, err := json.Marshal(map[string]any{
 		"type":               "transcript.update",
-		"session_id":         "sess_1",
+		"conversation_id":    nil,
 		"content_expires_at": nil,
 		"messages":           []any{},
-		"invocation_changes": []any{change},
+		"turn_changes":       []any{change},
 		"cursor":             "cursor-1",
 	})
 	if err != nil {
@@ -35,44 +31,40 @@ func TestReducerRefusesAChangeMissingTerminal(t *testing.T) {
 
 	reducer := NewReducer()
 	if err := reducer.Apply(StreamEvent{Type: "transcript.update", Data: data}); err == nil {
-		t.Fatal("reducer accepted a change with no terminal member")
+		t.Fatal("reducer accepted a Turn change with no terminal member")
 	}
 
 	change["terminal"] = true
 	data, err = json.Marshal(map[string]any{
 		"type":               "transcript.update",
-		"session_id":         "sess_1",
+		"conversation_id":    nil,
 		"content_expires_at": nil,
 		"messages":           []any{},
-		"invocation_changes": []any{change},
+		"turn_changes":       []any{change},
 		"cursor":             "cursor-1",
 	})
 	if err != nil {
-		t.Fatalf("marshal frame: %v", err)
+		t.Fatalf("marshal complete frame: %v", err)
 	}
 	if err := reducer.Apply(StreamEvent{Type: "transcript.update", Data: data}); err != nil {
 		t.Fatalf("reducer refused a complete change: %v", err)
 	}
-	if !reducer.Settled("inv_1") {
-		t.Fatal("a complete terminal change did not settle the turn")
+	if !reducer.Settled("turn_1") {
+		t.Fatal("complete terminal change did not settle the Turn")
 	}
 }
 
-// A required member holding null is present. Nullable-and-required is a real
-// shape in this contract — `error` and `structured_output` are both — so the
-// check must be about the member existing, not about what it holds.
-func TestRequiredMemberHoldingNullIsPresent(t *testing.T) {
+func TestRequiredNullableFrameMemberIsPresent(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sess_1","content_expires_at":null,"reason":null}`,
+		`{"type":"stream.resync","conversation_id":null,"content_expires_at":null,"reason":"live_delivery_gap"}`,
 	)); err != nil {
 		t.Fatalf("null-valued required member rejected: %v", err)
 	}
 }
 
-// Frames gain fields over time and a reader must keep going.
-func TestUnknownMembersAreIgnored(t *testing.T) {
+func TestUnknownFrameMembersAreIgnored(t *testing.T) {
 	if err := requireFrameKeys("StreamResyncEvent", json.RawMessage(
-		`{"type":"stream.resync","session_id":"sess_1","content_expires_at":null,"reason":"live_delivery_gap","added_later":1}`,
+		`{"type":"stream.resync","conversation_id":null,"content_expires_at":null,"reason":"live_delivery_gap","added_later":1}`,
 	)); err != nil {
 		t.Fatalf("unknown member rejected: %v", err)
 	}

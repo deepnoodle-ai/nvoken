@@ -7,48 +7,28 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
-// WebhookEnvelope is the signed body of one Invocation webhook.
+// WebhookEnvelope is the signed body of one Turn webhook.
 //
 // It mirrors CallbackEnvelope: everything nvoken asserts sits under Nvoken,
 // and the subject of the delivery sits beside it.
 type WebhookEnvelope struct {
-	Nvoken     WebhookContext `json:"nvoken"`
-	Invocation WebhookSubject `json:"invocation"`
+	Nvoken WebhookContext `json:"nvoken"`
+	Turn   WebhookSubject `json:"turn"`
 }
 
-type WebhookContext struct {
-	SchemaVersion int          `json:"schema_version"`
-	DeliveryID    string       `json:"delivery_id"`
-	Event         WebhookEvent `json:"event"`
-	// Sequence counts transitions within one Invocation, from 1. See
-	// VerifiedWebhook.Supersedes for what a receiver does with it.
-	Sequence     int64   `json:"sequence"`
-	InvocationID string  `json:"invocation_id"`
-	SessionID    *string `json:"session_id"`
-	AgentKey     string  `json:"agent_key"`
-	TenantKey    *string `json:"tenant_key,omitempty"`
-}
+type WebhookContext = generated.TurnWebhookContext
 
 // WebhookSubject is a pointer to the turn, not a projection of it. It carries
 // no transcript content, tool arguments, structured output, usage, provenance,
-// or failure message: read GetInvocation or GetInvocationResult for anything
+// or failure message: read GetTurn or GetTurnResult for anything
 // beyond what is here.
-type WebhookSubject struct {
-	Status      InvocationStatus      `json:"status"`
-	StopReason  *InvocationStopReason `json:"stop_reason,omitempty"`
-	FailureCode *string               `json:"failure_code,omitempty"`
-	// WaitingToolCallIDs names the host tools the turn is parked on, on
-	// WebhookEventWaiting only. Tools nvoken delivers itself are absent: they
-	// are not work the host has been handed.
-	WaitingToolCallIDs []string `json:"waiting_tool_call_ids,omitempty"`
-	// CreditBlock names the account that could not fund the next attempt, when
-	// a spending limit stopped the turn.
-	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
-}
+type WebhookSubject = generated.TurnWebhookSubject
 
-// VerifiedWebhook is one Invocation webhook whose signature has been checked.
+// VerifiedWebhook is one Turn webhook whose signature has been checked.
 type VerifiedWebhook struct {
 	Envelope   WebhookEnvelope
 	RawBody    []byte
@@ -56,16 +36,16 @@ type VerifiedWebhook struct {
 	// Event is read from the signed body. The endpoint URL may carry an
 	// unsigned per-event suffix; that belongs in logs, not in a dispatch
 	// decision.
-	Event        WebhookEvent
-	Sequence     int64
-	InvocationID string
-	SessionID    *string
-	KeyID        string
-	KeyVersion   int64
-	Timestamp    time.Time
+	Event          WebhookEvent
+	Sequence       int64
+	TurnID         string
+	ConversationID *string
+	KeyID          string
+	KeyVersion     int64
+	Timestamp      time.Time
 }
 
-// VerifyWebhook checks one Invocation webhook delivery and returns its signed
+// VerifyWebhook checks one Turn webhook delivery and returns its signed
 // body. It shares its signature scheme with VerifyCallback, so a host that
 // receives both implements verification once and dispatches on what the
 // verified body says.
@@ -82,7 +62,7 @@ func VerifyWebhook(key []byte, header http.Header, rawBody []byte, now time.Time
 	if err := json.Unmarshal(rawBody, &envelope); err != nil {
 		return VerifiedWebhook{}, fmt.Errorf("decode verified webhook: %w", err)
 	}
-	if envelope.Nvoken.SchemaVersion != 1 {
+	if envelope.Nvoken.SchemaVersion != 2 {
 		return VerifiedWebhook{}, fmt.Errorf("unsupported webhook schema version")
 	}
 	// The Idempotency-Key on a webhook is the delivery id, so both headers
@@ -95,34 +75,34 @@ func VerifyWebhook(key []byte, header http.Header, rawBody []byte, now time.Time
 	// event nvoken adds later reaches a receiver that has no branch for it,
 	// and answering it as if it were understood would settle a delivery the
 	// host in fact ignored.
-	if !envelope.Nvoken.Event.valid() {
+	if !envelope.Nvoken.Event.Valid() {
 		return VerifiedWebhook{}, fmt.Errorf("unsupported webhook event %q", envelope.Nvoken.Event)
 	}
 	if envelope.Nvoken.Sequence < 1 {
 		return VerifiedWebhook{}, fmt.Errorf("webhook sequence must be positive")
 	}
 	return VerifiedWebhook{
-		Envelope:     envelope,
-		RawBody:      append([]byte(nil), rawBody...),
-		DeliveryID:   delivery.DeliveryID,
-		Event:        envelope.Nvoken.Event,
-		Sequence:     envelope.Nvoken.Sequence,
-		InvocationID: envelope.Nvoken.InvocationID,
-		SessionID:    envelope.Nvoken.SessionID,
-		KeyID:        delivery.KeyID,
-		KeyVersion:   delivery.KeyVersion,
-		Timestamp:    delivery.Timestamp,
+		Envelope:       envelope,
+		RawBody:        append([]byte(nil), rawBody...),
+		DeliveryID:     delivery.DeliveryID,
+		Event:          WebhookEvent(envelope.Nvoken.Event),
+		Sequence:       envelope.Nvoken.Sequence,
+		TurnID:         envelope.Nvoken.TurnID,
+		ConversationID: envelope.Nvoken.ConversationID,
+		KeyID:          delivery.KeyID,
+		KeyVersion:     delivery.KeyVersion,
+		Timestamp:      delivery.Timestamp,
 	}, nil
 }
 
 // Supersedes reports whether this delivery describes a later transition of its
-// Invocation than the one already applied.
+// Turn than the one already applied.
 //
 // Delivery is at least once, so the same transition can arrive twice and a
 // redelivery can land after a later one. Keep the highest sequence applied per
-// Invocation and fold only what supersedes it; a receiver that applies
+// Turn and fold only what supersedes it; a receiver that applies
 // whichever arrived last rolls its own state backwards. Pass 0 for an
-// Invocation nothing has been applied for yet.
+// Turn nothing has been applied for yet.
 //
 // This is also the dedup: a repeat carries a sequence already applied, so
 // nothing further is needed to make handling idempotent. Answer it with
@@ -134,7 +114,7 @@ func (w VerifiedWebhook) Supersedes(appliedSequence int64) bool {
 
 // WebhookReply is the HTTP answer to one webhook delivery. nvoken ignores the
 // response body, so only the status carries meaning, and no answer ever
-// affects the Invocation the webhook describes.
+// affects the Turn the webhook describes.
 type WebhookReply struct {
 	Status int
 }
@@ -148,8 +128,8 @@ func AcceptWebhook() WebhookReply {
 // RetryWebhook asks nvoken to deliver again, for a receiver that could not
 // record the transition right now — its store was unreachable, or it is
 // shedding load. Retries are bounded, so a receiver that answers this forever
-// still ends with a transition nobody recorded; ListEndedInvocations is the
-// backstop that finds those.
+// still ends with a transition nobody recorded; reconcile ended Turns from
+// the exact Turn-list endpoint as a backstop.
 func RetryWebhook() WebhookReply {
 	return WebhookReply{Status: http.StatusServiceUnavailable}
 }
@@ -200,7 +180,7 @@ type WebhookDelivery struct {
 	Cause    error
 }
 
-// WebhookReceiver answers an Invocation-webhook endpoint. It is the callback
+// WebhookReceiver answers a Turn-webhook endpoint. It is the callback
 // receiver's twin — same key table, same reply discipline — because nvoken
 // signs both deliveries the same way.
 //
@@ -217,7 +197,7 @@ type WebhookDelivery struct {
 //	handler returned an error                 503  the receiver could not record it, so ask for it again
 //
 // Ordering stays yours. Delivery is at least once and out of order, so the
-// highest applied sequence per Invocation has to be read and written in the same
+// highest applied sequence per Turn has to be read and written in the same
 // transaction as the state it guards — which is the host's transaction, not one
 // this kit can open. Call VerifiedWebhook.Supersedes inside it. A superseded
 // delivery is still a delivery: record nothing and return nil, so it answers

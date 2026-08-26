@@ -5,13 +5,13 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
-            "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "content_expires_at": null,
             "user_key": null,
             "sequence": 1,
@@ -25,9 +25,9 @@
             "created_at": "2026-07-21T12:00:00Z"
           }
         ],
-        "invocation_changes": [
+        "turn_changes": [
           {
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 1,
             "status": "running",
             "terminal": false,
@@ -38,7 +38,7 @@
             "structured_output": null,
             "structured_output_provenance": null,
             "occurred_at": "2026-07-21T12:00:01Z",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "content_expires_at": null
           }
         ],
@@ -51,13 +51,13 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [
           {
-            "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb323",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "content_expires_at": null,
             "user_key": null,
             "sequence": 1,
@@ -71,10 +71,10 @@
             "created_at": "2026-07-21T12:00:00Z"
           },
           {
-            "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "content_expires_at": null,
             "user_key": null,
             "sequence": 2,
@@ -88,9 +88,9 @@
             "created_at": "2026-07-21T12:00:02Z"
           }
         ],
-        "invocation_changes": [
+        "turn_changes": [
           {
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 1,
             "status": "running",
             "terminal": false,
@@ -101,11 +101,11 @@
             "structured_output": null,
             "structured_output_provenance": null,
             "occurred_at": "2026-07-21T12:00:01Z",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "content_expires_at": null
           },
           {
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "revision": 2,
             "status": "completed",
             "terminal": true,
@@ -126,7 +126,7 @@
                 "updated_at": "2026-07-21T12:00:02Z"
               }
             ],
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "content_expires_at": null
           }
         ],
@@ -139,9 +139,9 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
         "messages": [],
-        "invocation_changes": [],
+        "turn_changes": [],
         "cursor": "cursor-2",
         "content_expires_at": null
       }
@@ -151,10 +151,10 @@
       "event": "message.delta",
       "data": {
         "type": "message.delta",
-        "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-        "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+        "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+        "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
         "attempt": 1,
-        "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
+        "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "content_index": 0,
         "kind": "text",
         "delta": "ephemeral",
@@ -172,10 +172,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
             "kind": "text",
             "delta": "Hel",
@@ -188,10 +188,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
             "kind": "thinking",
             "delta": "plan",
@@ -204,10 +204,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
             "kind": "text",
             "delta": "lo",
@@ -218,17 +218,17 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 0,
           "kind": "thinking",
           "delta": "plan"
         },
         {
-          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 1,
           "kind": "text",
           "delta": "Hello"
@@ -243,10 +243,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 2,
             "kind": "tool_arguments",
             "delta": "{\"order_id\"",
@@ -261,10 +261,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 2,
             "kind": "tool_arguments",
             "delta": ":\"A-1\"}",
@@ -277,9 +277,9 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 1,
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+          "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
           "content_index": 2,
           "kind": "tool_arguments",
           "delta": "{\"order_id\":\"A-1\"}",
@@ -296,10 +296,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
             "kind": "text",
             "delta": "old",
@@ -312,10 +312,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 1,
             "kind": "thinking",
             "delta": "old thought",
@@ -328,10 +328,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 2,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
             "content_index": 0,
             "kind": "text",
             "delta": "new",
@@ -342,9 +342,9 @@
       ],
       "expected_previews": [
         {
-          "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+          "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
           "attempt": 2,
-          "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
+          "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
           "content_index": 0,
           "kind": "text",
           "delta": "new"
@@ -359,10 +359,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
@@ -375,8 +375,8 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "reason": "live_delivery_gap",
             "content_expires_at": null
           }
@@ -385,17 +385,17 @@
       "expected_previews": []
     },
     {
-      "name": "a Session-wide resync omits its Invocation and voids every preview",
+      "name": "a Conversation-wide resync omits its Turn and voids every preview",
       "events": [
         {
           "id": "",
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
@@ -408,7 +408,7 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "reason": "live_delivery_gap",
             "content_expires_at": null
           }
@@ -424,10 +424,10 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
-            "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
             "attempt": 1,
-            "message_id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+            "message_id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
             "content_index": 0,
             "kind": "text",
             "delta": "provisional",
@@ -440,13 +440,13 @@
           "event": "transcript.update",
           "data": {
             "type": "transcript.update",
-            "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+            "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
             "messages": [
               {
-                "id": "smsg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
-                "session_id": "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
+                "id": "msg_019b0a12-8d51-7f34-aed2-0e07c1bdb324",
+                "conversation_id": "conv_019b0a12-8d51-7f34-aed2-0e07c1bdb321",
                 "agent_id": "agent_019b0a12-8d51-7f34-aed2-0e07c1bdb320",
-                "invocation_id": "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
+                "turn_id": "turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322",
                 "content_expires_at": null,
                 "user_key": null,
                 "sequence": 2,
@@ -460,7 +460,7 @@
                 "created_at": "2026-07-21T12:00:02Z"
               }
             ],
-            "invocation_changes": [],
+            "turn_changes": [],
             "cursor": "cursor-2",
             "content_expires_at": null
           }
@@ -474,7 +474,7 @@
       1,
       2
     ],
-    "invocation_revisions": [
+    "turn_revisions": [
       1,
       2
     ],

@@ -4,18 +4,16 @@ import { Client, formatNvokenError } from "@deepnoodle/nvoken";
 
 const client = new Client();
 
-// Both creates are keyed and idempotent, so this file is safe to run twice.
-// definitionKey and (tenantKey, agentKey) are unique, and restating one
-// returns what it already names rather than making a second.
 try {
-  await client.createAgentDefinition({
-    definitionKey: "quickstart",
+  const agent = await client.agents.create({
+    key: "quickstart",
     instructions: "Answer in one short sentence.",
     model: "anthropic/claude-sonnet-5",
+    idempotencyKey: "quickstart-agent-v1",
   });
-  // Declared from its keys. The Agent creates its own record on first use.
-  const agent = client.agent({ agentKey: "quickstart", definitionKey: "quickstart" });
-  console.log(await agent.text("Say hello in one short sentence."));
+  console.log(await agent.text("Say hello in one short sentence.", {
+    tenant: process.env.NVOKEN_TENANT_KEY ?? "quickstart",
+  }));
 } catch (error) {
   console.error(formatNvokenError(error));
   process.exitCode = 1;

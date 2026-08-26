@@ -135,7 +135,7 @@ func writeCreditAccountText(writer io.Writer, account *nvoken.CreditAccount) err
 		account.Allocated.Amount,
 		account.Used.Amount,
 		account.Held.Amount,
-		account.BudgetHoldInvocations,
+		account.BudgetHoldTurns,
 		account.Available.Currency,
 	)
 	return err

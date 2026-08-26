@@ -123,21 +123,20 @@ impl From<&str> for ContentType {
 }
 
 pub mod admissions_api;
-pub mod agent_definitions_api;
 pub mod agents_api;
 pub mod apps_api;
 pub mod console_integration_api;
+pub mod conversations_api;
 pub mod credits_api;
 pub mod identity_api;
-pub mod invocations_api;
 pub mod mcp_api;
-pub mod memories_api;
+pub mod memory_spaces_api;
 pub mod models_api;
 pub mod operations_api;
 pub mod orgs_api;
 pub mod provider_keys_api;
-pub mod sessions_api;
 pub mod tenants_api;
+pub mod turns_api;
 pub mod usage_api;
 
 pub mod configuration;

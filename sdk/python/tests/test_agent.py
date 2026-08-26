@@ -1,396 +1,513 @@
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, AsyncIterator
+from dataclasses import fields
+import asyncio
+import inspect
+import httpx
 
 import pytest
 
 from nvoken import (
-    TERMINAL_INVOCATION_STATUSES,
-    Agent,
-    AgentOptions,
-    InvocationSession,
-    InvocationOptions,
-    MissingToolHandlerError,
-    NoOutputTextError,
-    NvokenError,
-    StreamEvent,
-    Tool,
+    Behavior,
+    Client,
+    ConversationById,
+    ConversationByKey,
+    ConversationRef,
+    InlineMemory,
+    Memory,
+    OwnedBy,
+    TurnAdmission,
+    TurnAdmissionError,
+    TurnExecutionError,
+    TurnSnapshot,
+    TurnTimeoutError,
+    TurnUpdate,
+)
+from nvoken.facade import (
+    AgentCollection,
+    Conversation,
+    InlineAgent,
+    Turn,
+    TurnOptions,
+    _merge_narrow_limits,
 )
 
-INVOCATION_ID = "inv_019b0a12-8d51-7f34-aed2-0e07c1bdb322"
-SESSION_ID = "sess_019b0a12-8d51-7f34-aed2-0e07c1bdb321"
-TOOL_CALL_ID = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
 
+@pytest.mark.asyncio
+async def test_agent_lookup_is_explicit_and_awaited() -> None:
+    resource = SimpleNamespace(id="agent_1", agent_key="analyst")
 
-class FakeHandle:
-    def __init__(
-        self,
-        *,
-        waiting_tool: str | None = None,
-        output_text: str | None = "hello",
-        structured_output: dict[str, Any] | None = None,
-    ) -> None:
-        self.invocation_id = INVOCATION_ID
-        self.session_id = SESSION_ID
-        self.agent_id = "agent_test"
-        self.status = "queued"
-        self.waiting_tool = waiting_tool
-        self.output_text_value = output_text
-        self.structured_output = structured_output
-        self.submissions: list[Any] = []
-        self.cancelled = False
+    class Agents:
+        async def list_agents(self, owner, **kwargs):
+            assert owner.value == "user"
+            assert kwargs == {"tenant_key": "acme", "user_key": "alice", "agent_key": "analyst", "limit": 1}
+            return SimpleNamespace(items=[resource])
 
-    async def refresh(self) -> Any:
-        if self.waiting_tool and not self.submissions and not self.cancelled:
-            self.status = "waiting"
-            pending = [
-                SimpleNamespace(
-                    id=TOOL_CALL_ID,
-                    name=self.waiting_tool,
-                    mode="host",
-                    status="pending",
-                    arguments={"city": "Paris"},
-                )
-            ]
-        else:
-            self.status = "cancelled" if self.cancelled else "completed"
-            pending = None
-        return SimpleNamespace(
-            id=self.invocation_id,
-            status=self.status,
-            tool_calls=pending,
-            error=None,
-        )
-
-    async def wait_for_action(self, **_: Any) -> Any:
-        return await self.refresh()
-
-    async def result(self) -> Any:
-        invocation = SimpleNamespace(
-            id=self.invocation_id,
-            session_id=self.session_id,
-            agent_id=self.agent_id,
-            status="completed",
-            structured_output=self.structured_output,
-        )
-        return SimpleNamespace(
-            invocation=invocation,
-            messages=[],
-            output_text=self.output_text_value,
-        )
-
-    async def submit_tool_results(self, results: list[Any]) -> Any:
-        self.submissions.extend(results)
-        return SimpleNamespace(status="queued")
-
-    async def cancel(self) -> Any:
-        self.cancelled = True
-        self.status = "cancelled"
-        return SimpleNamespace(status="cancelled")
-
-    def events(self) -> AsyncIterator[StreamEvent]:
-        # Changes are the whole vocabulary a driver needs: one parks the turn on
-        # a host tool, one settles it, and the stream ends behind the second.
-        def change(revision: int, status: str) -> StreamEvent:
-            return StreamEvent(
-                type="transcript.update",
-                id=f"cursor-{revision}",
-                data={
-                    "messages": [],
-                    "invocation_changes": [{
-                        "invocation_id": self.invocation_id,
-                        "revision": revision,
-                        "status": status,
-                        "terminal": status in TERMINAL_INVOCATION_STATUSES,
-                    }],
-                    "cursor": f"cursor-{revision}",
-                },
-            )
-
-        async def generate() -> AsyncIterator[StreamEvent]:
-            if self.waiting_tool:
-                yield change(1, "waiting")
-            yield change(2, "completed")
-
-        return generate()
-
-    async def wait(self, **_: Any) -> Any:
-        while (await self.refresh()).status not in {
-            "completed",
-            "failed",
-            "cancelled",
-        }:
-            await asyncio.sleep(0)
-        return await self.refresh()
-
-
-class FakeClient:
-    def __init__(self, handles: list[FakeHandle]) -> None:
-        self.handles = handles
-        self.invocations: list[Any] = []
-        self._session_locks: dict[str, asyncio.Lock] = {}
-        self._background_tasks: set[asyncio.Task[Any]] = set()
-
-    async def invoke(self, request: Any) -> FakeHandle:
-        self.invocations.append(request)
-        return self.handles.pop(0)
-
-
-@dataclass(frozen=True)
-class Answer:
-    answer: str
-
-
-def agent_options(*tools: Tool) -> AgentOptions[Answer]:
-    return AgentOptions(
-        agent_key="support",
-        structured_output_decoder=lambda value: Answer(**value),
-        tools=tools,
-    )
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(agents=Agents())
+    client._agents = AgentCollection(client)
+    agent = await client.agent("analyst", owned_by=OwnedBy("acme", "alice"))
+    assert agent.id == "agent_1"
+    assert agent.key == "analyst"
 
 
 @pytest.mark.asyncio
-async def test_agent_five_verbs_dispatch_and_typed_structured_output() -> None:
-    handler_calls: list[Any] = []
+async def test_agent_create_generates_idempotency_key_when_omitted() -> None:
+    resource = SimpleNamespace(id="agent_1", agent_key="analyst")
 
-    async def weather(value: Any) -> Any:
-        handler_calls.append(value)
-        return {"temperature": 21}
+    class Agents:
+        async def create_agent(self, idempotency_key, request):
+            assert idempotency_key
+            assert request.agent_key == "analyst"
+            return resource
 
-    tool = Tool(
-        mode="host",
-        name="weather",
-        description="Weather lookup",
-        input_schema={"type": "object"},
-        handler=weather,
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(agents=Agents())
+    client._agents = AgentCollection(client)
+    created = await client.agents.create(
+        "analyst", behavior=Behavior("Analyze", "openai/gpt-5"),
     )
-    handles = [
-        FakeHandle(),
-        FakeHandle(waiting_tool="weather"),
-        FakeHandle(waiting_tool="weather", structured_output={"answer": "warm"}),
-        FakeHandle(waiting_tool="weather"),
-        FakeHandle(waiting_tool="weather"),
-    ]
-    client = FakeClient(handles)
-    agent = Agent(client, agent_options(tool))  # type: ignore[arg-type]
+    assert created.id == "agent_1"
 
-    handle = await agent.start(
-        "invoke",
-        options=InvocationOptions(
-            session=InvocationSession(mode="continue", id=SESSION_ID),
-            if_active="supersede",
+
+def test_inline_request_keeps_actor_memory_conversation_and_behavior_independent() -> None:
+    client = object.__new__(Client)
+    client._conversation_locks = {}
+    inline = InlineAgent(client, Behavior("Analyze listings", "openai/gpt-5"))
+    request = inline._request(
+        "Compare these homes",
+        TurnOptions(
+            tenant="acme",
+            user="alice",
+            memory=InlineMemory.tenant("portfolio"),
+            conversation=ConversationRef.by_key("deal-42", owner="user"),
+            limits={"max_iterations": 6},
+            idempotency_key="turn-request-1",
+        ),
+    ).to_dict()
+    assert request["behavior"]["kind"] == "inline"
+    assert request["tenant_key"] == "acme"
+    assert request["user_key"] == "alice"
+    assert request["memory"] == {"scope": "tenant", "namespace": "portfolio"}
+    assert request["conversation"]["owner"] == {"kind": "user", "user_key": "alice"}
+    assert request["limits"]["max_iterations"] == 6
+
+
+def test_behavior_and_agent_list_hide_raw_only_controls() -> None:
+    assert {field.name for field in fields(Behavior)} == {
+        "instructions", "model", "tools", "limits", "output_schema", "memory",
+    }
+    assert "limit" not in inspect.signature(AgentCollection.list).parameters
+
+
+def test_bind_tools_is_an_immutable_handler_map() -> None:
+    client = object.__new__(Client)
+    client._conversation_locks = {}
+    inline = InlineAgent(client, Behavior(
+        "Help",
+        "openai/gpt-5",
+        tools=({
+            "mode": "host", "name": "lookup", "description": "Find a record",
+            "input_schema": {"type": "object"},
+        },),
+    ))
+    bound = inline.bind_tools({"lookup": lambda value, context: value})
+    assert not inline.tools
+    assert set(bound.tools) == {"lookup"}
+    request = bound._request("Find it", TurnOptions(tenant="acme")).to_dict()
+    assert request["behavior"]["behavior"]["tools"][0]["mode"] == "host"
+    with pytest.raises(ValueError, match="not declared"):
+        inline.bind_tools({"other": lambda value, context: value})
+
+
+def test_turn_recovery_is_local() -> None:
+    client = object.__new__(Client)
+    handle = client.turn("turn_123", tenant="acme", user="alice")
+    assert (handle.id, handle.tenant, handle.user) == ("turn_123", "acme", "alice")
+
+
+def test_inline_memory_requires_namespace_and_user_actor() -> None:
+    client = object.__new__(Client)
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    with pytest.raises(ValueError, match="explicit namespace"):
+        InlineMemory.tenant("")
+    with pytest.raises(ValueError, match="Turn user"):
+        inline._request(
+            "Help", TurnOptions(tenant="acme", memory=InlineMemory.user("personal")),
+        )
+
+
+def test_conversation_selection_is_discriminated_and_keeps_create_options() -> None:
+    by_id = ConversationRef.by_id("conv_123")
+    assert isinstance(by_id, ConversationById)
+    assert by_id.to_wire(None) == {"mode": "continue", "conversation_id": "conv_123"}
+
+    by_key = ConversationRef.by_key(
+        "case-42",
+        owner="tenant",
+        retention={"ttl_seconds": 3600},
+        compaction={"trigger_tokens": {"kind": "fixed", "tokens": 4000}},
+        metadata={"title": "Home search", "rank": 2},
+    )
+    assert isinstance(by_key, ConversationByKey)
+    assert by_key.to_wire(None) == {
+        "mode": "continue_or_create",
+        "conversation_key": "case-42",
+        "owner": {"kind": "tenant"},
+        "retention": {"ttl_seconds": 3600},
+        "compaction": {"trigger_tokens": {"kind": "fixed", "tokens": 4000}},
+        "metadata": {"title": "Home search", "rank": 2},
+    }
+    assert "if_active" not in by_key.to_wire(None)
+
+
+def test_conversation_limits_only_narrow_and_tenant_lock_ignores_actor() -> None:
+    assert _merge_narrow_limits(
+        {"max_iterations": 6, "max_output_tokens": 1000},
+        {"max_iterations": 3},
+    ) == {"max_iterations": 3, "max_output_tokens": 1000}
+    with pytest.raises(ValueError, match="not widen"):
+        _merge_narrow_limits({"max_iterations": 6}, {"max_iterations": 7})
+
+    client = object.__new__(Client)
+    client._conversation_locks = {}
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    tenant_ref = ConversationRef.by_key("shared", owner="tenant")
+    alice = Conversation(inline, tenant_ref, "acme", user="alice")
+    bob = Conversation(inline, tenant_ref, "acme", user="bob")
+    assert alice.ref == bob.ref
+    assert alice._lock_key() == bob._lock_key()
+
+
+@pytest.mark.asyncio
+async def test_turn_status_uses_result_snapshot_and_actor_assertions() -> None:
+    source = SimpleNamespace(
+        actual_instance=SimpleNamespace(
+            kind="agent_revision", agent_id="agent_1", agent_revision_id="arev_1",
         ),
     )
-    assert handle.invocation_id == INVOCATION_ID
-    assert client.invocations[0].session.if_active == "supersede"
-
-    streamed = [
-        item.event.type
-        async for item in agent.stream("stream")
-    ]
-    assert streamed == ["transcript.update", "transcript.update"]
-
-    result = await agent.run("run")
-    assert result.text == "hello"
-    assert result.raw_structured_output == {"answer": "warm"}
-    assert result.structured_output == Answer(answer="warm")
-
-    assert await agent.text("text") == "hello"
-    bound = agent.bind_session(session_key="customer-123")
-    assert await bound.text("bound") == "hello"
-    assert client.invocations[-1].session.key == "customer-123"
-    assert handler_calls == [{"city": "Paris"}] * 4
-
-
-@pytest.mark.asyncio
-async def test_bound_session_serializes_admission() -> None:
-    client = FakeClient([])
-    agent = Agent(client, agent_options())  # type: ignore[arg-type]
-    active = 0
-    maximum = 0
-    release = asyncio.Event()
-
-    async def delayed_run(_input: str, *, options: Any = None) -> str:
-        nonlocal active, maximum
-        active += 1
-        maximum = max(maximum, active)
-        await release.wait()
-        active -= 1
-        return "done"
-
-    agent.run = delayed_run  # type: ignore[method-assign]
-    bound = agent.bind_session(session_id=SESSION_ID)
-    first = asyncio.create_task(bound.run("first"))
-    second = asyncio.create_task(bound.run("second"))
-    await asyncio.sleep(0)
-    assert active == 1
-    release.set()
-    assert await asyncio.gather(first, second) == ["done", "done"]
-    assert maximum == 1
-
-
-@pytest.mark.asyncio
-async def test_missing_handler_cancels_by_default_and_supports_opt_out() -> None:
-    missing = Tool(
-        mode="host",
-        name="weather",
-        description="Weather lookup",
-        input_schema={"type": "object"},
+    resource = SimpleNamespace(
+        status="running", structured_output=None, behavior_source=source,
+        conversation_id=None, memory_space_id=None, content_expires_at=None,
     )
-    cancelled_handle = FakeHandle(waiting_tool="weather")
-    agent = Agent(FakeClient([cancelled_handle]), agent_options(missing))  # type: ignore[arg-type]
-    with pytest.raises(MissingToolHandlerError) as cancelled:
-        await agent.run("hello")
-    assert cancelled.value.invocation_cancelled is True
-    assert cancelled_handle.cancelled is True
 
-    waiting_handle = FakeHandle(waiting_tool="weather")
-    agent = Agent(FakeClient([waiting_handle]), agent_options(missing))  # type: ignore[arg-type]
-    with pytest.raises(MissingToolHandlerError) as preserved:
-        await agent.run(
-            "hello",
-            options=InvocationOptions(leave_waiting_on_missing_handler=True),
-        )
-    assert preserved.value.invocation_cancelled is False
-    assert waiting_handle.cancelled is False
+    class Turns:
+        async def get_turn_result(self, turn_id, **kwargs):
+            assert turn_id == "turn_123"
+            assert kwargs["_headers"] == {
+                "X-Nvoken-Tenant-Key": "acme",
+                "X-Nvoken-User-Key": "alice",
+            }
+            return SimpleNamespace(turn=resource, messages=["working"], output_text=None)
 
-
-@pytest.mark.asyncio
-async def test_text_distinguishes_structured_and_tool_only_results() -> None:
-    structured = Agent(
-        FakeClient([
-            FakeHandle(output_text=None, structured_output={"answer": "json"}),
-        ]),
-        agent_options(),
-    )  # type: ignore[arg-type]
-    with pytest.raises(NoOutputTextError) as structured_error:
-        await structured.text("hello")
-    assert structured_error.value.result_kind == "structured output"
-
-    tool = Tool(
-        mode="callback",
-        name="notify",
-        description="Notify",
-        input_schema={"type": "object"},
-        callback_url="https://example.test/callback",
-    )
-    tool_only = Agent(
-        FakeClient([FakeHandle(output_text=None)]),
-        agent_options(tool),
-    )  # type: ignore[arg-type]
-    with pytest.raises(NoOutputTextError) as tool_error:
-        await tool_only.text("hello")
-    assert tool_error.value.result_kind == "tool-only output"
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    snapshot = await Turn(client, "turn_123", tenant="acme", user="alice").status()
+    assert snapshot.status == "running"
+    assert snapshot.messages == ("working",)
+    assert snapshot.text is None
+    assert snapshot.agent_id == "agent_1"
+    assert not hasattr(snapshot, "resource")
 
 
 @pytest.mark.asyncio
-async def test_agent_timeout_is_typed_and_cancellation_stays_native() -> None:
-    class BlockingHandle(FakeHandle):
-        def events(self) -> AsyncIterator[StreamEvent]:
-            async def generate() -> AsyncIterator[StreamEvent]:
-                await asyncio.Event().wait()
-                yield StreamEvent(type="never", data={})
+async def test_missing_tool_handler_leaves_waiting_turn_unmodified() -> None:
+    call = SimpleNamespace(id="call_1", name="lookup", mode="host", arguments={"id": 1})
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=SimpleNamespace())
+    turn = Turn(client, "turn_123", tenant="acme")
+    assert await turn._run_host_tools(SimpleNamespace(tool_calls=[call])) is False
 
-            return generate()
 
-    agent = Agent(
-        FakeClient([BlockingHandle(), BlockingHandle()]),
-        agent_options(),
-    )  # type: ignore[arg-type]
-    with pytest.raises(NvokenError) as timeout:
-        await agent.run("hello", options=InvocationOptions(timeout=0.001))
-    assert timeout.value.category == "timeout"
+@pytest.mark.asyncio
+async def test_tool_replay_dedupes_known_calls_and_passes_context() -> None:
+    submissions = []
+    contexts = []
 
-    task = asyncio.create_task(agent.run("hello"))
-    await asyncio.sleep(0)
+    class Turns:
+        async def submit_host_tool_results(self, turn_id, request, **kwargs):
+            submissions.append(request.to_dict())
+
+    async def lookup(arguments, context):
+        contexts.append((arguments, context.turn_id, context.tool_call_id))
+        return {"ok": True}
+
+    known = SimpleNamespace(id="call_1", name="lookup", mode="host", arguments={"id": 1})
+    unknown = SimpleNamespace(id="call_2", name="other", mode="host", arguments={"id": 2})
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    turn = Turn(client, "turn_123", tenant="acme", tools={"lookup": lookup})
+    resource = SimpleNamespace(tool_calls=[known, unknown])
+    assert await turn._run_host_tools(resource) is True
+    assert await turn._run_host_tools(resource) is False
+    assert contexts == [({"id": 1}, "turn_123", "call_1")]
+    assert len(submissions) == 1
+    assert len(submissions[0]["results"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_tool_submission_clears_local_replay_guard() -> None:
+    calls = 0
+
+    class Turns:
+        attempts = 0
+
+        async def submit_host_tool_results(self, turn_id, request, **kwargs):
+            self.attempts += 1
+            if self.attempts == 1:
+                from nvoken_generated.exceptions import ApiException
+                raise ApiException(status=503, reason="try again")
+
+    async def lookup(arguments, context):
+        nonlocal calls
+        calls += 1
+        return {"ok": True}
+
+    call = SimpleNamespace(id="call_1", name="lookup", mode="host", arguments={})
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    turn = Turn(client, "turn_123", tenant="acme", tools={"lookup": lookup})
+    with pytest.raises(Exception):
+        await turn._run_host_tools(SimpleNamespace(tool_calls=[call]))
+    assert await turn._run_host_tools(SimpleNamespace(tool_calls=[call])) is True
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_cancelled_tool_handler_clears_local_replay_guard() -> None:
+    entered = asyncio.Event()
+
+    async def lookup(arguments, context):
+        assert context.cancelled is False
+        entered.set()
+        await asyncio.Event().wait()
+
+    call = SimpleNamespace(id="call_1", name="lookup", mode="host", arguments={})
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=SimpleNamespace())
+    turn = Turn(client, "turn_123", tenant="acme", tools={"lookup": lookup})
+    task = asyncio.create_task(turn._run_host_tools(SimpleNamespace(tool_calls=[call])))
+    await entered.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+    assert "call_1" not in turn._handled_tool_call_ids
 
 
-class DeclaringClient(FakeClient):
-    """A client that records what a declared Agent creates and admits."""
+@pytest.mark.asyncio
+async def test_uncertain_admission_error_keeps_generated_idempotency_key() -> None:
+    class Turns:
+        async def create_turn(self, request):
+            raise httpx.ConnectError("connection dropped", request=httpx.Request("POST", "http://x"))
 
-    def __init__(self, handles: list[FakeHandle], *, pinned_revision: int | None = None) -> None:
-        super().__init__(handles)
-        self.creates: list[dict[str, Any]] = []
-        self.pinned_revision = pinned_revision
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    with pytest.raises(TurnAdmissionError) as error:
+        await inline.start("hello", tenant="acme")
+    assert error.value.category == "transport"
+    assert error.value.idempotency_key
 
-    async def create_agent(self, **kwargs: Any) -> Any:
-        self.creates.append(kwargs)
-        return SimpleNamespace(
-            id="agent_declared",
-            tenant_key=kwargs.get("tenant_key"),
-            agent_key=kwargs["agent_key"],
-            name=kwargs.get("name") or kwargs["agent_key"],
-            definition_id="def_declared",
-            pinned_revision=self.pinned_revision,
-            archived_at=None,
+
+@pytest.mark.asyncio
+async def test_admission_timeout_keeps_generated_idempotency_key() -> None:
+    class Turns:
+        async def create_turn(self, request, **kwargs):
+            await asyncio.Event().wait()
+
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    with pytest.raises(TurnTimeoutError) as error:
+        await inline.start("hello", tenant="acme", timeout=0.001)
+    assert error.value.turn is None
+    assert error.value.idempotency_key
+
+
+@pytest.mark.asyncio
+async def test_turn_stream_carries_recovery_assertions() -> None:
+    from nvoken.stream import Reducer, _read_stream
+
+    class Response:
+        is_error = False
+        status = 200
+
+        async def aiter_lines(self):
+            yield "event: message.delta"
+            yield 'data: {"turn_id":"turn_123","attempt":1,"message_id":"msg_1","content_index":0,"kind":"text","delta":"hi"}'
+            yield ""
+
+        async def aclose(self):
+            pass
+
+    class Turns:
+        async def stream_turn_without_preload_content(self, turn_id, **kwargs):
+            assert turn_id == "turn_123"
+            assert kwargs["_headers"] == {
+                "X-Nvoken-Tenant-Key": "acme",
+                "X-Nvoken-User-Key": "alice",
+            }
+            return Response()
+
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    stream = _read_stream(
+        client,
+        conversation_id=None,
+        turn_id="turn_123",
+        reducer=Reducer(),
+        deltas=True,
+        access_headers={
+            "X-Nvoken-Tenant-Key": "acme",
+            "X-Nvoken-User-Key": "alice",
+        },
+    )
+    event = await anext(stream)
+    assert event.data["turn_id"] == "turn_123"
+    await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_turn_stream_reconnects_after_transport_failure(monkeypatch) -> None:
+    from nvoken import stream as stream_module
+    from nvoken.stream import Reducer, _read_stream
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(stream_module.asyncio, "sleep", no_sleep)
+
+    class Response:
+        is_error = False
+        status = 200
+
+        async def aiter_lines(self):
+            yield "id: cursor-1"
+            yield "event: message.delta"
+            yield 'data: {"turn_id":"turn_123","attempt":1,"message_id":"msg_1","content_index":0,"kind":"text","delta":"hi"}'
+            yield ""
+
+        async def aclose(self):
+            pass
+
+    class Turns:
+        calls = 0
+
+        async def stream_turn_without_preload_content(self, turn_id, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise httpx.ReadError(
+                    "connection dropped",
+                    request=httpx.Request("GET", "http://x"),
+                )
+            return Response()
+
+    turns = Turns()
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=turns)
+    stream = _read_stream(
+        client,
+        conversation_id=None,
+        turn_id="turn_123",
+        reducer=Reducer(),
+        deltas=True,
+    )
+    event = await anext(stream)
+    assert event.id == "cursor-1"
+    assert turns.calls == 2
+    await stream.aclose()
+
+
+def test_turn_update_exposes_snapshot_frame_and_cursor_without_raw_resource() -> None:
+    snapshot = TurnSnapshot(
+        status="running", messages=(), text=None, structured_output=None,
+        behavior_source="inline", agent_id=None, agent_revision_id=None,
+        memory_space_id=None, conversation_id=None, content_expires_at=None,
+    )
+    update = TurnUpdate(snapshot=snapshot, frame={"type": "message.delta"}, cursor="cursor-1")
+    assert update.snapshot is snapshot
+    assert update.cursor == "cursor-1"
+    assert not hasattr(update.snapshot, "resource")
+
+
+@pytest.mark.asyncio
+async def test_conversation_run_holds_lock_through_terminal_result() -> None:
+    client = object.__new__(Client)
+    client._conversation_locks = {}
+    release = asyncio.Event()
+    starts = 0
+
+    class FakeTurn:
+        async def result(self, **kwargs):
+            await release.wait()
+            return SimpleNamespace(text="done")
+
+    class Runnable:
+        def __init__(self):
+            self.client = client
+
+        async def start(self, *args, **kwargs):
+            nonlocal starts
+            starts += 1
+            return FakeTurn()
+
+    conversation = Conversation(
+        Runnable(), ConversationRef.by_key("shared", owner="tenant"), "acme",
+    )
+    first = asyncio.create_task(conversation.run("first"))
+    await asyncio.sleep(0)
+    second = asyncio.create_task(conversation.run("second"))
+    await asyncio.sleep(0)
+    assert starts == 1
+    release.set()
+    await asyncio.gather(first, second)
+    assert starts == 2
+
+
+@pytest.mark.asyncio
+async def test_turn_result_raises_typed_execution_and_timeout_errors() -> None:
+    client = object.__new__(Client)
+    failed_resource = SimpleNamespace(
+        status="failed", structured_output=None, conversation_id=None,
+        memory_space_id=None, tool_calls=[],
+    )
+    turn = Turn(
+        client,
+        "turn_failed",
+        tenant="acme",
+        admission=TurnAdmission("idem-1", False),
+    )
+
+    async def failed_status():
+        return TurnSnapshot(
+            status="failed", messages=(), text=None, structured_output=None,
+            behavior_source="inline", agent_id=None, agent_revision_id=None,
+            memory_space_id=None, conversation_id=None, content_expires_at=None,
         )
 
+    turn.status = failed_status
+    with pytest.raises(TurnExecutionError) as execution:
+        await turn.result()
+    assert execution.value.result.turn is turn
+    assert execution.value.result.admission.idempotency_key == "idem-1"
 
-@pytest.mark.asyncio
-async def test_declared_agent_creates_its_record_on_first_use() -> None:
-    client = DeclaringClient([FakeHandle(), FakeHandle()])
-    agent: Agent[Answer] = Agent(
-        client,  # type: ignore[arg-type]
-        AgentOptions(
-            tenant_key="customer-482",
-            agent_key="support",
-            definition_key="support",
-        ),
+    running_resource = SimpleNamespace(
+        status="running", structured_output=None, conversation_id=None,
+        memory_space_id=None, tool_calls=[],
     )
-    assert agent.id is None and agent.resource is None
-
-    await agent.start("first")
-    await agent.start("second")
-
-    assert len(client.creates) == 1
-    assert client.creates[0]["definition_key"] == "support"
-    assert client.creates[0]["definition_id"] is None
-    assert agent.id == "agent_declared"
-    # Admission uses the record's ID once it is known.
-    assert [request.agent_id for request in client.invocations] == [
-        "agent_declared",
-        "agent_declared",
-    ]
-    assert [request.agent_key for request in client.invocations] == [None, None]
-
-
-@pytest.mark.asyncio
-async def test_declared_agent_refuses_a_contradicted_pin() -> None:
-    client = DeclaringClient([], pinned_revision=3)
-    contradicted: Agent[Answer] = Agent(
-        client,  # type: ignore[arg-type]
-        AgentOptions(agent_key="support", definition_key="support", pinned_revision=2),
+    waiting = Turn(
+        client,
+        "turn_running",
+        tenant="acme",
+        admission=TurnAdmission("idem-2", False),
     )
-    with pytest.raises(NvokenError) as conflict:
-        await contradicted.ensure()
-    assert conflict.value.code == "agent_pin_conflict"
 
-    # Declaring no pin declares nothing about the pin.
-    silent: Agent[Answer] = Agent(
-        client,  # type: ignore[arg-type]
-        AgentOptions(agent_key="support", definition_key="support"),
-    )
-    assert (await silent.ensure()).pinned_revision == 3
+    async def running_status():
+        await asyncio.Event().wait()
 
-
-@pytest.mark.asyncio
-async def test_declared_agent_without_a_definition_cannot_create_itself() -> None:
-    agent: Agent[Answer] = Agent(
-        DeclaringClient([]),  # type: ignore[arg-type]
-        AgentOptions(agent_key="support"),
-    )
-    with pytest.raises(NvokenError) as missing:
-        await agent.ensure()
-    assert "definition_key" in str(missing.value)
-
-    with pytest.raises(NvokenError):
-        Agent(
-            DeclaringClient([]),  # type: ignore[arg-type]
-            AgentOptions(agent_id="agent_declared", definition_key="support"),
-        )
+    waiting.status = running_status
+    with pytest.raises(TurnTimeoutError) as timeout:
+        await waiting.result(timeout=0.001)
+    assert timeout.value.turn is waiting
+    assert timeout.value.idempotency_key == "idem-2"

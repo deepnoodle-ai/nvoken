@@ -19,7 +19,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity":
-			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","app_id":"app_test","type":"app","tenant_key":null,"session_id":null,"method":"api_key"}}`))
+			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","app_id":"app_test","type":"app","tenant_key":null,"method":"api_key"}}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity/credentials":
 			if request.URL.Query().Get("status") != "active" || request.URL.Query().Get("cursor") != "page-2" || request.URL.Query().Get("limit") != "10" {
 				t.Errorf("list query = %q", request.URL.RawQuery)

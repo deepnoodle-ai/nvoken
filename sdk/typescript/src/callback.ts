@@ -5,40 +5,14 @@ import {
   verifySignedDelivery,
   type DeliverySigningKey,
 } from "./signed-delivery.js";
+import {
+  ToolCallbackRequestFromJSON,
+  type ToolCallbackRequest,
+} from "./generated/models/ToolCallbackRequest.js";
+import type { DeliveryBehaviorSource } from "./generated/models/DeliveryBehaviorSource.js";
 
-export interface CallbackEnvelope {
-  nvoken: {
-    schema_version: number;
-    delivery_id: string;
-    tool_call_id: string;
-    /**
-     * The tool this delivery is for. It is inside the signed body, so a
-     * receiver serving several tools dispatches on it directly. Any per-tool
-     * path or query suffix on the endpoint URL is unsigned and belongs in
-     * logs, not in a dispatch decision.
-     */
-    tool_name: string;
-    invocation_id: string;
-    session_id: string | null;
-    agent_key: string;
-    tenant_key?: string;
-  };
-  /**
-   * What the Session was bound to at creation, in the host's own terms, absent
-   * when it was created without one.
-   *
-   * It is a sibling of `nvoken` rather than a member of it, and the placement
-   * is the rule: everything inside `nvoken` is a fact nvoken minted or
-   * resolved, while this is a value the host asserted and nvoken carried
-   * unchanged. Signing proves it reached the receiver as recorded, not that it
-   * is true.
-   *
-   * **A value repeated in tool input may only agree with this, never establish
-   * it.** The model writes the input; it does not write this.
-   */
-  authorization_context?: Record<string, string>;
-  input: unknown;
-}
+/** The schema-v2 signed callback body, decoded to generated camelCase fields. */
+export type CallbackEnvelope = ToolCallbackRequest;
 
 export interface VerifiedCallback {
   envelope: CallbackEnvelope;
@@ -46,13 +20,13 @@ export interface VerifiedCallback {
   deliveryId: string;
   toolCallId: string;
   toolName: string;
-  /**
-   * The Session's authorization context, read off the signed body. Authorize
-   * the delivery from this rather than from anything in `envelope.input`, and
-   * treat a value that appears in both as agreement to check rather than as a
-   * second source.
-   */
-  authorizationContext?: Record<string, string>;
+  turnId: string;
+  conversationId: string | null;
+  memorySpaceId: string | null;
+  contentExpiresAt: Date | null;
+  behaviorSource: DeliveryBehaviorSource;
+  tenantKey: string;
+  userKey: string | null;
   keyId: string;
   keyVersion: number;
   timestamp: Date;
@@ -71,20 +45,32 @@ export async function verifyCallback(
 ): Promise<VerifiedCallback> {
   const { deliveryId, idempotencyKey: toolCallId, keyId, keyVersion, timestamp } =
     await verifySignedDelivery(key, headers, rawBody, now);
-  const envelope = JSON.parse(new TextDecoder().decode(rawBody)) as CallbackEnvelope;
-  if (envelope.nvoken.schema_version !== 1) throw new Error("unsupported callback schema version");
-  if (envelope.nvoken.delivery_id !== deliveryId || envelope.nvoken.tool_call_id !== toolCallId) throw new Error("callback identity header does not match signed body");
+  const envelope = ToolCallbackRequestFromJSON(
+    JSON.parse(new TextDecoder().decode(rawBody)),
+  );
+  if (envelope.nvoken.schemaVersion !== 2) throw new Error("unsupported callback schema version");
+  if (envelope.nvoken.deliveryId !== deliveryId || envelope.nvoken.toolCallId !== toolCallId) {
+    throw new Error("callback identity header does not match signed body");
+  }
   // tool_name is required on the wire, so a missing one is a sender that is not
   // nvoken or a body that is not a callback. Failing here keeps the dispatch
   // below it total: no receiver needs a branch for "no name".
-  if (!envelope.nvoken.tool_name) throw new Error("callback envelope is missing tool_name");
+  if (!envelope.nvoken.toolName || !envelope.nvoken.turnId) {
+    throw new Error("callback envelope is incomplete");
+  }
   return {
     envelope,
     rawBody: rawBody.slice(),
     deliveryId,
     toolCallId,
-    toolName: envelope.nvoken.tool_name,
-    authorizationContext: envelope.authorization_context,
+    toolName: envelope.nvoken.toolName,
+    turnId: envelope.nvoken.turnId,
+    conversationId: envelope.nvoken.conversationId,
+    memorySpaceId: envelope.nvoken.memorySpaceId,
+    contentExpiresAt: envelope.nvoken.contentExpiresAt,
+    behaviorSource: envelope.nvoken.behaviorSource,
+    tenantKey: envelope.nvoken.tenantKey,
+    userKey: envelope.nvoken.userKey,
     keyId,
     keyVersion,
     timestamp,
@@ -116,12 +102,13 @@ export function callbackResult(content: unknown, isError = false): CallbackReply
  * Accepts delivery without settling the ToolCall, for work that will outlive
  * this tool's reply deadline — its declared `timeout_seconds`, or the App's
  * default when it declares none. Settle it later with
- * `client.submitToolResults`, reusing the delivery's ToolCall ID.
+ * `client.raw().turns.submitHostToolResults`, reusing the delivery's
+ * ToolCall ID.
  *
  * This trades away the fail-loud guarantee. nvoken marks an unacknowledged
  * delivery failed once its retries are exhausted, so the turn always moves on.
  * An acknowledged call instead waits under the host's responsibility, bounded
- * only by the Invocation's `limits.waitingTimeoutSeconds`. Acknowledge only
+ * only by the Turn's `limits.waitingTimeoutSeconds`. Acknowledge only
  * when something durable will settle the call.
  */
 export function acknowledgeCallback(): CallbackReply {

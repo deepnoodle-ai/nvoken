@@ -48,25 +48,25 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 		case "PATCH /v1/apps/app_test":
 			var body struct {
 				BrowserAccess struct {
-					AllowedOrigins    []string `json:"allowed_origins"`
-					InvocationWebhook struct {
+					AllowedOrigins []string `json:"allowed_origins"`
+					TurnWebhook    struct {
 						URL string `json:"url"`
-					} `json:"invocation_webhook"`
+					} `json:"turn_webhook"`
 					Limits struct {
-						PerTenant int64 `json:"max_concurrent_invocations_per_tenant"`
-						PerUser   int64 `json:"max_concurrent_invocations_per_user"`
+						PerTenant int64 `json:"max_concurrent_turns_per_tenant"`
+						PerUser   int64 `json:"max_concurrent_turns_per_user"`
 						PerMinute int64 `json:"max_admissions_per_user_per_minute"`
 					} `json:"limits"`
 				} `json:"browser_access"`
 				DefaultRateLimits struct {
-					Concurrent int64 `json:"max_concurrent_invocations"`
+					Concurrent int64 `json:"max_concurrent_turns"`
 					PerMinute  int64 `json:"max_admissions_per_minute"`
 				} `json:"default_rate_limits"`
 			}
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Errorf("decode browser access: %v", err)
 			} else if !reflect.DeepEqual(body.BrowserAccess.AllowedOrigins, []string{"https://app.example.test", "http://localhost:5173"}) ||
-				body.BrowserAccess.InvocationWebhook.URL != "https://api.example.test/nvoken/events" ||
+				body.BrowserAccess.TurnWebhook.URL != "https://api.example.test/nvoken/events" ||
 				body.BrowserAccess.Limits.PerTenant != 12 ||
 				body.BrowserAccess.Limits.PerUser != 2 ||
 				body.BrowserAccess.Limits.PerMinute != 10 ||
@@ -107,10 +107,10 @@ func TestAppInitProvisionsBrowserAppAndPrintsEnvironment(t *testing.T) {
 			"--origin", "http://localhost:5173",
 			"--webhook-url", "https://api.example.test/nvoken/events",
 			"--client-key-name", "web production",
-			"--max-concurrent-invocations", "30",
+			"--max-concurrent-turns", "30",
 			"--max-admissions-per-minute", "200",
-			"--max-concurrent-invocations-per-tenant", "12",
-			"--max-concurrent-invocations-per-user", "2",
+			"--max-concurrent-turns-per-tenant", "12",
+			"--max-concurrent-turns-per-user", "2",
 			"--max-admissions-per-user-per-minute", "10",
 		),
 	)
@@ -213,7 +213,7 @@ func TestAppInitValidatesBrowserOptionsBeforeRegistering(t *testing.T) {
 		},
 		"browser limits are positive": {
 			"--browser", "--origin", "https://app.example.test", "--webhook-url", "https://api.example.test/nvoken/events",
-			"--max-concurrent-invocations-per-user", "0",
+			"--max-concurrent-turns-per-user", "0",
 		},
 		"browser flags need browser mode": {
 			"--origin", "https://app.example.test",

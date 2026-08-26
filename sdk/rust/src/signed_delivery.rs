@@ -11,7 +11,7 @@ pub const SIGNATURE_TIMESTAMP_WINDOW: Duration = Duration::from_secs(300);
 
 /// What can go wrong receiving a signed delivery.
 ///
-/// One enum covers callbacks and Invocation webhooks because one scheme signs
+/// One enum covers callbacks and Turn webhooks because one scheme signs
 /// both; the variants that name a delivery kind are the ones about what that
 /// kind's body must say.
 #[derive(Debug, thiserror::Error)]
@@ -46,13 +46,15 @@ pub enum DeliveryError {
     IdentityMismatch,
     #[error("callback envelope is missing tool_name")]
     MissingToolName,
+    #[error("delivery envelope is missing Turn attribution")]
+    InvalidAttribution,
     #[error("webhook sequence must be positive")]
     InvalidWebhookSequence,
 }
 
 /// One delivery whose signature has been checked, before its body is read.
 ///
-/// nvoken signs tool callbacks and Invocation webhooks the same way, so
+/// nvoken signs tool callbacks and Turn webhooks the same way, so
 /// everything up to and including the HMAC comparison lives here once rather
 /// than in two copies that have to be kept in step. What differs is only what
 /// the verified body then means: a callback settles a named ToolCall, a webhook

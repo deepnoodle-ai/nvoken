@@ -1,11 +1,10 @@
 // Generated modules directly rather than the barrel, so this subpath stays
-// reachable without pulling the runtime client in. `isTurnOver` is a real
-// value, but `invocation-status.js` is standalone by the same rule.
-import type { InvocationChange } from "./generated/models/InvocationChange.js";
-import type { Session } from "./generated/models/Session.js";
-import type { SessionMessage } from "./generated/models/SessionMessage.js";
+// reachable without pulling the runtime client in.
+import type { Conversation } from "./generated/models/Conversation.js";
+import type { ConversationMessage } from "./generated/models/ConversationMessage.js";
 import type { ToolCallSummary } from "./generated/models/ToolCallSummary.js";
-import { isTurnOver } from "./invocation-status.js";
+import type { TurnChange } from "./generated/models/TurnChange.js";
+import { isTurnOver } from "./turn-status.js";
 import { blocksOf } from "./transcript.js";
 
 /**
@@ -13,7 +12,7 @@ import { blocksOf } from "./transcript.js";
  *
  * Sources disagree about this and each is stale in its own direction. The
  * stream is authoritative but reports a settlement one frame after the message
- * that ended the turn; a Session read is a point-in-time snapshot taken when a
+ * that ended the turn; a Conversation read is a point-in-time snapshot taken when a
  * consumer connects and again when a turn settles. Reconciling them in one
  * place is what keeps a header badge, a composer, and a transcript's working
  * indicator from telling three different stories — and every consumer that
@@ -29,26 +28,26 @@ import { blocksOf } from "./transcript.js";
  * runtime about whether a turn is over — the set has four members and eight
  * statuses to get wrong.
  */
-function settles(change: InvocationChange): boolean {
+function settles(change: TurnChange): boolean {
   return isTurnOver(change);
 }
 
-/** The highest revision seen for each Invocation — its current state. */
-export function latestChanges(changes: InvocationChange[]): InvocationChange[] {
-  const byInvocation = new Map<string, InvocationChange>();
+/** The highest revision seen for each Turn — its current state. */
+export function latestChanges(changes: TurnChange[]): TurnChange[] {
+  const byTurn = new Map<string, TurnChange>();
   for (const change of changes) {
-    const existing = byInvocation.get(change.invocationId);
+    const existing = byTurn.get(change.turnId);
     if (!existing || change.revision > existing.revision) {
-      byInvocation.set(change.invocationId, change);
+      byTurn.set(change.turnId, change);
     }
   }
-  return [...byInvocation.values()];
+  return [...byTurn.values()];
 }
 
-export function settledInvocations(changes: InvocationChange[]): Set<string> {
+export function settledTurns(changes: TurnChange[]): Set<string> {
   const settled = new Set<string>();
   for (const change of latestChanges(changes)) {
-    if (settles(change)) settled.add(change.invocationId);
+    if (settles(change)) settled.add(change.turnId);
   }
   return settled;
 }
@@ -58,31 +57,31 @@ export function settledInvocations(changes: InvocationChange[]): Set<string> {
  *
  * There is one tool-call collection, and a call somebody is expected to run is
  * the one carrying the arguments to run it with. Filtering on that is the whole
- * rule, and it is why this needs no Session read on a timer.
+ * rule, and it is why this needs no Conversation read on a timer.
  */
 export function parkedCalls(
-  changes: InvocationChange[],
-  invocationId: string | null,
+  changes: TurnChange[],
+  turnId: string | null,
 ): ToolCallSummary[] {
-  if (!invocationId) return [];
+  if (!turnId) return [];
   const change = latestChanges(changes).find(
-    (candidate) => candidate.invocationId === invocationId,
+    (candidate) => candidate.turnId === turnId,
   );
   return (change?.toolCalls ?? []).filter((call) => call.arguments !== undefined);
 }
 
 export type Activity = {
-  /** The Invocation the Session is running, or null when it is idle. */
-  invocationId: string | null;
+  /** The Turn the Conversation is running, or null when it is idle. */
+  turnId: string | null;
   /** Its status, live from the stream where the stream has an opinion. */
   status: string | null;
 };
 
 /**
- * Reconcile the stream's view of the Session with what a consumer knows from
+ * Reconcile the stream's view of the Conversation with what a consumer knows from
  * outside it.
  *
- * The stream wins for any Invocation it has reported on: it is where a turn's
+ * The stream wins for any Turn it has reported on: it is where a turn's
  * status changes first, and preferring the other sources leaves a composer's
  * stop button up for a round trip after the answer is on screen, and a header
  * badge reading `queued` for a turn already streaming text.
@@ -91,12 +90,12 @@ export type Activity = {
  * stream has an opinion of its own. `admitted` is a turn this caller just
  * started, which covers the gap between the create call returning and the
  * reopened stream's first frame — without it a composer drops back to its idle
- * state for a beat and invites a second send. The Session read covers a turn
+ * state for a beat and invites a second send. The Conversation read covers a turn
  * some other client started between frames.
  */
 export function resolveActivity(
-  changes: InvocationChange[],
-  session: Session | null,
+  changes: TurnChange[],
+  conversation: Conversation | null,
   admitted: Activity | null = null,
 ): Activity {
   const latest = latestChanges(changes);
@@ -105,19 +104,19 @@ export function resolveActivity(
     .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime())
     .at(-1);
   if (running) {
-    return { invocationId: running.invocationId, status: running.status };
+    return { turnId: running.turnId, status: running.status };
   }
-  const known = new Set(latest.map((change) => change.invocationId));
-  const sessionClaim: Activity | null = session?.activeInvocationId
+  const known = new Set(latest.map((change) => change.turnId));
+  const conversationClaim: Activity | null = conversation?.activeTurnId
     ? {
-        invocationId: session.activeInvocationId,
-        status: session.activeInvocationStatus ?? "running",
+        turnId: conversation.activeTurnId,
+        status: conversation.activeTurnStatus ?? "running",
       }
     : null;
-  for (const claim of [admitted, sessionClaim]) {
-    if (claim?.invocationId && !known.has(claim.invocationId)) return claim;
+  for (const claim of [admitted, conversationClaim]) {
+    if (claim?.turnId && !known.has(claim.turnId)) return claim;
   }
-  return { invocationId: null, status: null };
+  return { turnId: null, status: null };
 }
 
 /**
@@ -125,7 +124,7 @@ export function resolveActivity(
  * not having settled yet.
  *
  * The runtime publishes the assistant message that ends a turn one frame
- * before the Invocation's terminal status, so a plain "is the Invocation
+ * before the Turn's terminal status, so a plain "is the Turn
  * active" test stays true for a beat after the answer is fully on screen.
  * Reporting work in that window makes an indicator flash in and out under the
  * finished message. An assistant message with no tool_use block is the model's
@@ -133,13 +132,13 @@ export function resolveActivity(
  * or not the bookkeeping has caught up.
  */
 export function awaitingOutput(
-  messages: SessionMessage[],
-  invocationId: string | null,
+  messages: ConversationMessage[],
+  turnId: string | null,
 ): boolean {
-  if (!invocationId) return false;
+  if (!turnId) return false;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message.invocationId !== invocationId) continue;
+    if (message.turnId !== turnId) continue;
     if (message.role !== "assistant") continue;
     return blocksOf(message).some((block) => block.type === "tool_use");
   }
@@ -156,7 +155,7 @@ export type SettlementNotice = {
  * The notice to show under a transcript, when the newest settlement was not a
  * clean finish. Suppressed once a later turn completes.
  */
-export function settlementNotice(changes: InvocationChange[]): SettlementNotice | null {
+export function settlementNotice(changes: TurnChange[]): SettlementNotice | null {
   const latest = latestChanges(changes);
   const problems = latest
     .filter((change) => {

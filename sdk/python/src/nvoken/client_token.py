@@ -4,13 +4,14 @@ import base64
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 #: The longest a client token may live. nvoken refuses anything longer, so this
 #: is a ceiling rather than a suggestion.
 #:
 #: Short lifetimes are the whole safety story of handing a browser a bearer
 #: token: the page refreshes from your backend on the schedule it already
-#: refreshes its own session, and a leaked token is worth minutes.
+#: refreshes its own authentication, and a leaked token is worth minutes.
 CLIENT_TOKEN_LIFETIME_LIMIT = timedelta(minutes=15)
 
 #: The required ``typ`` header.
@@ -21,9 +22,65 @@ CLIENT_TOKEN_LIFETIME_LIMIT = timedelta(minutes=15)
 CLIENT_TOKEN_TYPE = "nvoken-client+jwt"
 
 _AUDIENCE = "nvoken"
+_CONTRACT_VERSION = 2
 _MAX_CLAIM = 255
 
-@dataclass
+
+@dataclass(frozen=True)
+class ClientTokenMemoryAccess:
+    """The closed memory grant carried by a browser client token."""
+
+    scope: Literal["none", "user"]
+    namespace: str | None = None
+
+    @classmethod
+    def none(cls) -> ClientTokenMemoryAccess:
+        return cls(scope="none")
+
+    @classmethod
+    def user(cls, namespace: str) -> ClientTokenMemoryAccess:
+        return cls(scope="user", namespace=namespace)
+
+    def _wire(self) -> dict[str, str]:
+        if self.scope == "none" and self.namespace is None:
+            return {"scope": "none"}
+        if self.scope == "user" and self.namespace is not None and _canonical(self.namespace):
+            return {"namespace": self.namespace, "scope": "user"}
+        raise ValueError("nvoken: memory_access does not match its selected scope")
+
+
+@dataclass(frozen=True)
+class ClientTokenConversationAccess:
+    """The closed Conversation grant carried by a browser client token."""
+
+    scope: Literal["standalone_only", "exact", "user_conversations"]
+    conversation_id: str | None = None
+
+    @classmethod
+    def standalone_only(cls) -> ClientTokenConversationAccess:
+        return cls(scope="standalone_only")
+
+    @classmethod
+    def exact(cls, conversation_id: str) -> ClientTokenConversationAccess:
+        return cls(scope="exact", conversation_id=conversation_id)
+
+    @classmethod
+    def user_conversations(cls) -> ClientTokenConversationAccess:
+        return cls(scope="user_conversations")
+
+    def _wire(self) -> dict[str, str]:
+        if self.scope in ("standalone_only", "user_conversations") and self.conversation_id is None:
+            return {"scope": self.scope}
+        if self.scope == "exact" and self.conversation_id is not None:
+            if not _valid_stable_id(self.conversation_id, "conv"):
+                raise ValueError(
+                    f"nvoken: conversation_id {self.conversation_id!r} is not a Conversation id"
+                )
+            return {"conversation_id": self.conversation_id, "scope": "exact"}
+        raise ValueError("nvoken: conversation_access does not match its selected scope")
+
+
+@dataclass(frozen=True)
 class ClientTokenClaims:
     """What a host asserts when it lets a browser talk to nvoken directly.
 
@@ -42,20 +99,16 @@ class ClientTokenClaims:
     #: runtime user constraint and never resolves it to a person, so prefer an
     #: internal id over an email address.
     subject: str
+    #: Scopes the token to one tenant actor.
+    tenant_key: str
+    #: Pins one exact Agent and immutable AgentRevision.
+    agent_id: str
+    agent_revision_id: str
+    #: Closed grants; neither is inferred from the other.
+    memory_access: ClientTokenMemoryAccess
+    conversation_access: ClientTokenConversationAccess
     #: Required, and at most CLIENT_TOKEN_LIFETIME_LIMIT.
     lifetime: timedelta
-    #: Scopes the token to one tenant. ``None`` means the App's default tenant.
-    tenant_key: str | None = None
-    #: Exactly one of ``agent_id`` or ``agent_key`` names the Agent.
-    agent_id: str | None = None
-    agent_key: str | None = None
-    #: Pins the Agent Definition revision this token was minted against, so a
-    #: deploy mid-session cannot change what the browser is talking to.
-    definition_revision: int | None = None
-    #: Confines the token to one Session. Leaving it unset lets the browser
-    #: reach every Session belonging to this user and Agent, which is what a
-    #: session-list UI needs and a single-conversation UI does not.
-    session_id: str | None = None
     #: Defaults to the current time.
     issued_at: datetime | None = None
 
@@ -72,7 +125,7 @@ def mint_client_token(private_key: bytes, claims: ClientTokenClaims) -> str:
     bytes.
     """
     sign = _ed25519_signer(private_key)
-    _validate(claims)
+    memory_access, conversation_access = _validate(claims)
 
     issued_at = claims.issued_at or datetime.now(timezone.utc)
     issued = int(issued_at.timestamp())
@@ -85,17 +138,13 @@ def mint_client_token(private_key: bytes, claims: ClientTokenClaims) -> str:
         ("aud", _AUDIENCE),
         ("iat", issued),
         ("exp", issued + int(claims.lifetime.total_seconds())),
+        ("contract_version", _CONTRACT_VERSION),
+        ("tenant_key", claims.tenant_key),
+        ("agent_id", claims.agent_id),
+        ("agent_revision_id", claims.agent_revision_id),
+        ("memory_access", memory_access),
+        ("conversation_access", conversation_access),
     ]
-    if claims.tenant_key is not None:
-        members.append(("tenant_key", claims.tenant_key))
-    if claims.agent_id is not None:
-        members.append(("agent_id", claims.agent_id))
-    if claims.agent_key is not None:
-        members.append(("agent_key", claims.agent_key))
-    if claims.definition_revision:
-        members.append(("definition_revision", claims.definition_revision))
-    if claims.session_id is not None:
-        members.append(("session_id", claims.session_id))
     signing_input = f"{_base64url(header)}.{_base64url(_ordered_json(members))}"
     return f"{signing_input}.{_base64url(sign(signing_input.encode()))}"
 
@@ -116,7 +165,9 @@ def _ed25519_signer(private_key: bytes):
     return key.sign
 
 
-def _validate(claims: ClientTokenClaims) -> None:
+def _validate(
+    claims: ClientTokenClaims,
+) -> tuple[dict[str, str], dict[str, str]]:
     if not _valid_stable_id(claims.app_id, "app"):
         raise ValueError(f"nvoken: app_id {claims.app_id!r} is not an App id")
     if not _valid_stable_id(claims.key_id, "ckey"):
@@ -126,22 +177,16 @@ def _validate(claims: ClientTokenClaims) -> None:
             "nvoken: subject is required, and must not be blank, padded, or over "
             "255 characters"
         )
-    if claims.tenant_key is not None and not _canonical(claims.tenant_key):
+    if not _canonical(claims.tenant_key):
         raise ValueError(
-            "nvoken: tenant_key must not be blank, padded, or over 255 characters"
+            "nvoken: tenant_key is required, and must not be blank, padded, or over 255 characters"
         )
-    if (claims.agent_id is None) == (claims.agent_key is None):
-        raise ValueError("nvoken: set exactly one of agent_id or agent_key")
-    if claims.agent_id is not None and not _valid_stable_id(claims.agent_id, "agent"):
+    if not _valid_stable_id(claims.agent_id, "agent"):
         raise ValueError(f"nvoken: agent_id {claims.agent_id!r} is not an Agent id")
-    if claims.agent_key is not None and not _canonical(claims.agent_key):
+    if not _valid_stable_id(claims.agent_revision_id, "arev"):
         raise ValueError(
-            "nvoken: agent_key must not be blank, padded, or over 255 characters"
+            f"nvoken: agent_revision_id {claims.agent_revision_id!r} is not an AgentRevision id"
         )
-    if claims.definition_revision is not None and claims.definition_revision < 0:
-        raise ValueError("nvoken: definition_revision must not be negative")
-    if claims.session_id is not None and not _valid_stable_id(claims.session_id, "sess"):
-        raise ValueError(f"nvoken: session_id {claims.session_id!r} is not a Session id")
     if (
         claims.lifetime <= timedelta(0)
         or claims.lifetime > CLIENT_TOKEN_LIFETIME_LIMIT
@@ -149,6 +194,7 @@ def _validate(claims: ClientTokenClaims) -> None:
         raise ValueError(
             f"nvoken: lifetime must be positive and at most {CLIENT_TOKEN_LIFETIME_LIMIT}"
         )
+    return claims.memory_access._wire(), claims.conversation_access._wire()
 
 
 def _canonical(value: str) -> bool:

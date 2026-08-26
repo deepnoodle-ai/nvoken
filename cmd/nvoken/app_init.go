@@ -111,10 +111,10 @@ func appInitBrowserOptionsFrom(command *cli.Context) (*appInitBrowserOptions, er
 			"origin",
 			"webhook-url",
 			"client-key-name",
-			"max-concurrent-invocations",
+			"max-concurrent-turns",
 			"max-admissions-per-minute",
-			"max-concurrent-invocations-per-tenant",
-			"max-concurrent-invocations-per-user",
+			"max-concurrent-turns-per-tenant",
+			"max-concurrent-turns-per-user",
 			"max-admissions-per-user-per-minute",
 		} {
 			if command.IsSet(flag) {
@@ -146,10 +146,10 @@ func appInitBrowserOptionsFrom(command *cli.Context) (*appInitBrowserOptions, er
 		name  string
 		value int
 	}{
-		{"max-concurrent-invocations", command.Int("max-concurrent-invocations")},
+		{"max-concurrent-turns", command.Int("max-concurrent-turns")},
 		{"max-admissions-per-minute", command.Int("max-admissions-per-minute")},
-		{"max-concurrent-invocations-per-tenant", command.Int("max-concurrent-invocations-per-tenant")},
-		{"max-concurrent-invocations-per-user", command.Int("max-concurrent-invocations-per-user")},
+		{"max-concurrent-turns-per-tenant", command.Int("max-concurrent-turns-per-tenant")},
+		{"max-concurrent-turns-per-user", command.Int("max-concurrent-turns-per-user")},
 		{"max-admissions-per-user-per-minute", command.Int("max-admissions-per-user-per-minute")},
 	}
 	for _, limit := range limits {
@@ -161,18 +161,18 @@ func appInitBrowserOptionsFrom(command *cli.Context) (*appInitBrowserOptions, er
 	return &appInitBrowserOptions{
 		Access: nvoken.BrowserAccess{
 			AllowedOrigins: origins,
-			InvocationWebhook: nvoken.BrowserInvocationWebhook{
+			TurnWebhook: nvoken.BrowserTurnWebhook{
 				URL: webhookURL,
 			},
 			Limits: nvoken.BrowserRateLimits{
-				MaxAdmissionsPerUserPerMinute:     int64(command.Int("max-admissions-per-user-per-minute")),
-				MaxConcurrentInvocationsPerTenant: int64(command.Int("max-concurrent-invocations-per-tenant")),
-				MaxConcurrentInvocationsPerUser:   int64(command.Int("max-concurrent-invocations-per-user")),
+				MaxAdmissionsPerUserPerMinute: int64(command.Int("max-admissions-per-user-per-minute")),
+				MaxConcurrentTurnsPerTenant:   int64(command.Int("max-concurrent-turns-per-tenant")),
+				MaxConcurrentTurnsPerUser:     int64(command.Int("max-concurrent-turns-per-user")),
 			},
 		},
 		DefaultLimits: nvoken.AppDefaultRateLimits{
-			MaxAdmissionsPerMinute:   int64(command.Int("max-admissions-per-minute")),
-			MaxConcurrentInvocations: int64(command.Int("max-concurrent-invocations")),
+			MaxAdmissionsPerMinute: int64(command.Int("max-admissions-per-minute")),
+			MaxConcurrentTurns:     int64(command.Int("max-concurrent-turns")),
 		},
 		ClientKeyName: clientKeyName,
 	}, nil

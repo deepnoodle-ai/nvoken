@@ -12,17 +12,14 @@ paths. Neither looks inside a facade signature.
 
 Two things are checked, and they fail differently.
 
-**Parameter parity** is a hard failure. If a language wraps an operation, every
-query parameter and every top-level request-body field of that operation must
-appear somewhere in that language's hand-written sources. This is a
-spelling-level check rather than a signature parse: it answers "is this
-parameter reachable at all", which is the question that was being answered
-wrong. Body fields are checked because query parameters alone missed the case
-that motivated the check: `user_key` was writable on the wire and on no facade
-but one, so user-scope memory was unreachable through three of four front
-doors while the contract said otherwise. Only top-level fields are walked —
-a nested object is one field the facade must name, and its shape is what the
-conformance fixtures pin.
+**Parameter parity** is a hard failure for operations the handwritten facade
+deliberately wraps. Every query parameter and top-level request-body field in
+that operation's facade contract must appear somewhere in the language's
+handwritten sources. Exact-only operations and fields are listed explicitly
+below because `raw()` is their front door; forcing transport controls into the
+workflow facade would defeat the separation this check protects. This remains
+a spelling-level check rather than a signature parse. Only top-level fields are
+walked; nested shapes are pinned elsewhere.
 
 **Facade coverage** is a baseline. Not every operation needs a facade — some
 are reporting surfaces callers reach through the generated clients on purpose.
@@ -78,6 +75,74 @@ RAW_ONLY = {
     "listAdmissions",
     "summarizeAdmissions",
     "listApps",
+    # Conversation, MemorySpace, and Turn administration stays request-shaped
+    # under raw(). The workflow facade binds Conversation selection during
+    # admission and exposes a Turn's status, result, and updates; it does not
+    # duplicate the complete resource-management APIs.
+    "cancelNudge",
+    "cancelTurn",
+    "createConversation",
+    "createNudge",
+    "deleteConversation",
+    "deleteMemorySpace",
+    "deleteTurn",
+    "forkConversation",
+    "getAgentRevision",
+    "getConversation",
+    "getConversationTranscript",
+    "getMemorySpace",
+    "getTrace",
+    "getTurn",
+    "getTurnTimeline",
+    "interruptTurn",
+    "listAgentRevisions",
+    "listConversationCompactions",
+    "listConversationMessages",
+    "listConversations",
+    "listMemorySpaces",
+    "listNudges",
+    "listToolCalls",
+    "listTurnLogs",
+    "listTurnTraces",
+    "listTurns",
+    "receiveToolCallback",
+    "receiveTurnWebhook",
+    "resolveMemorySpace",
+    "resumeTurn",
+    "streamConversation",
+    "updateConversation",
+}
+
+# These operations back ordinary workflow methods, but the facade deliberately
+# omits transport-only controls. Every omitted member remains available under
+# raw(). Keep this list tied to the accepted facade rather than using it as a
+# general escape hatch for parity failures.
+EXACT_ONLY_FIELDS = {
+    "createAgent": {
+        "client_interface",
+        "mcp_servers",
+        "provider_tools",
+        "reasoning",
+        "sampling",
+        "tool_choice",
+    },
+    "createTurn": {
+        "context",
+        "mcp_server_headers",
+        "on_budget_exhausted",
+        "provider_keys",
+        "triggered_by",
+        "webhook",
+    },
+    "listAgents": {"limit"},
+    "publishAgentRevision": {
+        "client_interface",
+        "mcp_servers",
+        "provider_tools",
+        "reasoning",
+        "sampling",
+        "tool_choice",
+    },
 }
 
 # Operations whose facade takes the generated request type as its parameter
@@ -94,12 +159,6 @@ WIRE_SHAPED = {
     ("createAppClientKey", "rust"),
     ("createCredential", "rust"),
     ("createProviderKey", "rust"),
-    ("createSession", "typescript"),
-    ("createSession", "python"),
-    ("createSession", "rust"),
-    ("forkSession", "typescript"),
-    ("forkSession", "python"),
-    ("forkSession", "rust"),
     ("mintAppSigningKey", "typescript"),
     ("mintAppSigningKey", "python"),
     ("mintAppSigningKey", "rust"),
@@ -227,6 +286,14 @@ def spelling(language: str, parameter: str) -> str:
     return parameter
 
 
+def facade_parameters(operation_id: str, parameters: list[str]) -> list[str]:
+    """Return the wire members promised by the handwritten workflow facade."""
+    if operation_id in RAW_ONLY:
+        return []
+    exact_only = EXACT_ONLY_FIELDS.get(operation_id, set())
+    return [parameter for parameter in parameters if parameter not in exact_only]
+
+
 def main() -> int:
     operations = load_operations()
     sources = load_sources()
@@ -235,7 +302,8 @@ def main() -> int:
     observed_coverage: set[tuple[str, str]] = set()
 
     for operation_id, parameters in sorted(operations.items()):
-        if operation_id in RAW_ONLY or not parameters:
+        parameters = facade_parameters(operation_id, parameters)
+        if not parameters:
             continue
         for language, source in sorted(sources.items()):
             if (operation_id, language) in WIRE_SHAPED:

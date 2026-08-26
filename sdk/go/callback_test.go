@@ -11,38 +11,31 @@ import (
 	"time"
 )
 
-// tool_name is required on the wire, and a receiver dispatches on it. A body
-// without one is not a callback this SDK can hand to a handler, so verification
-// rejects it rather than passing an empty name down and leaving every receiver
-// to write the same guard.
-func TestVerifyCallbackRequiresToolName(t *testing.T) {
+func TestVerifyCallbackRequiresTargetToolName(t *testing.T) {
 	const (
 		key        = "0123456789abcdef0123456789abcdef"
-		deliveryID = "dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326"
-		toolCallID = "call_019b0a12-8d51-7f34-aed2-0e07c1bdb325"
+		deliveryID = "dlvr_1"
+		toolCallID = "call_1"
 	)
 	now := time.Unix(1784635200, 0)
-	body := `{"nvoken":{"schema_version":1,"delivery_id":"` + deliveryID +
-		`","tool_call_id":"` + toolCallID +
-		`","invocation_id":"inv_1","session_id":"sess_1","agent_key":"support"},"input":{}}`
+	context := `"schema_version":2,"delivery_id":"` + deliveryID + `","tool_call_id":"` + toolCallID +
+		`","turn_id":"turn_1","conversation_id":null,"memory_space_id":null,"content_expires_at":null,` +
+		`"behavior_source":{"kind":"inline","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},` +
+		`"tenant_key":"acme","user_key":null`
+	body := `{"nvoken":{` + context + `},"input":{}}`
 	header := signedDeliveryHeader(key, []byte(body), deliveryID, toolCallID, now)
 	if _, err := VerifyCallback([]byte(key), header, []byte(body), now); err == nil {
-		t.Fatal("a correctly signed envelope with no tool_name was accepted")
+		t.Fatal("signed target callback with no tool_name was accepted")
 	}
 
-	named := `{"nvoken":{"schema_version":1,"delivery_id":"` + deliveryID +
-		`","tool_call_id":"` + toolCallID +
-		`","tool_name":"open_ticket","invocation_id":"inv_1","session_id":"sess_1","agent_key":"support"},"input":{}}`
+	named := `{"nvoken":{` + context + `,"tool_name":"open_ticket"},"input":{}}`
 	header = signedDeliveryHeader(key, []byte(named), deliveryID, toolCallID, now)
 	verified, err := VerifyCallback([]byte(key), header, []byte(named), now)
-	if err != nil || verified.ToolName != "open_ticket" {
-		t.Fatalf("verified tool name = %q err=%v", verified.ToolName, err)
+	if err != nil || verified.ToolName != "open_ticket" || verified.Envelope.Nvoken.TurnID != "turn_1" {
+		t.Fatalf("verified callback = %#v err=%v", verified, err)
 	}
 }
 
-// signedDeliveryHeader signs a body the way nvoken does. It takes the
-// idempotency key rather than assuming one, because callbacks and Invocation
-// webhooks put different values there under one signing scheme.
 func signedDeliveryHeader(key string, body []byte, deliveryID, idempotencyKey string, now time.Time) http.Header {
 	mac := hmac.New(sha256.New, []byte(key))
 	_, _ = fmt.Fprintf(mac, "v1.%s.%d.", deliveryID, now.Unix())

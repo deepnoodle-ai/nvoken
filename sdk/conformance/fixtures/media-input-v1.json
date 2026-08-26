@@ -216,7 +216,7 @@
     "category": "validation",
     "status": 400,
     "code": "invalid_request",
-    "message": "The invocation request is invalid.",
+    "message": "The request is invalid.",
     "details": {
       "kind": "input_modality_unsupported",
       "field": "input.content[0]",

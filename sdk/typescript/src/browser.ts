@@ -1,28 +1,35 @@
-import {
-  Client,
-  NvokenError,
-  normalizeError,
-  type BrowserInvokeRequest,
-  type ClientOptions,
-  type InvocationHandle,
-  type JsonObject,
-} from "./client.js";
+import { Client, type RawClient } from "./client.js";
+import { NoOutputTextError, NvokenError, normalizeError } from "./turn-error.js";
+import type {
+  ClientOptions,
+  JsonObject,
+  NarrowedTurnLimits,
+  RawStreamOptions,
+  RunnerTurnOptions,
+  Turn,
+  TurnResult,
+} from "./facade-types.js";
+import type { CreateTurnRequest } from "./generated/models/CreateTurnRequest.js";
+import type { TurnContextItem } from "./generated/models/TurnContextItem.js";
+import type { TurnInput } from "./generated/models/TurnInput.js";
 import {
   AnonymousTokenResponseFromJSON,
   type AnonymousTokenResponse,
 } from "./generated/models/AnonymousTokenResponse.js";
 import { ResponseError } from "./generated/runtime.js";
+import type { StreamFrame } from "./stream.js";
 
 /**
  * How a page talks to nvoken.
  *
  * The credential is a client token your backend minted for this one end user,
- * this one Agent, and often this one Session — never a machine API key. That
+ * this one Agent, and often one Conversation — never a machine API key. That
  * is the entire difference between browser-direct access and putting your
  * server's credential in a bundle, so this entry refuses the second rather
  * than trusting the distinction to a code review.
  */
-export interface BrowserClientOptions extends Omit<ClientOptions, "apiKey" | "envFile" | "scope"> {
+export interface BrowserClientOptions
+  extends Omit<ClientOptions, "apiKey" | "baseUrl" | "browserCredential"> {
   baseUrl: string;
   /**
    * The token, or a function returning one.
@@ -39,8 +46,8 @@ export interface BrowserClientOptions extends Omit<ClientOptions, "apiKey" | "en
  * Builds a Client for browser-direct access.
  *
  * Everything a browser may reach it reaches with the token's own authority:
- * the token names the tenant, the end user, the Agent, and the Definition
- * revision, and nvoken narrows every response to them. Scope headers are not
+ * the token names the tenant, the end user, the Agent, and the AgentRevision,
+ * and nvoken narrows every response to them. Scope headers are not
  * accepted from a browser token and are not sent here — the token already
  * carries what they would assert.
  */
@@ -53,34 +60,119 @@ export function createBrowserClient(options: BrowserClientOptions): BrowserClien
   const resolve = typeof clientToken === "function" ? clientToken : () => clientToken;
   const client = new Client({
     ...rest,
-    // A browser has no .env to read, and probing for one is the kind of thing
-    // that turns into a bundler warning nobody can act on.
-    envFile: false,
     apiKey: async () => refuseMachineCredential(await resolve()),
     browserCredential: true,
   });
-  // One Client, described to a page in the terms a page can act on. The
-  // assertion is needed because narrowing a parameter type is not a subtype
-  // relationship; the instance is unchanged, and `browserCredential` above is
-  // what makes the narrower contract true at runtime.
-  return client as unknown as BrowserClient;
+  return new BrowserClientHandle(client);
 }
 
-/**
- * A {@link Client} whose credential is a browser token.
- *
- * It is the same object with the same methods; one signature differs.
- * `invoke` takes a {@link BrowserInvokeRequest}, which omits the Agent, the
- * tenant, and the end user because the token already carries them, along with
- * the fields the service refuses from a browser token. Everything a page may
- * reach — streaming, reading a Session, answering a client tool — it reaches
- * exactly as a machine client does.
- */
-export interface BrowserClient extends Omit<Client, "invoke"> {
-  invoke<TOutput extends object = JsonObject>(
-    request: BrowserInvokeRequest,
-    signal?: AbortSignal,
-  ): Promise<InvocationHandle<TOutput>>;
+export type BrowserConversationSelection =
+  | { id: string; key?: never; ownedByUser?: never; ifActive?: "reject" }
+  | {
+      id?: never;
+      key: string;
+      ownedByUser: string;
+      ifActive?: "reject" | "interrupt";
+    };
+
+export interface BrowserTurnOptions extends RunnerTurnOptions {
+  conversation?: BrowserConversationSelection;
+  limits?: NarrowedTurnLimits;
+  context?: readonly TurnContextItem[];
+  onBudgetExhausted?: "stop";
+}
+
+export interface BrowserClient {
+  start<TOutput extends object = JsonObject>(
+    input: TurnInput,
+    options?: BrowserTurnOptions,
+  ): Promise<Turn<TOutput>>;
+  run<TOutput extends object = JsonObject>(
+    input: TurnInput,
+    options?: BrowserTurnOptions,
+  ): Promise<TurnResult<TOutput>>;
+  text(input: TurnInput, options?: BrowserTurnOptions): Promise<string>;
+  turn<TOutput extends object = JsonObject>(turnId: string): Turn<TOutput>;
+  conversationFrames<TOutput extends object = JsonObject>(
+    conversationId: string,
+    options?: RawStreamOptions,
+  ): AsyncIterable<StreamFrame<TOutput>>;
+  raw(): RawClient;
+}
+
+class BrowserClientHandle implements BrowserClient {
+  constructor(private readonly client: Client) {}
+
+  async start<TOutput extends object = JsonObject>(
+    input: TurnInput,
+    options: BrowserTurnOptions = {},
+  ): Promise<Turn<TOutput>> {
+    const request: CreateTurnRequest = {
+      idempotencyKey: options.idempotencyKey ?? `nvoken-${crypto.randomUUID()}`,
+      input,
+      conversation: options.conversation
+        ? browserConversation(options.conversation)
+        : undefined,
+      limits: options.limits ? { ...options.limits } : undefined,
+      metadata: options.metadata ? { ...options.metadata } : undefined,
+      context: options.context ? [...options.context] : undefined,
+      onBudgetExhausted: options.onBudgetExhausted,
+    };
+    return this.client.admit<TOutput>(request, { tenant: "" }, {}, options);
+  }
+
+  async run<TOutput extends object = JsonObject>(
+    input: TurnInput,
+    options: BrowserTurnOptions = {},
+  ): Promise<TurnResult<TOutput>> {
+    const turn = await this.start<TOutput>(input, options);
+    return turn.result({ signal: options.signal, timeoutMs: options.timeoutMs });
+  }
+
+  async text(input: TurnInput, options: BrowserTurnOptions = {}): Promise<string> {
+    const result = await this.run(input, options);
+    if (result.text === null) {
+      throw new NoOutputTextError(result);
+    }
+    return result.text;
+  }
+
+  turn<TOutput extends object = JsonObject>(turnId: string): Turn<TOutput> {
+    return this.client.turn<TOutput>(turnId, { tenant: "" });
+  }
+
+  conversationFrames<TOutput extends object = JsonObject>(
+    conversationId: string,
+    options: RawStreamOptions = {},
+  ): AsyncIterable<StreamFrame<TOutput>> {
+    return this.client.conversationFrames<TOutput>(
+      conversationId,
+      { tenant: "" },
+      options,
+    );
+  }
+
+  raw(): RawClient {
+    return this.client.raw();
+  }
+}
+
+function browserConversation(
+  selection: BrowserConversationSelection,
+): NonNullable<CreateTurnRequest["conversation"]> {
+  if (selection.id !== undefined) {
+    return {
+      mode: "continue",
+      conversationId: selection.id,
+      ifActive: selection.ifActive,
+    };
+  }
+  return {
+    mode: "continue_or_create",
+    conversationKey: selection.key,
+    owner: { kind: "user", userKey: selection.ownedByUser },
+    ifActive: selection.ifActive,
+  };
 }
 
 export interface AnonymousTokenOptions {
@@ -96,7 +188,7 @@ export interface AnonymousTokenOptions {
  * Mints or renews credential-free browser access for an App that enabled
  * anonymous visitors. The browser supplies its actual Origin automatically.
  * Persist the returned visitor token and pass it on the next call to keep the
- * same visitor partition and Session. Reuse the idempotency key if transport
+ * same visitor partition and Conversation. Reuse the idempotency key if transport
  * fails and this logical exchange must be retried.
  */
 export async function issueAnonymousToken(
@@ -143,12 +235,20 @@ export async function issueAnonymousToken(
  */
 function refuseMachineCredential(token: string): string {
   if (typeof token !== "string" || token === "") {
-    throw new Error("nvoken: clientToken resolved to nothing");
+    throw new NvokenError(
+      "validation",
+      "nvoken: clientToken resolved to nothing",
+      undefined,
+      "browser_client_token_required",
+    );
   }
   if (token.startsWith("nvk_")) {
-    throw new Error(
+    throw new NvokenError(
+      "validation",
       "nvoken: that is a machine API key, not a client token. A page must never hold one: " +
         "mint a client token in your backend with mintClientToken() and hand the browser that.",
+      undefined,
+      "machine_credential_in_browser",
     );
   }
   return token;

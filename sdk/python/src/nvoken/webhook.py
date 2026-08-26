@@ -14,23 +14,22 @@ from .signed_delivery import (
     verify_signed_delivery,
 )
 
-#: The closed set of Invocation webhook events.
-WEBHOOK_EVENTS = ("invocation.budget_hold", "invocation.ended", "invocation.waiting")
+#: The closed set of Turn webhook events.
+WEBHOOK_EVENTS = ("turn.budget_hold", "turn.ended", "turn.waiting")
 
 
 @dataclass(frozen=True)
 class VerifiedWebhook:
-    """One Invocation webhook whose signature has been checked.
+    """One Turn webhook whose signature has been checked.
 
     ``event`` is read from the signed body. The endpoint URL may carry an
     unsigned per-event suffix; that belongs in logs, not in a dispatch
     decision.
 
-    The envelope's ``invocation`` object is a pointer to the turn, not a
+    The envelope's ``turn`` object is a pointer to the Turn, not a
     projection of it: no transcript content, tool arguments, structured output,
     usage, provenance, or failure message. Read
-    :meth:`Client.get_invocation` or :meth:`Client.get_invocation_result` for
-    anything beyond what is there.
+    authoritative Turn reads for anything beyond what is there.
     """
 
     envelope: dict[str, Any]
@@ -38,8 +37,13 @@ class VerifiedWebhook:
     delivery_id: str
     event: str
     sequence: int
-    invocation_id: str
-    session_id: str | None
+    turn_id: str
+    conversation_id: str | None
+    memory_space_id: str | None
+    content_expires_at: str | None
+    behavior_source: dict[str, Any]
+    tenant_key: str
+    user_key: str | None
     key_id: str
     key_version: int
     timestamp: datetime
@@ -49,9 +53,9 @@ class VerifiedWebhook:
 
         Delivery is at least once, so the same transition can arrive twice and
         a redelivery can land after a later one. Keep the highest sequence
-        applied per Invocation and fold only what supersedes it; a receiver
+        applied per Turn and fold only what supersedes it; a receiver
         that applies whichever arrived last rolls its own state backwards. Pass
-        0 for an Invocation nothing has been applied for yet.
+        0 for a Turn nothing has been applied for yet.
 
         This is also the dedup: a repeat carries a sequence already applied, so
         nothing further is needed to make handling idempotent. Answer it with
@@ -68,7 +72,7 @@ def verify_webhook(
     *,
     now: datetime | None = None,
 ) -> VerifiedWebhook:
-    """Check one Invocation webhook delivery and return its signed body.
+    """Check one Turn webhook delivery and return its signed body.
 
     It shares its signature scheme with :func:`verify_callback`, so a host that
     receives both implements verification once and dispatches on what the
@@ -81,7 +85,7 @@ def verify_webhook(
     delivery = verify_signed_delivery(key, headers, raw_body, now=now)
     envelope = json.loads(raw_body)
     context = envelope.get("nvoken", {})
-    if context.get("schema_version") != 1:
+    if context.get("schema_version") != 2:
         raise ValueError("unsupported webhook schema version")
     # The idempotency key on a webhook is the delivery id, so both headers pin
     # the same fact and both must agree with the body that was signed.
@@ -100,14 +104,24 @@ def verify_webhook(
     sequence = context.get("sequence")
     if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1:
         raise ValueError("webhook sequence must be positive")
+    turn_id = context.get("turn_id")
+    tenant_key = context.get("tenant_key")
+    behavior_source = context.get("behavior_source")
+    if not turn_id or not tenant_key or not isinstance(behavior_source, dict):
+        raise ValueError("webhook envelope is missing Turn attribution")
     return VerifiedWebhook(
         envelope=envelope,
         raw_body=bytes(raw_body),
         delivery_id=delivery.delivery_id,
         event=event,
         sequence=sequence,
-        invocation_id=context.get("invocation_id", ""),
-        session_id=context.get("session_id"),
+        turn_id=turn_id,
+        conversation_id=context.get("conversation_id"),
+        memory_space_id=context.get("memory_space_id"),
+        content_expires_at=context.get("content_expires_at"),
+        behavior_source=dict(behavior_source),
+        tenant_key=tenant_key,
+        user_key=context.get("user_key"),
         key_id=delivery.key_id,
         key_version=delivery.key_version,
         timestamp=delivery.timestamp,
@@ -119,7 +133,7 @@ class WebhookReply:
     """The HTTP answer to one webhook delivery.
 
     nvoken ignores the response body, so only the status carries meaning, and
-    no answer ever affects the Invocation the webhook describes.
+    no answer ever affects the Turn the webhook describes.
     """
 
     status: int
@@ -136,7 +150,7 @@ def retry_webhook() -> WebhookReply:
     For a receiver that could not record the transition right now — its store
     was unreachable, or it is shedding load. Retries are bounded, so a receiver
     that answers this forever still ends with a transition nobody recorded;
-    :meth:`Client.list_ended_invocations` is the backstop that finds those.
+    listing ended Turns through :attr:`Client.raw` is the backstop that finds those.
     """
     return WebhookReply(status=503)
 
@@ -174,7 +188,7 @@ class WebhookDelivery:
 
 
 class WebhookReceiver:
-    """Answers an Invocation-webhook endpoint.
+    """Answers a Turn-webhook endpoint.
 
     It is :class:`~nvoken.callback.CallbackReceiver`'s twin — same key table,
     same reply discipline — because nvoken signs both deliveries the same way.
@@ -196,7 +210,7 @@ class WebhookReceiver:
     =========================================  ======  ================================================
 
     **Ordering stays yours.** Delivery is at least once and out of order, so the
-    highest applied ``sequence`` per Invocation has to be read and written in
+    highest applied ``sequence`` per Turn has to be read and written in
     the same transaction as the state it guards — which is the host's
     transaction, not one this kit can open. Call
     :meth:`VerifiedWebhook.supersedes` inside it. A superseded delivery is

@@ -32,7 +32,7 @@ class ImageSource:
     data: str | None = None
     """Standard padded base64 with no whitespace."""
     url: str | None = None
-    """Public HTTPS URL fetched once when the Invocation is accepted."""
+    """Public HTTPS URL fetched once when the Turn is accepted."""
 
     @classmethod
     def from_url(
@@ -49,7 +49,7 @@ class DocumentSource:
     data: str | None = None
     """Standard padded base64 with no whitespace."""
     url: str | None = None
-    """Public HTTPS URL fetched once when the Invocation is accepted."""
+    """Public HTTPS URL fetched once when the Turn is accepted."""
 
     @classmethod
     def from_url(

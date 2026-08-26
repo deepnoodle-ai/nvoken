@@ -1,12 +1,12 @@
 # Receiving signed deliveries
 
 **Status:** Descriptive. This is how the four SDKs in this repository receive
-tool callbacks and Invocation webhooks today.
+tool callbacks and Turn webhooks today.
 **Verified against:** the signing vectors in
 [`docs/design/delivery-signing-v1.json`](../design/delivery-signing-v1.json),
 the contract in [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml), and the
 receiver in each SDK.
-**Date:** 2026-08-17
+**Date:** 2026-08-26
 **Authority:** The runtime is the authority. Where this document and the
 runtime disagree, the runtime is right and this document is stale.
 
@@ -16,7 +16,7 @@ People standing up an endpoint nvoken posts to. There are two of them and they
 are the same shape:
 
 - a **tool callback**, which delivers one ToolCall and waits for its answer, and
-- an **Invocation webhook**, which reports a transition that already happened
+- a **Turn webhook**, which reports a transition that already happened
   and waits for nothing.
 
 Each SDK ships a receiver — `createCallbackReceiver` in TypeScript,
@@ -36,7 +36,7 @@ was signed.
 
 What differs is only what the verified body then means:
 
-|  | tool callback | Invocation webhook |
+|  | tool callback | Turn webhook |
 | --- | --- | --- |
 | Signing key purpose | `callback` | `webhook` |
 | `Idempotency-Key` | the ToolCall being settled | the delivery id, also in the body |
@@ -119,8 +119,8 @@ Skip the store only when every tool on the endpoint is safe to run twice —
 a read that touches nothing and writes nothing.
 
 Webhooks deduplicate differently, and it costs you nothing extra. Each carries a
-`sequence` counting transitions within one Invocation from 1. Keep the highest
-sequence you have applied per Invocation and fold only what exceeds it; a
+`sequence` counting transitions within one Turn from 1. Keep the highest
+sequence you have applied per Turn and fold only what exceeds it; a
 receiver that applies whichever arrived last rolls its own state backwards. A
 repeat carries a sequence you already applied, so ignoring it *is* the dedup.
 
@@ -144,55 +144,46 @@ thing to have in an access log and never a thing to branch on.
 
 ## Authorization: what signing does and does not prove
 
-A verified delivery proves it came from nvoken. It does not say what the work
-belongs to, and **the tool input cannot say either — the model wrote it.**
-
-The callback envelope answers this directly:
+A verified delivery proves it came from nvoken and protects the resolved facts
+inside `nvoken`: Turn, optional Conversation and MemorySpace, exact behavior
+source, tenant, and optional user actor. **Tool input proves none of those — the
+model wrote it.**
 
 ```json
 {
-  "nvoken": { "tool_name": "open_ticket", "tenant_key": "acme", "…": "…" },
-  "authorization_context": { "board": "brd_9f21" },
+  "nvoken": {
+    "tool_name": "open_ticket",
+    "turn_id": "turn_…",
+    "conversation_id": "conv_…",
+    "memory_space_id": null,
+    "tenant_key": "acme",
+    "user_key": "alice",
+    "behavior_source": {
+      "kind": "agent_revision",
+      "agent_id": "agent_…",
+      "agent_revision_id": "arev_…",
+      "revision": 3
+    }
+  },
   "input": { "board": "brd_9f21", "ticket": "A-42" }
 }
 ```
 
-`authorization_context` is what you asserted when the Session was created, in
-your own terms — a board, a workspace, a document, whatever your authorization
-boundary actually is. It is written at creation only, never interpreted by
-nvoken, never model-visible, and carried to you unchanged.
-
-**It sits beside `nvoken`, not inside it, and the placement is the rule.**
-Everything under `nvoken` is a fact nvoken minted or resolved. This is a value
-you asserted and nvoken carried. Signing guarantees its integrity, not its
-truth.
-
-So:
-
-> **A value repeated in tool input may only agree with the authorization
-> context, never establish it.**
-
-The example above repeats `board` on purpose. Checking that the two agree is
-reasonable — a disagreement is worth refusing. Reading the board out of `input`
-when the context is absent is not, because then the model chose it.
-
-This is also what removes a round trip. Without it a receiver has to read the
-Invocation back on every delivery to recover which of your objects the work
-belongs to. With it, the answer arrives signed.
-
-`user_key` and `authorization_context` are both omitted from browser-audience
-responses, for the same reason: they carry your own identifiers, and the browser
-caller is the end user those identifiers are about.
+Use the signed tenant and actor to enter your own authorization system. If a
+tool needs a host object such as a board or document, resolve it from your own
+state or read the Turn's host metadata by signed `turn_id`; never authorize it
+from the model-written input. The delivery schema deliberately has no generic
+`authorization_context` copy and no Conversation-owned actor default.
 
 ## What is not the receiver's job
 
 - **Rendering.** Every SDK returns a status and an optional body; you write it
   with your own framework. The kit never imports one.
 - **Routing.** Mount the endpoint yourself, on POST.
-- **Reading the turn.** The webhook envelope's `invocation` object is a pointer,
+- **Reading the turn.** The webhook envelope's `turn` object is a pointer,
   not a projection: status, stop reason, failure code, waiting ToolCall ids,
-  credit block, and nothing else. Read `getInvocation` or `getInvocationResult`
+  credit block, and nothing else. Read `getTurn` or `getTurnResult`
   for anything more.
 - **Backstopping.** Retries are bounded, so a receiver that answers 503 forever
-  still ends with a transition nobody recorded. `listEndedInvocations` is the
+  still ends with a transition nobody recorded. `listEndedTurns` is the
   reconciliation feed that finds those.

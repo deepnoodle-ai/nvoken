@@ -1,0 +1,64 @@
+{
+  "note": "What a host signs to let its own browser talk to nvoken directly. The host is the identity provider; nvoken verifies the assertion and never learns who the subject is. Minting happens in host backend code and never in a browser. Contract version 2 pins one tenant actor, exact Agent and AgentRevision, one closed memory grant, and one closed Conversation grant. Claims never select operations.",
+  "signing_key": {
+    "key_id": "ckey_019b0a12-0000-7000-8000-000000000002",
+    "private_key_seed": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+    "public_key": "I7xUkSwebpLEqGglyGfif/3FVb/71CRPF6Jqv//ull0=",
+    "note": "Base64 of the 32-byte Ed25519 seed and of the 32-byte public key. `public_key` is what `nvoken client-key create --public-key` registers; the seed never leaves the host."
+  },
+  "serialization": {
+    "header_order": ["alg", "typ", "kid"],
+    "claim_order": [
+      "iss",
+      "sub",
+      "aud",
+      "iat",
+      "exp",
+      "contract_version",
+      "tenant_key",
+      "agent_id",
+      "agent_revision_id",
+      "memory_access",
+      "conversation_access"
+    ],
+    "note": "Compact JSON with no insignificant whitespace, top-level members in this order, absent members omitted. Nested grant members use lexical order, so namespace or conversation_id precedes scope. Ed25519 signatures are deterministic, so identical claims produce an identical token in every language — which is what makes `token` below a check rather than an illustration. A verifier parses JSON and does not care about order; this order exists so the SDKs can be held to one byte-exact answer."
+  },
+  "header": {
+    "alg": "EdDSA",
+    "typ": "nvoken-client+jwt",
+    "kid": "ckey_019b0a12-0000-7000-8000-000000000002"
+  },
+  "claims": {
+    "iss": "app_019b0a12-0000-7000-8000-000000000001",
+    "sub": "opaque-user-7",
+    "aud": "nvoken",
+    "iat": 1784635200,
+    "exp": 1784635800,
+    "contract_version": 2,
+    "tenant_key": "acme",
+    "agent_id": "agent_019b0a12-0000-7000-8000-000000000006",
+    "agent_revision_id": "arev_019b0a12-0000-7000-8000-000000000003",
+    "memory_access": {
+      "namespace": "support",
+      "scope": "user"
+    },
+    "conversation_access": {
+      "conversation_id": "conv_019b0a12-7c41-7e24-8ed2-0e07c1bdb311",
+      "scope": "exact"
+    }
+  },
+  "token": "eyJhbGciOiJFZERTQSIsInR5cCI6Im52b2tlbi1jbGllbnQrand0Iiwia2lkIjoiY2tleV8wMTliMGExMi0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDIifQ.eyJpc3MiOiJhcHBfMDE5YjBhMTItMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic3ViIjoib3BhcXVlLXVzZXItNyIsImF1ZCI6Im52b2tlbiIsImlhdCI6MTc4NDYzNTIwMCwiZXhwIjoxNzg0NjM1ODAwLCJjb250cmFjdF92ZXJzaW9uIjoyLCJ0ZW5hbnRfa2V5IjoiYWNtZSIsImFnZW50X2lkIjoiYWdlbnRfMDE5YjBhMTItMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDA2IiwiYWdlbnRfcmV2aXNpb25faWQiOiJhcmV2XzAxOWIwYTEyLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMyIsIm1lbW9yeV9hY2Nlc3MiOnsibmFtZXNwYWNlIjoic3VwcG9ydCIsInNjb3BlIjoidXNlciJ9LCJjb252ZXJzYXRpb25fYWNjZXNzIjp7ImNvbnZlcnNhdGlvbl9pZCI6ImNvbnZfMDE5YjBhMTItN2M0MS03ZTI0LThlZDItMGUwN2MxYmRiMzExIiwic2NvcGUiOiJleGFjdCJ9fQ.4_lsoZ5y6MzUbNktaOETc7wu5JGXz_Xpvdir4j-yFNeCKsGZv4WKs_7Bhnv_o3yLihE9_W6b-GB_uiOmFeyWDQ",
+  "maximum_lifetime_seconds": 900,
+  "refusals": {
+    "note": "A mint helper refuses these rather than producing a token the runtime will reject, so a bad grant fails in the host's own tests instead of in a browser.",
+    "cases": [
+      "a contract_version other than 2",
+      "blank or whitespace-padded sub, tenant_key, a user memory namespace, or any string claim over 255 characters",
+      "a missing or malformed agent_id or agent_revision_id",
+      "a missing memory_access or conversation_access grant, an unknown scope, or members that do not match the selected scope",
+      "a lifetime of zero or less, or over maximum_lifetime_seconds",
+      "any ops claim, including an empty array",
+      "iss, kid, agent_id, agent_revision_id, or an exact conversation_id that is not a well-formed id of its kind"
+    ]
+  }
+}

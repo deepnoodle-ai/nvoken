@@ -22,11 +22,6 @@
       "path": "/v1/agents/{agent_id}"
     },
     {
-      "operation_id": "archiveAgentDefinition",
-      "method": "DELETE",
-      "path": "/v1/agent-definitions/{agent_definition_id}"
-    },
-    {
       "operation_id": "archiveApp",
       "method": "DELETE",
       "path": "/v1/apps/{app_id}"
@@ -37,24 +32,19 @@
       "path": "/v1/orgs/{org_id}"
     },
     {
-      "operation_id": "cancelInvocation",
-      "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/cancel"
-    },
-    {
       "operation_id": "cancelNudge",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/nudges/{nudge_id}/cancel"
+      "path": "/v1/turns/{turn_id}/nudges/{nudge_id}/cancel"
+    },
+    {
+      "operation_id": "cancelTurn",
+      "method": "POST",
+      "path": "/v1/turns/{turn_id}/cancel"
     },
     {
       "operation_id": "createAgent",
       "method": "POST",
       "path": "/v1/agents"
-    },
-    {
-      "operation_id": "createAgentDefinition",
-      "method": "POST",
-      "path": "/v1/agent-definitions"
     },
     {
       "operation_id": "createAppClientKey",
@@ -67,19 +57,19 @@
       "path": "/v1/console/device-authorizations"
     },
     {
+      "operation_id": "createConversation",
+      "method": "POST",
+      "path": "/v1/conversations"
+    },
+    {
       "operation_id": "createCredential",
       "method": "POST",
       "path": "/v1/identity/credentials"
     },
     {
-      "operation_id": "createInvocation",
-      "method": "POST",
-      "path": "/v1/invocations"
-    },
-    {
       "operation_id": "createNudge",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/nudges"
+      "path": "/v1/turns/{turn_id}/nudges"
     },
     {
       "operation_id": "createProviderKey",
@@ -87,29 +77,29 @@
       "path": "/v1/provider-keys"
     },
     {
-      "operation_id": "createSession",
+      "operation_id": "createTurn",
       "method": "POST",
-      "path": "/v1/sessions"
+      "path": "/v1/turns"
     },
     {
-      "operation_id": "deleteInvocation",
+      "operation_id": "deleteConversation",
       "method": "DELETE",
-      "path": "/v1/invocations/{invocation_id}"
+      "path": "/v1/conversations/{conversation_id}"
     },
     {
-      "operation_id": "deleteMemory",
+      "operation_id": "deleteMemorySpace",
       "method": "DELETE",
-      "path": "/v1/memories/{memory_id}"
-    },
-    {
-      "operation_id": "deleteSession",
-      "method": "DELETE",
-      "path": "/v1/sessions/{session_id}"
+      "path": "/v1/memory-spaces/{memory_space_id}"
     },
     {
       "operation_id": "deleteTenant",
       "method": "DELETE",
       "path": "/v1/tenants/{tenant_id}"
+    },
+    {
+      "operation_id": "deleteTurn",
+      "method": "DELETE",
+      "path": "/v1/turns/{turn_id}"
     },
     {
       "operation_id": "denyConsoleDeviceAuthorization",
@@ -122,9 +112,9 @@
       "path": "/v1/console/device-authorizations/{device_code}/exchange"
     },
     {
-      "operation_id": "forkSession",
+      "operation_id": "forkConversation",
       "method": "POST",
-      "path": "/v1/sessions/{session_id}/fork"
+      "path": "/v1/conversations/{conversation_id}/fork"
     },
     {
       "operation_id": "getAgent",
@@ -132,14 +122,9 @@
       "path": "/v1/agents/{agent_id}"
     },
     {
-      "operation_id": "getAgentDefinition",
+      "operation_id": "getAgentRevision",
       "method": "GET",
-      "path": "/v1/agent-definitions/{agent_definition_id}"
-    },
-    {
-      "operation_id": "getAgentDefinitionRevision",
-      "method": "GET",
-      "path": "/v1/agent-definitions/{agent_definition_id}/revisions/{revision}"
+      "path": "/v1/agents/{agent_id}/revisions/{revision}"
     },
     {
       "operation_id": "getApp",
@@ -150,6 +135,16 @@
       "operation_id": "getConsoleDeviceAuthorization",
       "method": "GET",
       "path": "/v1/console/device-authorizations/{user_code}"
+    },
+    {
+      "operation_id": "getConversation",
+      "method": "GET",
+      "path": "/v1/conversations/{conversation_id}"
+    },
+    {
+      "operation_id": "getConversationTranscript",
+      "method": "GET",
+      "path": "/v1/conversations/{conversation_id}/transcript"
     },
     {
       "operation_id": "getCredential",
@@ -167,24 +162,9 @@
       "path": "/health"
     },
     {
-      "operation_id": "getInvocation",
+      "operation_id": "getMemorySpace",
       "method": "GET",
-      "path": "/v1/invocations/{invocation_id}"
-    },
-    {
-      "operation_id": "getInvocationResult",
-      "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/result"
-    },
-    {
-      "operation_id": "getInvocationTimeline",
-      "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/timeline"
-    },
-    {
-      "operation_id": "getMemory",
-      "method": "GET",
-      "path": "/v1/memories/{memory_id}"
+      "path": "/v1/memory-spaces/{memory_space_id}"
     },
     {
       "operation_id": "getModel",
@@ -212,19 +192,24 @@
       "path": "/ready"
     },
     {
-      "operation_id": "getSession",
-      "method": "GET",
-      "path": "/v1/sessions/{session_id}"
-    },
-    {
-      "operation_id": "getSessionTranscript",
-      "method": "GET",
-      "path": "/v1/sessions/{session_id}/transcript"
-    },
-    {
       "operation_id": "getTrace",
       "method": "GET",
       "path": "/v1/traces/{trace_id}"
+    },
+    {
+      "operation_id": "getTurn",
+      "method": "GET",
+      "path": "/v1/turns/{turn_id}"
+    },
+    {
+      "operation_id": "getTurnResult",
+      "method": "GET",
+      "path": "/v1/turns/{turn_id}/result"
+    },
+    {
+      "operation_id": "getTurnTimeline",
+      "method": "GET",
+      "path": "/v1/turns/{turn_id}/timeline"
     },
     {
       "operation_id": "getUsageBreakdown",
@@ -237,9 +222,9 @@
       "path": "/v1/usage/timeseries"
     },
     {
-      "operation_id": "interruptInvocation",
+      "operation_id": "interruptTurn",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/interrupt"
+      "path": "/v1/turns/{turn_id}/interrupt"
     },
     {
       "operation_id": "issueAnonymousToken",
@@ -252,9 +237,9 @@
       "path": "/v1/admissions"
     },
     {
-      "operation_id": "listAgentDefinitions",
+      "operation_id": "listAgentRevisions",
       "method": "GET",
-      "path": "/v1/agent-definitions"
+      "path": "/v1/agents/{agent_id}/revisions"
     },
     {
       "operation_id": "listAgents",
@@ -277,6 +262,21 @@
       "path": "/v1/apps"
     },
     {
+      "operation_id": "listConversationCompactions",
+      "method": "GET",
+      "path": "/v1/conversations/{conversation_id}/compactions"
+    },
+    {
+      "operation_id": "listConversationMessages",
+      "method": "GET",
+      "path": "/v1/conversations/{conversation_id}/messages"
+    },
+    {
+      "operation_id": "listConversations",
+      "method": "GET",
+      "path": "/v1/conversations"
+    },
+    {
       "operation_id": "listCredentials",
       "method": "GET",
       "path": "/v1/identity/credentials"
@@ -292,29 +292,14 @@
       "path": "/v1/credits/allocations"
     },
     {
-      "operation_id": "listInvocationLogs",
-      "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/logs"
-    },
-    {
-      "operation_id": "listInvocationTraces",
-      "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/traces"
-    },
-    {
-      "operation_id": "listInvocations",
-      "method": "GET",
-      "path": "/v1/invocations"
-    },
-    {
       "operation_id": "listMCPTools",
       "method": "POST",
       "path": "/v1/mcp/list-tools"
     },
     {
-      "operation_id": "listMemories",
+      "operation_id": "listMemorySpaces",
       "method": "GET",
-      "path": "/v1/memories"
+      "path": "/v1/memory-spaces"
     },
     {
       "operation_id": "listModels",
@@ -324,7 +309,7 @@
     {
       "operation_id": "listNudges",
       "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/nudges"
+      "path": "/v1/turns/{turn_id}/nudges"
     },
     {
       "operation_id": "listOrgs",
@@ -337,21 +322,6 @@
       "path": "/v1/provider-keys"
     },
     {
-      "operation_id": "listSessionCompactions",
-      "method": "GET",
-      "path": "/v1/sessions/{session_id}/compactions"
-    },
-    {
-      "operation_id": "listSessionMessages",
-      "method": "GET",
-      "path": "/v1/sessions/{session_id}/messages"
-    },
-    {
-      "operation_id": "listSessions",
-      "method": "GET",
-      "path": "/v1/sessions"
-    },
-    {
       "operation_id": "listTenants",
       "method": "GET",
       "path": "/v1/tenants"
@@ -359,7 +329,22 @@
     {
       "operation_id": "listToolCalls",
       "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/tool-calls"
+      "path": "/v1/turns/{turn_id}/tool-calls"
+    },
+    {
+      "operation_id": "listTurnLogs",
+      "method": "GET",
+      "path": "/v1/turns/{turn_id}/logs"
+    },
+    {
+      "operation_id": "listTurnTraces",
+      "method": "GET",
+      "path": "/v1/turns/{turn_id}/traces"
+    },
+    {
+      "operation_id": "listTurns",
+      "method": "GET",
+      "path": "/v1/turns"
     },
     {
       "operation_id": "listUsageRecords",
@@ -372,6 +357,11 @@
       "path": "/v1/apps/{app_id}/signing-keys"
     },
     {
+      "operation_id": "publishAgentRevision",
+      "method": "POST",
+      "path": "/v1/agents/{agent_id}/revisions"
+    },
+    {
       "operation_id": "registerApp",
       "method": "POST",
       "path": "/v1/apps"
@@ -382,14 +372,14 @@
       "path": "/v1/orgs"
     },
     {
+      "operation_id": "resolveMemorySpace",
+      "method": "POST",
+      "path": "/v1/memory-spaces"
+    },
+    {
       "operation_id": "restoreAgent",
       "method": "POST",
       "path": "/v1/agents/{agent_id}/restore"
-    },
-    {
-      "operation_id": "restoreAgentDefinition",
-      "method": "POST",
-      "path": "/v1/agent-definitions/{agent_definition_id}/restore"
     },
     {
       "operation_id": "restoreApp",
@@ -402,9 +392,9 @@
       "path": "/v1/orgs/{org_id}/restore"
     },
     {
-      "operation_id": "resumeInvocation",
+      "operation_id": "resumeTurn",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/resume"
+      "path": "/v1/turns/{turn_id}/resume"
     },
     {
       "operation_id": "retireAppSigningKey",
@@ -437,19 +427,19 @@
       "path": "/v1/provider-keys/{provider_key_id}/rotate"
     },
     {
-      "operation_id": "streamInvocation",
+      "operation_id": "streamConversation",
       "method": "GET",
-      "path": "/v1/invocations/{invocation_id}/stream"
+      "path": "/v1/conversations/{conversation_id}/stream"
     },
     {
-      "operation_id": "streamSession",
+      "operation_id": "streamTurn",
       "method": "GET",
-      "path": "/v1/sessions/{session_id}/stream"
+      "path": "/v1/turns/{turn_id}/stream"
     },
     {
       "operation_id": "submitHostToolResults",
       "method": "POST",
-      "path": "/v1/invocations/{invocation_id}/tool-results"
+      "path": "/v1/turns/{turn_id}/tool-results"
     },
     {
       "operation_id": "summarizeAdmissions",
@@ -457,29 +447,19 @@
       "path": "/v1/admissions/summary"
     },
     {
-      "operation_id": "updateAgent",
-      "method": "PATCH",
-      "path": "/v1/agents/{agent_id}"
-    },
-    {
-      "operation_id": "updateAgentDefinition",
-      "method": "PUT",
-      "path": "/v1/agent-definitions/{agent_definition_id}"
-    },
-    {
       "operation_id": "updateApp",
       "method": "PATCH",
       "path": "/v1/apps/{app_id}"
     },
     {
+      "operation_id": "updateConversation",
+      "method": "PATCH",
+      "path": "/v1/conversations/{conversation_id}"
+    },
+    {
       "operation_id": "updateOrg",
       "method": "PATCH",
       "path": "/v1/orgs/{org_id}"
-    },
-    {
-      "operation_id": "updateSession",
-      "method": "PATCH",
-      "path": "/v1/sessions/{session_id}"
     }
   ]
 }

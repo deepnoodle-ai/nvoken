@@ -1,0 +1,186 @@
+{
+  "version": 2,
+  "note": "Turn webhooks are opt-in per Turn and are delivered as signed HTTPS POSTs. Every SDK must transmit the target verbatim, and the payload every SDK documents must stay a pointer to authoritative state rather than a copy of it.",
+  "events": [
+    "turn.budget_hold",
+    "turn.ended",
+    "turn.waiting"
+  ],
+  "default_events_when_omitted": [
+    "turn.budget_hold",
+    "turn.ended",
+    "turn.waiting"
+  ],
+  "default_note": "Omitting events selects every event. The harmful default is the one that quietly drops turn.waiting and leaves a parked host tool loop with nobody listening.",
+  "rejected_events": [
+    "turn.queued",
+    "turn.running",
+    "turn.completed",
+    "message.appended",
+    "waiting"
+  ],
+  "rejected_urls": [
+    "http://host.example.com/hook",
+    "https://user:pass@host.example.com/hook",
+    "https://host.example.com/hook#fragment",
+    "ftp://host.example.com/hook",
+    "/relative/hook",
+    ""
+  ],
+  "content_type": "application/vnd.nvoken.turn-webhook+json; version=2",
+  "signature": {
+    "version": "v1",
+    "canonical_string": "v1.<delivery_id>.<timestamp>.<body>",
+    "signature_header": "X-Nvoken-Signature",
+    "signature_prefix": "sha256=",
+    "timestamp_header": "X-Nvoken-Timestamp",
+    "delivery_id_header": "X-Nvoken-Delivery-Id",
+    "idempotency_key_header": "Idempotency-Key",
+    "idempotency_key_is": "webhook_id",
+    "note": "Identical to the tool-callback scheme so a host implements one verification path. Only the content type and the idempotency key's meaning differ."
+  },
+  "payload_fields": {
+    "nvoken": [
+      "schema_version",
+      "delivery_id",
+      "event",
+      "sequence",
+      "turn_id",
+      "conversation_id",
+      "memory_space_id",
+      "content_expires_at",
+      "behavior_source",
+      "tenant_key",
+      "user_key"
+    ],
+    "turn": [
+      "status",
+      "stop_reason",
+      "failure_code",
+      "waiting_tool_call_ids"
+    ]
+  },
+  "ended_statuses": [
+    "completed",
+    "incomplete",
+    "failed",
+    "cancelled"
+  ],
+  "ended_statuses_note": "turn.ended reports whichever terminal status the Turn reached, so a host that treats only 'completed' as an ending stalls on 'incomplete'. Only 'failed' carries failure_code; non-failure endings carry stop_reason.",
+  "payload_absent_fields": [
+    "messages",
+    "output_text",
+    "structured_output",
+    "usage",
+    "provenance",
+    "failure_message",
+    "tool_input",
+    "tool_result"
+  ],
+  "delivery": {
+    "guarantee": "at_least_once",
+    "ordering": "per_turn_by_sequence",
+    "ordering_note": "A webhook is claimable only when every lower-sequence webhook for the same Turn is terminal, so turn.ended never arrives before a turn.waiting or turn.budget_hold event that preceded it. Head-of-line blocking is scoped to one Turn.",
+    "success_statuses": "2xx",
+    "retryable_statuses": [408, 425, 429, 500, 502, 503, 504],
+    "permanent_statuses": [400, 401, 403, 404, 409, 410, 422],
+    "response_body_is_ignored": true,
+    "never_affects_turn": true
+  },
+  "example_request": {
+    "tenant_key": "acme",
+    "user_key": "alice",
+    "idempotency_key": "req-1",
+    "behavior": {
+      "kind": "agent",
+      "agent": {
+        "owner_kind": "app",
+        "agent_key": "support-bot",
+        "revision": "current"
+      }
+    },
+    "conversation": {
+      "mode": "continue_or_create",
+      "conversation_key": "ticket-4417",
+      "owner": { "kind": "user", "user_key": "alice" },
+      "if_active": "reject"
+    },
+    "webhook": {
+      "url": "https://host.example.com/nvoken/webhooks",
+      "events": ["turn.budget_hold", "turn.ended", "turn.waiting"]
+    },
+    "input": [{ "type": "text", "text": "Where is my order?" }]
+  },
+  "example_ended_payload": {
+    "nvoken": {
+      "schema_version": 2,
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000001",
+      "event": "turn.ended",
+      "sequence": 2,
+      "turn_id": "turn_019b0a12-0000-7000-8000-000000000001",
+      "conversation_id": "conv_019b0a12-0000-7000-8000-000000000001",
+      "memory_space_id": null,
+      "content_expires_at": null,
+      "behavior_source": {
+        "kind": "agent_revision",
+        "agent_id": "agent_019b0a12-0000-7000-8000-000000000006",
+        "agent_revision_id": "arev_019b0a12-0000-7000-8000-000000000005",
+        "revision": 1
+      },
+      "tenant_key": "acme",
+      "user_key": "alice"
+    },
+    "turn": {
+      "status": "failed",
+      "failure_code": "context_window_exceeded"
+    }
+  },
+  "example_waiting_payload": {
+    "nvoken": {
+      "schema_version": 2,
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000002",
+      "event": "turn.waiting",
+      "sequence": 1,
+      "turn_id": "turn_019b0a12-0000-7000-8000-000000000001",
+      "conversation_id": "conv_019b0a12-0000-7000-8000-000000000001",
+      "memory_space_id": null,
+      "content_expires_at": null,
+      "behavior_source": {
+        "kind": "agent_revision",
+        "agent_id": "agent_019b0a12-0000-7000-8000-000000000006",
+        "agent_revision_id": "arev_019b0a12-0000-7000-8000-000000000005",
+        "revision": 1
+      },
+      "tenant_key": "acme",
+      "user_key": "alice"
+    },
+    "turn": {
+      "status": "waiting",
+      "waiting_tool_call_ids": ["call_019b0a12-0000-7000-8000-000000000001"]
+    }
+  },
+  "example_budget_hold_payload": {
+    "nvoken": {
+      "schema_version": 2,
+      "delivery_id": "dlvr_019b0a12-0000-7000-8000-000000000003",
+      "event": "turn.budget_hold",
+      "sequence": 2,
+      "turn_id": "turn_019b0a12-0000-7000-8000-000000000001",
+      "conversation_id": "conv_019b0a12-0000-7000-8000-000000000001",
+      "memory_space_id": null,
+      "content_expires_at": null,
+      "behavior_source": {
+        "kind": "agent_revision",
+        "agent_id": "agent_019b0a12-0000-7000-8000-000000000006",
+        "agent_revision_id": "arev_019b0a12-0000-7000-8000-000000000005",
+        "revision": 1
+      },
+      "tenant_key": "acme",
+      "user_key": "alice"
+    },
+    "turn": {
+      "status": "budget_hold",
+      "stop_reason": "max_estimated_cost"
+    }
+  }
+}

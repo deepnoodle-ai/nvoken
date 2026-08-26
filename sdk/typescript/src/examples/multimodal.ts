@@ -25,13 +25,13 @@ const client = new Client({
   apiKey: process.env.NVOKEN_API_KEY ?? "",
 });
 
-const agent = client.agent({
-  agentKey: "invoice-review",
-});
+const agent = await client.agent("invoice-review");
 
 // Bytes are inlined, so nvoken never fetches a URL. Public message reads later
 // return a digest reference rather than these bytes; keep your own copy.
 console.log(
   "agent>",
-  await agent.text([textBlock("Which line item changed?"), mediaBlock]),
+  await agent.text([textBlock("Which line item changed?"), mediaBlock], {
+    tenant: process.env.NVOKEN_TENANT_KEY ?? "quickstart",
+  }),
 );

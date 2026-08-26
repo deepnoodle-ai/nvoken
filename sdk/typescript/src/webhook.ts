@@ -6,60 +6,19 @@ import {
   type DeliverySigningKey,
 } from "./signed-delivery.js";
 import { WebhookEvent } from "./generated/models/WebhookEvent.js";
-import type { CreditBlock } from "./generated/models/CreditBlock.js";
-import type { InvocationStatus } from "./generated/models/InvocationStatus.js";
-import type { InvocationStopReason } from "./generated/models/InvocationStopReason.js";
+import {
+  TurnWebhookRequestFromJSON,
+  type TurnWebhookRequest,
+} from "./generated/models/TurnWebhookRequest.js";
 
 // Derived from the generated enum rather than restated, so an event the
 // contract adds cannot be one this verifier silently keeps refusing.
 const WEBHOOK_EVENTS: readonly string[] = Object.values(WebhookEvent);
 
-/**
- * The signed body of one Invocation webhook.
- *
- * It mirrors `CallbackEnvelope`: everything nvoken asserts sits under `nvoken`,
- * and the subject of the delivery sits beside it.
- */
-export interface WebhookEnvelope {
-  nvoken: {
-    schema_version: number;
-    delivery_id: string;
-    event: WebhookEvent;
-    /**
-     * Counts transitions within one Invocation, from 1. See
-     * `webhookSupersedes` for what a receiver does with it.
-     */
-    sequence: number;
-    invocation_id: string;
-    session_id: string | null;
-    agent_key: string;
-    tenant_key?: string;
-  };
-  /**
-   * A pointer to the turn, not a projection of it. It carries no transcript
-   * content, tool arguments, structured output, usage, provenance, or failure
-   * message: read `getInvocation` or `getInvocationResult` for anything beyond
-   * what is here.
-   */
-  invocation: {
-    status: InvocationStatus;
-    stop_reason?: InvocationStopReason;
-    failure_code?: string;
-    /**
-     * The host tools the turn is parked on, on `invocation.waiting` only.
-     * Tools nvoken delivers itself are absent: they are not work the host has
-     * been handed.
-     */
-    waiting_tool_call_ids?: string[];
-    /**
-     * Names the account that could not fund the next attempt, when a spending
-     * limit stopped the turn.
-     */
-    credit_block?: CreditBlock;
-  };
-}
+/** The schema-v2 signed Turn webhook, decoded to generated camelCase fields. */
+export type WebhookEnvelope = TurnWebhookRequest;
 
-/** One Invocation webhook whose signature has been checked. */
+/** One Turn webhook whose signature has been checked. */
 export interface VerifiedWebhook {
   envelope: WebhookEnvelope;
   rawBody: Uint8Array;
@@ -70,15 +29,17 @@ export interface VerifiedWebhook {
    */
   event: WebhookEvent;
   sequence: number;
-  invocationId: string;
-  sessionId: string | null;
+  turnId: string;
+  conversationId: string | null;
+  memorySpaceId: string | null;
+  contentExpiresAt: Date | null;
   keyId: string;
   keyVersion: number;
   timestamp: Date;
 }
 
 /**
- * Checks one Invocation webhook delivery and returns its signed body. It
+ * Checks one Turn webhook delivery and returns its signed body. It
  * shares its signature scheme with `verifyCallback`, so a host that receives
  * both implements verification once and dispatches on what the verified body
  * says.
@@ -95,11 +56,13 @@ export async function verifyWebhook(
 ): Promise<VerifiedWebhook> {
   const { deliveryId, idempotencyKey, keyId, keyVersion, timestamp } =
     await verifySignedDelivery(key, headers, rawBody, now);
-  const envelope = JSON.parse(new TextDecoder().decode(rawBody)) as WebhookEnvelope;
-  if (envelope.nvoken?.schema_version !== 1) throw new Error("unsupported webhook schema version");
+  const envelope = TurnWebhookRequestFromJSON(
+    JSON.parse(new TextDecoder().decode(rawBody)),
+  );
+  if (envelope.nvoken?.schemaVersion !== 2) throw new Error("unsupported webhook schema version");
   // The idempotency key on a webhook is the delivery id, so both headers pin
   // the same fact and both must agree with the body that was signed.
-  if (envelope.nvoken.delivery_id !== deliveryId || idempotencyKey !== deliveryId) {
+  if (envelope.nvoken.deliveryId !== deliveryId || idempotencyKey !== deliveryId) {
     throw new Error("webhook identity header does not match signed body");
   }
   // Refusing an unknown event here keeps the dispatch below it total. A new
@@ -118,8 +81,10 @@ export async function verifyWebhook(
     deliveryId,
     event: envelope.nvoken.event,
     sequence: envelope.nvoken.sequence,
-    invocationId: envelope.nvoken.invocation_id,
-    sessionId: envelope.nvoken.session_id,
+    turnId: envelope.nvoken.turnId,
+    conversationId: envelope.nvoken.conversationId,
+    memorySpaceId: envelope.nvoken.memorySpaceId,
+    contentExpiresAt: envelope.nvoken.contentExpiresAt,
     keyId,
     keyVersion,
     timestamp,
@@ -127,14 +92,14 @@ export async function verifyWebhook(
 }
 
 /**
- * Reports whether a delivery describes a later transition of its Invocation
+ * Reports whether a delivery describes a later transition of its Turn
  * than the one already applied.
  *
  * Delivery is at least once, so the same transition can arrive twice and a
  * redelivery can land after a later one. Keep the highest sequence applied per
- * Invocation and fold only what supersedes it; a receiver that applies
+ * Turn and fold only what supersedes it; a receiver that applies
  * whichever arrived last rolls its own state backwards. Pass 0 for an
- * Invocation nothing has been applied for yet.
+ * Turn nothing has been applied for yet.
  *
  * This is also the dedup: a repeat carries a sequence already applied, so
  * nothing further is needed to make handling idempotent. Answer it with
@@ -148,7 +113,7 @@ export function webhookSupersedes(delivery: VerifiedWebhook, appliedSequence: nu
 /**
  * The HTTP answer to one webhook delivery. nvoken ignores the response body,
  * so only the status carries meaning, and no answer ever affects the
- * Invocation the webhook describes.
+ * Turn the webhook describes.
  */
 export interface WebhookReply {
   status: number;
@@ -163,8 +128,7 @@ export function acceptWebhook(): WebhookReply {
  * Asks nvoken to deliver again, for a receiver that could not record the
  * transition right now — its store was unreachable, or it is shedding load.
  * Retries are bounded, so a receiver that answers this forever still ends with
- * a transition nobody recorded; `listEndedInvocations` is the backstop that
- * finds those.
+ * transition nobody recorded; an exact raw Turn listing is the backstop.
  */
 export function retryWebhook(): WebhookReply {
   return { status: 503 };
@@ -218,7 +182,7 @@ export interface WebhookReceiver {
 }
 
 /**
- * Builds the receiver for an Invocation-webhook endpoint. It is the callback
+ * Builds the receiver for a Turn-webhook endpoint. It is the callback
  * receiver's twin — same key table, same reply discipline — because nvoken
  * signs both deliveries the same way.
  *
@@ -237,7 +201,7 @@ export interface WebhookReceiver {
  * | handler threw | 503 | the receiver could not record it, so ask for it again |
  *
  * **Ordering stays yours.** Delivery is at least once and out of order, so the
- * highest applied `sequence` per Invocation has to be read and written in the
+ * highest applied `sequence` per Turn has to be read and written in the
  * same transaction as the state it guards — which is the host's transaction,
  * not one this kit can open. Call `webhookSupersedes` inside it. A superseded
  * delivery is still a delivery: record nothing and return, so it answers 200.

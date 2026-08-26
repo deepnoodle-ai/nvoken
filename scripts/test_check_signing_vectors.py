@@ -28,7 +28,7 @@ def document(callback_signature: str, webhook_signature: str) -> dict:
                     "X-Nvoken-Timestamp": "1784635200",
                     "X-Nvoken-Signature": webhook_signature,
                 },
-                "body": '{"nvoken":{"event":"invocation.ended"}}',
+                "body": '{"nvoken":{"event":"turn.ended"}}',
             },
         },
     }

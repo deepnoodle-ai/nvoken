@@ -8,6 +8,21 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: Agents, MemorySpaces, Conversations, and Turns replace the old
+  runtime model.** Agent Definition, tenant Agent instance, Session,
+  Invocation, and compatibility aliases are removed from the contract, all
+  generated transports, handwritten SDKs, callbacks, streams, and CLI.
+- **Agents now feel local while remaining durable.** Awaited
+  `client.agent(key, { ownedBy? })` lookup returns a directly runnable Agent;
+  `start`, `run`, and `text` take explicit tenant, optional user, independent
+  memory and Conversation selection, and optional narrowed limits. Inline
+  behavior and `client.turn(id, context)` use the same execution facade.
+- **The published browser and delivery contracts advance with the hard cut.**
+  Browser tokens pin an exact AgentRevision with closed memory and Conversation
+  grants, while signed callback and Turn webhook bodies use schema version 2.
+
+## 0.29.0 - 2026-08-25
+
 - **Breaking: one-shot Invocations are standalone unless a Session is selected.**
   Invocation requests replace `session_id`, `session_key`, `session_options`,
   and `if_active` with an optional `session` object; omitting it creates no

@@ -1,28 +1,40 @@
 import asyncio
 import os
 
-from nvoken import AgentOptions, Client, Model, fetch_tool
+import httpx
+
+from nvoken import Behavior, Client
+
+
+async def fetch(arguments, context):
+    async with httpx.AsyncClient() as http:
+        response = await http.get(arguments["url"], follow_redirects=True)
+        response.raise_for_status()
+        return response.text[:20_000]
 
 
 async def main() -> None:
-    url = os.getenv("NVOKEN_FETCH_URL", "https://example.com")
-    async with Client(
-        os.getenv("NVOKEN_BASE_URL", "http://localhost:8080"),
-        os.environ["NVOKEN_API_KEY"],
-    ) as client:
-        agent = client.agent(AgentOptions(
-            agent_key="public-web-summary",
-            instructions=(
-                "Use nvoken_fetch to read the supplied public URL, then "
-                "summarize only what the page says."
-            ),
-            model=Model(
-                provider=os.environ["NVOKEN_PROVIDER"],
-                id=os.environ["NVOKEN_MODEL"],
-            ),
-            tools=(fetch_tool(),),
+    behavior = Behavior(
+        instructions="Use fetch to read the supplied public URL, then summarize it.",
+        model=os.environ["NVOKEN_MODEL"],
+        tools=({
+            "mode": "host",
+            "name": "fetch",
+            "description": "Fetch one public URL",
+            "input_schema": {
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
+                "additionalProperties": False,
+            },
+        },),
+    )
+    async with Client(os.environ["NVOKEN_API_KEY"]) as client:
+        agent = client.inline(behavior).bind_tools({"fetch": fetch})
+        print(await agent.text(
+            f"Summarize {os.getenv('NVOKEN_FETCH_URL', 'https://example.com')}",
+            tenant="example",
         ))
-        print(f"agent> {await agent.text(f'Summarize this public URL: {url}')}")
 
 
 asyncio.run(main())

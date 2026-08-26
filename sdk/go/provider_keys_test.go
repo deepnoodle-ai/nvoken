@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 func TestProviderKeyLifecycleMethods(t *testing.T) {
@@ -52,7 +54,7 @@ func TestProviderKeyLifecycleMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	provider := ModelProviderOpenAI
+	provider := ModelProvider("openai")
 	scope := ProviderKeyScopeApp
 	status := ProviderKeyStatusActive
 	cursor := "page-2"
@@ -96,44 +98,43 @@ func TestProviderKeyLifecycleMethods(t *testing.T) {
 	}
 }
 
-func TestInvokeProviderKeySelections(t *testing.T) {
-	base := InvokeRequest{
-		AgentKey:       "support",
-		IdempotencyKey: "credential-selection",
-		Input:          "hello",
+func TestTurnProviderKeySelectionsAreWireExact(t *testing.T) {
+	secret := "secret"
+	caller := generated.ProviderKeySelection{}
+	if err := caller.FromProviderKeySelection0(generated.ProviderKeySelection0{
+		Key:      generated.ProviderStaticKey{APIKey: &secret},
+		Provider: "openai",
+		Source:   generated.SourceCallerEphemeral,
+	}); err != nil {
+		t.Fatalf("encode caller selection: %v", err)
 	}
-
+	stored := generated.ProviderKeySelection{}
+	if err := stored.FromProviderKeySelection1(generated.ProviderKeySelection1{
+		Provider: "openai",
+		Source:   generated.ProviderKeySelection1SourceAppByok,
+	}); err != nil {
+		t.Fatalf("encode stored selection: %v", err)
+	}
 	for _, test := range []struct {
 		name      string
-		selection ProviderKeySelection
+		selection generated.ProviderKeySelection
 		want      string
 	}{
 		{
-			name: "caller ephemeral",
-			selection: ProviderKeySelection{
-				Provider: "openai",
-				Source:   ProviderKeyCallerEphemeral,
-				APIKey:   "secret",
-			},
-			want: `"provider_keys":[{"key":{"api_key":"secret"},"provider":"openai","source":"caller_ephemeral"}]`,
+			name:      "caller ephemeral",
+			selection: caller,
+			want:      `"provider_keys":[{"key":{"api_key":"secret"},"provider":"openai","source":"caller_ephemeral"}]`,
 		},
 		{
-			name: "stored app BYOK",
-			selection: ProviderKeySelection{
-				Provider: "openai",
-				Source:   ProviderKeyAppBYOK,
-			},
-			want: `"provider_keys":[{"provider":"openai","source":"app_byok"}]`,
+			name:      "stored app BYOK",
+			selection: stored,
+			want:      `"provider_keys":[{"provider":"openai","source":"app_byok"}]`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			request := base
-			request.ProviderKeys = []ProviderKeySelection{test.selection}
-			generatedRequest, err := request.generated()
-			if err != nil {
-				t.Fatal(err)
-			}
-			encoded, err := json.Marshal(generatedRequest)
+			encoded, err := json.Marshal(map[string]any{
+				"provider_keys": []generated.ProviderKeySelection{test.selection},
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
