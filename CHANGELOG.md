@@ -8,6 +8,8 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.30.0 - 2026-08-26
+
 - **Breaking: Agents, MemorySpaces, Conversations, and Turns replace the old
   runtime model.** Agent Definition, tenant Agent instance, Session,
   Invocation, and compatibility aliases are removed from the contract, all
