@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.memory_scope import MemoryScope
@@ -30,7 +30,7 @@ class MemorySpace(BaseModel):
     """
     MemorySpace
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
     tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     scope: MemoryScope
     user_key: Optional[StrictStr]
@@ -41,6 +41,16 @@ class MemorySpace(BaseModel):
     created_at: datetime
     updated_at: datetime
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "scope", "user_key", "namespace", "retention_ttl_seconds", "expires_at", "erased_at", "created_at", "updated_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

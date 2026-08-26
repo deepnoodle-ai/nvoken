@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.compaction_policy import CompactionPolicy
@@ -34,12 +34,12 @@ class Conversation(BaseModel):
     """
     Conversation
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     tenant_key: StrictStr
     owner: ConversationOwner
     conversation_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]]
     forked_from: Optional[ConversationForkLineage]
-    active_turn_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    active_turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
     active_turn_status: Optional[TurnStatus]
     retention: Optional[RetentionPolicy]
     compaction: Optional[CompactionPolicy]
@@ -48,6 +48,29 @@ class Conversation(BaseModel):
     created_at: datetime
     updated_at: datetime
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "owner", "conversation_key", "forked_from", "active_turn_id", "active_turn_status", "retention", "compaction", "metadata", "expires_at", "created_at", "updated_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('active_turn_id')
+    def active_turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

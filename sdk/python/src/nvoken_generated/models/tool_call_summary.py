@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.tool_call_mode import ToolCallMode
@@ -31,7 +31,7 @@ class ToolCallSummary(BaseModel):
     """
     One tool call as a stream sees it: which call, what tool, how it executes, what state it is in, and when it reached that state. The `id` is the `id` of the `tool_use` block that opened it, so a client can show a call as failed or still running without waiting for the message that carries its result.  This is the only tool-call collection. A call you may settle carries `arguments` and `deadline_at`; a call you must run yourself is one of those with `mode: host`. Filter on those rather than reading a second list or keeping a list of your own tool names. Attempts and delivery detail live on the ToolCall resource at `GET /v1/turns/{turn_id}/tool-calls`.
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
+    id: Annotated[str, Field(strict=True)] = Field(description="Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery. ")
     name: StrictStr = Field(description="The tool this call names.")
     mode: ToolCallMode = Field(description="How this call executes, present on every entry whatever its mode.  It is what separates \"answerable\" from \"mine to run\". A pending callback-mode call is answerable to a machine credential, because you may settle it after acknowledging delivery — but nvoken is the one delivering it. A call you must run yourself is one that carries `arguments` **and** has `mode: host`. ")
     status: ToolCallStatus
@@ -40,6 +40,16 @@ class ToolCallSummary(BaseModel):
     updated_at: datetime = Field(description="When this call last changed state.")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["id", "name", "mode", "status", "arguments", "deadline_at", "updated_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.credit_block import CreditBlock
@@ -37,8 +37,8 @@ class TurnChange(BaseModel):
     """
     One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change carries what a turn's own projection carries about where it stands: `terminal` for whether this change is the end, `stop_reason` for a turn that ended, `credit_block` for one held on credits, and `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them. You never need a second request to find out why a turn is not moving.
     """ # noqa: E501
-    turn_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     revision: Annotated[int, Field(strict=True, ge=1)]
     status: TurnStatus
@@ -55,6 +55,29 @@ class TurnChange(BaseModel):
     occurred_at: datetime
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["turn_id", "conversation_id", "content_expires_at", "revision", "status", "terminal", "stop_reason", "credit_block", "tool_calls", "through_message_sequence", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "occurred_at"]
+
+    @field_validator('turn_id')
+    def turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

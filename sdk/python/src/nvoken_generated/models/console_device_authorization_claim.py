@@ -31,7 +31,7 @@ class ConsoleDeviceAuthorizationClaim(BaseModel):
     status: StrictStr
     device_code: Annotated[str, Field(min_length=43, strict=True, max_length=43)]
     issuer_token: StrictStr = Field(description="Five-minute App issuer bearer, returned only to the authenticated console Worker.")
-    app_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `app_` prefix. Treat the body as opaque.")
+    app_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `app_` prefix. Treat the body as opaque.")
     app_name: Annotated[str, Field(min_length=1, strict=True)]
     credential_type: StrictStr
     label: Annotated[str, Field(min_length=1, strict=True, max_length=64)]
@@ -42,6 +42,16 @@ class ConsoleDeviceAuthorizationClaim(BaseModel):
         """Validates the enum"""
         if value not in set(['approved']):
             raise ValueError("must be one of enum values ('approved')")
+        return value
+
+    @field_validator('app_id')
+    def app_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     @field_validator('credential_type')

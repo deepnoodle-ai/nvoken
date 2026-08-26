@@ -9,14 +9,14 @@ import (
 
 const (
 	webhookKey        = "0123456789abcdef0123456789abcdef"
-	webhookDeliveryID = "dlvr_1"
+	webhookDeliveryID = "dlvr_01kc514000e008000000000001"
 )
 
 var webhookNow = time.Unix(1784635200, 0)
 
 func endedWebhookBody(deliveryID string, sequence string) string {
 	return `{"nvoken":{"schema_version":2,"delivery_id":"` + deliveryID +
-		`","event":"turn.ended","sequence":` + sequence + `,"turn_id":"turn_1",` +
+		`","event":"turn.ended","sequence":` + sequence + `,"turn_id":"turn_01kc514000e008000000000001",` +
 		`"conversation_id":null,"memory_space_id":null,"content_expires_at":null,` +
 		`"behavior_source":{"kind":"inline","digest":"sha256:` + strings.Repeat("0", 64) + `"},` +
 		`"tenant_key":"acme","user_key":null},` +
@@ -30,7 +30,7 @@ func TestVerifyWebhookReadsTargetTurnBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify webhook: %v", err)
 	}
-	if verified.Event != WebhookEventEnded || verified.Sequence != 2 || verified.TurnID != "turn_1" {
+	if verified.Event != WebhookEventEnded || verified.Sequence != 2 || verified.TurnID != "turn_01kc514000e008000000000001" {
 		t.Fatalf("verified webhook = %#v", verified)
 	}
 	if verified.Envelope.Turn.Status != TurnStatus("failed") || verified.Envelope.Turn.FailureCode == nil {

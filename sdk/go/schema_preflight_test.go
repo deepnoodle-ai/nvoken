@@ -36,7 +36,7 @@ func TestTargetBehaviorPreflightsOutputSchemaBeforeTransport(t *testing.T) {
 	}); !isSchemaPreflightError(err) {
 		t.Fatalf("Agent create error = %v", err)
 	}
-	agent := &Agent{client: client, value: AgentResource{ID: "agent_1"}}
+	agent := &Agent{client: client, value: AgentResource{ID: "agent_01kc514000e008000000000001"}}
 	if _, err := agent.Publish(context.Background(), behavior, PublishOptions{}); !isSchemaPreflightError(err) {
 		t.Fatalf("Agent publish error = %v", err)
 	}

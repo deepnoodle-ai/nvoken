@@ -801,9 +801,9 @@ paths:
                 $ref: '#/components/schemas/ToolCallList'
               example:
                 items:
-                  - id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
-                    turn_id: turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                    conversation_id: conv_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                  - id: call_01kc5153ahfwtaxmge0z0vvcs5
+                    turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
+                    conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
                     content_expires_at: null
                     mode: callback
                     name: create_ticket
@@ -1236,11 +1236,11 @@ paths:
               $ref: '#/components/schemas/SubmitHostToolResultsRequest'
             example:
               results:
-                - tool_call_id: call_019b0a12-9e61-7144-bed2-0e07c1bdb333
+                - tool_call_id: call_01kc5157k1e52bxmge0z0vvcsk
                   content:
                     order_id: order-123
                     state: ready
-                - tool_call_id: call_019b0a12-af71-7254-8ed2-0e07c1bdb344
+                - tool_call_id: call_01kc515bvhe9a8xmge0z0vvct4
                   content:
                     delivered: false
                   is_error: true
@@ -3239,7 +3239,7 @@ paths:
                 message: Archive every App the Org owns before archiving the Org.
                 request_id: req_01K0NVB0QFQP0YNSVD3CB7E97V
                 details:
-                  org_id: org_019b0a12-8d51-7f34-aed2-0e07c1bdb321
+                  org_id: org_01kc5153ahfwtaxmge0z0vvcs1
                   active_apps: 2
         '429':
           $ref: '#/components/responses/RateLimited'
@@ -4449,18 +4449,18 @@ webhooks:
             example:
               nvoken:
                 schema_version: 2
-                delivery_id: dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb326
-                tool_call_id: call_019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                delivery_id: dlvr_01kc5153ahfwtaxmge0z0vvcs6
+                tool_call_id: call_01kc5153ahfwtaxmge0z0vvcs5
                 tool_name: open_ticket
-                turn_id: turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                conversation_id: conv_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
+                conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
                 content_expires_at: null
                 behavior_source:
                   kind: agent_revision
-                  agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                  agent_revision_id: arev_019b0a12-5b21-7c04-8ed2-0e07c1bdb301
+                  agent_id: agent_01kc514thhfma9xmge0z0vvcr0
+                  agent_revision_id: arev_01kc514ps1fg28xmge0z0vvcr1
                   revision: 3
-                memory_space_id: mspc_019b0a12-5b21-7c04-8ed2-0e07c1bdb302
+                memory_space_id: mspc_01kc514ps1fg28xmge0z0vvcr2
                 user_key: user-7c1f
                 tenant_key: acme
               input:
@@ -4578,18 +4578,18 @@ webhooks:
             example:
               nvoken:
                 schema_version: 2
-                delivery_id: dlvr_019b0a12-8d51-7f34-aed2-0e07c1bdb327
+                delivery_id: dlvr_01kc5153ahfwtaxmge0z0vvcs7
                 event: turn.ended
                 sequence: 2
-                turn_id: turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322
-                conversation_id: conv_019b0a12-7c41-7e24-8ed2-0e07c1bdb311
+                turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
+                conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
                 content_expires_at: null
                 behavior_source:
                   kind: agent_revision
-                  agent_id: agent_019b0a12-6a31-7d14-9ed2-0e07c1bdb300
-                  agent_revision_id: arev_019b0a12-5b21-7c04-8ed2-0e07c1bdb301
+                  agent_id: agent_01kc514thhfma9xmge0z0vvcr0
+                  agent_revision_id: arev_01kc514ps1fg28xmge0z0vvcr1
                   revision: 3
-                memory_space_id: mspc_019b0a12-5b21-7c04-8ed2-0e07c1bdb302
+                memory_space_id: mspc_01kc514ps1fg28xmge0z0vvcr2
                 user_key: user-7c1f
                 tenant_key: acme
               turn:
@@ -4906,43 +4906,43 @@ components:
   schemas:
     OrgID:
       type: string
-      minLength: 1
+      pattern: ^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `org_` prefix. Treat the body as
         opaque.
     AgentID:
       type: string
-      minLength: 1
+      pattern: ^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `agent_` prefix. Treat the body as
         opaque.
     MemorySpaceID:
       type: string
-      minLength: 1
+      pattern: ^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `mspc_` prefix. Treat the body as
         opaque.
     AppID:
       type: string
-      minLength: 1
+      pattern: ^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `app_` prefix. Treat the body as
         opaque.
     ConversationID:
       type: string
-      minLength: 1
+      pattern: ^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `conv_` prefix. Treat the body as
         opaque.
     ConversationMessageID:
       type: string
-      minLength: 1
+      pattern: ^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `msg_` prefix. Treat the body as
         opaque.
     TurnID:
       type: string
-      minLength: 1
+      pattern: ^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `turn_` prefix. Treat the body as
         opaque.
@@ -4956,19 +4956,19 @@ components:
         Null while it is nonterminal and for conversation-bound work.
     ProviderKeyID:
       type: string
-      minLength: 1
+      pattern: ^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `pkey_` prefix. Treat the body as
         opaque.
     CredentialID:
       type: string
-      minLength: 1
+      pattern: ^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `cred_` prefix. Treat the body as
         opaque.
     ProviderKeyVersionID:
       type: string
-      minLength: 1
+      pattern: ^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `ver_` prefix. Treat the body as
         opaque.
@@ -5070,7 +5070,7 @@ components:
           minLength: 1
     AgentRevisionID:
       type: string
-      minLength: 1
+      pattern: ^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque AgentRevision identifier with the public `arev_` prefix. Treat
         the body as opaque.
@@ -5936,7 +5936,7 @@ components:
         ends.
     ToolCallID:
       type: string
-      minLength: 1
+      pattern: ^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         Identifies one durable ToolCall. Treat it as opaque: read it from a
         transcript `tool_use` block or from a turn's `tool_calls`, and pass it
@@ -6895,7 +6895,7 @@ components:
         always safe.
     PreviewMessageID:
       type: string
-      minLength: 1
+      pattern: ^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         The identifier the saved assistant message will carry when this
         iteration lands, with the same `msg_` prefix every message ID has. Key
@@ -6994,7 +6994,7 @@ components:
       description: Lowercase W3C trace ID. Holding this value does not grant access.
     NudgeID:
       type: string
-      minLength: 1
+      pattern: ^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `nudge_` prefix. Treat the body as
         opaque.
@@ -9674,6 +9674,12 @@ components:
         - running
         - completed
         - failed
+    ConversationCompactionID:
+      type: string
+      pattern: ^comp_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `comp_` prefix. Treat the body as
+        opaque.
     ConversationCompaction:
       type: object
       additionalProperties: false
@@ -9687,8 +9693,7 @@ components:
         - updated_at
       properties:
         id:
-          type: string
-          minLength: 1
+          $ref: '#/components/schemas/ConversationCompactionID'
         conversation_id:
           $ref: '#/components/schemas/ConversationID'
         status:
@@ -10551,7 +10556,7 @@ components:
             Conversation automatically.
     ClientKeyID:
       type: string
-      minLength: 1
+      pattern: ^ckey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque App client verification-key identifier with the public `ckey_`
         prefix.
@@ -10683,6 +10688,12 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+    ModelCallFactID:
+      type: string
+      pattern: ^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `mcall_` prefix. Treat the body as
+        opaque.
     UsageInterval:
       type: string
       enum:
@@ -11042,8 +11053,7 @@ components:
         - settled_at
       properties:
         id:
-          type: string
-          description: Opaque model-call fact ID with the mcall_ prefix.
+          $ref: '#/components/schemas/ModelCallFactID'
         turn_id:
           oneOf:
             - $ref: '#/components/schemas/TurnID'
@@ -11229,7 +11239,7 @@ components:
             - 'null'
     CreditAllocationID:
       type: string
-      minLength: 1
+      pattern: ^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `alloc_` prefix. Treat the body as
         opaque.
@@ -11378,7 +11388,7 @@ components:
             - 'null'
     TenantID:
       type: string
-      minLength: 1
+      pattern: ^tnt_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque identifier with the public `tnt_` prefix. Treat the body as
         opaque.
@@ -11589,6 +11599,12 @@ components:
           type:
             - string
             - 'null'
+    AdmissionAttemptID:
+      type: string
+      pattern: ^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `adm_` prefix. Treat the body as
+        opaque.
     AdmissionOutcome:
       type: string
       enum:
@@ -11625,9 +11641,7 @@ components:
         - deduplicated
       properties:
         id:
-          type: string
-          minLength: 1
-          description: Opaque identifier with the public `adm_` prefix.
+          $ref: '#/components/schemas/AdmissionAttemptID'
         attempted_at:
           type: string
           format: date-time
@@ -12256,7 +12270,7 @@ components:
           maxLength: 64
     DeliveryID:
       type: string
-      minLength: 1
+      pattern: ^dlvr_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         Identifies one delivery nvoken sent you, callback or webhook alike —
         both are the same durable record and carry the same `dlvr_` prefix.
@@ -12553,7 +12567,7 @@ components:
               new work or grants are admitted.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97T
             details:
-              app_id: app_019b0a12-8d51-7f34-aed2-0e07c1bdb320
+              app_id: app_01kc5153ahfwtaxmge0z0vvcs0
     RateLimited:
       description: >-
         A durable App, tenant, or opaque-user admission limit refused fresh
@@ -12604,7 +12618,7 @@ components:
             message: The Turn content has been erased.
             request_id: req_01K0NVASB4CF29K41VZA271H24
             details:
-              turn_id: turn_019b0a12-8d51-7f34-aed2-0e07c1bdb322
+              turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
               erased_at: '2026-08-25T13:00:00Z'
     MCPDiscoveryFailed:
       description: >-
@@ -12629,7 +12643,7 @@ components:
             message: The Org is archived and admits no new Apps or credentials.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97U
             details:
-              org_id: org_019b0a12-8d51-7f34-aed2-0e07c1bdb321
+              org_id: org_01kc5153ahfwtaxmge0z0vvcs1
     MethodNotAllowed:
       description: |
         The request method is not allowed on this path. The `Allow` header

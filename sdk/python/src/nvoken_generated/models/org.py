@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
@@ -29,12 +29,22 @@ class Org(BaseModel):
     """
     Thin customer ownership boundary. Membership, roles, invitations, policy, and runtime state deliberately live elsewhere.
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `org_` prefix. Treat the body as opaque.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `org_` prefix. Treat the body as opaque.")
     display_name: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Human-facing label for the customer Org.")
     external_ref: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(description="Optional unique identity-provider Org identifier.")
     created_at: datetime
     archived_at: Optional[datetime] = Field(description="When the Org was archived, or null while it is live. An archived Org admits no new App and no new Org-bound credential; its reads and org-scoped reporting are unchanged. ")
     __properties: ClassVar[List[str]] = ["id", "display_name", "external_ref", "created_at", "archived_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

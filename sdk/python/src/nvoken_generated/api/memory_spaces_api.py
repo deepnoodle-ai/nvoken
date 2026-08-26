@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.memory_scope import MemoryScope
@@ -44,7 +44,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -116,7 +116,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space_with_http_info(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -188,7 +188,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space_without_preload_content(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -320,7 +320,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -393,7 +393,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space_with_http_info(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -466,7 +466,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space_without_preload_content(
         self,
-        memory_space_id: Annotated[str, Field(min_length=1, strict=True)],
+        memory_space_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],

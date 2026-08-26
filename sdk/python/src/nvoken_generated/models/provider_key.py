@@ -30,14 +30,14 @@ class ProviderKey(BaseModel):
     """
     Safe metadata only; secret material is never represented.
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.")
     provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     scope: ProviderKeyScope
     tenant_key: Optional[StrictStr]
     status: StrictStr = Field(description="Active roots remain rotatable and revocable even when their current version has expired.")
     version: Annotated[int, Field(strict=True, ge=1)]
-    version_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `ver_` prefix. Treat the body as opaque.")
-    previous_version_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `ver_` prefix. Treat the body as opaque.")
+    version_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `ver_` prefix. Treat the body as opaque.")
+    previous_version_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `ver_` prefix. Treat the body as opaque.")
     version_status: StrictStr = Field(description="An expired version cannot be used. Rotate the key before any new turn or model call can use it. ")
     expires_at: Optional[datetime]
     overlap_expires_at: Optional[datetime]
@@ -46,6 +46,16 @@ class ProviderKey(BaseModel):
     updated_at: datetime
     revoked_at: Optional[datetime]
     __properties: ClassVar[List[str]] = ["id", "provider", "scope", "tenant_key", "status", "version", "version_id", "previous_version_id", "version_status", "expires_at", "overlap_expires_at", "created_by", "created_at", "updated_at", "revoked_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('provider')
     def provider_validate_regular_expression(cls, value):
@@ -62,6 +72,29 @@ class ProviderKey(BaseModel):
         """Validates the enum"""
         if value not in set(['active', 'revoked']):
             raise ValueError("must be one of enum values ('active', 'revoked')")
+        return value
+
+    @field_validator('version_id')
+    def version_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('previous_version_id')
+    def previous_version_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     @field_validator('version_status')

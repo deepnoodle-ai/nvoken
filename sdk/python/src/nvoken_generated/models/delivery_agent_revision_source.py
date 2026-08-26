@@ -29,8 +29,8 @@ class DeliveryAgentRevisionSource(BaseModel):
     DeliveryAgentRevisionSource
     """ # noqa: E501
     kind: StrictStr
-    agent_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    agent_revision_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.")
+    agent_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_revision_id: Annotated[str, Field(strict=True)] = Field(description="Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.")
     revision: Annotated[int, Field(strict=True, ge=1)]
     __properties: ClassVar[List[str]] = ["kind", "agent_id", "agent_revision_id", "revision"]
 
@@ -39,6 +39,26 @@ class DeliveryAgentRevisionSource(BaseModel):
         """Validates the enum"""
         if value not in set(['agent_revision']):
             raise ValueError("must be one of enum values ('agent_revision')")
+        return value
+
+    @field_validator('agent_id')
+    def agent_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('agent_revision_id')
+    def agent_revision_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

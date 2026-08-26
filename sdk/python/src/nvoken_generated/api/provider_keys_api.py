@@ -338,7 +338,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -410,7 +410,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key_with_http_info(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -482,7 +482,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key_without_preload_content(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -614,7 +614,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key_usage(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -686,7 +686,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key_usage_with_http_info(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -758,7 +758,7 @@ class ProviderKeysApi:
     @validate_call
     async def get_provider_key_usage_without_preload_content(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1253,7 +1253,7 @@ class ProviderKeysApi:
     @validate_call
     async def revoke_provider_key(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1325,7 +1325,7 @@ class ProviderKeysApi:
     @validate_call
     async def revoke_provider_key_with_http_info(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1397,7 +1397,7 @@ class ProviderKeysApi:
     @validate_call
     async def revoke_provider_key_without_preload_content(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1529,7 +1529,7 @@ class ProviderKeysApi:
     @validate_call
     async def rotate_provider_key(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         rotate_provider_key_request: RotateProviderKeyRequest,
         _request_timeout: Union[
             None,
@@ -1607,7 +1607,7 @@ class ProviderKeysApi:
     @validate_call
     async def rotate_provider_key_with_http_info(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         rotate_provider_key_request: RotateProviderKeyRequest,
         _request_timeout: Union[
             None,
@@ -1685,7 +1685,7 @@ class ProviderKeysApi:
     @validate_call
     async def rotate_provider_key_without_preload_content(
         self,
-        provider_key_id: Annotated[str, Field(min_length=1, strict=True)],
+        provider_key_id: Annotated[str, Field(strict=True)],
         rotate_provider_key_request: RotateProviderKeyRequest,
         _request_timeout: Union[
             None,

@@ -31,7 +31,7 @@ class ConnectionClosingEvent(BaseModel):
     This connection is closing. The stream continues and the turn is unaffected, so reconnect with your last `cursor`.  There is no cursor here. You already track your last durable one, because you need it to survive a connection that drops without saying anything, and a field that repeats what you must hold anyway is a second spelling of it.
     """ # noqa: E501
     type: StrictStr
-    conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     reason: ConnectionClosingReason
     additional_properties: Dict[str, Any] = {}
@@ -42,6 +42,19 @@ class ConnectionClosingEvent(BaseModel):
         """Validates the enum"""
         if value not in set(['connection.closing']):
             raise ValueError("must be one of enum values ('connection.closing')")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

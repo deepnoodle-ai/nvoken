@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator
 from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from nvoken_generated.models.nudge_status import NudgeStatus
@@ -29,11 +29,21 @@ class NudgeAcknowledgement(BaseModel):
     """
     NudgeAcknowledgement
     """ # noqa: E501
-    nudge_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.")
+    nudge_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.")
     status: NudgeStatus
     deduplicated: StrictBool
     after_sequence: StrictInt = Field(description="Transcript position to watch from for the promoted message. It is the Conversation cursor as of this call for a Nudge that has not been drained, and the position immediately before the promoted message for a Nudge that already has, so reading after it finds the message either way. ")
     __properties: ClassVar[List[str]] = ["nudge_id", "status", "deduplicated", "after_sequence"]
+
+    @field_validator('nudge_id')
+    def nudge_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

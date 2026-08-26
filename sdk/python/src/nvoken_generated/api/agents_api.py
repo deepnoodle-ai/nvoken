@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, field_validator
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent import Agent
@@ -47,7 +47,7 @@ class AgentsApi:
     @validate_call
     async def archive_agent(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -121,7 +121,7 @@ class AgentsApi:
     @validate_call
     async def archive_agent_with_http_info(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -195,7 +195,7 @@ class AgentsApi:
     @validate_call
     async def archive_agent_without_preload_content(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -639,7 +639,7 @@ class AgentsApi:
     @validate_call
     async def get_agent(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -712,7 +712,7 @@ class AgentsApi:
     @validate_call
     async def get_agent_with_http_info(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -785,7 +785,7 @@ class AgentsApi:
     @validate_call
     async def get_agent_without_preload_content(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -918,7 +918,7 @@ class AgentsApi:
     @validate_call
     async def get_agent_revision(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         revision: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
             None,
@@ -994,7 +994,7 @@ class AgentsApi:
     @validate_call
     async def get_agent_revision_with_http_info(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         revision: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
             None,
@@ -1070,7 +1070,7 @@ class AgentsApi:
     @validate_call
     async def get_agent_revision_without_preload_content(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         revision: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
             None,
@@ -1209,7 +1209,7 @@ class AgentsApi:
     @validate_call
     async def list_agent_revisions(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1289,7 +1289,7 @@ class AgentsApi:
     @validate_call
     async def list_agent_revisions_with_http_info(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1369,7 +1369,7 @@ class AgentsApi:
     @validate_call
     async def list_agent_revisions_without_preload_content(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -1903,7 +1903,7 @@ class AgentsApi:
     async def publish_agent_revision(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         behavior_input: BehaviorInput,
         _request_timeout: Union[
             None,
@@ -1986,7 +1986,7 @@ class AgentsApi:
     async def publish_agent_revision_with_http_info(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         behavior_input: BehaviorInput,
         _request_timeout: Union[
             None,
@@ -2069,7 +2069,7 @@ class AgentsApi:
     async def publish_agent_revision_without_preload_content(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         behavior_input: BehaviorInput,
         _request_timeout: Union[
             None,
@@ -2230,7 +2230,7 @@ class AgentsApi:
     @validate_call
     async def restore_agent(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2303,7 +2303,7 @@ class AgentsApi:
     @validate_call
     async def restore_agent_with_http_info(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2376,7 +2376,7 @@ class AgentsApi:
     @validate_call
     async def restore_agent_without_preload_content(
         self,
-        agent_id: Annotated[str, Field(min_length=1, strict=True)],
+        agent_id: Annotated[str, Field(strict=True)],
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],

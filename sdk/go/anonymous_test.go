@@ -12,7 +12,7 @@ import (
 func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 	visitor := "visitor-1"
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/v1/apps/app_test/anonymous-tokens" {
+		if request.URL.Path != "/v1/apps/app_01kc514000e008000000000002/anonymous-tokens" {
 			t.Errorf("path = %q", request.URL.Path)
 		}
 		if request.Header.Get("Origin") != "https://app.example.test" {
@@ -46,7 +46,7 @@ func TestIssueAnonymousTokenIsCredentialFree(t *testing.T) {
 	token, err := IssueAnonymousToken(
 		context.Background(),
 		server.URL,
-		"app_test",
+		"app_01kc514000e008000000000002",
 		"https://app.example.test",
 		AnonymousTokenOptions{IdempotencyKey: "anonymous-exchange-1", VisitorToken: &visitor},
 	)

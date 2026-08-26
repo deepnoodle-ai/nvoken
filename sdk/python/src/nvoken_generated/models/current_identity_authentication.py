@@ -31,12 +31,12 @@ class CurrentIdentityAuthentication(BaseModel):
     """
     CurrentIdentityAuthentication
     """ # noqa: E501
-    credential_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Machine credentials only.")
-    app_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Null for installation credentials and Org console presentations. A browser grant is always App-scoped, so this is never null for one. ")
-    org_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Short-lived console presentations only.")
+    credential_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Machine credentials only.")
+    app_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Null for installation credentials and Org console presentations. A browser grant is always App-scoped, so this is never null for one. ")
+    org_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Short-lived console presentations only.")
     type: Optional[CredentialType] = Field(default=None, description="Machine API keys only.")
-    agent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Browser grants only. The Agent this grant is pinned to.")
-    agent_revision_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Browser grants only. Exact immutable behavior pinned by the grant.")
+    agent_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Browser grants only. The Agent this grant is pinned to.")
+    agent_revision_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Browser grants only. Exact immutable behavior pinned by the grant.")
     tenant_key: Optional[StrictStr] = Field(default=None, description="Null only when a machine credential resolves no tenant. A browser grant is always tenant-pinned, so this is never null for one. ")
     user_key: Optional[StrictStr] = Field(default=None, description="Browser subject and Turn actor; null for machine credentials.")
     memory_access: Optional[BrowserMemoryAccess] = Field(default=None, description="Browser grants only. Omission grants no memory authority.")
@@ -44,6 +44,71 @@ class CurrentIdentityAuthentication(BaseModel):
     method: StrictStr = Field(description="How this caller authenticated. New values may be added; handle a value you do not recognize as an unknown caller rather than refusing the response. ")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["credential_id", "app_id", "org_id", "type", "agent_id", "agent_revision_id", "tenant_key", "user_key", "memory_access", "conversation_access", "method"]
+
+    @field_validator('credential_id')
+    def credential_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('app_id')
+    def app_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('org_id')
+    def org_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('agent_id')
+    def agent_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('agent_revision_id')
+    def agent_revision_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('method')
     def method_validate_enum(cls, value):

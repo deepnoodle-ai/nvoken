@@ -30,7 +30,7 @@ class ContinueTurnConversation(BaseModel):
     ContinueTurnConversation
     """ # noqa: E501
     mode: StrictStr
-    conversation_id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    conversation_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     if_active: Optional[ConversationActivePolicy] = ConversationActivePolicy.REJECT
     __properties: ClassVar[List[str]] = ["mode", "conversation_id", "if_active"]
 
@@ -39,6 +39,16 @@ class ContinueTurnConversation(BaseModel):
         """Validates the enum"""
         if value not in set(['continue']):
             raise ValueError("must be one of enum values ('continue')")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

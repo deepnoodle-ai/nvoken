@@ -31,9 +31,9 @@ class StreamResyncEvent(BaseModel):
     StreamResyncEvent
     """ # noqa: E501
     type: StrictStr
-    conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
-    turn_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="The Turn whose previews are void. Absent means every Turn in the Conversation: an absent field is scope, where a null identifier would be scope wearing an identifier's name. ")
+    turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="The Turn whose previews are void. Absent means every Turn in the Conversation: an absent field is scope, where a null identifier would be scope wearing an identifier's name. ")
     reason: StreamResyncReason
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["type", "conversation_id", "content_expires_at", "turn_id", "reason"]
@@ -43,6 +43,32 @@ class StreamResyncEvent(BaseModel):
         """Validates the enum"""
         if value not in set(['stream.resync']):
             raise ValueError("must be one of enum values ('stream.resync')")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('turn_id')
+    def turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

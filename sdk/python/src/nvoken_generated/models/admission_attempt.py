@@ -31,7 +31,7 @@ class AdmissionAttempt(BaseModel):
     """
     AdmissionAttempt
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `adm_` prefix.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `adm_` prefix. Treat the body as opaque.")
     attempted_at: datetime
     outcome: AdmissionOutcome
     error_code: Optional[ErrorCode] = Field(description="The refusal code, or null when the turn was admitted.")
@@ -41,21 +41,31 @@ class AdmissionAttempt(BaseModel):
     behavior_source_kind: Optional[StrictStr] = Field(description="Resolved source kind, or null when admission was refused before behavior selection completed. ")
     agent_owner_kind: Optional[StrictStr] = Field(description="Raw owner namespace for a key selector, otherwise null.")
     agent_key: Optional[StrictStr] = Field(description="Raw owner-qualified lookup key, or null for ID, inline, or browser selection.")
-    agent_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    agent_revision_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.")
+    agent_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_revision_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.")
     effective_behavior_digest: Optional[Annotated[str, Field(strict=True)]]
-    memory_space_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    memory_space_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     provider: Optional[StrictStr]
     model: Optional[StrictStr]
     credential_family_id: Optional[StrictStr]
     authentication_method: Optional[StrictStr]
     request_id: Optional[StrictStr]
-    turn_id: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(description="The admitted Turn, or null for a refusal. It carries no foreign key: the record outlives Conversation erasure, so a deleted transcript never erases the evidence that the request happened. ")
+    turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="The admitted Turn, or null for a refusal. It carries no foreign key: the record outlives Conversation erasure, so a deleted transcript never erases the evidence that the request happened. ")
     deduplicated: StrictBool = Field(description="Whether the request replayed an existing Turn.")
     details: Optional[Dict[str, Any]] = Field(default=None, description="The refusal's own detail object, the same one the caller received. For `insufficient_credits` it carries the tenant key with exact available and required amounts. ")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["id", "attempted_at", "outcome", "error_code", "http_status", "tenant_key", "user_key", "behavior_source_kind", "agent_owner_kind", "agent_key", "agent_id", "agent_revision_id", "effective_behavior_digest", "memory_space_id", "conversation_id", "provider", "model", "credential_family_id", "authentication_method", "request_id", "turn_id", "deduplicated", "details"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('behavior_source_kind')
     def behavior_source_kind_validate_enum(cls, value):
@@ -77,6 +87,32 @@ class AdmissionAttempt(BaseModel):
             raise ValueError("must be one of enum values ('app', 'tenant', 'user')")
         return value
 
+    @field_validator('agent_id')
+    def agent_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('agent_revision_id')
+    def agent_revision_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
     @field_validator('effective_behavior_digest')
     def effective_behavior_digest_validate_regular_expression(cls, value):
         """Validates the regular expression"""
@@ -90,6 +126,32 @@ class AdmissionAttempt(BaseModel):
             raise ValueError(r"must validate the regular expression /^sha256:[0-9a-f]{64}$/")
         return value
 
+    @field_validator('memory_space_id')
+    def memory_space_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
+    @field_validator('conversation_id')
+    def conversation_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
+
     @field_validator('authentication_method')
     def authentication_method_validate_enum(cls, value):
         """Validates the enum"""
@@ -98,6 +160,19 @@ class AdmissionAttempt(BaseModel):
 
         if value not in set(['api_key', 'issuer_token', 'client_token', 'anonymous_token']):
             raise ValueError("must be one of enum values ('api_key', 'issuer_token', 'client_token', 'anonymous_token')")
+        return value
+
+    @field_validator('turn_id')
+    def turn_id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

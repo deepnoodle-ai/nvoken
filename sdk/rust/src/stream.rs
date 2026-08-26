@@ -469,9 +469,9 @@ mod tests {
                     "type": "message.delta",
                     "conversation_id": null,
                     "content_expires_at": null,
-                    "turn_id": "turn_1",
+                    "turn_id": "turn_01kc514000e008000000000001",
                     "attempt": 1,
-                    "message_id": "msg_1",
+                    "message_id": "msg_01kc514000e008000000000001",
                     "content_index": 0,
                     "kind": "text",
                     "delta": fragment,
@@ -490,7 +490,7 @@ mod tests {
                     "type": "stream.resync",
                     "conversation_id": null,
                     "content_expires_at": null,
-                    "turn_id": "turn_1",
+                    "turn_id": "turn_01kc514000e008000000000001",
                     "reason": "live_delivery_gap"
                 }),
             ))
@@ -498,7 +498,7 @@ mod tests {
         assert!(reducer.snapshot().previews.is_empty());
 
         let change = models::TurnChange::new(
-            "turn_1".into(),
+            "turn_01kc514000e008000000000001".into(),
             None,
             None,
             2,
@@ -526,8 +526,11 @@ mod tests {
             })
             .unwrap();
         let snapshot = reducer.snapshot();
-        assert_eq!(snapshot.turn_changes[0].turn_id, "turn_1");
-        assert!(reducer.settled("turn_1"));
+        assert_eq!(
+            snapshot.turn_changes[0].turn_id,
+            "turn_01kc514000e008000000000001"
+        );
+        assert!(reducer.settled("turn_01kc514000e008000000000001"));
         assert_eq!(snapshot.cursor.as_deref(), Some("cursor-2"));
     }
 
@@ -538,7 +541,7 @@ mod tests {
             client
                 .raw()
                 .client
-                .get("http://localhost/v1/turns/turn_1/stream"),
+                .get("http://localhost/v1/turns/turn_01kc514000e008000000000001/stream"),
             Some("acme"),
             Some("alice"),
         )

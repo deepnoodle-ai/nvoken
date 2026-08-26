@@ -28,7 +28,7 @@ import {
  */
 export interface ConversationCompaction {
     /**
-     *
+     * Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof ConversationCompaction
      */

@@ -116,7 +116,7 @@ func TestDeviceLoginUsesPinnedContractAndSavesOrgProfile(t *testing.T) {
 	if err := authstore.PutProfile("default", authstore.Profile{
 		Endpoint:     "https://old.example",
 		Token:        "saved-profile-token",
-		CredentialID: "cred_old",
+		CredentialID: "cred_01kc514000e008000000000001",
 		CreatedAt:    "2026-08-01T00:00:00Z",
 	}, true); err != nil {
 		t.Fatal(err)
