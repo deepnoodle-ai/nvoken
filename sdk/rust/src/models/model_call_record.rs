@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModelCallRecord {
-    /// Opaque model-call fact ID with the mcall_ prefix.
+    /// Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
     /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.

@@ -31,7 +31,7 @@ class AdmissionAttempt(BaseModel):
     """
     AdmissionAttempt
     """ # noqa: E501
-    id: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque identifier with the public `adm_` prefix.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `adm_` prefix. Treat the body as opaque.")
     attempted_at: datetime
     outcome: AdmissionOutcome
     error_code: Optional[ErrorCode] = Field(description="The refusal code, or null when the turn was admitted.")
@@ -56,6 +56,16 @@ class AdmissionAttempt(BaseModel):
     details: Optional[Dict[str, Any]] = Field(default=None, description="The refusal's own detail object, the same one the caller received. For `insufficient_credits` it carries the tenant key with exact available and required amounts. ")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["id", "attempted_at", "outcome", "error_code", "http_status", "tenant_key", "user_key", "behavior_source_kind", "agent_owner_kind", "agent_key", "agent_id", "agent_revision_id", "effective_behavior_digest", "memory_space_id", "conversation_id", "provider", "model", "credential_family_id", "authentication_method", "request_id", "turn_id", "deduplicated", "details"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('behavior_source_kind')
     def behavior_source_kind_validate_enum(cls, value):

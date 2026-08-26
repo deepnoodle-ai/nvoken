@@ -35,7 +35,7 @@ import {
  */
 export interface AdmissionAttempt {
     /**
-     * Opaque identifier with the public `adm_` prefix.
+     * Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof AdmissionAttempt
      */

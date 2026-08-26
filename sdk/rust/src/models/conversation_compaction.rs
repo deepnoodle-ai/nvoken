@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ConversationCompaction {
+    /// Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
     /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.

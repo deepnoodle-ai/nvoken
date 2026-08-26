@@ -9674,6 +9674,12 @@ components:
         - running
         - completed
         - failed
+    ConversationCompactionID:
+      type: string
+      pattern: ^comp_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `comp_` prefix. Treat the body as
+        opaque.
     ConversationCompaction:
       type: object
       additionalProperties: false
@@ -9687,8 +9693,7 @@ components:
         - updated_at
       properties:
         id:
-          type: string
-          minLength: 1
+          $ref: '#/components/schemas/ConversationCompactionID'
         conversation_id:
           $ref: '#/components/schemas/ConversationID'
         status:
@@ -10683,6 +10688,12 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+    ModelCallFactID:
+      type: string
+      pattern: ^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `mcall_` prefix. Treat the body as
+        opaque.
     UsageInterval:
       type: string
       enum:
@@ -11042,8 +11053,7 @@ components:
         - settled_at
       properties:
         id:
-          type: string
-          description: Opaque model-call fact ID with the mcall_ prefix.
+          $ref: '#/components/schemas/ModelCallFactID'
         turn_id:
           oneOf:
             - $ref: '#/components/schemas/TurnID'
@@ -11589,6 +11599,12 @@ components:
           type:
             - string
             - 'null'
+    AdmissionAttemptID:
+      type: string
+      pattern: ^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
+      description: >-
+        Opaque identifier with the public `adm_` prefix. Treat the body as
+        opaque.
     AdmissionOutcome:
       type: string
       enum:
@@ -11625,9 +11641,7 @@ components:
         - deduplicated
       properties:
         id:
-          type: string
-          minLength: 1
-          description: Opaque identifier with the public `adm_` prefix.
+          $ref: '#/components/schemas/AdmissionAttemptID'
         attempted_at:
           type: string
           format: date-time

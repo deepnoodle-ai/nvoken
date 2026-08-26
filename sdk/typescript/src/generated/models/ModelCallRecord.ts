@@ -63,7 +63,7 @@ import {
  */
 export interface ModelCallRecord {
     /**
-     * Opaque model-call fact ID with the mcall_ prefix.
+     * Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */

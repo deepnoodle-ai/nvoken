@@ -2880,10 +2880,10 @@ type AdmissionAttempt struct {
 	// HTTPStatus The status the caller received.
 	HTTPStatus int `json:"http_status"`
 
-	// ID Opaque identifier with the public `adm_` prefix.
-	ID            string         `json:"id"`
-	MemorySpaceID *MemorySpaceID `json:"memory_space_id"`
-	Model         *string        `json:"model"`
+	// ID Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
+	ID            AdmissionAttemptID `json:"id"`
+	MemorySpaceID *MemorySpaceID     `json:"memory_space_id"`
+	Model         *string            `json:"model"`
 
 	// Outcome `admitted` created a Turn; `refused` did not. A refusal is the
 	// only record that the request happened at all.
@@ -2914,6 +2914,9 @@ type AdmissionAttemptAuthenticationMethod string
 // AdmissionAttemptBehaviorSourceKind Resolved source kind, or null when admission was refused before
 // behavior selection completed.
 type AdmissionAttemptBehaviorSourceKind string
+
+// AdmissionAttemptID Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
+type AdmissionAttemptID = string
 
 // AdmissionAttemptList defines model for AdmissionAttemptList.
 type AdmissionAttemptList struct {
@@ -3861,14 +3864,19 @@ type ConversationActivePolicy string
 // ConversationCompaction defines model for ConversationCompaction.
 type ConversationCompaction struct {
 	// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
-	ConversationID  ConversationID               `json:"conversation_id"`
-	CreatedAt       time.Time                    `json:"created_at"`
-	ID              string                       `json:"id"`
+	ConversationID ConversationID `json:"conversation_id"`
+	CreatedAt      time.Time      `json:"created_at"`
+
+	// ID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
+	ID              ConversationCompactionID     `json:"id"`
 	Status          ConversationCompactionStatus `json:"status"`
 	Summary         *string                      `json:"summary"`
 	ThroughSequence int64                        `json:"through_sequence"`
 	UpdatedAt       time.Time                    `json:"updated_at"`
 }
+
+// ConversationCompactionID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
+type ConversationCompactionID = string
 
 // ConversationCompactionList defines model for ConversationCompactionList.
 type ConversationCompactionList struct {
@@ -5024,6 +5032,9 @@ type Model struct {
 	Provider ModelProvider `json:"provider"`
 }
 
+// ModelCallFactID Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+type ModelCallFactID = string
+
 // ModelCallFactStatus defines model for ModelCallFactStatus.
 type ModelCallFactStatus string
 
@@ -5058,8 +5069,8 @@ type ModelCallRecord struct {
 	FailureClass            *string                     `json:"failure_class"`
 	FirstOutputAt           *time.Time                  `json:"first_output_at"`
 
-	// ID Opaque model-call fact ID with the mcall_ prefix.
-	ID                     string                  `json:"id"`
+	// ID Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+	ID                     ModelCallFactID         `json:"id"`
 	InputTokens            *int                    `json:"input_tokens"`
 	LeaseAttempt           int                     `json:"lease_attempt"`
 	MaxCostAtRisk          *Money                  `json:"max_cost_at_risk"`

@@ -35,7 +35,7 @@ class ModelCallRecord(BaseModel):
     """
     ModelCallRecord
     """ # noqa: E501
-    id: StrictStr = Field(description="Opaque model-call fact ID with the mcall_ prefix.")
+    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.")
     turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
     conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
@@ -78,6 +78,16 @@ class ModelCallRecord(BaseModel):
     first_output_at: Optional[datetime]
     settled_at: Optional[datetime]
     __properties: ClassVar[List[str]] = ["id", "turn_id", "conversation_id", "content_expires_at", "app_id", "tenant_key", "user_key", "behavior_source_kind", "agent_id", "agent_revision_id", "effective_behavior_digest", "effective_limits", "memory_space_id", "credential_family_id", "authentication_method", "provider_key_source", "provider_key_id", "provider_key_version_id", "call_kind", "call_ordinal", "lease_attempt", "provider_attempt_ordinal", "requested_provider", "requested_model", "served_provider", "served_model", "status", "outcome", "failure_class", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost", "cost_coverage", "max_cost_at_risk", "pricing_version", "created_at", "started_at", "first_output_at", "settled_at"]
+
+    @field_validator('id')
+    def id_validate_regular_expression(cls, value):
+        """Validates the regular expression"""
+        if not isinstance(value, str):
+            value = str(value)
+
+        if not re.match(r"^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
+            raise ValueError(r"must validate the regular expression /^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
+        return value
 
     @field_validator('turn_id')
     def turn_id_validate_regular_expression(cls, value):

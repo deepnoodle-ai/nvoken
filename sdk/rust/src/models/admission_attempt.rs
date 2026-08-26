@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AdmissionAttempt {
-    /// Opaque identifier with the public `adm_` prefix.
+    /// Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "attempted_at")]
