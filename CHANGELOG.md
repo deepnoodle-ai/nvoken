@@ -8,6 +8,8 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.31.0 - 2026-08-26
+
 - **Validate canonical TypeIDs throughout generated SDK models.** Public
   resource IDs now use prefix-specific TypeID patterns instead of accepting
   arbitrary non-empty strings.
