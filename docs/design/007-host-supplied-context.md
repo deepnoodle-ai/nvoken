@@ -1,13 +1,16 @@
 # One home for each host-supplied fact
 
-**Status:** Accepted on 2026-08-17. Rollout step 1 is implemented, as is the
-service and contract half of step 2; the SDK facades, conformance fixtures, and
-the step 3 items are not.
+**Status:** Historical and superseded by the 0.30.0 hard cut. Its authority
+decisions survive in the current contract as per-Turn actor attribution,
+Turn-owned correlation metadata, independently selected Conversation and
+MemorySpace coordinates, and signed resolved delivery facts. The rollout
+language below describes the pre-cut contract and is retained as decision
+history.
 **Author:** Claude Opus 5 with Curtis Myzie
 **Date:** 2026-08-17
-**Revised:** 2026-08-17, after a review against the implementation. The review's
-findings are folded into the sections below; where it corrected this document,
-the correction is marked.
+**Revised:** 2026-08-26 to mark the pre-cut rollout as historical. The
+2026-08-17 implementation review remains folded into the sections below, where
+its corrections are marked.
 **Applies to:** the service for the contract and runtime behavior; this
 repository for the SDK facades, conformance fixtures, and reference
 documentation.

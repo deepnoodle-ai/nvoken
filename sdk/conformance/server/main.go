@@ -398,8 +398,8 @@ func (h conformanceMCPServerHeaders) valid() bool {
 }
 
 // conformanceContext is one recorded application state snapshot. It travels at
-// the top level of the request, so an SDK that nests it inside the Agent
-// Definition or drops the tier fails here rather than at the Runtime.
+// the top level of the request, so an SDK that nests it inside Agent behavior
+// or drops the tier fails here rather than at the Runtime.
 type conformanceContext struct {
 	Name    string `json:"name"`
 	Tier    string `json:"tier"`

@@ -8,6 +8,20 @@ const TURN_ID = "turn_01kc5153ahfwtaxmge0z0vvcs2";
 const AGENT_ID = "agent_01kc5153ahfwtaxmge0z0vvcs0";
 const NOW = "2026-07-21T12:00:00Z";
 
+test("shared conformance server uses the current model contract", async (t) => {
+  const baseUrl = process.env.NVOKEN_CONFORMANCE_URL;
+  if (!baseUrl) {
+    t.skip("NVOKEN_CONFORMANCE_URL is not set");
+    return;
+  }
+  const models = await new Client({ baseUrl, apiKey: "conformance" }).listModels({
+    provider: "future_provider",
+  });
+  assert.equal(models.items.length, 1);
+  assert.equal(models.items[0]?.provider, "future_provider");
+  assert.equal(models.items[0]?.id, "future-model");
+});
+
 function wireAgent(owner: Record<string, unknown> = { kind: "app" }) {
   return {
     id: AGENT_ID,

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "An Agent is stable, owner-namespaced, reusable behavior. AgentRevision is its immutable snapshot. A Turn selects an exact revision at admission; no per-tenant Agent instance is required.",
+  "note": "An Agent is stable, owner-namespaced, reusable behavior. AgentRevision is its immutable snapshot. A Turn selects an exact revision at admission; no intermediate tenant resource is required.",
   "agent_id": "agent_01kc514000e008000000000006",
   "agent_revision_id": "arev_01kc514000e008000000000005",
   "reference_fields": {
@@ -14,7 +14,7 @@
     "retained_while_referenced": true,
     "turn_records_exact_revision": true,
     "create_includes_revision_one": true,
-    "agent_instance_required_for_admission": false,
+    "intermediate_tenant_resource_required_for_admission": false,
     "inline_turn_admission": true
   },
   "refusals": [

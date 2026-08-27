@@ -8,6 +8,11 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Current vocabulary now reaches CLI text, conformance fixtures, and active
+  concept documentation.** Usage summaries report `turns`, stale pre-0.30
+  fixture fields are rejected by the repository gate, and each SDK transport
+  now proves it can decode the shared conformance server.
+
 ## 0.31.0 - 2026-08-26
 
 - **Validate canonical TypeIDs throughout generated SDK models.** Public

@@ -134,29 +134,33 @@ func runProviderKeyUsage(command *cli.Context) error {
 		return err
 	}
 	return writeOutput(command, usage, func(writer io.Writer) error {
-		lastUsed := "never"
-		if usage.LastUsedAt != nil {
-			lastUsed = usage.LastUsedAt.UTC().Format(time.RFC3339)
-		}
-		inputTokens := 0
-		outputTokens := 0
-		if usage.Usage != nil {
-			inputTokens = usage.Usage.InputTokens
-			outputTokens = usage.Usage.OutputTokens
-		}
-		_, err := fmt.Fprintf(
-			writer,
-			"%s\t%s\t%s\tinvocations=%d\tinput_tokens=%d\toutput_tokens=%d\tlast_used=%s\n",
-			usage.ID,
-			usage.Provider,
-			usage.Scope,
-			usage.Turns,
-			inputTokens,
-			outputTokens,
-			lastUsed,
-		)
-		return err
+		return writeProviderKeyUsage(writer, usage)
 	})
+}
+
+func writeProviderKeyUsage(writer io.Writer, usage *nvoken.ProviderKeyUsage) error {
+	lastUsed := "never"
+	if usage.LastUsedAt != nil {
+		lastUsed = usage.LastUsedAt.UTC().Format(time.RFC3339)
+	}
+	inputTokens := 0
+	outputTokens := 0
+	if usage.Usage != nil {
+		inputTokens = usage.Usage.InputTokens
+		outputTokens = usage.Usage.OutputTokens
+	}
+	_, err := fmt.Fprintf(
+		writer,
+		"%s\t%s\t%s\tturns=%d\tinput_tokens=%d\toutput_tokens=%d\tlast_used=%s\n",
+		usage.ID,
+		usage.Provider,
+		usage.Scope,
+		usage.Turns,
+		inputTokens,
+		outputTokens,
+		lastUsed,
+	)
+	return err
 }
 
 func runProviderKeyRotate(command *cli.Context) error {

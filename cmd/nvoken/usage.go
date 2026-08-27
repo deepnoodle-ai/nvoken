@@ -324,7 +324,7 @@ func runUsageRecords(command *cli.Context) error {
 func writeUsageMetrics(writer io.Writer, label string, metrics nvoken.UsageMetrics) error {
 	_, err := fmt.Fprintf(
 		writer,
-		"%s\tinvocations=%d\tmodel_calls=%d\tinput_tokens=%d\toutput_tokens=%d\ttool_calls=%d\tmodel_cost=%s %s\n",
+		"%s\tturns=%d\tmodel_calls=%d\tinput_tokens=%d\toutput_tokens=%d\ttool_calls=%d\tmodel_cost=%s %s\n",
 		label,
 		metrics.Activity.Turns,
 		metrics.Model.ModelCalls,

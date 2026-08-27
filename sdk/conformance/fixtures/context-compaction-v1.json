@@ -1,4 +1,6 @@
 {
+  "version": 1,
+  "note": "Compaction is Conversation continuity policy. The same policy shape is used when creating a Conversation directly or selecting continue-or-create continuity during Turn admission.",
   "auto": {
     "compaction": {
       "trigger_tokens": "auto"
@@ -14,17 +16,8 @@
     }
   },
   "materialized_auto_trigger_tokens": 120000,
-  "errors": [
-    {
-      "kind": "session_compaction_trigger_invalid",
-      "field": "session_options.compaction.trigger_tokens"
-    },
-    {
-      "kind": "session_compaction_model_provider_mismatch",
-      "fields": [
-        "model.provider",
-        "session_options.compaction.model.provider"
-      ]
-    }
+  "request_locations": [
+    "CreateConversationRequest.compaction",
+    "ContinueOrCreateTurnConversation.compaction"
   ]
 }

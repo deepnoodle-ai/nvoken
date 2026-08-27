@@ -1,5 +1,22 @@
+import os
+
+import pytest
+
 from nvoken import Client
 from nvoken import Reducer, StreamEvent
+
+
+@pytest.mark.asyncio
+async def test_shared_conformance_server_uses_current_model_contract() -> None:
+    base_url = os.getenv("NVOKEN_CONFORMANCE_URL")
+    if not base_url:
+        pytest.skip("NVOKEN_CONFORMANCE_URL is not set")
+    models = await Client("conformance", base_url=base_url).list_models(
+        provider="future_provider",
+    )
+    assert len(models.items) == 1
+    assert models.items[0].provider == "future_provider"
+    assert models.items[0].id == "future-model"
 
 
 def test_raw_client_exposes_exact_runtime_collections() -> None:
