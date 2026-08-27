@@ -1,8 +1,13 @@
 # CLI contract conformance
 
-**Status:** Accepted
+**Status:** Implemented; historical implementation record for the 0.19.0 CLI.
+The generated operation count and the Invocation and Session command names
+below describe that release, not the current Agent, MemorySpace, Conversation,
+and Turn surface.
 
 **Date:** 2026-08-16
+**Revised:** 2026-08-26 to mark this pre-cut implementation record as
+historical.
 **Workflow:** Spec then build in the same pass
 
 ## Context

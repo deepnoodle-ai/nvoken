@@ -8,6 +8,7 @@ and OpenAI's Apps SDK.
 **Status here:** Research. Two separate questions, one strategic and one a
 concrete compatibility gap we have today.
 **Date:** 2026-08-13
+**Revised:** 2026-08-26 for the shipped Agent, Conversation, and Turn contract.
 
 ## What it is
 
@@ -76,9 +77,9 @@ about agents nvoken runs. MCP Apps is about nvoken appearing as a surface inside
 someone else's agent.
 
 Concretely: an nvoken MCP server, exposed to Claude and every other MCP host,
-whose tools manage agents and sessions and whose `ui://` resources render a
-session transcript or a live turn inside the host's chat. Someone asks Claude to
-check on a long-running agent, and Claude draws our view of it.
+whose tools manage Agents and Conversations and whose `ui://` resources render
+a Conversation transcript or a live Turn inside the host's chat. Someone asks
+Claude to check on a long-running Agent, and Claude draws our view of it.
 
 This pairs naturally with the tasks extension covered in
 [001-mcp](001-mcp.md). Tools return durable task handles; MCP Apps renders them.

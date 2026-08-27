@@ -2,8 +2,8 @@
 
 **Status:** Standing target. The frame-vocabulary collapse was reached on
 2026-08-14. Standalone execution later justified distinct Turn and Conversation
-stream scopes, and the accepted terminology cutover is not implemented. This is
-the artifact
+stream scopes, and the accepted terminology cutover shipped in 0.30.0 on
+2026-08-26. This is the artifact
 [DIRECTION](DIRECTION.md) calls for: the protocol we would design today with no
 installed base. Part 1 is what every later change to the streaming protocol and
 the contract is measured against. It changes only by a decision recorded here,
@@ -11,7 +11,7 @@ never by drift. Part 2 was the path, and all three of its steps landed on
 2026-08-14; it is kept as the record of how this was sequenced.
 **Author:** Claude Fable 5 with Curtis Myzie
 **Date:** 2026-08-13
-**Revised:** 2026-08-25 to apply the accepted Conversation and Turn public
+**Revised:** 2026-08-26 to record the shipped Conversation and Turn public
 vocabulary without changing the streaming mechanics.
 **Applies to:** `openapi/nvoken.yaml` and the runtime behind it; the SDKs,
 conformance fixtures, and reference documentation in this repository.

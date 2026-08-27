@@ -1,13 +1,14 @@
 # TypeScript SDK ergonomics and public terminology
 
-**Status:** Accepted; implementation in progress against the published
-Agent, AgentRevision, MemorySpace, Conversation, and Turn contract.
+**Status:** Accepted and implemented in 0.30.0 across the published contract,
+TypeScript, Go, Python, Rust, CLI, examples, and delivery surfaces.
 
 **Date:** 2026-08-24
 
-**Revised:** 2026-08-25 after newcomer reviews, complete-vocabulary comparison,
-and review of shared behavior, private Agents, independent memory ownership,
-inline behavior, and optional Conversation continuity.
+**Revised:** 2026-08-26 to record implementation after newcomer reviews,
+complete-vocabulary comparison, and review of shared behavior, private Agents,
+independent memory ownership, inline behavior, and optional Conversation
+continuity.
 
 **Pre-cutover reference:** `@deepnoodle/nvoken` 0.29.0 at `3045dc4b`
 
@@ -21,9 +22,10 @@ document if they conflict.
 
 ## Verdict
 
-The implemented SDK exposes the service accurately, but it does not yet feel
-like a natural local agent library. Its hardest concept is not streaming or
-durable execution. It is the current two-level Agent model:
+At the 0.29.0 pre-cut reference, the implemented SDK exposed the service
+accurately but did not yet feel like a natural local agent library. Its hardest
+concept was not streaming or durable execution. It was the two-level Agent
+model at that revision:
 
 - an App-scoped Agent Definition contains the behavior most developers call an
   Agent; and

@@ -63,40 +63,37 @@ detail, as `P1` through `T3` across six categories.
 
 ### MCP, which is the only front with working code here
 
-- [`sdk/go/examples/mcp-recovery/`](../../sdk/go/examples/mcp-recovery/) is the
-  most useful thing in the repository on this subject. It exercises
-  authenticated stateless discovery, a durable model-selected tool call,
-  executor replacement, and authoritative result plus fixed-cut transcript
-  recovery. Its scripted server counts its own invocations, so you can watch how
-  many times a tool actually runs across a recovered turn. That is precisely the
-  retry-safety question [001-mcp](001-mcp.md) raises now that MCP has removed
-  stream resumability. Start with its README.
+- [`sdk/conformance/server/main.go`](../../sdk/conformance/server/main.go) is
+  the executable contract double for MCP discovery, Turn admission, recovery,
+  and streaming. The complete SDK gate runs each language against the same
+  process, which is the seam [001-mcp](001-mcp.md) says must retain retry-safe
+  behavior as MCP removes transport resumability.
 - [`cmd/nvoken/mcp.go`](../../cmd/nvoken/mcp.go) implements
   `nvoken mcp list-tools`, which connects to one server and prints the exact
   projected catalog including allowlist ordering and `<name>__<tool>` prefixing.
   The fastest way to see what nvoken does and does not carry from a server.
-- [`sdk/go/go.mod`](../../sdk/go/go.mod) pins the official MCP Go SDK, `v1.6.1`
+- [`sdk/go/go.mod`](../../sdk/go/go.mod) pins the official MCP Go SDK, `v1.7.0`
   at the time of writing. That pin is the concrete starting point for the
   `2026-07-28` migration.
 - [`sdk/typescript/README.md`](../../sdk/typescript/README.md), under "Remote
-  MCP tools", on why authentication headers travel per Invocation rather than in
-  a durable Agent Definition.
+  MCP tools", on why authentication headers travel per Turn rather than in a
+  durable AgentRevision.
 - [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml) for `MCPServer`,
   `MCPTransport`, and `MCPToolExclusion` with its six refusal reasons.
 
-### Invocation lifecycle, which A2A maps onto most closely
+### Turn lifecycle, which A2A maps onto most closely
 
 - [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml) again, for
-  `InvocationStatus` and `InvocationStopReason`. Both carry long prose
+  `TurnStatus` and `TurnStopReason`. Both carry long prose
   explaining why `incomplete` and `budget_hold` exist as distinct states, which is
   what makes their absence from A2A a real cost rather than a cosmetic one. See
   [005-a2a](005-a2a.md).
 - [`sdk/conformance/fixtures/`](../../sdk/conformance/fixtures/) has several
   fixtures directly on topic: `settlement-legibility-v1.json` and
-  `invocation-result.json` for how turns end, `tool-call-records-v1.json` and
+  `turn-result.json` for how Turns end, `tool-call-records-v1.json` and
   `tool-result-content-v1.json` for the tool boundary, `ask-user-tool-v1.json`
   for the path MCP's Multi Round-Trip Requests map onto, and
-  `invocation-webhooks-v1.json` for what A2A calls push notifications and
+  `turn-webhooks-v2.json` for what A2A calls push notifications and
   recommends over streaming.
 - `reducer.json` in the same directory for the client-side fold, bearing in mind
   rough edge `T1`: it covers four frame types out of seven.
@@ -109,9 +106,9 @@ detail, as `P1` through `T3` across six categories.
 - [SDK and contract development](../guides/sdk-development.md) covers how a
   published contract is adopted and the cross-language reliability rules any
   new protocol surface would have to satisfy.
-- [Session options conflict scope](../design/002-session-options-conflict-scope.md)
-  is not about protocols, but it is the house style for arguing a change, for
-  whenever one of these research documents graduates into a decision.
+- [TypeScript SDK ergonomics and public terminology](../design/008-typescript-sdk-ergonomics.md)
+  is not about external protocols, but it is the current house style for
+  defining public workflows before changing the wire beneath them.
 
 ### What is not here
 

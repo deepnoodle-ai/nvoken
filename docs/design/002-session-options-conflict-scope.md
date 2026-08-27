@@ -1,9 +1,13 @@
 # Session options are a creation payload and a precondition at once
 
-**Status:** Accepted. Proposals 1 through 3 landed in the service; proposal 4
-is deferred, for the reason recorded under it.
+**Status:** Historical and superseded. Proposals 1 through 3 landed in the
+pre-0.30 service; the 0.30.0 hard cut then replaced Session options with
+explicit Conversation selection and removed the public Session and Invocation
+nouns. This document remains the record of the production defect and the
+reasoning it prompted, not a description of the current contract.
 **Author:** Claude Opus 5 with Curtis Myzie
 **Date:** 2026-08-13
+**Revised:** 2026-08-26 to mark this pre-cut analysis as historical.
 **Workflow:** Written from a production defect in a host application
 **Applies to:** the service for the contract and runtime behavior; this
 repository for the SDK error types

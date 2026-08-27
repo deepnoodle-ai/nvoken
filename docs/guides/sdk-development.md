@@ -75,5 +75,5 @@ sdk/python/.venv/bin/pytest sdk/python
 cargo test --manifest-path sdk/rust/Cargo.toml --all-targets
 ```
 
-Use `make sdk-check` for the shared conformance server and complete
-cross-language gate.
+Use `make sdk-check` for a shared conformance-server transport smoke through all
+four SDKs plus each language's complete local suite.

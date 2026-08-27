@@ -21,6 +21,7 @@ trap cleanup EXIT
 
 cd "$ROOT"
 sdk/scripts/check-generated.sh
+python3 sdk/scripts/check_fixture_vocabulary.py
 
 go build -o "$SERVER_BIN" ./sdk/conformance/server
 NVOKEN_CONFORMANCE_ADDR="127.0.0.1:${SERVER_PORT}" "$SERVER_BIN" >"$SERVER_LOG" 2>&1 &

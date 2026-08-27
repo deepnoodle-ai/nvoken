@@ -6,11 +6,31 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestSharedConformanceServerUsesCurrentModelContract(t *testing.T) {
+	baseURL := os.Getenv("NVOKEN_CONFORMANCE_URL")
+	if baseURL == "" {
+		t.Skip("NVOKEN_CONFORMANCE_URL is not set")
+	}
+	client, err := NewClient(baseURL, "conformance")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	provider := "future_provider"
+	models, err := client.ListModels(t.Context(), ListModelsOptions{Provider: &provider})
+	if err != nil {
+		t.Fatalf("list models: %v", err)
+	}
+	if len(models.Items) != 1 || models.Items[0].Provider != provider || models.Items[0].ID != "future-model" {
+		t.Fatalf("models = %#v", models.Items)
+	}
+}
 
 func TestTurnAdmissionRetryReusesGeneratedIdempotencyKey(t *testing.T) {
 	var mu sync.Mutex

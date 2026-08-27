@@ -671,7 +671,9 @@ In this repository:
 - [`sdk/conformance/fixtures/reducer.json`](../../sdk/conformance/fixtures/reducer.json).
   The pinned reducer behavior.
 - [`sdk/conformance/server/main.go`](../../sdk/conformance/server/main.go). The
-  fake runtime the cross-language gate streams against.
+  fake runtime every SDK transport decodes against in the cross-language gate.
+  Streaming behavior remains covered by focused reducer and facade tests; T4
+  above records the missing cross-Turn subscription case.
 
 The nvoken console, not public, is the only production client that builds a
 live transcript. Its transcript model does block folding, tool call indexing,

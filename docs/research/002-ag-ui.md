@@ -5,6 +5,7 @@
 **Status here:** Research. The strongest adoption candidate of the five, and the
 one whose event model most directly answers gaps in our own.
 **Date:** 2026-08-13
+**Revised:** 2026-08-26 for the shipped Agent, Conversation, and Turn contract.
 
 ## What it is
 
@@ -77,7 +78,7 @@ rough edges. Set the two side by side:
 | I1, preview and message share no identifier | `TextMessageStart` carries `messageId`; every `TextMessageContent` belongs to it |
 | I7, tool call progress is invisible between call and result | `ToolCallStart`, `ToolCallArgs`, `ToolCallEnd`, `ToolCallResult` |
 | No block framing, only `content_index` on deltas | Explicit Start, Content, End for both text and reasoning |
-| I3, `invocation_changes` is a log the client re-folds | `StateSnapshot` and `StateDelta` with an explicit replace-or-patch rule |
+| I3, `turn_changes` is a log the client re-folds | `StateSnapshot` and `StateDelta` with an explicit replace-or-patch rule |
 | N4, deltas name their payload `text` on one frame and `thinking` on another | Every streaming event carries `delta` |
 | I4, terminal status trails the final message | `RunFinished` is a lifecycle event with an explicit outcome |
 
@@ -87,8 +88,8 @@ application layer" is what nvoken is:
 | AG-UI gap | What nvoken has |
 | --- | --- |
 | No resumption after a drop | Durable cursors, `Last-Event-ID`, replay from position |
-| No durable transcript | Sessions, message sequences, forks, compaction |
-| Interrupts resumed by starting a new run | A parked Invocation resumed in place, same turn |
+| No durable transcript | Conversations, message sequences, forks, compaction |
+| Interrupts resumed by starting a new run | A parked Turn resumed in place |
 | No execution guarantees | Admission commits before the model runs |
 
 These are complementary in the strict sense. AG-UI specifies the vocabulary of
@@ -102,7 +103,7 @@ remain authoritative and resumable; AG-UI events are a rendering of them.
 
 Two plausible shapes:
 
-1. **Server-side.** A `format=ag-ui` option on the Invocation stream, translating
+1. **Server-side.** A `format=ag-ui` option on the Turn stream, translating
    frames on the way out. Any AG-UI-native frontend then points at nvoken with no
    adapter.
 2. **Client-side.** An adapter in the TypeScript SDK that consumes our stream and
@@ -115,11 +116,12 @@ into the contract before we know the translation holds.
 
 ### The translation is lossy in one direction, and that is the finding
 
-Most of the mapping is clean. `invocation.accepted` becomes `RunStarted`.
-`invocation.result` becomes `RunFinished`. `output_text.delta` becomes
-`TextMessageContent`. `thinking.delta` becomes `ReasoningMessageContent`.
-Terminal statuses map onto `RunFinished` outcomes, and `waiting` maps onto
-`outcome.type: "interrupt"` with `pending_tool_calls` as the `interrupts` array.
+Most of the mapping is clean. Successful Turn admission becomes `RunStarted`.
+A terminal `TurnChange` becomes `RunFinished`. A `message.delta` with kind
+`text` becomes `TextMessageContent`; kind `thinking` becomes
+`ReasoningMessageContent`. Terminal statuses map onto `RunFinished` outcomes,
+and `waiting` maps onto `outcome.type: "interrupt"` with pending ToolCalls as
+the `interrupts` array.
 
 Three things do not translate, and each is a gap in our protocol rather than
 theirs:
@@ -130,7 +132,7 @@ theirs:
   written. Fixing this means a new delta frame on our side.
 - **`TextMessageStart` needs a `messageId` we do not have.** This is rough edge
   I1 exactly. We can synthesize a stable id from
-  `(invocation_id, attempt, iteration)`, but it will not equal the durable
+  `(turn_id, attempt, iteration)`, but it will not equal the durable
   message id that arrives later, so a consumer cannot join them.
 - **`ToolCallResult` timing.** We only learn a tool call finished when its
   `tool_result` block appears in a later message, so the event fires late and

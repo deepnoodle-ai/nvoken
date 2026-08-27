@@ -1,8 +1,11 @@
 # Public SDK repository
 
-**Status:** Accepted
+**Status:** Accepted and implemented. Updated after the 0.30.0 terminology
+cutover so its standing repository boundaries use the current public model.
 **Author:** OpenAI Codex with Curtis Einsmann
 **Date:** 2026-08-08
+**Revised:** 2026-08-26 for the shipped public terminology and actual
+cross-language conformance boundary.
 **Workflow:** Standard-tier spec, written and built in parallel
 
 ## Context
@@ -117,16 +120,16 @@ Each language package contains:
 
 1. Generated models and endpoint clients derived from the published
    contract.
-2. A handwritten facade for durable invocation admission, waiting, resumable
+2. A handwritten facade for durable Turn admission, waiting, resumable
    streaming, cancellation, ToolCall submission, callbacks, validation, and
    common media inputs.
-3. Language-specific tests backed by shared JSON fixtures and the same local
-   conformance server.
+3. Language-specific tests, selected shared JSON fixtures, and a shared local
+   conformance-server smoke exercised through every SDK transport.
 
 Reliability belongs in the facade, not in generated templates. Admission
 retries reuse the exact body and idempotency key; stream recovery uses durable
 cursors and authoritative reads; ToolCall IDs are preserved; `Retry-After` is
-honored; local wait cancellation is distinct from remote Invocation
+honored; local wait cancellation is distinct from remote Turn
 cancellation.
 
 ### CLI boundary

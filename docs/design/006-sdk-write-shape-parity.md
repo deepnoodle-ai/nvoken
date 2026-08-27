@@ -1,8 +1,12 @@
 # SDK write shape parity
 
-**Status:** Accepted, implemented
+**Status:** Implemented; historical record. The 0.30.0 hard cut removed the
+Agent Definition write surface discussed below. Its remaining follow-ups have
+either shipped or been resolved by the accepted raw-versus-workflow boundary.
 
 **Date:** 2026-08-17
+**Revised:** 2026-08-26 to record how the hard cut and facade-parity gate
+resolved the remaining follow-ups.
 **Workflow:** Survey first, then flatten and align across all four SDKs
 
 ## Context
@@ -260,10 +264,10 @@ Three real bugs, none of which the survey predicted.
 ### Idempotency key placement
 
 - [x] Rule stated and applied: generate only where the contract requires a key.
-- [ ] Protocol question, deferred to `004-protocol-end-state.md`: should
-      `idempotency_key` be a header everywhere? Body placement means it
-      participates in request validation and cannot be added by a proxy or
-      retry layer.
+- [x] Resolved by the current contract: Turn and Nudge admission keys remain
+      body members because they are durable request identity; resource
+      lifecycle operations use `Idempotency-Key` headers. Exact placement is
+      visible through `raw()` rather than flattened into one false rule.
 
 ### Opposite-direction divergence
 
@@ -286,14 +290,11 @@ Three real bugs, none of which the survey predicted.
       had the gap.
 - [x] The `name` optional-on-create, required-on-update asymmetry is gone.
 
-### Found while implementing, not yet done
+### Found while implementing, since resolved
 
-- [ ] Ergonomic wrappers are missing across languages, in both directions. Go
-      has `ListMemories`, `GetUsageTimeseries`, and `GetUsageBreakdown`;
-      TypeScript, Python, and Rust have none. TypeScript, Python, and Go have
-      provider key wrappers; Rust has none. Each gap means a caller drops to the
-      generated client, or in Rust's case cannot reach the endpoint through the
-      SDK at all.
-- [ ] Python's `raw()` is a fifteen-element positional tuple, which is a poor
-      shape for something that will keep growing. TypeScript returns an object.
-      Consider a named tuple or a small dataclass at the next breaking change.
+- [x] Provider-key workflow coverage is aligned across all four SDKs. Reporting
+      and complete Conversation, MemorySpace, and Turn administration are
+      deliberately raw-only; `sdk/scripts/check_facade_parity.py` now records
+      that boundary and rejects accidental cross-language facade gaps.
+- [x] Python's `raw()` is a named `RawClient` dataclass rather than a positional
+      tuple.
