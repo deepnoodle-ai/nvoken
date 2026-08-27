@@ -8,6 +8,23 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.32.0 - 2026-08-27
+
+- **Breaking: identifiers are canonical UUIDs, and nothing validates their
+  shape.** Every public id changes form —
+  `turn_01h455vb4pex5vsknk084sn02q` becomes
+  `019b0a12-8d51-7f34-aed2-0e07c1bdb322`. Reverses 0.31.0: generated models no
+  longer compile an id pattern into a runtime assertion, so a client can parse
+  a response whatever form its ids take. Update any stored id and any code that
+  matched on a prefix.
+- **Breaking: client tokens no longer require a prefixed id.** Minting checked
+  `app_`, `ckey_`, `agent_`, `arev_`, and `conv_` prefixes in all four SDKs and
+  refused a canonical UUID outright. Those claims are now checked for presence
+  and canonical form only. Rust drops `ClientTokenError::InvalidId`.
+- **Breaking: the default tenant is gone.** `default_tenant` is removed from
+  credit allocation and listing and from the Turn list filter, and `tenant_key`
+  is no longer nullable. The CLI drops `--default-tenant` and requires
+  `--tenant-key` for an allocation.
 - **Current vocabulary now reaches CLI text, conformance fixtures, and active
   concept documentation.** Usage summaries report `turns`, stale pre-0.30
   fixture fields are rejected by the repository gate, and each SDK transport
