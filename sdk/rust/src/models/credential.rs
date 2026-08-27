@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Credential {
-    /// Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "name")]
@@ -24,7 +24,7 @@ pub struct Credential {
     pub status: models::CredentialStatus,
     #[serde(rename = "type")]
     pub r#type: models::CredentialType,
-    /// Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(
         rename = "app_id",
         default,
@@ -32,7 +32,7 @@ pub struct Credential {
         skip_serializing_if = "Option::is_none"
     )]
     pub app_id: Option<Option<String>>,
-    /// Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(
         rename = "creator_credential_id",
         default,
@@ -55,7 +55,7 @@ pub struct Credential {
         skip_serializing_if = "Option::is_none"
     )]
     pub expires_at: Option<Option<chrono::DateTime<chrono::FixedOffset>>>,
-    /// Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(
         rename = "rotated_from_id",
         default,

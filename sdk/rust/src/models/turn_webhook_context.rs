@@ -25,13 +25,13 @@ pub struct TurnWebhookContext {
     /// Counts transitions within one Turn, from 1. Deliveries can arrive out of order, so a receiver folding state keeps the highest sequence it has seen for that Turn and discards anything lower rather than applying whichever arrived last.
     #[serde(rename = "sequence")]
     pub sequence: u64,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id")]
     pub turn_id: String,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
-    /// Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "memory_space_id", deserialize_with = "Option::deserialize")]
     pub memory_space_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.

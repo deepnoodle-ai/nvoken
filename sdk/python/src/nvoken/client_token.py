@@ -72,9 +72,9 @@ class ClientTokenConversationAccess:
         if self.scope in ("standalone_only", "user_conversations") and self.conversation_id is None:
             return {"scope": self.scope}
         if self.scope == "exact" and self.conversation_id is not None:
-            if not _valid_stable_id(self.conversation_id, "conv"):
+            if not _canonical(self.conversation_id):
                 raise ValueError(
-                    f"nvoken: conversation_id {self.conversation_id!r} is not a Conversation id"
+                    "nvoken: an exact Conversation grant requires a conversation_id"
                 )
             return {"conversation_id": self.conversation_id, "scope": "exact"}
         raise ValueError("nvoken: conversation_access does not match its selected scope")
@@ -168,10 +168,14 @@ def _ed25519_signer(private_key: bytes):
 def _validate(
     claims: ClientTokenClaims,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    if not _valid_stable_id(claims.app_id, "app"):
-        raise ValueError(f"nvoken: app_id {claims.app_id!r} is not an App id")
-    if not _valid_stable_id(claims.key_id, "ckey"):
-        raise ValueError(f"nvoken: key_id {claims.key_id!r} is not a client key id")
+    if not _canonical(claims.app_id):
+        raise ValueError(
+            "nvoken: app_id is required, and must not be blank, padded, or over 255 characters"
+        )
+    if not _canonical(claims.key_id):
+        raise ValueError(
+            "nvoken: key_id is required, and must not be blank, padded, or over 255 characters"
+        )
     if not _canonical(claims.subject):
         raise ValueError(
             "nvoken: subject is required, and must not be blank, padded, or over "
@@ -181,11 +185,14 @@ def _validate(
         raise ValueError(
             "nvoken: tenant_key is required, and must not be blank, padded, or over 255 characters"
         )
-    if not _valid_stable_id(claims.agent_id, "agent"):
-        raise ValueError(f"nvoken: agent_id {claims.agent_id!r} is not an Agent id")
-    if not _valid_stable_id(claims.agent_revision_id, "arev"):
+    if not _canonical(claims.agent_id):
         raise ValueError(
-            f"nvoken: agent_revision_id {claims.agent_revision_id!r} is not an AgentRevision id"
+            "nvoken: agent_id is required, and must not be blank, padded, or over 255 characters"
+        )
+    if not _canonical(claims.agent_revision_id):
+        raise ValueError(
+            "nvoken: agent_revision_id is required, and must not be blank, padded, or over "
+            "255 characters"
         )
     if (
         claims.lifetime <= timedelta(0)
@@ -199,10 +206,6 @@ def _validate(
 
 def _canonical(value: str) -> bool:
     return bool(value) and value.strip() == value and len(value) <= _MAX_CLAIM
-
-
-def _valid_stable_id(value: str, prefix: str) -> bool:
-    return _canonical(value) and value.startswith(f"{prefix}_") and len(value) > len(prefix) + 1
 
 
 def _ordered_json(members: list[tuple[str, object]]) -> bytes:

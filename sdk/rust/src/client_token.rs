@@ -32,12 +32,6 @@ const MAX_CLAIM: usize = 255;
 pub enum ClientTokenError {
     #[error("client key must be the 32-byte Ed25519 seed")]
     InvalidSigningKey,
-    #[error("{field} {value:?} is not a well-formed {kind} id")]
-    InvalidId {
-        field: &'static str,
-        value: String,
-        kind: &'static str,
-    },
     #[error("{0} must not be blank, padded, or over 255 characters")]
     InvalidClaim(&'static str),
     #[error("{0} does not match its selected scope")]
@@ -82,7 +76,9 @@ impl ClientTokenConversationAccess {
             Self::StandaloneOnly => Ok(serde_json::json!({"scope": "standalone_only"})),
             Self::UserConversations => Ok(serde_json::json!({"scope": "user_conversations"})),
             Self::Exact { conversation_id } => {
-                valid_stable_id("conversation_id", conversation_id, "conv", "Conversation")?;
+                if !canonical(conversation_id) {
+                    return Err(ClientTokenError::InvalidClaim("conversation_id"));
+                }
                 Ok(serde_json::json!({
                     "conversation_id": conversation_id,
                     "scope": "exact",
@@ -185,21 +181,24 @@ pub fn mint_client_token(
 }
 
 fn validate(claims: &ClientTokenClaims) -> Result<(), ClientTokenError> {
-    valid_stable_id("app_id", &claims.app_id, "app", "App")?;
-    valid_stable_id("key_id", &claims.key_id, "ckey", "client key")?;
+    if !canonical(&claims.app_id) {
+        return Err(ClientTokenError::InvalidClaim("app_id"));
+    }
+    if !canonical(&claims.key_id) {
+        return Err(ClientTokenError::InvalidClaim("key_id"));
+    }
     if !canonical(&claims.subject) {
         return Err(ClientTokenError::InvalidClaim("subject"));
     }
     if !canonical(&claims.tenant_key) {
         return Err(ClientTokenError::InvalidClaim("tenant_key"));
     }
-    valid_stable_id("agent_id", &claims.agent_id, "agent", "Agent")?;
-    valid_stable_id(
-        "agent_revision_id",
-        &claims.agent_revision_id,
-        "arev",
-        "AgentRevision",
-    )?;
+    if !canonical(&claims.agent_id) {
+        return Err(ClientTokenError::InvalidClaim("agent_id"));
+    }
+    if !canonical(&claims.agent_revision_id) {
+        return Err(ClientTokenError::InvalidClaim("agent_revision_id"));
+    }
     if claims.lifetime.is_zero() || claims.lifetime > CLIENT_TOKEN_LIFETIME_LIMIT {
         return Err(ClientTokenError::InvalidLifetime);
     }
@@ -208,27 +207,6 @@ fn validate(claims: &ClientTokenClaims) -> Result<(), ClientTokenError> {
 
 fn canonical(value: &str) -> bool {
     !value.is_empty() && value.trim() == value && value.chars().count() <= MAX_CLAIM
-}
-
-fn valid_stable_id(
-    field: &'static str,
-    value: &str,
-    prefix: &str,
-    kind: &'static str,
-) -> Result<(), ClientTokenError> {
-    let well_formed = canonical(value)
-        && value
-            .strip_prefix(prefix)
-            .and_then(|rest| rest.strip_prefix('_'))
-            .is_some_and(|rest| !rest.is_empty());
-    if well_formed {
-        return Ok(());
-    }
-    Err(ClientTokenError::InvalidId {
-        field,
-        value: value.to_string(),
-        kind,
-    })
 }
 
 enum Value {

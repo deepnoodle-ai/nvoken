@@ -165,9 +165,7 @@ paths:
 
         with AND. An App credential without a tenant constraint may list all
 
-        tenant partitions in that App, one named partition with `tenant_key`,
-
-        or the default partition with `default_tenant=true`. A
+        tenant partitions in that App, or one of them with `tenant_key`. A
 
         tenant-constrained credential is always scoped to its partition. The
 
@@ -248,7 +246,6 @@ paths:
         appears; reconcile before you erase.
       parameters:
         - $ref: '#/components/parameters/TenantKeyFilter'
-        - $ref: '#/components/parameters/DefaultTenantFilter'
         - $ref: '#/components/parameters/UserKeyFilter'
         - name: conversation_id
           in: query
@@ -801,9 +798,9 @@ paths:
                 $ref: '#/components/schemas/ToolCallList'
               example:
                 items:
-                  - id: call_01kc5153ahfwtaxmge0z0vvcs5
-                    turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
-                    conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
+                  - id: 019b0a12-8d51-7f34-aed2-0e07c1bdb325
+                    turn_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                    conversation_id: 019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                     content_expires_at: null
                     mode: callback
                     name: create_ticket
@@ -1236,11 +1233,11 @@ paths:
               $ref: '#/components/schemas/SubmitHostToolResultsRequest'
             example:
               results:
-                - tool_call_id: call_01kc5157k1e52bxmge0z0vvcsk
+                - tool_call_id: 019b0a12-9e61-7144-bed2-0e07c1bdb333
                   content:
                     order_id: order-123
                     state: ready
-                - tool_call_id: call_01kc515bvhe9a8xmge0z0vvct4
+                - tool_call_id: 019b0a12-af71-7254-8ed2-0e07c1bdb344
                   content:
                     delivered: false
                   is_error: true
@@ -3239,7 +3236,7 @@ paths:
                 message: Archive every App the Org owns before archiving the Org.
                 request_id: req_01K0NVB0QFQP0YNSVD3CB7E97V
                 details:
-                  org_id: org_01kc5153ahfwtaxmge0z0vvcs1
+                  org_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb321
                   active_apps: 2
         '429':
           $ref: '#/components/responses/RateLimited'
@@ -3518,13 +3515,6 @@ paths:
         tenant constraint.
       parameters:
         - $ref: '#/components/parameters/TenantKeyFilter'
-        - name: default_tenant
-          in: query
-          schema:
-            type: boolean
-          description: >-
-            Select the App's default tenant account. Mutually exclusive with
-            tenant_key.
         - $ref: '#/components/parameters/Cursor'
         - name: limit
           in: query
@@ -3561,13 +3551,6 @@ paths:
         tenant constraint.
       parameters:
         - $ref: '#/components/parameters/TenantKeyFilter'
-        - name: default_tenant
-          in: query
-          schema:
-            type: boolean
-          description: >-
-            Select the App's default tenant allocations. Mutually exclusive with
-            tenant_key.
         - $ref: '#/components/parameters/Cursor'
         - name: limit
           in: query
@@ -4449,18 +4432,18 @@ webhooks:
             example:
               nvoken:
                 schema_version: 2
-                delivery_id: dlvr_01kc5153ahfwtaxmge0z0vvcs6
-                tool_call_id: call_01kc5153ahfwtaxmge0z0vvcs5
+                delivery_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb326
+                tool_call_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb325
                 tool_name: open_ticket
-                turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
-                conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
+                turn_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                conversation_id: 019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                 content_expires_at: null
                 behavior_source:
                   kind: agent_revision
-                  agent_id: agent_01kc514thhfma9xmge0z0vvcr0
-                  agent_revision_id: arev_01kc514ps1fg28xmge0z0vvcr1
+                  agent_id: 019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                  agent_revision_id: 019b0a12-5b21-7c04-8ed2-0e07c1bdb301
                   revision: 3
-                memory_space_id: mspc_01kc514ps1fg28xmge0z0vvcr2
+                memory_space_id: 019b0a12-5b21-7c04-8ed2-0e07c1bdb302
                 user_key: user-7c1f
                 tenant_key: acme
               input:
@@ -4578,18 +4561,18 @@ webhooks:
             example:
               nvoken:
                 schema_version: 2
-                delivery_id: dlvr_01kc5153ahfwtaxmge0z0vvcs7
+                delivery_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb327
                 event: turn.ended
                 sequence: 2
-                turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
-                conversation_id: conv_01kc514z21frj8xmge0z0vvcrh
+                turn_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb322
+                conversation_id: 019b0a12-7c41-7e24-8ed2-0e07c1bdb311
                 content_expires_at: null
                 behavior_source:
                   kind: agent_revision
-                  agent_id: agent_01kc514thhfma9xmge0z0vvcr0
-                  agent_revision_id: arev_01kc514ps1fg28xmge0z0vvcr1
+                  agent_id: 019b0a12-6a31-7d14-9ed2-0e07c1bdb300
+                  agent_revision_id: 019b0a12-5b21-7c04-8ed2-0e07c1bdb301
                   revision: 3
-                memory_space_id: mspc_01kc514ps1fg28xmge0z0vvcr2
+                memory_space_id: 019b0a12-5b21-7c04-8ed2-0e07c1bdb302
                 user_key: user-7c1f
                 tenant_key: acme
               turn:
@@ -4719,20 +4702,11 @@ components:
     TenantKeyFilter:
       name: tenant_key
       in: query
-      description: Exact non-default tenant partition reference.
+      description: Exact tenant partition reference.
       schema:
         type: string
         minLength: 1
         maxLength: 255
-    DefaultTenantFilter:
-      name: default_tenant
-      in: query
-      description: >-
-        Select only the default tenant partition. Mutually exclusive with
-        tenant_key.
-      schema:
-        type: boolean
-        default: false
     TurnID:
       name: turn_id
       in: path
@@ -4906,46 +4880,39 @@ components:
   schemas:
     OrgID:
       type: string
-      pattern: ^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `org_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     AgentID:
       type: string
-      pattern: ^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `agent_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     MemorySpaceID:
       type: string
-      pattern: ^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `mspc_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     AppID:
       type: string
-      pattern: ^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `app_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ConversationID:
       type: string
-      pattern: ^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `conv_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ConversationMessageID:
       type: string
-      pattern: ^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `msg_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     TurnID:
       type: string
-      pattern: ^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `turn_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ContentExpiresAt:
       oneOf:
         - type: string
@@ -4956,22 +4923,19 @@ components:
         Null while it is nonterminal and for conversation-bound work.
     ProviderKeyID:
       type: string
-      pattern: ^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `pkey_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     CredentialID:
       type: string
-      pattern: ^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `cred_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ProviderKeyVersionID:
       type: string
-      pattern: ^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `ver_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ModelProvider:
       type: string
       pattern: "^[a-z][a-z0-9_]*$"
@@ -5070,10 +5034,7 @@ components:
           minLength: 1
     AgentRevisionID:
       type: string
-      pattern: ^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
-      description: >-
-        Opaque AgentRevision identifier with the public `arev_` prefix. Treat
-        the body as opaque.
+      description: RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
     ClientInterface:
       type: object
       additionalProperties: false
@@ -5699,13 +5660,19 @@ components:
         max_iterations:
           type: integer
           minimum: 1
+          description: |
+            The number of model calls this turn may make. Omitted means the
+            turn carries no cap of its own: nvoken never invents one, and the
+            loop runs until the agent stops or the installation ceiling
+            (`TURN_MAX_ITERATIONS`) halts a runaway. A behavior may set a cap,
+            and a request may only narrow it.
       description: |
         Optional requested limits. Total time bounds the entire turn, active
         time bounds model and tool execution, and waiting time bounds the
         cumulative time parked for host or callback tool results. Installation
-        defaults supply all three time limits and the iteration limit.
-        Output-token and estimated-cost limits are unlimited when omitted.
-        Installation maxima may be lower than the schema's numeric range.
+        defaults supply the three time limits. Iteration, output-token, and
+        estimated-cost limits are unlimited when omitted. Installation maxima
+        may be lower than the schema's numeric range.
     Model:
       type: object
       additionalProperties: false
@@ -5936,7 +5903,6 @@ components:
         ends.
     ToolCallID:
       type: string
-      pattern: ^call_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         Identifies one durable ToolCall. Treat it as opaque: read it from a
         transcript `tool_use` block or from a turn's `tool_calls`, and pass it
@@ -6895,7 +6861,6 @@ components:
         always safe.
     PreviewMessageID:
       type: string
-      pattern: ^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         The identifier the saved assistant message will carry when this
         iteration lands, with the same `msg_` prefix every message ID has. Key
@@ -6994,10 +6959,9 @@ components:
       description: Lowercase W3C trace ID. Holding this value does not grant access.
     NudgeID:
       type: string
-      pattern: ^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `nudge_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     CreateTurnRequest:
       type: object
       additionalProperties: false
@@ -8566,7 +8530,6 @@ components:
         - total_timeout_seconds
         - active_timeout_seconds
         - waiting_timeout_seconds
-        - max_iterations
       properties:
         total_timeout_seconds:
           type: integer
@@ -8595,6 +8558,11 @@ components:
         max_iterations:
           type: integer
           minimum: 1
+          description: |
+            The turn's own model-call cap. Absent when neither the behavior nor
+            the request set one; the installation ceiling still bounds the
+            loop, but it is not reported here because the host never asked for
+            it.
     CreateNudgeRequest:
       type: object
       additionalProperties: false
@@ -9676,10 +9644,9 @@ components:
         - failed
     ConversationCompactionID:
       type: string
-      pattern: ^comp_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `comp_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     ConversationCompaction:
       type: object
       additionalProperties: false
@@ -10556,7 +10523,6 @@ components:
             Conversation automatically.
     ClientKeyID:
       type: string
-      pattern: ^ckey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
         Opaque App client verification-key identifier with the public `ckey_`
         prefix.
@@ -10690,10 +10656,9 @@ components:
           maxLength: 255
     ModelCallFactID:
       type: string
-      pattern: ^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `mcall_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     UsageInterval:
       type: string
       enum:
@@ -11239,14 +11204,14 @@ components:
             - 'null'
     CreditAllocationID:
       type: string
-      pattern: ^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `alloc_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     AllocateCreditsRequest:
       type: object
       additionalProperties: false
       required:
+        - tenant_key
         - amount
         - idempotency_key
       properties:
@@ -11254,9 +11219,6 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-        default_tenant:
-          type: boolean
-          default: false
         amount:
           $ref: '#/components/schemas/Money'
         reference:
@@ -11268,10 +11230,9 @@ components:
           minLength: 1
           maxLength: 255
       description: |
-        Select exactly one account with `tenant_key` or
-        `default_tenant: true`. Amount must be positive USD with exactly six
-        fractional digits. The optional reference is host-owned correlation
-        text, not payment-provider state.
+        `tenant_key` names the account. Amount must be positive USD with
+        exactly six fractional digits. The optional reference is host-owned
+        correlation text, not payment-provider state.
     CreditAccount:
       type: object
       additionalProperties: false
@@ -11286,10 +11247,7 @@ components:
         - updated_at
       properties:
         tenant_key:
-          oneOf:
-            - type: string
-            - type: 'null'
-          description: Null identifies the App's default tenant.
+          type: string
         allocated:
           $ref: '#/components/schemas/Money'
         used:
@@ -11327,10 +11285,7 @@ components:
         id:
           $ref: '#/components/schemas/CreditAllocationID'
         tenant_key:
-          oneOf:
-            - type: string
-            - type: 'null'
-          description: Null identifies the App's default tenant.
+          type: string
         amount:
           $ref: '#/components/schemas/Money'
         reference:
@@ -11388,10 +11343,9 @@ components:
             - 'null'
     TenantID:
       type: string
-      pattern: ^tnt_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `tnt_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     TenantCredits:
       type: object
       additionalProperties: false
@@ -11428,10 +11382,8 @@ components:
         id:
           $ref: '#/components/schemas/TenantID'
         tenant_key:
-          type:
-            - string
-            - 'null'
-          description: The interned key, or null for the App's default tenant.
+          type: string
+          description: The host's opaque key for this tenant.
         credits:
           $ref: '#/components/schemas/TenantCredits'
         last_turn_at:
@@ -11601,10 +11553,9 @@ components:
             - 'null'
     AdmissionAttemptID:
       type: string
-      pattern: ^adm_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: >-
-        Opaque identifier with the public `adm_` prefix. Treat the body as
-        opaque.
+        RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type
+        prefix; treat the value as opaque.
     AdmissionOutcome:
       type: string
       enum:
@@ -12270,7 +12221,6 @@ components:
           maxLength: 64
     DeliveryID:
       type: string
-      pattern: ^dlvr_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$
       description: |
         Identifies one delivery nvoken sent you, callback or webhook alike —
         both are the same durable record and carry the same `dlvr_` prefix.
@@ -12567,7 +12517,7 @@ components:
               new work or grants are admitted.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97T
             details:
-              app_id: app_01kc5153ahfwtaxmge0z0vvcs0
+              app_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb320
     RateLimited:
       description: >-
         A durable App, tenant, or opaque-user admission limit refused fresh
@@ -12618,7 +12568,7 @@ components:
             message: The Turn content has been erased.
             request_id: req_01K0NVASB4CF29K41VZA271H24
             details:
-              turn_id: turn_01kc5153ahfwtaxmge0z0vvcs2
+              turn_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb322
               erased_at: '2026-08-25T13:00:00Z'
     MCPDiscoveryFailed:
       description: >-
@@ -12643,7 +12593,7 @@ components:
             message: The Org is archived and admits no new Apps or credentials.
             request_id: req_01K0NVB0QFQP0YNSVD3CB7E97U
             details:
-              org_id: org_01kc5153ahfwtaxmge0z0vvcs1
+              org_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb321
     MethodNotAllowed:
       description: |
         The request method is not allowed on this path. The `Allow` header

@@ -146,11 +146,11 @@ func MintClientToken(privateKey ed25519.PrivateKey, claims ClientTokenClaims) (s
 }
 
 func (c ClientTokenClaims) validate() error {
-	if !validStableID(c.AppID, "app") {
-		return fmt.Errorf("nvoken: AppID %q is not an App id", c.AppID)
+	if !canonicalClientClaim(c.AppID) {
+		return errors.New("nvoken: AppID is required, and must not be blank, padded, or over 255 characters")
 	}
-	if !validStableID(c.KeyID, "ckey") {
-		return fmt.Errorf("nvoken: KeyID %q is not a client key id", c.KeyID)
+	if !canonicalClientClaim(c.KeyID) {
+		return errors.New("nvoken: KeyID is required, and must not be blank, padded, or over 255 characters")
 	}
 	if !canonicalClientClaim(c.Subject) {
 		return errors.New("nvoken: Subject is required, and must not be blank, padded, or over 255 characters")
@@ -158,11 +158,11 @@ func (c ClientTokenClaims) validate() error {
 	if !canonicalClientClaim(c.TenantKey) {
 		return errors.New("nvoken: TenantKey is required, and must not be blank, padded, or over 255 characters")
 	}
-	if !validStableID(c.AgentID, "agent") {
-		return fmt.Errorf("nvoken: AgentID %q is not an Agent id", c.AgentID)
+	if !canonicalClientClaim(c.AgentID) {
+		return errors.New("nvoken: AgentID is required, and must not be blank, padded, or over 255 characters")
 	}
-	if !validStableID(c.AgentRevisionID, "arev") {
-		return fmt.Errorf("nvoken: AgentRevisionID %q is not an AgentRevision id", c.AgentRevisionID)
+	if !canonicalClientClaim(c.AgentRevisionID) {
+		return errors.New("nvoken: AgentRevisionID is required, and must not be blank, padded, or over 255 characters")
 	}
 	switch c.MemoryAccess.Scope {
 	case "none":
@@ -182,8 +182,8 @@ func (c ClientTokenClaims) validate() error {
 			return errors.New("nvoken: Conversation grant cannot carry an id for this scope")
 		}
 	case "exact":
-		if !validStableID(c.ConversationAccess.ConversationID, "conv") {
-			return fmt.Errorf("nvoken: ConversationID %q is not a Conversation id", c.ConversationAccess.ConversationID)
+		if !canonicalClientClaim(c.ConversationAccess.ConversationID) {
+			return errors.New("nvoken: an exact Conversation grant requires a ConversationID")
 		}
 	default:
 		return errors.New("nvoken: ConversationAccess must grant standalone_only, exact, or user_conversations")
@@ -197,11 +197,6 @@ func (c ClientTokenClaims) validate() error {
 func canonicalClientClaim(value string) bool {
 	return value != "" && strings.TrimSpace(value) == value &&
 		utf8.ValidString(value) && utf8.RuneCountInString(value) <= maxClientClaim
-}
-
-func validStableID(value, prefix string) bool {
-	rest, ok := strings.CutPrefix(value, prefix+"_")
-	return ok && rest != "" && canonicalClientClaim(value)
 }
 
 type member struct {

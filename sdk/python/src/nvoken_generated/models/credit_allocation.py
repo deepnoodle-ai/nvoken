@@ -18,9 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
 from typing import Optional, Set
 from typing_extensions import Self
@@ -30,23 +29,13 @@ class CreditAllocation(BaseModel):
     """
     One append-only addition to a tenant's credit account. Allocations are never rewritten or deleted by this API.
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.")
-    tenant_key: Optional[StrictStr] = Field(description="Null identifies the App's default tenant.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    tenant_key: StrictStr
     amount: Money
     reference: Optional[StrictStr]
     created_by: StrictStr
     created_at: datetime
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "amount", "reference", "created_by", "created_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^alloc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -90,11 +79,6 @@ class CreditAllocation(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of amount
         if self.amount:
             _dict['amount'] = self.amount.to_dict()
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
-
         # set to None if reference (nullable) is None
         # and model_fields_set contains the field
         if self.reference is None and "reference" in self.model_fields_set:

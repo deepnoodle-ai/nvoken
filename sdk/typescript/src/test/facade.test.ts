@@ -4,7 +4,7 @@ import test from "node:test";
 import { Client, defineHostTool, NvokenError, TurnTimeoutError } from "../index.js";
 
 const BASE_URL = "https://runtime.example.test";
-const TURN_ID = "turn_01kc5153ahfwtaxmge0z0vvcs2";
+const TURN_ID = "019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const AGENT_ID = "agent_01kc5153ahfwtaxmge0z0vvcs0";
 const NOW = "2026-07-21T12:00:00Z";
 

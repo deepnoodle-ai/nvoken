@@ -41,8 +41,8 @@ class Trace(BaseModel):
     error_count: Annotated[int, Field(strict=True, ge=0)]
     is_partial: StrictBool = Field(description="True when this response contains only a bounded or rootless partial trace.")
     attempt: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Durable Turn lease attempt associated with this trace.")
-    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    turn_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     spans: List[TraceSpan]
     __properties: ClassVar[List[str]] = ["trace_id", "root_span_id", "name", "status", "started_at", "ended_at", "duration_ms", "span_count", "error_count", "is_partial", "attempt", "turn_id", "conversation_id", "content_expires_at", "spans"]
@@ -72,29 +72,6 @@ class Trace(BaseModel):
         """Validates the enum"""
         if value not in set(['unset', 'ok', 'error']):
             raise ValueError("must be one of enum values ('unset', 'ok', 'error')")
-        return value
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

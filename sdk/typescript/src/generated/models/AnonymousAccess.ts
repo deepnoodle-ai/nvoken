@@ -55,7 +55,7 @@ export interface AnonymousAccess {
      */
     tenantKey: string;
     /**
-     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof AnonymousAccess
      */

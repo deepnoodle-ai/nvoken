@@ -14,10 +14,10 @@ use serde::{Deserialize, Serialize};
 /// TurnChange : One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change carries what a turn's own projection carries about where it stands: `terminal` for whether this change is the end, `stop_reason` for a turn that ended, `credit_block` for one held on credits, and `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them. You never need a second request to find out why a turn is not moving.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TurnChange {
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id")]
     pub turn_id: String,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.

@@ -19,55 +19,55 @@
       "tool_name": "open_ticket",
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
-        "X-Nvoken-Delivery-ID": "dlvr_01kc5153ahfwtaxmge0z0vvcs6",
+        "X-Nvoken-Delivery-ID": "019b0a12-8d51-7f34-aed2-0e07c1bdb326",
         "X-Nvoken-Timestamp": "1784635200",
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
-        "Idempotency-Key": "call_01kc5153ahfwtaxmge0z0vvcs5",
-        "X-Nvoken-Signature": "sha256=2fdd22b3f735fe7f74ae452b6bef61312f44a3c3becfdccae734ddecf712cc13"
+        "Idempotency-Key": "019b0a12-8d51-7f34-aed2-0e07c1bdb325",
+        "X-Nvoken-Signature": "sha256=d05770b316f6601d0c15d989e18502cafe9087b0d7266b47c83795d62e41d562"
       },
-      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_01kc5153ahfwtaxmge0z0vvcs6\",\"tool_call_id\":\"call_01kc5153ahfwtaxmge0z0vvcs5\",\"tool_name\":\"open_ticket\",\"turn_id\":\"turn_01kc5153ahfwtaxmge0z0vvcs2\",\"conversation_id\":\"conv_01kc5153ahfwtaxmge0z0vvcs1\",\"memory_space_id\":\"mspc_01kc514ps1fg28xmge0z0vvcr2\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"agent_01kc5153ahfwtaxmge0z0vvcsg\",\"agent_revision_id\":\"arev_01kc5153ahfwtaxmge0z0vvcsh\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"input\":{\"ticket\":\"A-42\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb326\",\"tool_call_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb325\",\"tool_name\":\"open_ticket\",\"turn_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"conversation_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"memory_space_id\":\"019b0a12-5b21-7c04-8ed2-0e07c1bdb302\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb330\",\"agent_revision_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb331\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"input\":{\"ticket\":\"A-42\"}}"
     },
     "webhook": {
       "event": "turn.ended",
       "sequence": 2,
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
-        "X-Nvoken-Delivery-ID": "dlvr_01kc5153ahfwtaxmge0z0vvcs9",
+        "X-Nvoken-Delivery-ID": "019b0a12-8d51-7f34-aed2-0e07c1bdb329",
         "X-Nvoken-Timestamp": "1784635200",
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
         "X-Nvoken-Signing-Key-Version": "1",
-        "Idempotency-Key": "dlvr_01kc5153ahfwtaxmge0z0vvcs9",
-        "X-Nvoken-Signature": "sha256=13b2363d3af36d7c65b5c772dd4699918704b2f7a1561bf07ef55f1038bc6ade"
+        "Idempotency-Key": "019b0a12-8d51-7f34-aed2-0e07c1bdb329",
+        "X-Nvoken-Signature": "sha256=32962440d6e120f9ad319cb90a8a39dbb514f867b99e984c8b596db0b5b7aef0"
       },
-      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_01kc5153ahfwtaxmge0z0vvcs9\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"turn_01kc5153ahfwtaxmge0z0vvcs2\",\"conversation_id\":\"conv_01kc5153ahfwtaxmge0z0vvcs1\",\"memory_space_id\":\"mspc_01kc514ps1fg28xmge0z0vvcr2\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"agent_01kc5153ahfwtaxmge0z0vvcsg\",\"agent_revision_id\":\"arev_01kc5153ahfwtaxmge0z0vvcsh\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb329\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb322\",\"conversation_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb321\",\"memory_space_id\":\"019b0a12-5b21-7c04-8ed2-0e07c1bdb302\",\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"agent_revision\",\"agent_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb330\",\"agent_revision_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb331\",\"revision\":3},\"tenant_key\":\"acme\",\"user_key\":\"alice\"},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
     },
     "standalone_callback": {
       "tool_name": "open_ticket",
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
-        "X-Nvoken-Delivery-ID": "dlvr_01kc5153ahfwtaxmge0z0vvcsc",
+        "X-Nvoken-Delivery-ID": "019b0a12-8d51-7f34-aed2-0e07c1bdb32c",
         "X-Nvoken-Timestamp": "1784635200",
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb327",
         "X-Nvoken-Signing-Key-Version": "1",
-        "Idempotency-Key": "call_01kc5153ahfwtaxmge0z0vvcsd",
-        "X-Nvoken-Signature": "sha256=57dddd4294e078eb2d680785d5d4215eb2d97f78f2ba19a28bcbf2923f70009f"
+        "Idempotency-Key": "019b0a12-8d51-7f34-aed2-0e07c1bdb32d",
+        "X-Nvoken-Signature": "sha256=23fc07e1adde0131acfbc57b01439ce86907c0f788f4db4f165afc55d508391b"
       },
-      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_01kc5153ahfwtaxmge0z0vvcsc\",\"tool_call_id\":\"call_01kc5153ahfwtaxmge0z0vvcsd\",\"tool_name\":\"open_ticket\",\"turn_id\":\"turn_01kc5153ahfwtaxmge0z0vvcse\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"input\":{\"ticket\":\"A-43\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb32c\",\"tool_call_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb32d\",\"tool_name\":\"open_ticket\",\"turn_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":null,\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"input\":{\"ticket\":\"A-43\"}}"
     },
     "standalone_webhook": {
       "event": "turn.ended",
       "sequence": 2,
       "headers": {
         "X-Nvoken-Signature-Version": "v1",
-        "X-Nvoken-Delivery-ID": "dlvr_01kc5153ahfwtaxmge0z0vvcsf",
+        "X-Nvoken-Delivery-ID": "019b0a12-8d51-7f34-aed2-0e07c1bdb32f",
         "X-Nvoken-Timestamp": "1784635200",
         "X-Nvoken-Signing-Key-ID": "key_019b0a12-8d51-7f34-aed2-0e07c1bdb32b",
         "X-Nvoken-Signing-Key-Version": "1",
-        "Idempotency-Key": "dlvr_01kc5153ahfwtaxmge0z0vvcsf",
-        "X-Nvoken-Signature": "sha256=6b0d6126fb37a66d3107dc544b867c214132720b77892a6a7e5c216c227ce0a3"
+        "Idempotency-Key": "019b0a12-8d51-7f34-aed2-0e07c1bdb32f",
+        "X-Nvoken-Signature": "sha256=e5eed8563aaebfc47fc8b94e40084a4ce2830d1360868f9a88568d3b7245ee8c"
       },
-      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"dlvr_01kc5153ahfwtaxmge0z0vvcsf\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"turn_01kc5153ahfwtaxmge0z0vvcse\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":\"2026-07-21T13:00:00Z\",\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
+      "body": "{\"nvoken\":{\"schema_version\":2,\"delivery_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb32f\",\"event\":\"turn.ended\",\"sequence\":2,\"turn_id\":\"019b0a12-8d51-7f34-aed2-0e07c1bdb32e\",\"conversation_id\":null,\"memory_space_id\":null,\"content_expires_at\":\"2026-07-21T13:00:00Z\",\"behavior_source\":{\"kind\":\"inline\",\"digest\":\"sha256:4242424242424242424242424242424242424242424242424242424242424242\"},\"tenant_key\":\"acme\",\"user_key\":null},\"turn\":{\"status\":\"completed\",\"stop_reason\":\"end_turn\"}}"
     }
   },
   "tampering": [

@@ -17,9 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict
-from typing_extensions import Annotated
 from nvoken_generated.models.agent_revision_selector import AgentRevisionSelector
 from typing import Optional, Set
 from typing_extensions import Self
@@ -29,19 +28,9 @@ class AgentSelectorByID(BaseModel):
     """
     AgentSelectorByID
     """ # noqa: E501
-    agent_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     revision: AgentRevisionSelector
     __properties: ClassVar[List[str]] = ["agent_id", "revision"]
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

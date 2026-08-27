@@ -32,9 +32,9 @@ def test_signed_delivery_v2_exposes_turn_facts() -> None:
         callback["body"].encode(),
         now=now,
     )
-    assert verified_callback.turn_id.startswith("turn_")
-    assert verified_callback.conversation_id.startswith("conv_")
-    assert verified_callback.memory_space_id.startswith("mspc_")
+    assert verified_callback.turn_id == "019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+    assert verified_callback.conversation_id == "019b0a12-8d51-7f34-aed2-0e07c1bdb321"
+    assert verified_callback.memory_space_id == "019b0a12-5b21-7c04-8ed2-0e07c1bdb302"
     assert verified_callback.behavior_source["kind"] == "agent_revision"
     assert verified_callback.tenant_key == "acme"
     assert verified_callback.user_key == "alice"

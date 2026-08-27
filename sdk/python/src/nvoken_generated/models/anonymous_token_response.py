@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from typing import Optional, Set
@@ -33,21 +33,8 @@ class AnonymousTokenResponse(BaseModel):
     access_token_expires_in_seconds: Annotated[int, Field(le=900, strict=True, ge=1)] = Field(description="Whole seconds until access-token expiry at issuance.")
     visitor_token: Annotated[str, Field(min_length=1, strict=True)] = Field(description="Opaque replacement continuity bearer accepted only by this route.")
     visitor_token_expires_at: datetime
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Canonical conversation for this visitor, or null before its first turn. Anonymous Turns that omit Conversation selectors resume this Conversation automatically. ")
+    conversation_id: Optional[StrictStr] = Field(description="Canonical conversation for this visitor, or null before its first turn. Anonymous Turns that omit Conversation selectors resume this Conversation automatically. ")
     __properties: ClassVar[List[str]] = ["access_token", "access_token_expires_in_seconds", "visitor_token", "visitor_token_expires_at", "conversation_id"]
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// ProviderKey : Safe metadata only; secret material is never represented.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProviderKey {
-    /// Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     /// Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation.
@@ -29,10 +29,10 @@ pub struct ProviderKey {
     pub status: Status,
     #[serde(rename = "version")]
     pub version: u32,
-    /// Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "version_id")]
     pub version_id: String,
-    /// Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(
         rename = "previous_version_id",
         deserialize_with = "Option::deserialize"

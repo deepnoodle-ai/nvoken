@@ -56,7 +56,7 @@ import {
  */
 export interface Conversation {
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Conversation
      */
@@ -86,7 +86,7 @@ export interface Conversation {
      */
     forkedFrom: ConversationForkLineage | null;
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Conversation
      */

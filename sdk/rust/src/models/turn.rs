@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// Turn : One durable Turn. Trusted reads include behavior details and all coordinates. A browser projection may omit machine-only fields while retaining this same response schema. An exact admission replay after content erasure returns a content-free projection with `deduplicated` and `erased_at`; content-bearing optional fields remain absent or null.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Turn {
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "tenant_key")]
@@ -45,7 +45,7 @@ pub struct Turn {
     /// Null for a standalone Turn.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
-    /// Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "memory_space_id", deserialize_with = "Option::deserialize")]
     pub memory_space_id: Option<String>,
     /// The resolved memory selection; null means no MemorySpace.

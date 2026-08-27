@@ -13,12 +13,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Tenant {
-    /// Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// The interned key, or null for the App's default tenant.
-    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
-    pub tenant_key: Option<String>,
+    /// The host's opaque key for this tenant.
+    #[serde(rename = "tenant_key")]
+    pub tenant_key: String,
     #[serde(rename = "credits")]
     pub credits: Box<models::TenantCredits>,
     /// When this tenant last had a turn admitted, or null if it never has. Read from retained Turn facts, so Conversation deletion does not change it.
@@ -32,7 +32,7 @@ pub struct Tenant {
 impl Tenant {
     pub fn new(
         id: String,
-        tenant_key: Option<String>,
+        tenant_key: String,
         credits: models::TenantCredits,
         last_turn_at: Option<chrono::DateTime<chrono::FixedOffset>>,
         created_at: chrono::DateTime<chrono::FixedOffset>,

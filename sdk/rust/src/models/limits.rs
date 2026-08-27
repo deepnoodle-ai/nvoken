@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Limits : Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply all three time limits and the iteration limit. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+/// Limits : Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply the three time limits. Iteration, output-token, and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Limits {
     #[serde(
@@ -38,12 +38,13 @@ pub struct Limits {
         skip_serializing_if = "Option::is_none"
     )]
     pub max_estimated_cost_usd: Option<f64>,
+    /// The number of model calls this turn may make. Omitted means the turn carries no cap of its own: nvoken never invents one, and the loop runs until the agent stops or the installation ceiling (`TURN_MAX_ITERATIONS`) halts a runaway. A behavior may set a cap, and a request may only narrow it.
     #[serde(rename = "max_iterations", skip_serializing_if = "Option::is_none")]
     pub max_iterations: Option<u32>,
 }
 
 impl Limits {
-    /// Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply all three time limits and the iteration limit. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+    /// Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply the three time limits. Iteration, output-token, and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
     pub fn new() -> Limits {
         Limits {
             total_timeout_seconds: None,

@@ -17,9 +17,9 @@ import { mapValues } from '../runtime.js';
  * Optional requested limits. Total time bounds the entire turn, active
  * time bounds model and tool execution, and waiting time bounds the
  * cumulative time parked for host or callback tool results. Installation
- * defaults supply all three time limits and the iteration limit.
- * Output-token and estimated-cost limits are unlimited when omitted.
- * Installation maxima may be lower than the schema's numeric range.
+ * defaults supply the three time limits. Iteration, output-token, and
+ * estimated-cost limits are unlimited when omitted. Installation maxima
+ * may be lower than the schema's numeric range.
  *
  * @export
  * @interface Limits
@@ -71,6 +71,11 @@ export interface Limits {
      */
     maxEstimatedCostUsd?: number;
     /**
+     * The number of model calls this turn may make. Omitted means the
+     * turn carries no cap of its own: nvoken never invents one, and the
+     * loop runs until the agent stops or the installation ceiling
+     * (`TURN_MAX_ITERATIONS`) halts a runaway. A behavior may set a cap,
+     * and a request may only narrow it.
      *
      * @type {number}
      * @memberof Limits

@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.credit_block import CreditBlock
@@ -34,7 +34,7 @@ class TurnWebhookSubject(BaseModel):
     status: TurnStatus
     stop_reason: Optional[TurnStopReason] = None
     failure_code: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="Present when the turn ended in a failure.")
-    waiting_tool_call_ids: Optional[List[Annotated[str, Field(strict=True)]]] = Field(default=None, description="The host tools this turn is parked on. Present on `turn.waiting` only. ")
+    waiting_tool_call_ids: Optional[List[StrictStr]] = Field(default=None, description="The host tools this turn is parked on. Present on `turn.waiting` only. ")
     credit_block: Optional[CreditBlock] = Field(default=None, description="Present when a spending limit stopped the turn, naming the account that could not fund the next attempt. ")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["status", "stop_reason", "failure_code", "waiting_tool_call_ids", "credit_block"]

@@ -14,12 +14,11 @@ use serde::{Deserialize, Serialize};
 /// CreditAllocation : One append-only addition to a tenant's credit account. Allocations are never rewritten or deleted by this API.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreditAllocation {
-    /// Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// Null identifies the App's default tenant.
-    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
-    pub tenant_key: Option<String>,
+    #[serde(rename = "tenant_key")]
+    pub tenant_key: String,
     #[serde(rename = "amount")]
     pub amount: Box<models::Money>,
     #[serde(rename = "reference", deserialize_with = "Option::deserialize")]
@@ -34,7 +33,7 @@ impl CreditAllocation {
     /// One append-only addition to a tenant's credit account. Allocations are never rewritten or deleted by this API.
     pub fn new(
         id: String,
-        tenant_key: Option<String>,
+        tenant_key: String,
         amount: models::Money,
         reference: Option<String>,
         created_by: String,

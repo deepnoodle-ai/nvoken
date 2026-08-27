@@ -35,19 +35,19 @@ class ModelCallRecord(BaseModel):
     """
     ModelCallRecord
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.")
-    turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    turn_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
-    app_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `app_` prefix. Treat the body as opaque.")
+    app_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     tenant_key: Optional[StrictStr]
     user_key: Optional[StrictStr] = Field(description="Null after user erasure.")
     behavior_source_kind: Optional[StrictStr] = Field(description="Null for model calls not owned by a Turn.")
-    agent_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    agent_revision_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.")
+    agent_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    agent_revision_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.")
     effective_behavior_digest: Optional[Annotated[str, Field(strict=True)]]
     effective_limits: Optional[ResolvedLimits]
-    memory_space_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
+    memory_space_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     credential_family_id: Optional[StrictStr]
     authentication_method: Optional[AuthenticationMethod]
     provider_key_source: ProviderKeySource
@@ -79,52 +79,6 @@ class ModelCallRecord(BaseModel):
     settled_at: Optional[datetime]
     __properties: ClassVar[List[str]] = ["id", "turn_id", "conversation_id", "content_expires_at", "app_id", "tenant_key", "user_key", "behavior_source_kind", "agent_id", "agent_revision_id", "effective_behavior_digest", "effective_limits", "memory_space_id", "credential_family_id", "authentication_method", "provider_key_source", "provider_key_id", "provider_key_version_id", "call_kind", "call_ordinal", "lease_attempt", "provider_attempt_ordinal", "requested_provider", "requested_model", "served_provider", "served_model", "status", "outcome", "failure_class", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost", "cost_coverage", "max_cost_at_risk", "pricing_version", "created_at", "started_at", "first_output_at", "settled_at"]
 
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^mcall_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('app_id')
-    def app_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
     @field_validator('behavior_source_kind')
     def behavior_source_kind_validate_enum(cls, value):
         """Validates the enum"""
@@ -133,32 +87,6 @@ class ModelCallRecord(BaseModel):
 
         if value not in set(['agent_revision', 'inline']):
             raise ValueError("must be one of enum values ('agent_revision', 'inline')")
-        return value
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('agent_revision_id')
-    def agent_revision_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^arev_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     @field_validator('effective_behavior_digest')
@@ -172,19 +100,6 @@ class ModelCallRecord(BaseModel):
 
         if not re.match(r"^sha256:[0-9a-f]{64}$", value):
             raise ValueError(r"must validate the regular expression /^sha256:[0-9a-f]{64}$/")
-        return value
-
-    @field_validator('memory_space_id')
-    def memory_space_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     @field_validator('outcome')

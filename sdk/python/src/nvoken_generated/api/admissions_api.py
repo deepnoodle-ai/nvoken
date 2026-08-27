@@ -46,7 +46,7 @@ class AdmissionsApi:
         self,
         outcome: Annotated[Optional[AdmissionOutcome], Field(description="Limit to admitted or refused attempts.")] = None,
         error_code: Annotated[Optional[Annotated[str, Field(strict=True, max_length=64)]], Field(description="Limit to one refusal code, for example `insufficient_credits`.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         start_at: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `attempted_at`.")] = None,
         end_at: Annotated[Optional[datetime], Field(description="Exclusive RFC 3339 upper bound on `attempted_at`.")] = None,
@@ -73,7 +73,7 @@ class AdmissionsApi:
         :type outcome: AdmissionOutcome
         :param error_code: Limit to one refusal code, for example `insufficient_credits`.
         :type error_code: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -146,7 +146,7 @@ class AdmissionsApi:
         self,
         outcome: Annotated[Optional[AdmissionOutcome], Field(description="Limit to admitted or refused attempts.")] = None,
         error_code: Annotated[Optional[Annotated[str, Field(strict=True, max_length=64)]], Field(description="Limit to one refusal code, for example `insufficient_credits`.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         start_at: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `attempted_at`.")] = None,
         end_at: Annotated[Optional[datetime], Field(description="Exclusive RFC 3339 upper bound on `attempted_at`.")] = None,
@@ -173,7 +173,7 @@ class AdmissionsApi:
         :type outcome: AdmissionOutcome
         :param error_code: Limit to one refusal code, for example `insufficient_credits`.
         :type error_code: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -246,7 +246,7 @@ class AdmissionsApi:
         self,
         outcome: Annotated[Optional[AdmissionOutcome], Field(description="Limit to admitted or refused attempts.")] = None,
         error_code: Annotated[Optional[Annotated[str, Field(strict=True, max_length=64)]], Field(description="Limit to one refusal code, for example `insufficient_credits`.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         start_at: Annotated[Optional[datetime], Field(description="Inclusive RFC 3339 lower bound on `attempted_at`.")] = None,
         end_at: Annotated[Optional[datetime], Field(description="Exclusive RFC 3339 upper bound on `attempted_at`.")] = None,
@@ -273,7 +273,7 @@ class AdmissionsApi:
         :type outcome: AdmissionOutcome
         :param error_code: Limit to one refusal code, for example `insufficient_credits`.
         :type error_code: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str

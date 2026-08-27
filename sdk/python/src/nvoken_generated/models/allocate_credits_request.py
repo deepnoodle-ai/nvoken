@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
@@ -27,14 +27,13 @@ from pydantic_core import to_jsonable_python
 
 class AllocateCreditsRequest(BaseModel):
     """
-    Select exactly one account with `tenant_key` or `default_tenant: true`. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
+    `tenant_key` names the account. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
     """ # noqa: E501
-    tenant_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
-    default_tenant: Optional[StrictBool] = False
+    tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     amount: Money
     reference: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
     idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
-    __properties: ClassVar[List[str]] = ["tenant_key", "default_tenant", "amount", "reference", "idempotency_key"]
+    __properties: ClassVar[List[str]] = ["tenant_key", "amount", "reference", "idempotency_key"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -91,7 +90,6 @@ class AllocateCreditsRequest(BaseModel):
 
         _obj = cls.model_validate({
             "tenant_key": obj.get("tenant_key"),
-            "default_tenant": obj.get("default_tenant") if obj.get("default_tenant") is not None else False,
             "amount": Money.from_dict(obj["amount"]) if obj.get("amount") is not None else None,
             "reference": obj.get("reference"),
             "idempotency_key": obj.get("idempotency_key")

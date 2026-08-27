@@ -13,13 +13,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModelCallRecord {
-    /// Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id", deserialize_with = "Option::deserialize")]
     pub turn_id: Option<String>,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
@@ -28,7 +28,7 @@ pub struct ModelCallRecord {
         deserialize_with = "Option::deserialize"
     )]
     pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    /// Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "app_id")]
     pub app_id: String,
     #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
@@ -42,10 +42,10 @@ pub struct ModelCallRecord {
         deserialize_with = "Option::deserialize"
     )]
     pub behavior_source_kind: Option<BehaviorSourceKind>,
-    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "agent_id", deserialize_with = "Option::deserialize")]
     pub agent_id: Option<String>,
-    /// Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
     #[serde(rename = "agent_revision_id", deserialize_with = "Option::deserialize")]
     pub agent_revision_id: Option<String>,
     #[serde(
@@ -55,7 +55,7 @@ pub struct ModelCallRecord {
     pub effective_behavior_digest: Option<String>,
     #[serde(rename = "effective_limits", deserialize_with = "Option::deserialize")]
     pub effective_limits: Option<Box<models::ResolvedLimits>>,
-    /// Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "memory_space_id", deserialize_with = "Option::deserialize")]
     pub memory_space_id: Option<String>,
     #[serde(

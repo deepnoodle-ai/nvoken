@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.anonymous_access import AnonymousAccess
@@ -34,7 +34,7 @@ class UpdateAppRequest(BaseModel):
     UpdateAppRequest
     """ # noqa: E501
     display_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="New human-facing label for the app.")
-    org_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="New owning Org. Supplying this field transfers ownership and is restricted to installation administrators. ")
+    org_id: Optional[StrictStr] = Field(default=None, description="New owning Org. Supplying this field transfers ownership and is restricted to installation administrators. ")
     callback_timeout_seconds: Optional[Annotated[int, Field(le=60, strict=True, ge=1)]] = Field(default=None, description="New callback HTTP reply deadline for tools that declare none of their own. Still capped at 60; per-tool deadlines up to 300 are declared on the tool. ")
     default_rate_limits: Optional[AppDefaultRateLimits] = Field(default=None, description="Replace the whole member, or send null to restore unlimited machine admission. Clearing is rejected while browser access remains enabled. Omission preserves the stored value. ")
     machine_concurrency_limits: Optional[MachineConcurrencyLimits] = Field(default=None, description="Replace both machine concurrency ceilings, or send null to disable them. Omission preserves the stored value. ")
@@ -42,19 +42,6 @@ class UpdateAppRequest(BaseModel):
     anonymous_access: Optional[AnonymousAccess] = Field(default=None, description="Replace the complete anonymous-browser mode, or send null to stop minting and reject new anonymous-token requests. Enabling requires browser access, finite App limits, and `credit_policy: required`. Omission preserves the stored value. ")
     credit_policy: Optional[CreditPolicy] = Field(default=None, description="Change credit enforcement for turns admitted from now on. Turns already running keep the policy they were admitted under. Omission preserves the stored value. ")
     __properties: ClassVar[List[str]] = ["display_name", "org_id", "callback_timeout_seconds", "default_rate_limits", "machine_concurrency_limits", "browser_access", "anonymous_access", "credit_policy"]
-
-    @field_validator('org_id')
-    def org_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

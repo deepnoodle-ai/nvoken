@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub struct TurnTrigger {
     #[serde(rename = "type")]
     pub r#type: Type,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "parent_turn_id")]
     pub parent_turn_id: String,
     /// Identifies one durable ToolCall. Treat it as opaque: read it from a transcript `tool_use` block or from a turn's `tool_calls`, and pass it back verbatim as `tool_call_id` when submitting results. The same value is the `Idempotency-Key` on a callback delivery.

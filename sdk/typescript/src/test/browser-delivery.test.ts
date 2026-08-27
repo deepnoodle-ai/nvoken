@@ -17,7 +17,7 @@ import {
 } from "../index.js";
 
 const BASE_URL = "https://runtime.example.test";
-const TURN_ID = "turn_01kc5153ahfwtaxmge0z0vvcs2";
+const TURN_ID = "019b0a12-8d51-7f34-aed2-0e07c1bdb322";
 const NOW = "2026-07-21T12:00:00Z";
 
 function wireTurn(status: "queued" | "completed" = "queued") {
@@ -183,7 +183,7 @@ test("schema-v2 callback verification and receiver dedup use Turn identity", asy
     now(),
   );
   assert.equal(verified.turnId, TURN_ID);
-  assert.equal(verified.conversationId?.startsWith("conv_"), true);
+  assert.equal(verified.conversationId, "019b0a12-8d51-7f34-aed2-0e07c1bdb321");
   assert.equal(verified.toolName, "open_ticket");
 
   const recorded = new Map<string, CallbackReply>();

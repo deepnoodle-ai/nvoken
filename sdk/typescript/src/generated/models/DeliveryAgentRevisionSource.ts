@@ -26,13 +26,13 @@ export interface DeliveryAgentRevisionSource {
      */
     kind: DeliveryAgentRevisionSourceKindEnum;
     /**
-     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof DeliveryAgentRevisionSource
      */
     agentId: string;
     /**
-     * Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
      * @type {string}
      * @memberof DeliveryAgentRevisionSource
      */

@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool
+from pydantic import Field
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.allocate_credits_request import AllocateCreditsRequest
@@ -336,8 +336,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_accounts(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant account. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -357,10 +356,8 @@ class CreditsApi:
 
         Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant account. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -389,7 +386,6 @@ class CreditsApi:
 
         _param = self._list_credit_accounts_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -420,8 +416,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_accounts_with_http_info(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant account. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -441,10 +436,8 @@ class CreditsApi:
 
         Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant account. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -473,7 +466,6 @@ class CreditsApi:
 
         _param = self._list_credit_accounts_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -504,8 +496,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_accounts_without_preload_content(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant account. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -525,10 +516,8 @@ class CreditsApi:
 
         Returns non-expiring credit accounts inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant account. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -557,7 +546,6 @@ class CreditsApi:
 
         _param = self._list_credit_accounts_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -584,7 +572,6 @@ class CreditsApi:
     def _list_credit_accounts_serialize(
         self,
         tenant_key,
-        default_tenant,
         cursor,
         limit,
         _request_auth,
@@ -612,10 +599,6 @@ class CreditsApi:
         if tenant_key is not None:
 
             _query_params.append(('tenant_key', tenant_key))
-
-        if default_tenant is not None:
-
-            _query_params.append(('default_tenant', default_tenant))
 
         if cursor is not None:
 
@@ -665,8 +648,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_allocations(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant allocations. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -686,10 +668,8 @@ class CreditsApi:
 
         Returns append-only credit allocations inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant allocations. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -718,7 +698,6 @@ class CreditsApi:
 
         _param = self._list_credit_allocations_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -749,8 +728,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_allocations_with_http_info(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant allocations. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -770,10 +748,8 @@ class CreditsApi:
 
         Returns append-only credit allocations inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant allocations. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -802,7 +778,6 @@ class CreditsApi:
 
         _param = self._list_credit_allocations_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -833,8 +808,7 @@ class CreditsApi:
     @validate_call
     async def list_credit_allocations_without_preload_content(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select the App's default tenant allocations. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -854,10 +828,8 @@ class CreditsApi:
 
         Returns append-only credit allocations inside the authenticated App and tenant constraint.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select the App's default tenant allocations. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
         :param limit:
@@ -886,7 +858,6 @@ class CreditsApi:
 
         _param = self._list_credit_allocations_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             cursor=cursor,
             limit=limit,
             _request_auth=_request_auth,
@@ -913,7 +884,6 @@ class CreditsApi:
     def _list_credit_allocations_serialize(
         self,
         tenant_key,
-        default_tenant,
         cursor,
         limit,
         _request_auth,
@@ -941,10 +911,6 @@ class CreditsApi:
         if tenant_key is not None:
 
             _query_params.append(('tenant_key', tenant_key))
-
-        if default_tenant is not None:
-
-            _query_params.append(('default_tenant', default_tenant))
 
         if cursor is not None:
 

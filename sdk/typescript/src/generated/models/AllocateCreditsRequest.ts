@@ -22,10 +22,9 @@ import {
 } from './Money.js';
 
 /**
- * Select exactly one account with `tenant_key` or
- * `default_tenant: true`. Amount must be positive USD with exactly six
- * fractional digits. The optional reference is host-owned correlation
- * text, not payment-provider state.
+ * `tenant_key` names the account. Amount must be positive USD with
+ * exactly six fractional digits. The optional reference is host-owned
+ * correlation text, not payment-provider state.
  *
  * @export
  * @interface AllocateCreditsRequest
@@ -36,13 +35,7 @@ export interface AllocateCreditsRequest {
      * @type {string}
      * @memberof AllocateCreditsRequest
      */
-    tenantKey?: string;
-    /**
-     *
-     * @type {boolean}
-     * @memberof AllocateCreditsRequest
-     */
-    defaultTenant?: boolean;
+    tenantKey: string;
     /**
      *
      * @type {Money}
@@ -67,6 +60,7 @@ export interface AllocateCreditsRequest {
  * Check if a given object implements the AllocateCreditsRequest interface.
  */
 export function instanceOfAllocateCreditsRequest(value: object): value is AllocateCreditsRequest {
+    if (!('tenantKey' in value) || value['tenantKey'] === undefined) return false;
     if (!('amount' in value) || value['amount'] === undefined) return false;
     if (!('idempotencyKey' in value) || value['idempotencyKey'] === undefined) return false;
     return true;
@@ -82,8 +76,7 @@ export function AllocateCreditsRequestFromJSONTyped(json: any, ignoreDiscriminat
     }
     return {
 
-        'tenantKey': json['tenant_key'] == null ? undefined : json['tenant_key'],
-        'defaultTenant': json['default_tenant'] == null ? undefined : json['default_tenant'],
+        'tenantKey': json['tenant_key'],
         'amount': MoneyFromJSON(json['amount']),
         'reference': json['reference'] == null ? undefined : json['reference'],
         'idempotencyKey': json['idempotency_key'],
@@ -102,7 +95,6 @@ export function AllocateCreditsRequestToJSONTyped(value?: AllocateCreditsRequest
     return {
 
         'tenant_key': value['tenantKey'],
-        'default_tenant': value['defaultTenant'],
         'amount': MoneyToJSON(value['amount']),
         'reference': value['reference'],
         'idempotency_key': value['idempotencyKey'],

@@ -44,12 +44,14 @@ fn signed_delivery_v2_exposes_turn_facts() {
         now,
     )
     .unwrap();
-    assert!(verified_callback.turn_id.starts_with("turn_"));
-    assert!(verified_callback
-        .conversation_id
-        .as_deref()
-        .unwrap()
-        .starts_with("conv_"));
+    assert_eq!(
+        verified_callback.turn_id,
+        "019b0a12-8d51-7f34-aed2-0e07c1bdb322"
+    );
+    assert_eq!(
+        verified_callback.conversation_id.as_deref(),
+        Some("019b0a12-8d51-7f34-aed2-0e07c1bdb321")
+    );
     assert_eq!(verified_callback.behavior_source["kind"], "agent_revision");
     assert_eq!(verified_callback.tenant_key, "acme");
 

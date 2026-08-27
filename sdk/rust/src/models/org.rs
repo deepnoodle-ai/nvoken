@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// Org : Thin customer ownership boundary. Membership, roles, invitations, policy, and runtime state deliberately live elsewhere.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Org {
-    /// Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     /// Human-facing label for the customer Org.

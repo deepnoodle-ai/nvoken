@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictBool, field_validator
+from pydantic import Field, StrictBool, StrictStr
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.memory_scope import MemoryScope
@@ -44,7 +44,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -116,7 +116,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space_with_http_info(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -188,7 +188,7 @@ class MemorySpacesApi:
     @validate_call
     async def delete_memory_space_without_preload_content(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -320,7 +320,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -393,7 +393,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space_with_http_info(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -466,7 +466,7 @@ class MemorySpacesApi:
     @validate_call
     async def get_memory_space_without_preload_content(
         self,
-        memory_space_id: Annotated[str, Field(strict=True)],
+        memory_space_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -599,7 +599,7 @@ class MemorySpacesApi:
     @validate_call
     async def list_memory_spaces(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         scope: Optional[MemoryScope] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         erased: Optional[StrictBool] = None,
@@ -621,7 +621,7 @@ class MemorySpacesApi:
         """List MemorySpaces
 
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param scope:
         :type scope: MemoryScope
@@ -691,7 +691,7 @@ class MemorySpacesApi:
     @validate_call
     async def list_memory_spaces_with_http_info(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         scope: Optional[MemoryScope] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         erased: Optional[StrictBool] = None,
@@ -713,7 +713,7 @@ class MemorySpacesApi:
         """List MemorySpaces
 
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param scope:
         :type scope: MemoryScope
@@ -783,7 +783,7 @@ class MemorySpacesApi:
     @validate_call
     async def list_memory_spaces_without_preload_content(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         scope: Optional[MemoryScope] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
         erased: Optional[StrictBool] = None,
@@ -805,7 +805,7 @@ class MemorySpacesApi:
         """List MemorySpaces
 
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param scope:
         :type scope: MemoryScope

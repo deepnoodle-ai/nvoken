@@ -22,13 +22,13 @@ import { mapValues } from '../runtime.js';
  */
 export interface ConversationForkLineage {
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ConversationForkLineage
      */
     conversationId: string;
     /**
-     * Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ConversationForkLineage
      */

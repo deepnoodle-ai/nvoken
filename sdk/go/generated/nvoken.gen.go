@@ -2880,7 +2880,7 @@ type AdmissionAttempt struct {
 	// HTTPStatus The status the caller received.
 	HTTPStatus int `json:"http_status"`
 
-	// ID Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID            AdmissionAttemptID `json:"id"`
 	MemorySpaceID *MemorySpaceID     `json:"memory_space_id"`
 	Model         *string            `json:"model"`
@@ -2915,7 +2915,7 @@ type AdmissionAttemptAuthenticationMethod string
 // behavior selection completed.
 type AdmissionAttemptBehaviorSourceKind string
 
-// AdmissionAttemptID Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
+// AdmissionAttemptID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type AdmissionAttemptID = string
 
 // AdmissionAttemptList defines model for AdmissionAttemptList.
@@ -2969,14 +2969,14 @@ type Agent struct {
 	CreatedAt       time.Time           `json:"created_at"`
 	CurrentRevision AgentRevisionNumber `json:"current_revision"`
 
-	// ID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID        AgentID    `json:"id"`
 	Name      string     `json:"name"`
 	Owner     AgentOwner `json:"owner"`
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type AgentID = string
 
 // AgentKey Caller-owned key, unique only inside one explicit Agent owner namespace.
@@ -2999,7 +2999,7 @@ type AgentOwnerKind string
 
 // AgentRevision defines model for AgentRevision.
 type AgentRevision struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID AgentID `json:"agent_id"`
 
 	// Behavior Normalized immutable behavior returned on an AgentRevision.
@@ -3007,12 +3007,12 @@ type AgentRevision struct {
 	BehaviorSha256 string    `json:"behavior_sha256"`
 	CreatedAt      time.Time `json:"created_at"`
 
-	// ID Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
 	ID       AgentRevisionID     `json:"id"`
 	Revision AgentRevisionNumber `json:"revision"`
 }
 
-// AgentRevisionID Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+// AgentRevisionID RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
 type AgentRevisionID = string
 
 // AgentRevisionList defines model for AgentRevisionList.
@@ -3040,7 +3040,7 @@ type AgentSelector struct {
 
 // AgentSelectorByID defines model for AgentSelectorByID.
 type AgentSelectorByID struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID  AgentID               `json:"agent_id"`
 	Revision AgentRevisionSelector `json:"revision"`
 }
@@ -3062,16 +3062,14 @@ type AgentTurnBehavior struct {
 // AgentTurnBehaviorKind defines model for AgentTurnBehavior.Kind.
 type AgentTurnBehaviorKind string
 
-// AllocateCreditsRequest Select exactly one account with `tenant_key` or
-// `default_tenant: true`. Amount must be positive USD with exactly six
-// fractional digits. The optional reference is host-owned correlation
-// text, not payment-provider state.
+// AllocateCreditsRequest `tenant_key` names the account. Amount must be positive USD with
+// exactly six fractional digits. The optional reference is host-owned
+// correlation text, not payment-provider state.
 type AllocateCreditsRequest struct {
 	Amount         Money   `json:"amount"`
-	DefaultTenant  *bool   `json:"default_tenant,omitempty"`
 	IdempotencyKey string  `json:"idempotency_key"`
 	Reference      *string `json:"reference,omitempty"`
-	TenantKey      *string `json:"tenant_key,omitempty"`
+	TenantKey      string  `json:"tenant_key"`
 }
 
 // AllocateCreditsResult defines model for AllocateCreditsResult.
@@ -3094,7 +3092,7 @@ type AllocateCreditsResult struct {
 // Clearing browser storage can create a new subject, so anonymous limits,
 // tenant Credits, and App admission limits remain aggregate hard caps.
 type AnonymousAccess struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID AgentID `json:"agent_id"`
 
 	// ConversationRetention How long a Conversation can sit unused before nvoken deletes it. When the
@@ -3250,7 +3248,7 @@ type AppDefaultRateLimits struct {
 	MaxConcurrentTurns     int64 `json:"max_concurrent_turns"`
 }
 
-// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+// AppID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type AppID = string
 
 // AppList defines model for AppList.
@@ -3353,9 +3351,9 @@ type BehaviorInput struct {
 	// Limits Optional requested limits. Total time bounds the entire turn, active
 	// time bounds model and tool execution, and waiting time bounds the
 	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
+	// defaults supply the three time limits. Iteration, output-token, and
+	// estimated-cost limits are unlimited when omitted. Installation maxima
+	// may be lower than the schema's numeric range.
 	Limits     *Limits              `json:"limits,omitempty"`
 	McpServers *[]MCPServer         `json:"mcp_servers,omitempty"`
 	Memory     *DefaultMemoryPolicy `json:"memory,omitempty"`
@@ -3435,7 +3433,7 @@ type BrowserConversationAccess struct {
 
 // BrowserExactConversationAccess defines model for BrowserExactConversationAccess.
 type BrowserExactConversationAccess struct {
-	// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+	// ConversationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ConversationID ConversationID                      `json:"conversation_id"`
 	Scope          BrowserExactConversationAccessScope `json:"scope"`
 }
@@ -3700,7 +3698,7 @@ type ConsoleDeviceAuthorizationApprovalCredentialType string
 
 // ConsoleDeviceAuthorizationClaim defines model for ConsoleDeviceAuthorizationClaim.
 type ConsoleDeviceAuthorizationClaim struct {
-	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	// AppID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AppID          AppID                                         `json:"app_id"`
 	AppName        string                                        `json:"app_name"`
 	CredentialType ConsoleDeviceAuthorizationClaimCredentialType `json:"credential_type"`
@@ -3800,7 +3798,7 @@ type ContinueOrCreateTurnConversationMode string
 
 // ContinueTurnConversation defines model for ContinueTurnConversation.
 type ContinueTurnConversation struct {
-	// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+	// ConversationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ConversationID ConversationID `json:"conversation_id"`
 
 	// IfActive Selects what admission does when the Conversation already has a
@@ -3835,7 +3833,7 @@ type Conversation struct {
 	ExpiresAt        *time.Time               `json:"expires_at"`
 	ForkedFrom       *ConversationForkLineage `json:"forked_from"`
 
-	// ID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID        ConversationID        `json:"id"`
 	Metadata  *ConversationMetadata `json:"metadata"`
 	Owner     ConversationOwner     `json:"owner"`
@@ -3863,11 +3861,11 @@ type ConversationActivePolicy string
 
 // ConversationCompaction defines model for ConversationCompaction.
 type ConversationCompaction struct {
-	// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+	// ConversationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ConversationID ConversationID `json:"conversation_id"`
 	CreatedAt      time.Time      `json:"created_at"`
 
-	// ID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID              ConversationCompactionID     `json:"id"`
 	Status          ConversationCompactionStatus `json:"status"`
 	Summary         *string                      `json:"summary"`
@@ -3875,7 +3873,7 @@ type ConversationCompaction struct {
 	UpdatedAt       time.Time                    `json:"updated_at"`
 }
 
-// ConversationCompactionID Opaque identifier with the public `comp_` prefix. Treat the body as opaque.
+// ConversationCompactionID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ConversationCompactionID = string
 
 // ConversationCompactionList defines model for ConversationCompactionList.
@@ -3903,14 +3901,14 @@ type ConversationContentBlock struct {
 // ConversationForkLineage Durable source prefix lineage. It records provenance and does not
 // imply the fork's owner.
 type ConversationForkLineage struct {
-	// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+	// ConversationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ConversationID ConversationID `json:"conversation_id"`
 
-	// MessageID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+	// MessageID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	MessageID ConversationMessageID `json:"message_id"`
 }
 
-// ConversationID Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+// ConversationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ConversationID = string
 
 // ConversationKey defines model for ConversationKey.
@@ -3925,7 +3923,7 @@ type ConversationList struct {
 
 // ConversationMessage defines model for ConversationMessage.
 type ConversationMessage struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID *AgentID                   `json:"agent_id,omitempty"`
 	Content []ConversationContentBlock `json:"content"`
 
@@ -3938,7 +3936,7 @@ type ConversationMessage struct {
 	CopiedFromMessageID *ConversationMessageID `json:"copied_from_message_id,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 
-	// ID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID ConversationMessageID `json:"id"`
 
 	// Phase Whether this assistant message is the turn's actual answer or something
@@ -3967,7 +3965,7 @@ type ConversationMessage struct {
 	UserKey *string `json:"user_key,omitempty"`
 }
 
-// ConversationMessageID Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+// ConversationMessageID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ConversationMessageID = string
 
 // ConversationMessageList defines model for ConversationMessageList.
@@ -4037,9 +4035,9 @@ type CreateAgentRequest struct {
 	// Limits Optional requested limits. Total time bounds the entire turn, active
 	// time bounds model and tool execution, and waiting time bounds the
 	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
+	// defaults supply the three time limits. Iteration, output-token, and
+	// estimated-cost limits are unlimited when omitted. Installation maxima
+	// may be lower than the schema's numeric range.
 	Limits     *Limits              `json:"limits,omitempty"`
 	McpServers *[]MCPServer         `json:"mcp_servers,omitempty"`
 	Memory     *DefaultMemoryPolicy `json:"memory,omitempty"`
@@ -4269,7 +4267,7 @@ type Credential struct {
 	CreatorSubject *string    `json:"creator_subject,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
-	// ID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID                    CredentialID     `json:"id"`
 	LastUsedAt            *time.Time       `json:"last_used_at,omitempty"`
 	Name                  string           `json:"name"`
@@ -4285,7 +4283,7 @@ type Credential struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
-// CredentialID Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+// CredentialID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type CredentialID = string
 
 // CredentialIssuance defines model for CredentialIssuance.
@@ -4321,11 +4319,9 @@ type CreditAccount struct {
 	BudgetHoldTurns int64     `json:"budget_hold_turns"`
 	CreatedAt       time.Time `json:"created_at"`
 	Held            Money     `json:"held"`
-
-	// TenantKey Null identifies the App's default tenant.
-	TenantKey *string   `json:"tenant_key"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Used      Money     `json:"used"`
+	TenantKey       string    `json:"tenant_key"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Used            Money     `json:"used"`
 }
 
 // CreditAccountList defines model for CreditAccountList.
@@ -4341,15 +4337,13 @@ type CreditAllocation struct {
 	CreatedAt time.Time `json:"created_at"`
 	CreatedBy string    `json:"created_by"`
 
-	// ID Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID        CreditAllocationID `json:"id"`
 	Reference *string            `json:"reference"`
-
-	// TenantKey Null identifies the App's default tenant.
-	TenantKey *string `json:"tenant_key"`
+	TenantKey string             `json:"tenant_key"`
 }
 
-// CreditAllocationID Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.
+// CreditAllocationID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type CreditAllocationID = string
 
 // CreditAllocationList defines model for CreditAllocationList.
@@ -4466,10 +4460,10 @@ type DefaultMemoryUserDefaultScope string
 
 // DeliveryAgentRevisionSource defines model for DeliveryAgentRevisionSource.
 type DeliveryAgentRevisionSource struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID AgentID `json:"agent_id"`
 
-	// AgentRevisionID Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+	// AgentRevisionID RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
 	AgentRevisionID AgentRevisionID                 `json:"agent_revision_id"`
 	Kind            DeliveryAgentRevisionSourceKind `json:"kind"`
 	Revision        AgentRevisionNumber             `json:"revision"`
@@ -4738,9 +4732,9 @@ type InputBlock struct {
 // Limits Optional requested limits. Total time bounds the entire turn, active
 // time bounds model and tool execution, and waiting time bounds the
 // cumulative time parked for host or callback tool results. Installation
-// defaults supply all three time limits and the iteration limit.
-// Output-token and estimated-cost limits are unlimited when omitted.
-// Installation maxima may be lower than the schema's numeric range.
+// defaults supply the three time limits. Iteration, output-token, and
+// estimated-cost limits are unlimited when omitted. Installation maxima
+// may be lower than the schema's numeric range.
 type Limits struct {
 	ActiveTimeoutSeconds *int `json:"active_timeout_seconds,omitempty"`
 
@@ -4757,9 +4751,15 @@ type Limits struct {
 	// `stop_reason: max_estimated_cost` and keeps everything it
 	// produced.
 	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations       *int     `json:"max_iterations,omitempty"`
-	MaxOutputTokens     *int     `json:"max_output_tokens,omitempty"`
-	TotalTimeoutSeconds *int     `json:"total_timeout_seconds,omitempty"`
+
+	// MaxIterations The number of model calls this turn may make. Omitted means the
+	// turn carries no cap of its own: nvoken never invents one, and the
+	// loop runs until the agent stops or the installation ceiling
+	// (`TURN_MAX_ITERATIONS`) halts a runaway. A behavior may set a cap,
+	// and a request may only narrow it.
+	MaxIterations       *int `json:"max_iterations,omitempty"`
+	MaxOutputTokens     *int `json:"max_output_tokens,omitempty"`
+	TotalTimeoutSeconds *int `json:"total_timeout_seconds,omitempty"`
 
 	// WaitingTimeoutSeconds Optional cumulative external-waiting SLA. When omitted, host and
 	// callback ToolCalls may remain pending indefinitely; waiting does
@@ -4886,7 +4886,7 @@ type MemorySpace struct {
 	// ExpiresAt Immediate content-authority boundary when non-null and reached.
 	ExpiresAt *time.Time `json:"expires_at"`
 
-	// ID Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID                  MemorySpaceID   `json:"id"`
 	Namespace           MemoryNamespace `json:"namespace"`
 	RetentionTTLSeconds *int64          `json:"retention_ttl_seconds"`
@@ -4896,7 +4896,7 @@ type MemorySpace struct {
 	UserKey             *string         `json:"user_key"`
 }
 
-// MemorySpaceID Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+// MemorySpaceID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type MemorySpaceID = string
 
 // MemorySpaceList defines model for MemorySpaceList.
@@ -4966,7 +4966,7 @@ type MessageDeltaEvent struct {
 	// a fragment. Absent on other kinds.
 	ToolCallID *string `json:"tool_call_id,omitempty"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID                `json:"turn_id"`
 	Type   MessageDeltaEventType `json:"type"`
 }
@@ -5032,7 +5032,7 @@ type Model struct {
 	Provider ModelProvider `json:"provider"`
 }
 
-// ModelCallFactID Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+// ModelCallFactID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ModelCallFactID = string
 
 // ModelCallFactStatus defines model for ModelCallFactStatus.
@@ -5046,7 +5046,7 @@ type ModelCallRecord struct {
 	AgentID         *AgentID         `json:"agent_id"`
 	AgentRevisionID *AgentRevisionID `json:"agent_revision_id"`
 
-	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	// AppID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AppID                AppID                 `json:"app_id"`
 	AuthenticationMethod *AuthenticationMethod `json:"authentication_method"`
 
@@ -5069,7 +5069,7 @@ type ModelCallRecord struct {
 	FailureClass            *string                     `json:"failure_class"`
 	FirstOutputAt           *time.Time                  `json:"first_output_at"`
 
-	// ID Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID                     ModelCallFactID         `json:"id"`
 	InputTokens            *int                    `json:"input_tokens"`
 	LeaseAttempt           int                     `json:"lease_attempt"`
@@ -5276,11 +5276,11 @@ type ModelPricingUnit string
 type ModelProvenance struct {
 	Provider string `json:"provider"`
 
-	// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+	// ProviderKeyID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ProviderKeyID     *ProviderKeyID                   `json:"provider_key_id,omitempty"`
 	ProviderKeySource ModelProvenanceProviderKeySource `json:"provider_key_source"`
 
-	// ProviderKeyVersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+	// ProviderKeyVersionID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ProviderKeyVersionID *ProviderKeyVersionID `json:"provider_key_version_id,omitempty"`
 	RequestedModel       string                `json:"requested_model"`
 	ServedModel          string                `json:"served_model"`
@@ -5442,7 +5442,7 @@ type Nudge struct {
 	// EndedAt When the Nudge left pending for any terminal status.
 	EndedAt *time.Time `json:"ended_at,omitempty"`
 
-	// ID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID             NudgeID `json:"id"`
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 
@@ -5452,7 +5452,7 @@ type Nudge struct {
 	// before the turn got to it.
 	Status NudgeStatus `json:"status"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -5466,7 +5466,7 @@ type NudgeAcknowledgement struct {
 	AfterSequence int64 `json:"after_sequence"`
 	Deduplicated  bool  `json:"deduplicated"`
 
-	// NudgeID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+	// NudgeID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	NudgeID NudgeID `json:"nudge_id"`
 
 	// Status `pending` is the only state a turn will still pick up. `drained` means
@@ -5476,7 +5476,7 @@ type NudgeAcknowledgement struct {
 	Status NudgeStatus `json:"status"`
 }
 
-// NudgeID Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+// NudgeID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type NudgeID = string
 
 // NudgeList defines model for NudgeList.
@@ -5510,11 +5510,11 @@ type Org struct {
 	// ExternalRef Optional unique identity-provider Org identifier.
 	ExternalRef *string `json:"external_ref"`
 
-	// ID Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID OrgID `json:"id"`
 }
 
-// OrgID Opaque identifier with the public `org_` prefix. Treat the body as opaque.
+// OrgID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type OrgID = string
 
 // OrgList defines model for OrgList.
@@ -5553,7 +5553,7 @@ type ProviderKey struct {
 	CreatedBy string     `json:"created_by"`
 	ExpiresAt *time.Time `json:"expires_at"`
 
-	// ID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID                ProviderKeyID         `json:"id"`
 	OverlapExpiresAt  *time.Time            `json:"overlap_expires_at"`
 	PreviousVersionID *ProviderKeyVersionID `json:"previous_version_id"`
@@ -5575,7 +5575,7 @@ type ProviderKey struct {
 	UpdatedAt time.Time         `json:"updated_at"`
 	Version   int               `json:"version"`
 
-	// VersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+	// VersionID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	VersionID ProviderKeyVersionID `json:"version_id"`
 
 	// VersionStatus An expired version cannot be used. Rotate the key before any new turn
@@ -5590,7 +5590,7 @@ type ProviderKeyStatus string
 // or model call can use it.
 type ProviderKeyVersionStatus string
 
-// ProviderKeyID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+// ProviderKeyID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ProviderKeyID = string
 
 // ProviderKeyList defines model for ProviderKeyList.
@@ -5649,7 +5649,7 @@ type ProviderKeySource string
 
 // ProviderKeyUsage defines model for ProviderKeyUsage.
 type ProviderKeyUsage struct {
-	// ID Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID ProviderKeyID `json:"id"`
 
 	// LastUsedAt Latest durable model checkpoint under any bound Turn, null before the first model call.
@@ -5672,7 +5672,7 @@ type ProviderKeyUsage struct {
 	Usage *ModelUsage `json:"usage"`
 }
 
-// ProviderKeyVersionID Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+// ProviderKeyVersionID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type ProviderKeyVersionID = string
 
 // ProviderStaticKey defines model for ProviderStaticKey.
@@ -5808,9 +5808,14 @@ type ResolvedLimits struct {
 	// MaxEstimatedCostUsd Resolved USD list-price guardrail. It is present only when the host
 	// requested a cost limit; unknown price metadata fails closed.
 	MaxEstimatedCostUsd *float32 `json:"max_estimated_cost_usd,omitempty"`
-	MaxIterations       int      `json:"max_iterations"`
-	MaxOutputTokens     *int     `json:"max_output_tokens,omitempty"`
-	TotalTimeoutSeconds int      `json:"total_timeout_seconds"`
+
+	// MaxIterations The turn's own model-call cap. Absent when neither the behavior nor
+	// the request set one; the installation ceiling still bounds the
+	// loop, but it is not reported here because the host never asked for
+	// it.
+	MaxIterations       *int `json:"max_iterations,omitempty"`
+	MaxOutputTokens     *int `json:"max_output_tokens,omitempty"`
+	TotalTimeoutSeconds int  `json:"total_timeout_seconds"`
 
 	// WaitingTimeoutSeconds The explicit cumulative external-waiting SLA, or null when waits
 	// are durable and unbounded.
@@ -5824,9 +5829,9 @@ type ResumeTurnRequest struct {
 	// Limits Optional requested limits. Total time bounds the entire turn, active
 	// time bounds model and tool execution, and waiting time bounds the
 	// cumulative time parked for host or callback tool results. Installation
-	// defaults supply all three time limits and the iteration limit.
-	// Output-token and estimated-cost limits are unlimited when omitted.
-	// Installation maxima may be lower than the schema's numeric range.
+	// defaults supply the three time limits. Iteration, output-token, and
+	// estimated-cost limits are unlimited when omitted. Installation maxima
+	// may be lower than the schema's numeric range.
 	Limits Limits `json:"limits"`
 }
 
@@ -5888,10 +5893,10 @@ type ServerToolUseBlockType string
 
 // StoredTurnBehaviorSource defines model for StoredTurnBehaviorSource.
 type StoredTurnBehaviorSource struct {
-	// AgentID Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+	// AgentID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AgentID AgentID `json:"agent_id"`
 
-	// AgentRevisionID Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+	// AgentRevisionID RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
 	AgentRevisionID AgentRevisionID              `json:"agent_revision_id"`
 	Kind            StoredTurnBehaviorSourceKind `json:"kind"`
 	Revision        AgentRevisionNumber          `json:"revision"`
@@ -6016,7 +6021,7 @@ type SubmitHostToolResultsResponse struct {
 	// ones still yours to run carry `arguments` and `deadline_at`.
 	ToolCalls []ToolCallSummary `json:"tool_calls"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -6026,7 +6031,7 @@ type Tenant struct {
 	CreatedAt time.Time     `json:"created_at"`
 	Credits   TenantCredits `json:"credits"`
 
-	// ID Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID TenantID `json:"id"`
 
 	// LastTurnAt When this tenant last had a turn admitted, or null if it never
@@ -6034,8 +6039,8 @@ type Tenant struct {
 	// not change it.
 	LastTurnAt *time.Time `json:"last_turn_at"`
 
-	// TenantKey The interned key, or null for the App's default tenant.
-	TenantKey *string `json:"tenant_key"`
+	// TenantKey The host's opaque key for this tenant.
+	TenantKey string `json:"tenant_key"`
 }
 
 // TenantAgentOwner defines model for TenantAgentOwner.
@@ -6067,7 +6072,7 @@ type TenantCredits struct {
 	Used   Money `json:"used"`
 }
 
-// TenantID Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+// TenantID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type TenantID = string
 
 // TenantList defines model for TenantList.
@@ -6146,7 +6151,7 @@ type ToolCall struct {
 	// host tool, waiting on you. The last three are final.
 	Status ToolCallStatus `json:"status"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -6277,7 +6282,7 @@ type ToolCallbackContext struct {
 	// convenience rather than the thing you branch on.
 	ToolName string `json:"tool_name"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 
 	// UserKey Optional Turn actor.
@@ -6381,7 +6386,7 @@ type Trace struct {
 	// TraceID Lowercase W3C trace ID. Holding this value does not grant access.
 	TraceID TraceID `json:"trace_id"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -6403,7 +6408,7 @@ type TraceList struct {
 	// Status Whether this installation has a hosted observation store.
 	Status ObservationStatus `json:"status"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -6544,7 +6549,7 @@ type Turn struct {
 	ErasedAt *time.Time   `json:"erased_at,omitempty"`
 	Error    *TurnFailure `json:"error"`
 
-	// ID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ID     TurnID          `json:"id"`
 	Limits *ResolvedLimits `json:"limits,omitempty"`
 
@@ -6701,7 +6706,7 @@ type TurnChange struct {
 	// disconnected sees it on replay.
 	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID      `json:"turn_id"`
 	Usage  *ModelUsage `json:"usage,omitempty"`
 }
@@ -6788,7 +6793,7 @@ type TurnFailure struct {
 // TurnFailureCode defines model for TurnFailure.Code.
 type TurnFailureCode string
 
-// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type TurnID = string
 
 // TurnInput A plain string is shorthand for one text block; an array is ordered
@@ -6860,7 +6865,7 @@ type TurnLogList struct {
 	// Status Whether this installation has a hosted observation store.
 	Status ObservationStatus `json:"status"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 }
 
@@ -6956,7 +6961,7 @@ type TurnTimeline struct {
 	// AgentID Null when the Turn used inline behavior.
 	AgentID *AgentID `json:"agent_id"`
 
-	// AppID Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+	// AppID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	AppID        AppID `json:"app_id"`
 	AttemptCount int   `json:"attempt_count"`
 
@@ -6972,7 +6977,7 @@ type TurnTimeline struct {
 	StopReason       *string            `json:"stop_reason"`
 	TenantKey        *string            `json:"tenant_key"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID             TurnID  `json:"turn_id"`
 	UserKey            *string `json:"user_key"`
 	WaitingExecutionMs int     `json:"waiting_execution_ms"`
@@ -7010,7 +7015,7 @@ type TurnTimelineStepKind string
 // Conversation is erased; they do not imply cancellation, budget, or result
 // propagation.
 type TurnTrigger struct {
-	// ParentTurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// ParentTurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	ParentTurnID TurnID `json:"parent_turn_id"`
 
 	// ToolCallID Identifies one durable ToolCall. Treat it as opaque: read it from a
@@ -7061,7 +7066,7 @@ type TurnWebhookContext struct {
 	Sequence  int64  `json:"sequence"`
 	TenantKey string `json:"tenant_key"`
 
-	// TurnID Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 	TurnID TurnID `json:"turn_id"`
 
 	// UserKey Optional Turn actor.
@@ -7426,9 +7431,6 @@ type CredentialLimit = int
 // Cursor defines model for Cursor.
 type Cursor = string
 
-// DefaultTenantFilter defines model for DefaultTenantFilter.
-type DefaultTenantFilter = bool
-
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
@@ -7441,10 +7443,10 @@ type Limit = int
 // TenantKeyFilter defines model for TenantKeyFilter.
 type TenantKeyFilter = string
 
-// UsageAgentIDFilter Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+// UsageAgentIDFilter RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type UsageAgentIDFilter = AgentID
 
-// UsageAppIDFilter Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+// UsageAppIDFilter RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type UsageAppIDFilter = AppID
 
 // UsageAuthenticationMethodFilter defines model for UsageAuthenticationMethodFilter.
@@ -7453,7 +7455,7 @@ type UsageAuthenticationMethodFilter = AuthenticationMethod
 // UsageCallKindFilter defines model for UsageCallKindFilter.
 type UsageCallKindFilter = ModelCallKind
 
-// UsageCredentialFamilyIDFilter Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+// UsageCredentialFamilyIDFilter RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type UsageCredentialFamilyIDFilter = CredentialID
 
 // UsageEndAt defines model for UsageEndAt.
@@ -7465,7 +7467,7 @@ type UsageModelFilter = string
 // UsageProviderFilter defines model for UsageProviderFilter.
 type UsageProviderFilter = string
 
-// UsageProviderKeyIDFilter Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+// UsageProviderKeyIDFilter RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
 type UsageProviderKeyIDFilter = ProviderKeyID
 
 // UsageProviderKeySourceFilter Which account pays for a model call. Installations choose which
@@ -7534,7 +7536,7 @@ type ListAdmissionsParams struct {
 	// ErrorCode Limit to one refusal code, for example `insufficient_credits`.
 	ErrorCode *string `form:"error_code,omitempty" json:"error_code,omitempty"`
 
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
@@ -7626,7 +7628,7 @@ type ExchangeConsoleDeviceAuthorization403JSONResponseBody struct {
 
 // ListConversationsParams defines parameters for ListConversations.
 type ListConversationsParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
@@ -7672,11 +7674,8 @@ type StreamConversationParams struct {
 
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
 type ListCreditAccountsParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
-
-	// DefaultTenant Select the App's default tenant account. Mutually exclusive with tenant_key.
-	DefaultTenant *bool `form:"default_tenant,omitempty" json:"default_tenant,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -7685,11 +7684,8 @@ type ListCreditAccountsParams struct {
 
 // ListCreditAllocationsParams defines parameters for ListCreditAllocations.
 type ListCreditAllocationsParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
-
-	// DefaultTenant Select the App's default tenant allocations. Mutually exclusive with tenant_key.
-	DefaultTenant *bool `form:"default_tenant,omitempty" json:"default_tenant,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -7725,7 +7721,7 @@ type RotateCredentialParams struct {
 
 // ListMemorySpacesParams defines parameters for ListMemorySpaces.
 type ListMemorySpacesParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 	Scope     *MemoryScope     `form:"scope,omitempty" json:"scope,omitempty"`
 
@@ -7786,7 +7782,7 @@ type ListProviderKeysParamsStatus string
 
 // ListTenantsParams defines parameters for ListTenants.
 type ListTenantsParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// Cursor Opaque cursor returned by the same operation and filter set.
@@ -7796,11 +7792,8 @@ type ListTenantsParams struct {
 
 // ListTurnsParams defines parameters for ListTurns.
 type ListTurnsParams struct {
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
-
-	// DefaultTenant Select only the default tenant partition. Mutually exclusive with tenant_key.
-	DefaultTenant *DefaultTenantFilter `form:"default_tenant,omitempty" json:"default_tenant,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
 	// on owner-qualified resources it is part of the explicit owner tuple.
@@ -7914,7 +7907,7 @@ type GetUsageBreakdownParams struct {
 	// AppID Exact App within the caller's App, Org, or installation reporting scope.
 	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
 
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
@@ -7955,7 +7948,7 @@ type ListUsageRecordsParams struct {
 	// AppID Exact App within the caller's App, Org, or installation reporting scope.
 	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
 
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
@@ -7996,7 +7989,7 @@ type GetUsageTimeseriesParams struct {
 	// AppID Exact App within the caller's App, Org, or installation reporting scope.
 	AppID *UsageAppIDFilter `form:"app_id,omitempty" json:"app_id,omitempty"`
 
-	// TenantKey Exact non-default tenant partition reference.
+	// TenantKey Exact tenant partition reference.
 	TenantKey *TenantKeyFilter `form:"tenant_key,omitempty" json:"tenant_key,omitempty"`
 
 	// UserKey Exact host-owned end-user reference. On Turn lists this is the actor;
@@ -11894,8 +11887,7 @@ type ClientInterface interface {
 	//
 	// Returns newest-first durable Turn state. Exact filters combine
 	// with AND. An App credential without a tenant constraint may list all
-	// tenant partitions in that App, one named partition with `tenant_key`,
-	// or the default partition with `default_tenant=true`. A
+	// tenant partitions in that App, or one of them with `tenant_key`. A
 	// tenant-constrained credential is always scoped to its partition. The
 	// opaque cursor is bound to the normalized filter set and credential
 	// tenant scope. Agent filtering uses the persisted Agent ID; an
@@ -14395,8 +14387,7 @@ func (c *Client) GetTrace(ctx context.Context, traceID TraceID, reqEditors ...Re
 //
 // Returns newest-first durable Turn state. Exact filters combine
 // with AND. An App credential without a tenant constraint may list all
-// tenant partitions in that App, one named partition with `tenant_key`,
-// or the default partition with `default_tenant=true`. A
+// tenant partitions in that App, or one of them with `tenant_key`. A
 // tenant-constrained credential is always scoped to its partition. The
 // opaque cursor is bound to the normalized filter set and credential
 // tenant scope. Agent filtering uses the persisted Agent ID; an
@@ -17237,18 +17228,6 @@ func NewListCreditAccountsRequest(server string, params *ListCreditAccountsParam
 
 		}
 
-		if params.DefaultTenant != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "default_tenant", *params.DefaultTenant, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
 		if params.Cursor != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -17318,18 +17297,6 @@ func NewListCreditAllocationsRequest(server string, params *ListCreditAllocation
 		if params.TenantKey != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.DefaultTenant != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "default_tenant", *params.DefaultTenant, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -18825,18 +18792,6 @@ func NewListTurnsRequest(server string, params *ListTurnsParams) (*http.Request,
 		if params.TenantKey != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tenant_key", *params.TenantKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.DefaultTenant != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "default_tenant", *params.DefaultTenant, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -21869,8 +21824,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns newest-first durable Turn state. Exact filters combine
 	// with AND. An App credential without a tenant constraint may list all
-	// tenant partitions in that App, one named partition with `tenant_key`,
-	// or the default partition with `default_tenant=true`. A
+	// tenant partitions in that App, or one of them with `tenant_key`. A
 	// tenant-constrained credential is always scoped to its partition. The
 	// opaque cursor is bound to the normalized filter set and credential
 	// tenant scope. Agent filtering uses the persisted Agent ID; an
@@ -32083,8 +32037,7 @@ func (c *ClientWithResponses) GetTraceWithResponse(ctx context.Context, traceID 
 //
 // Returns newest-first durable Turn state. Exact filters combine
 // with AND. An App credential without a tenant constraint may list all
-// tenant partitions in that App, one named partition with `tenant_key`,
-// or the default partition with `default_tenant=true`. A
+// tenant partitions in that App, or one of them with `tenant_key`. A
 // tenant-constrained credential is always scoped to its partition. The
 // opaque cursor is bound to the normalized filter set and credential
 // tenant scope. Agent filtering uses the persisted Agent ID; an

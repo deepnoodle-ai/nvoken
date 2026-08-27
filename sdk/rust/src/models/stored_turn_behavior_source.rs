@@ -15,10 +15,10 @@ use serde::{Deserialize, Serialize};
 pub struct StoredTurnBehaviorSource {
     #[serde(rename = "kind")]
     pub kind: Kind,
-    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "agent_id")]
     pub agent_id: String,
-    /// Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
     #[serde(rename = "agent_revision_id")]
     pub agent_revision_id: String,
     #[serde(rename = "revision")]

@@ -30,17 +30,17 @@ import {
  */
 export interface CreditAllocation {
     /**
-     * Opaque identifier with the public `alloc_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof CreditAllocation
      */
     id: string;
     /**
-     * Null identifies the App's default tenant.
+     *
      * @type {string}
      * @memberof CreditAllocation
      */
-    tenantKey: string | null;
+    tenantKey: string;
     /**
      *
      * @type {Money}

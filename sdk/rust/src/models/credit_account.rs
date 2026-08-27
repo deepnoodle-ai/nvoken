@@ -14,9 +14,8 @@ use serde::{Deserialize, Serialize};
 /// CreditAccount : One tenant's persistent, non-expiring spending capacity. These exact USD counters are enforcement facts, not an invoice or payment record. Deleting runtime transcripts never restores used credits.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreditAccount {
-    /// Null identifies the App's default tenant.
-    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
-    pub tenant_key: Option<String>,
+    #[serde(rename = "tenant_key")]
+    pub tenant_key: String,
     #[serde(rename = "allocated")]
     pub allocated: Box<models::Money>,
     #[serde(rename = "used")]
@@ -37,7 +36,7 @@ pub struct CreditAccount {
 impl CreditAccount {
     /// One tenant's persistent, non-expiring spending capacity. These exact USD counters are enforcement facts, not an invoice or payment record. Deleting runtime transcripts never restores used credits.
     pub fn new(
-        tenant_key: Option<String>,
+        tenant_key: String,
         allocated: models::Money,
         used: models::Money,
         held: models::Money,

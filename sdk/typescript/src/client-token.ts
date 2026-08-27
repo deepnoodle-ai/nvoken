@@ -84,11 +84,11 @@ function validateClaims(claims: ClientTokenClaims): {
   memory: Record<string, string>;
   conversation: Record<string, string>;
 } {
-  if (!validStableId(claims.appId, "app")) {
-    throw new Error(`nvoken: appId ${JSON.stringify(claims.appId)} is not an App id`);
+  if (!canonicalClaim(claims.appId)) {
+    throw new Error("nvoken: appId must not be blank, padded, or over 255 characters");
   }
-  if (!validStableId(claims.keyId, "ckey")) {
-    throw new Error(`nvoken: keyId ${JSON.stringify(claims.keyId)} is not a client key id`);
+  if (!canonicalClaim(claims.keyId)) {
+    throw new Error("nvoken: keyId must not be blank, padded, or over 255 characters");
   }
   if (!canonicalClaim(claims.subject)) {
     throw new Error("nvoken: subject must not be blank, padded, or over 255 characters");
@@ -96,12 +96,12 @@ function validateClaims(claims: ClientTokenClaims): {
   if (!canonicalClaim(claims.tenantKey)) {
     throw new Error("nvoken: tenantKey must not be blank, padded, or over 255 characters");
   }
-  if (!validStableId(claims.agentId, "agent")) {
-    throw new Error(`nvoken: agentId ${JSON.stringify(claims.agentId)} is not an Agent id`);
+  if (!canonicalClaim(claims.agentId)) {
+    throw new Error("nvoken: agentId must not be blank, padded, or over 255 characters");
   }
-  if (!validStableId(claims.agentRevisionId, "arev")) {
+  if (!canonicalClaim(claims.agentRevisionId)) {
     throw new Error(
-      `nvoken: agentRevisionId ${JSON.stringify(claims.agentRevisionId)} is not an AgentRevision id`,
+      "nvoken: agentRevisionId must not be blank, padded, or over 255 characters",
     );
   }
   if (!Number.isSafeInteger(claims.lifetimeMs)
@@ -121,9 +121,9 @@ function validateClaims(claims: ClientTokenClaims): {
 
   let conversation: Record<string, string>;
   if (claims.conversationAccess.scope === "exact") {
-    if (!validStableId(claims.conversationAccess.conversationId, "conv")) {
+    if (!canonicalClaim(claims.conversationAccess.conversationId)) {
       throw new Error(
-        `nvoken: conversationId ${JSON.stringify(claims.conversationAccess.conversationId)} is not a Conversation id`,
+        "nvoken: an exact Conversation grant requires a conversationId",
       );
     }
     conversation = {
@@ -141,12 +141,6 @@ function canonicalClaim(value: string): boolean {
     && value !== ""
     && value.trim() === value
     && [...value].length <= MAX_CLIENT_CLAIM;
-}
-
-function validStableId(value: string, prefix: string): boolean {
-  return canonicalClaim(value)
-    && value.startsWith(`${prefix}_`)
-    && value.length > prefix.length + 1;
 }
 
 function orderedJson(members: Array<[string, unknown]>): Uint8Array {

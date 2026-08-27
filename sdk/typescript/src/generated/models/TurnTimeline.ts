@@ -28,13 +28,13 @@ import {
  */
 export interface TurnTimeline {
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof TurnTimeline
      */
     turnId: string;
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof TurnTimeline
      */
@@ -48,7 +48,7 @@ export interface TurnTimeline {
      */
     contentExpiresAt: Date | null;
     /**
-     * Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof TurnTimeline
      */

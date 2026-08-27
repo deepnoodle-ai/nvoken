@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.compaction_policy import CompactionPolicy
@@ -31,23 +31,13 @@ class ForkConversationRequest(BaseModel):
     """
     ForkConversationRequest
     """ # noqa: E501
-    from_message_id: Annotated[str, Field(strict=True)] = Field(description="Public source message included as the final message in the copied prefix.")
+    from_message_id: StrictStr = Field(description="Public source message included as the final message in the copied prefix.")
     conversation_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None
     owner: ConversationOwner = Field(description="Explicit owner of the new Conversation; never inferred from the source.")
     retention: Optional[RetentionPolicy] = None
     compaction: Optional[CompactionPolicy] = None
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Application-owned JSON metadata stored without interpretation.")
     __properties: ClassVar[List[str]] = ["from_message_id", "conversation_key", "owner", "retention", "compaction", "metadata"]
-
-    @field_validator('from_message_id')
-    def from_message_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.model_usage import ModelUsage
@@ -31,23 +31,13 @@ class ProviderKeyUsage(BaseModel):
     """
     ProviderKeyUsage
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     provider: Annotated[str, Field(strict=True)] = Field(description="Extensible canonical provider identifier. Consumers must preserve unknown values so adding a provider does not break decoding. Request positions still reject providers not registered by the installation. ")
     scope: ProviderKeyScope
     turns: Annotated[int, Field(strict=True, ge=0)] = Field(description="How many turns used this provider key.")
     last_used_at: Optional[datetime] = Field(description="Latest durable model checkpoint under any bound Turn, null before the first model call.")
     usage: Optional[ModelUsage] = Field(description="Summed checkpoint usage, null before the first model call.")
     __properties: ClassVar[List[str]] = ["id", "provider", "scope", "turns", "last_used_at", "usage"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     @field_validator('provider')
     def provider_validate_regular_expression(cls, value):

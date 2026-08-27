@@ -18,9 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
 from nvoken_generated.models.nudge_status import NudgeStatus
 from nvoken_generated.models.turn_input import TurnInput
 from typing import Optional, Set
@@ -31,8 +30,8 @@ class Nudge(BaseModel):
     """
     Nudge
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.")
-    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    turn_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     status: NudgeStatus
     content: TurnInput
     idempotency_key: Optional[StrictStr] = None
@@ -41,26 +40,6 @@ class Nudge(BaseModel):
     drained_message_sequence: Optional[StrictInt] = Field(default=None, description="Transcript sequence the content was promoted into. Present only on a drained Nudge, and the receipt that the model saw it. ")
     ended_at: Optional[datetime] = Field(default=None, description="When the Nudge left pending for any terminal status.")
     __properties: ClassVar[List[str]] = ["id", "turn_id", "status", "content", "idempotency_key", "created_at", "drained_at", "drained_message_sequence", "ended_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^nudge_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

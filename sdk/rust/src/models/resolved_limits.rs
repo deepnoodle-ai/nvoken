@@ -31,8 +31,9 @@ pub struct ResolvedLimits {
         skip_serializing_if = "Option::is_none"
     )]
     pub max_estimated_cost_usd: Option<f64>,
-    #[serde(rename = "max_iterations")]
-    pub max_iterations: u32,
+    /// The turn's own model-call cap. Absent when neither the behavior nor the request set one; the installation ceiling still bounds the loop, but it is not reported here because the host never asked for it.
+    #[serde(rename = "max_iterations", skip_serializing_if = "Option::is_none")]
+    pub max_iterations: Option<u32>,
 }
 
 impl ResolvedLimits {
@@ -40,7 +41,6 @@ impl ResolvedLimits {
         total_timeout_seconds: u32,
         active_timeout_seconds: u32,
         waiting_timeout_seconds: Option<u32>,
-        max_iterations: u32,
     ) -> ResolvedLimits {
         ResolvedLimits {
             total_timeout_seconds,
@@ -48,7 +48,7 @@ impl ResolvedLimits {
             waiting_timeout_seconds,
             max_output_tokens: None,
             max_estimated_cost_usd: None,
-            max_iterations,
+            max_iterations: None,
         }
     }
 }

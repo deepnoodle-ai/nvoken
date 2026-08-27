@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.conversation_content_block import ConversationContentBlock
@@ -32,81 +32,19 @@ class ConversationMessage(BaseModel):
     """
     ConversationMessage
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `msg_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
-    agent_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
-    turn_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="The Turn that wrote this row, or null for a copied fork-history row. `copied_from_message_id` explains that null. ")
+    agent_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    turn_id: Optional[StrictStr] = Field(description="The Turn that wrote this row, or null for a copied fork-history row. `copied_from_message_id` explains that null. ")
     user_key: Optional[StrictStr] = Field(default=None, description="Per-Turn actor attribution. Copied rows preserve it. ")
     sequence: Annotated[int, Field(strict=True, ge=1)]
     role: ConversationMessageRole
     content: Annotated[List[ConversationContentBlock], Field(min_length=1)]
-    copied_from_message_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Present only on a fork copy; names its source message.")
+    copied_from_message_id: Optional[StrictStr] = Field(default=None, description="Present only on a fork copy; names its source message.")
     phase: Optional[MessagePhase] = Field(default=None, description="Whether this assistant message is the turn's actual answer or something along the way. Absent on user and tool messages, which have no phase.  It is worked out when you read, from how the turn ended, and it is frozen onto forked copies so a fork keeps the phases it had. Your own input never carries a phase.  Because it is worked out on read, it is authoritative on ordinary reads and not on the stream: a message delivered there before its turn settled carries `commentary` forever, and no later frame corrects it. On the stream, derive the answer instead. A turn has a final answer only once it settled `completed` with stop reason `end_turn`, and that answer is the turn's last assistant message. That is the same rule nvoken applies. ")
     created_at: datetime
     __properties: ClassVar[List[str]] = ["id", "conversation_id", "content_expires_at", "agent_id", "turn_id", "user_key", "sequence", "role", "content", "copied_from_message_id", "phase", "created_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('copied_from_message_id')
-    def copied_from_message_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

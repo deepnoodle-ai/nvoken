@@ -31,11 +31,11 @@ import {
  */
 export interface CreditAccount {
     /**
-     * Null identifies the App's default tenant.
+     *
      * @type {string}
      * @memberof CreditAccount
      */
-    tenantKey: string | null;
+    tenantKey: string;
     /**
      *
      * @type {Money}

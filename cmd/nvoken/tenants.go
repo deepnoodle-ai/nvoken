@@ -36,15 +36,11 @@ func runTenantList(command *cli.Context) error {
 	}
 	return writeOutput(command, page, func(writer io.Writer) error {
 		for _, tenant := range page.Items {
-			key := "default"
-			if tenant.TenantKey != nil {
-				key = *tenant.TenantKey
-			}
 			if _, err := fmt.Fprintf(
 				writer,
 				"%s\t%s\t%s %s\t%s %s\n",
 				tenant.ID,
-				key,
+				tenant.TenantKey,
 				tenant.Credits.Available.Amount,
 				tenant.Credits.Available.Currency,
 				tenant.Credits.Used.Amount,

@@ -165,15 +165,13 @@ export interface RotateProviderKeyOptions {
 
 export interface AllocateCreditsOptions {
   amount: Money;
-  tenantKey?: string;
-  defaultTenant?: boolean;
+  tenantKey: string;
   reference?: string;
   idempotencyKey?: string;
 }
 
 export interface ListCreditsOptions {
   tenantKey?: string;
-  defaultTenant?: boolean;
   cursor?: string;
   limit?: number;
 }
@@ -446,7 +444,6 @@ export class Client {
         allocateCreditsRequest: {
           amount: options.amount,
           tenantKey: options.tenantKey,
-          defaultTenant: options.defaultTenant,
           reference: options.reference,
           idempotencyKey: options.idempotencyKey ?? newIdempotencyKey(),
         },

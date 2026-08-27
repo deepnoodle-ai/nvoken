@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, StrictStr
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.tenant_list import TenantList
@@ -41,7 +41,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant(
         self,
-        tenant_id: Annotated[str, Field(strict=True)],
+        tenant_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -114,7 +114,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant_with_http_info(
         self,
-        tenant_id: Annotated[str, Field(strict=True)],
+        tenant_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -187,7 +187,7 @@ class TenantsApi:
     @validate_call
     async def delete_tenant_without_preload_content(
         self,
-        tenant_id: Annotated[str, Field(strict=True)],
+        tenant_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -320,7 +320,7 @@ class TenantsApi:
     @validate_call
     async def list_tenants(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -340,7 +340,7 @@ class TenantsApi:
 
         One row per tenant key nvoken has interned for this App, with its credit position and the last time it ran a turn.  A tenant row is an interning of a key, not tenant state: nvoken stores no configuration, profile, or entitlement for it. What this list reports is therefore what is attached to the key, not what is configured on it.  A key that has only ever been refused does not appear here, because it was never interned. Those keys are in `GET /v1/admissions`, and the difference between the two lists is the set of tenants a host is addressing but has never successfully run.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
@@ -400,7 +400,7 @@ class TenantsApi:
     @validate_call
     async def list_tenants_with_http_info(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -420,7 +420,7 @@ class TenantsApi:
 
         One row per tenant key nvoken has interned for this App, with its credit position and the last time it ran a turn.  A tenant row is an interning of a key, not tenant state: nvoken stores no configuration, profile, or entitlement for it. What this list reports is therefore what is attached to the key, not what is configured on it.  A key that has only ever been refused does not appear here, because it was never interned. Those keys are in `GET /v1/admissions`, and the difference between the two lists is the set of tenants a host is addressing but has never successfully run.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str
@@ -480,7 +480,7 @@ class TenantsApi:
     @validate_call
     async def list_tenants_without_preload_content(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Optional[Annotated[int, Field(le=100, strict=True, ge=1)]] = None,
         _request_timeout: Union[
@@ -500,7 +500,7 @@ class TenantsApi:
 
         One row per tenant key nvoken has interned for this App, with its credit position and the last time it ran a turn.  A tenant row is an interning of a key, not tenant state: nvoken stores no configuration, profile, or entitlement for it. What this list reports is therefore what is attached to the key, not what is configured on it.  A key that has only ever been refused does not appear here, because it was never interned. Those keys are in `GET /v1/admissions`, and the difference between the two lists is the set of tenants a host is addressing but has never successfully run.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param cursor: Opaque cursor returned by the same operation and filter set.
         :type cursor: str

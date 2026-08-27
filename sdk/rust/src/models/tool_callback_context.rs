@@ -26,13 +26,13 @@ pub struct ToolCallbackContext {
     /// The tool this delivery is asking you to run, taken from the durable ToolCall. It is inside the signed body, so a receiver serving many tools dispatches on it with no authoritative read — and any per-tool path suffix you configure stays an unsigned logging convenience rather than the thing you branch on.
     #[serde(rename = "tool_name")]
     pub tool_name: String,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id")]
     pub turn_id: String,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
-    /// Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "memory_space_id", deserialize_with = "Option::deserialize")]
     pub memory_space_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
