@@ -31,11 +31,11 @@ class MessageDeltaEvent(BaseModel):
     A live preview of a message the model is writing. Not saved, never replayed, and never a message. Accumulate it by `(message_id, content_index)` and discard it under the rules in Streaming above.  Reasoning previews travel here like any other kind, on machine and browser streams alike. What an end user sees is your application's decision, made in your application. Reasoning is watchable and not stored: no content block carries it, and no read returns it. Watch the stream if you want to see the model think. A turn that runs under explicit `reasoning` controls emits no reasoning previews at all, to either audience.
     """ # noqa: E501
     type: StrictStr
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
-    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    turn_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     attempt: Annotated[int, Field(strict=True, ge=1)] = Field(description="Execution attempt that emitted this preview. Discard provisional output from earlier attempts when this value increases. ")
-    message_id: Annotated[str, Field(strict=True)] = Field(description="The identifier the saved assistant message will carry when this iteration lands, with the same `msg_` prefix every message ID has. Key your preview by it and the handoff becomes an update to a row that already has its permanent identity, rather than one row disappearing and another taking its place.  It is allocated when the model starts writing, so every preview of one message carries it. It is stable within one attempt; a retried attempt allocates a new one, which is harmless, because a higher `attempt` already voids every earlier preview. ")
+    message_id: StrictStr = Field(description="The identifier the saved assistant message will carry when this iteration lands, with the same `msg_` prefix every message ID has. Key your preview by it and the handoff becomes an update to a row that already has its permanent identity, rather than one row disappearing and another taking its place.  It is allocated when the model starts writing, so every preview of one message carries it. It is stable within one attempt; a retried attempt allocates a new one, which is harmless, because a higher `attempt` already voids every earlier preview. ")
     content_index: Annotated[int, Field(strict=True, ge=0)]
     kind: MessageDeltaKind
     delta: Annotated[str, Field(min_length=1, strict=True)] = Field(description="The fragment, for every kind. One accumulator handles all of them. ")
@@ -50,39 +50,6 @@ class MessageDeltaEvent(BaseModel):
         """Validates the enum"""
         if value not in set(['message.delta']):
             raise ValueError("must be one of enum values ('message.delta')")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('message_id')
-    def message_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^msg_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

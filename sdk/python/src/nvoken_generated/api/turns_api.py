@@ -60,8 +60,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
-        nudge_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
+        nudge_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -139,8 +139,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
-        nudge_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
+        nudge_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -218,8 +218,8 @@ class TurnsApi:
     @validate_call
     async def cancel_nudge_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
-        nudge_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
+        nudge_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -360,7 +360,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -434,7 +434,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -508,7 +508,7 @@ class TurnsApi:
     @validate_call
     async def cancel_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -642,7 +642,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -721,7 +721,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -800,7 +800,7 @@ class TurnsApi:
     @validate_call
     async def create_nudge_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         create_nudge_request: CreateNudgeRequest,
         _request_timeout: Union[
             None,
@@ -1316,7 +1316,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1392,7 +1392,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1468,7 +1468,7 @@ class TurnsApi:
     @validate_call
     async def delete_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1883,7 +1883,7 @@ class TurnsApi:
     @validate_call
     async def get_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1958,7 +1958,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2033,7 +2033,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2168,7 +2168,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2243,7 +2243,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2318,7 +2318,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_result_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2453,7 +2453,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2527,7 +2527,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2601,7 +2601,7 @@ class TurnsApi:
     @validate_call
     async def get_turn_timeline_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2735,7 +2735,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2809,7 +2809,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2883,7 +2883,7 @@ class TurnsApi:
     @validate_call
     async def interrupt_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3017,7 +3017,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3103,7 +3103,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3189,7 +3189,7 @@ class TurnsApi:
     @validate_call
     async def list_nudges_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         status: Annotated[Optional[NudgeStatus], Field(description="Restrict to one status.")] = None,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=100, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 20.")] = None,
@@ -3350,7 +3350,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3433,7 +3433,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3516,7 +3516,7 @@ class TurnsApi:
     @validate_call
     async def list_tool_calls_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -3669,7 +3669,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -3755,7 +3755,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -3841,7 +3841,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_logs_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         trace_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Return only logs correlated to this W3C trace ID.")] = None,
@@ -4002,7 +4002,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4084,7 +4084,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4166,7 +4166,7 @@ class TurnsApi:
     @validate_call
     async def list_turn_traces_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Maximum items in this page. Defaults to 100.")] = None,
         _request_timeout: Union[
@@ -4318,11 +4318,10 @@ class TurnsApi:
     @validate_call
     async def list_turns(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[StrictStr] = None,
+        agent_id: Annotated[Optional[StrictStr], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4344,12 +4343,10 @@ class TurnsApi:
     ) -> TurnList:
         """List authoritative Turns, or walk the ones that ended
 
-        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
+        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, or one of them with `tenant_key`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select only the default tenant partition. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
         :param conversation_id:
@@ -4392,7 +4389,6 @@ class TurnsApi:
 
         _param = self._list_turns_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             user_key=user_key,
             conversation_id=conversation_id,
             agent_id=agent_id,
@@ -4431,11 +4427,10 @@ class TurnsApi:
     @validate_call
     async def list_turns_with_http_info(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[StrictStr] = None,
+        agent_id: Annotated[Optional[StrictStr], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4457,12 +4452,10 @@ class TurnsApi:
     ) -> ApiResponse[TurnList]:
         """List authoritative Turns, or walk the ones that ended
 
-        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
+        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, or one of them with `tenant_key`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select only the default tenant partition. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
         :param conversation_id:
@@ -4505,7 +4498,6 @@ class TurnsApi:
 
         _param = self._list_turns_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             user_key=user_key,
             conversation_id=conversation_id,
             agent_id=agent_id,
@@ -4544,11 +4536,10 @@ class TurnsApi:
     @validate_call
     async def list_turns_without_preload_content(
         self,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
-        default_tenant: Annotated[Optional[StrictBool], Field(description="Select only the default tenant partition. Mutually exclusive with tenant_key.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        conversation_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        agent_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact persisted Agent relationship.")] = None,
+        conversation_id: Optional[StrictStr] = None,
+        agent_id: Annotated[Optional[StrictStr], Field(description="Exact persisted Agent relationship.")] = None,
         status: Annotated[Optional[Annotated[List[TurnStatus], Field(min_length=1)]], Field(description="Repeat to select a union of statuses. Order and duplicates are normalized before cursor binding. ")] = None,
         parent_turn_id: Annotated[Optional[StrictStr], Field(description="Select direct children of one Turn. Send the literal `null` to select top-level Turns; omit the parameter to retain the authoritative unfiltered collection. This filter is part of the opaque cursor's collection identity. ")] = None,
         ended: Annotated[Optional[StrictBool], Field(description="Walk the turns that ended, oldest first, instead of listing current state newest first. See the description above. ")] = None,
@@ -4570,12 +4561,10 @@ class TurnsApi:
     ) -> RESTResponseType:
         """List authoritative Turns, or walk the ones that ended
 
-        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
+        Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, or one of them with `tenant_key`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
 
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
-        :param default_tenant: Select only the default tenant partition. Mutually exclusive with tenant_key.
-        :type default_tenant: bool
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
         :param conversation_id:
@@ -4618,7 +4607,6 @@ class TurnsApi:
 
         _param = self._list_turns_serialize(
             tenant_key=tenant_key,
-            default_tenant=default_tenant,
             user_key=user_key,
             conversation_id=conversation_id,
             agent_id=agent_id,
@@ -4653,7 +4641,6 @@ class TurnsApi:
     def _list_turns_serialize(
         self,
         tenant_key,
-        default_tenant,
         user_key,
         conversation_id,
         agent_id,
@@ -4689,10 +4676,6 @@ class TurnsApi:
         if tenant_key is not None:
 
             _query_params.append(('tenant_key', tenant_key))
-
-        if default_tenant is not None:
-
-            _query_params.append(('default_tenant', default_tenant))
 
         if user_key is not None:
 
@@ -4779,7 +4762,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -4859,7 +4842,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -4939,7 +4922,7 @@ class TurnsApi:
     @validate_call
     async def resume_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         resume_turn_request: ResumeTurnRequest,
         _request_timeout: Union[
             None,
@@ -5095,7 +5078,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5182,7 +5165,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5269,7 +5252,7 @@ class TurnsApi:
     @validate_call
     async def stream_turn_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         cursor: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor returned by the same operation and filter set.")] = None,
         deltas: Annotated[Optional[StrictBool], Field(description="Include id-less preview frames. Defaults to true.")] = None,
         last_event_id: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.")] = None,
@@ -5430,7 +5413,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,
@@ -5509,7 +5492,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results_with_http_info(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,
@@ -5588,7 +5571,7 @@ class TurnsApi:
     @validate_call
     async def submit_host_tool_results_without_preload_content(
         self,
-        turn_id: Annotated[str, Field(strict=True)],
+        turn_id: StrictStr,
         submit_host_tool_results_request: SubmitHostToolResultsRequest,
         _request_timeout: Union[
             None,

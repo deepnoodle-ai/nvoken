@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Conversation {
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "tenant_key")]
@@ -24,7 +24,7 @@ pub struct Conversation {
     pub conversation_key: Option<String>,
     #[serde(rename = "forked_from", deserialize_with = "Option::deserialize")]
     pub forked_from: Option<Box<models::ConversationForkLineage>>,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "active_turn_id", deserialize_with = "Option::deserialize")]
     pub active_turn_id: Option<String>,
     #[serde(

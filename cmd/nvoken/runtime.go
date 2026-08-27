@@ -78,7 +78,7 @@ func registerRuntimeCommands(app *cli.App) {
 	turns.Command("get").Description("Read a Turn").AddArg(requiredArg("turn-id", "Opaque Turn ID")).Run(runTurnGet)
 	turns.Command("result").Description("Read a Turn with its produced messages and final-answer text").AddArg(requiredArg("turn-id", "Opaque Turn ID")).Run(runTurnResult)
 	turns.Command("list").Description("List Turns").Flags(
-		cli.String("tenant"), cli.Bool("default-tenant"), cli.String("user"),
+		cli.String("tenant"), cli.String("user"),
 		cli.String("conversation-id"), cli.String("agent-id"), cli.Strings("status"),
 		cli.String("cursor"), cli.Int("limit"),
 	).Run(runTurnList)
@@ -300,7 +300,7 @@ func runTurnList(command *cli.Context) error {
 	for i, value := range command.Strings("status") {
 		statuses[i] = generated.TurnStatus(value)
 	}
-	params := &generated.ListTurnsParams{TenantKey: optionalString(command.String("tenant")), DefaultTenant: optionalBool(command.Bool("default-tenant")), UserKey: optionalString(command.String("user")), ConversationID: optionalString(command.String("conversation-id")), AgentID: optionalString(command.String("agent-id")), Cursor: optionalString(command.String("cursor")), Limit: optionalInt(command.Int("limit"))}
+	params := &generated.ListTurnsParams{TenantKey: optionalString(command.String("tenant")), UserKey: optionalString(command.String("user")), ConversationID: optionalString(command.String("conversation-id")), AgentID: optionalString(command.String("agent-id")), Cursor: optionalString(command.String("cursor")), Limit: optionalInt(command.Int("limit"))}
 	if len(statuses) != 0 {
 		params.Status = &statuses
 	}

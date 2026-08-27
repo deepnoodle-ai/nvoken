@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub struct MessageDeltaEvent {
     #[serde(rename = "type")]
     pub r#type: Type,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
@@ -25,7 +25,7 @@ pub struct MessageDeltaEvent {
         deserialize_with = "Option::deserialize"
     )]
     pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    /// Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id")]
     pub turn_id: String,
     /// Execution attempt that emitted this preview. Discard provisional output from earlier attempts when this value increases.

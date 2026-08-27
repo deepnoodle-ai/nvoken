@@ -104,13 +104,11 @@ pub async fn allocate_credits(
 pub async fn list_credit_accounts(
     configuration: &configuration::Configuration,
     tenant_key: Option<&str>,
-    default_tenant: Option<bool>,
     cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::CreditAccountList, Error<ListCreditAccountsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_tenant_key = tenant_key;
-    let p_query_default_tenant = default_tenant;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
 
@@ -119,9 +117,6 @@ pub async fn list_credit_accounts(
 
     if let Some(ref param_value) = p_query_tenant_key {
         req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
-    }
-    if let Some(ref param_value) = p_query_default_tenant {
-        req_builder = req_builder.query(&[("default_tenant", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_cursor {
         req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
@@ -169,13 +164,11 @@ pub async fn list_credit_accounts(
 pub async fn list_credit_allocations(
     configuration: &configuration::Configuration,
     tenant_key: Option<&str>,
-    default_tenant: Option<bool>,
     cursor: Option<&str>,
     limit: Option<u32>,
 ) -> Result<models::CreditAllocationList, Error<ListCreditAllocationsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_tenant_key = tenant_key;
-    let p_query_default_tenant = default_tenant;
     let p_query_cursor = cursor;
     let p_query_limit = limit;
 
@@ -184,9 +177,6 @@ pub async fn list_credit_allocations(
 
     if let Some(ref param_value) = p_query_tenant_key {
         req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
-    }
-    if let Some(ref param_value) = p_query_default_tenant {
-        req_builder = req_builder.query(&[("default_tenant", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_cursor {
         req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);

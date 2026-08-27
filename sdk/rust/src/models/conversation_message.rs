@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ConversationMessage {
-    /// Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
     /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
@@ -25,7 +25,7 @@ pub struct ConversationMessage {
         deserialize_with = "Option::deserialize"
     )]
     pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
-    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "agent_id", skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     /// The Turn that wrote this row, or null for a copied fork-history row. `copied_from_message_id` explains that null.

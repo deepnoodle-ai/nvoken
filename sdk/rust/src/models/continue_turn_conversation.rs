@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 pub struct ContinueTurnConversation {
     #[serde(rename = "mode")]
     pub mode: Mode,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id")]
     pub conversation_id: String,
     #[serde(rename = "if_active", skip_serializing_if = "Option::is_none")]

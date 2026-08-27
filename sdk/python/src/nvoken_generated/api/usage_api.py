@@ -52,15 +52,15 @@ class UsageApi:
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         group_by: StrictStr,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -92,7 +92,7 @@ class UsageApi:
         :type group_by: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -195,15 +195,15 @@ class UsageApi:
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         group_by: StrictStr,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -235,7 +235,7 @@ class UsageApi:
         :type group_by: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -338,15 +338,15 @@ class UsageApi:
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         group_by: StrictStr,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -378,7 +378,7 @@ class UsageApi:
         :type group_by: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -652,15 +652,15 @@ class UsageApi:
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         interval: UsageInterval,
         timezone: Annotated[Optional[StrictStr], Field(description="IANA timezone used for bucket boundaries.")] = None,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -695,7 +695,7 @@ class UsageApi:
         :type timezone: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -800,15 +800,15 @@ class UsageApi:
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         interval: UsageInterval,
         timezone: Annotated[Optional[StrictStr], Field(description="IANA timezone used for bucket boundaries.")] = None,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -843,7 +843,7 @@ class UsageApi:
         :type timezone: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -948,15 +948,15 @@ class UsageApi:
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
         interval: UsageInterval,
         timezone: Annotated[Optional[StrictStr], Field(description="IANA timezone used for bucket boundaries.")] = None,
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -991,7 +991,7 @@ class UsageApi:
         :type timezone: str
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -1269,15 +1269,15 @@ class UsageApi:
         self,
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -1308,7 +1308,7 @@ class UsageApi:
         :type end_at: datetime
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -1409,15 +1409,15 @@ class UsageApi:
         self,
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -1448,7 +1448,7 @@ class UsageApi:
         :type end_at: datetime
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str
@@ -1549,15 +1549,15 @@ class UsageApi:
         self,
         start_at: Annotated[datetime, Field(description="Inclusive RFC 3339 start of the half-open reporting window.")],
         end_at: Annotated[datetime, Field(description="Exclusive RFC 3339 end of the half-open reporting window; at most 400 days after start_at.")],
-        app_id: Annotated[Optional[Annotated[str, Field(strict=True)]], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
-        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact non-default tenant partition reference.")] = None,
+        app_id: Annotated[Optional[StrictStr], Field(description="Exact App within the caller's App, Org, or installation reporting scope.")] = None,
+        tenant_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact tenant partition reference.")] = None,
         user_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]], Field(description="Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple. ")] = None,
-        agent_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        agent_id: Optional[StrictStr] = None,
         provider: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         model: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
         provider_key_source: Optional[ProviderKeySource] = None,
-        provider_key_id: Optional[Annotated[str, Field(strict=True)]] = None,
-        credential_family_id: Optional[Annotated[str, Field(strict=True)]] = None,
+        provider_key_id: Optional[StrictStr] = None,
+        credential_family_id: Optional[StrictStr] = None,
         authentication_method: Optional[AuthenticationMethod] = None,
         call_kind: Optional[ModelCallKind] = None,
         tool_name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = None,
@@ -1588,7 +1588,7 @@ class UsageApi:
         :type end_at: datetime
         :param app_id: Exact App within the caller's App, Org, or installation reporting scope.
         :type app_id: str
-        :param tenant_key: Exact non-default tenant partition reference.
+        :param tenant_key: Exact tenant partition reference.
         :type tenant_key: str
         :param user_key: Exact host-owned end-user reference. On Turn lists this is the actor; on owner-qualified resources it is part of the explicit owner tuple.
         :type user_key: str

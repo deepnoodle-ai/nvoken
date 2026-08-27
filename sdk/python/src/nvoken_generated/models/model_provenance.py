@@ -19,7 +19,6 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -32,8 +31,8 @@ class ModelProvenance(BaseModel):
     requested_model: StrictStr
     served_model: StrictStr
     provider_key_source: StrictStr
-    provider_key_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.")
-    provider_key_version_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `ver_` prefix. Treat the body as opaque.")
+    provider_key_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    provider_key_version_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     __properties: ClassVar[List[str]] = ["provider", "requested_model", "served_model", "provider_key_source", "provider_key_id", "provider_key_version_id"]
 
     @field_validator('provider_key_source')
@@ -41,32 +40,6 @@ class ModelProvenance(BaseModel):
         """Validates the enum"""
         if value not in set(['caller_ephemeral', 'app_byok', 'tenant_byok', 'platform', 'config_byok']):
             raise ValueError("must be one of enum values ('caller_ephemeral', 'app_byok', 'tenant_byok', 'platform', 'config_byok')")
-        return value
-
-    @field_validator('provider_key_id')
-    def provider_key_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^pkey_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('provider_key_version_id')
-    def provider_key_version_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^ver_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

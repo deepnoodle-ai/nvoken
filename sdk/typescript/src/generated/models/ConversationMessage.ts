@@ -42,13 +42,13 @@ import {
  */
 export interface ConversationMessage {
     /**
-     * Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ConversationMessage
      */
     id: string;
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ConversationMessage
      */
@@ -62,7 +62,7 @@ export interface ConversationMessage {
      */
     contentExpiresAt: Date | null;
     /**
-     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ConversationMessage
      */

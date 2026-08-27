@@ -11,13 +11,11 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// AllocateCreditsRequest : Select exactly one account with `tenant_key` or `default_tenant: true`. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
+/// AllocateCreditsRequest : `tenant_key` names the account. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AllocateCreditsRequest {
-    #[serde(rename = "tenant_key", skip_serializing_if = "Option::is_none")]
-    pub tenant_key: Option<String>,
-    #[serde(rename = "default_tenant", skip_serializing_if = "Option::is_none")]
-    pub default_tenant: Option<bool>,
+    #[serde(rename = "tenant_key")]
+    pub tenant_key: String,
     #[serde(rename = "amount")]
     pub amount: Box<models::Money>,
     #[serde(rename = "reference", skip_serializing_if = "Option::is_none")]
@@ -27,11 +25,14 @@ pub struct AllocateCreditsRequest {
 }
 
 impl AllocateCreditsRequest {
-    /// Select exactly one account with `tenant_key` or `default_tenant: true`. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
-    pub fn new(amount: models::Money, idempotency_key: String) -> AllocateCreditsRequest {
+    /// `tenant_key` names the account. Amount must be positive USD with exactly six fractional digits. The optional reference is host-owned correlation text, not payment-provider state.
+    pub fn new(
+        tenant_key: String,
+        amount: models::Money,
+        idempotency_key: String,
+    ) -> AllocateCreditsRequest {
         AllocateCreditsRequest {
-            tenant_key: None,
-            default_tenant: None,
+            tenant_key,
             amount: Box::new(amount),
             reference: None,
             idempotency_key,

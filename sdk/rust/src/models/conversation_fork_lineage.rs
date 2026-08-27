@@ -14,10 +14,10 @@ use serde::{Deserialize, Serialize};
 /// ConversationForkLineage : Durable source prefix lineage. It records provenance and does not imply the fork's owner.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ConversationForkLineage {
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id")]
     pub conversation_id: String,
-    /// Opaque identifier with the public `msg_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "message_id")]
     pub message_id: String,
 }

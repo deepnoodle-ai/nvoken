@@ -32,22 +32,12 @@ class AnonymousAccess(BaseModel):
     Complete managed-anonymous mode. The Agent must be live, visible in the configured tenant, App- or tenant-owned, client-capable, and declare memory `none`. Each short-lived access token pins the exact AgentRevision selected when that token is minted. The positive USD allowance is a fixed thirty-day visitor-continuity cost ceiling. Clearing browser storage can create a new subject, so anonymous limits, tenant Credits, and App admission limits remain aggregate hard caps.
     """ # noqa: E501
     tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Exact tenant in which all anonymous Turns run.")
-    agent_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    agent_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     visitor_allowance: Money
     limits: AnonymousRateLimits
     conversation_retention: RetentionPolicy
     webhook_delivery: StrictStr = Field(description="`browser_access` copies the App browser webhook onto anonymous Turns. `disabled` creates no webhook delivery and requires every host-mode tool to be named in `client_interface`. ")
     __properties: ClassVar[List[str]] = ["tenant_key", "agent_id", "visitor_allowance", "limits", "conversation_retention", "webhook_delivery"]
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     @field_validator('webhook_delivery')
     def webhook_delivery_validate_enum(cls, value):

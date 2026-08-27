@@ -33,7 +33,7 @@ class ResolvedLimits(BaseModel):
     waiting_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(description="The explicit cumulative external-waiting SLA, or null when waits are durable and unbounded. ")
     max_output_tokens: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="Resolved USD list-price guardrail. It is present only when the host requested a cost limit; unknown price metadata fails closed. ")
-    max_iterations: Annotated[int, Field(strict=True, ge=1)]
+    max_iterations: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="The turn's own model-call cap. Absent when neither the behavior nor the request set one; the installation ceiling still bounds the loop, but it is not reported here because the host never asked for it. ")
     __properties: ClassVar[List[str]] = ["total_timeout_seconds", "active_timeout_seconds", "waiting_timeout_seconds", "max_output_tokens", "max_estimated_cost_usd", "max_iterations"]
 
     model_config = ConfigDict(

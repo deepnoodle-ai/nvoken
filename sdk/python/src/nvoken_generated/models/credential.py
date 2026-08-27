@@ -18,9 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from nvoken_generated.models.credential_status import CredentialStatus
 from nvoken_generated.models.credential_type import CredentialType
 from typing import Optional, Set
@@ -31,16 +30,16 @@ class Credential(BaseModel):
     """
     Credential
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `cred_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     name: StrictStr
     prefix: StrictStr
     status: CredentialStatus
     type: CredentialType
-    app_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `app_` prefix. Treat the body as opaque.")
-    creator_credential_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `cred_` prefix. Treat the body as opaque.")
+    app_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    creator_credential_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     creator_subject: Optional[StrictStr] = Field(default=None, description="Opaque issuer subject when the credential was created by an issuer token.")
     expires_at: Optional[datetime] = None
-    rotated_from_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Opaque identifier with the public `cred_` prefix. Treat the body as opaque.")
+    rotated_from_id: Optional[StrictStr] = Field(default=None, description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     rotation_overlap_ends_at: Optional[datetime] = None
     revoked_at: Optional[datetime] = None
     last_used_at: Optional[datetime] = None
@@ -48,55 +47,6 @@ class Credential(BaseModel):
     updated_at: datetime
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["id", "name", "prefix", "status", "type", "app_id", "creator_credential_id", "creator_subject", "expires_at", "rotated_from_id", "rotation_overlap_ends_at", "revoked_at", "last_used_at", "created_at", "updated_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('app_id')
-    def app_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('creator_credential_id')
-    def creator_credential_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('rotated_from_id')
-    def rotated_from_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^cred_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.credential_type import CredentialType
@@ -32,22 +32,9 @@ class CreateCredentialRequest(BaseModel):
     """ # noqa: E501
     name: Annotated[str, Field(min_length=1, strict=True, max_length=100)]
     type: CredentialType
-    app_id: Optional[Annotated[str, Field(strict=True)]] = Field(default=None, description="Required for App and App-read-only credentials. Console Org callers may name only Apps contained by their Org. Installation admins may name any App. Full App keys cannot create a new key family. ")
+    app_id: Optional[StrictStr] = Field(default=None, description="Required for App and App-read-only credentials. Console Org callers may name only Apps contained by their Org. Installation admins may name any App. Full App keys cannot create a new key family. ")
     expires_at: Optional[datetime] = None
     __properties: ClassVar[List[str]] = ["name", "type", "app_id", "expires_at"]
-
-    @field_validator('app_id')
-    def app_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

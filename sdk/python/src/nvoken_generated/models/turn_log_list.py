@@ -18,9 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from nvoken_generated.models.observation_status import ObservationStatus
 from nvoken_generated.models.turn_log import TurnLog
 from typing import Optional, Set
@@ -31,36 +30,13 @@ class TurnLogList(BaseModel):
     """
     TurnLogList
     """ # noqa: E501
-    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    turn_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     status: ObservationStatus
     items: List[TurnLog]
     next_cursor: Optional[StrictStr]
     __properties: ClassVar[List[str]] = ["turn_id", "conversation_id", "content_expires_at", "status", "items", "next_cursor"]
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

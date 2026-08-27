@@ -54,11 +54,15 @@ export interface ResolvedLimits {
      */
     maxEstimatedCostUsd?: number;
     /**
+     * The turn's own model-call cap. Absent when neither the behavior nor
+     * the request set one; the installation ceiling still bounds the
+     * loop, but it is not reported here because the host never asked for
+     * it.
      *
      * @type {number}
      * @memberof ResolvedLimits
      */
-    maxIterations: number;
+    maxIterations?: number;
 }
 
 /**
@@ -68,7 +72,6 @@ export function instanceOfResolvedLimits(value: object): value is ResolvedLimits
     if (!('totalTimeoutSeconds' in value) || value['totalTimeoutSeconds'] === undefined) return false;
     if (!('activeTimeoutSeconds' in value) || value['activeTimeoutSeconds'] === undefined) return false;
     if (!('waitingTimeoutSeconds' in value) || value['waitingTimeoutSeconds'] === undefined) return false;
-    if (!('maxIterations' in value) || value['maxIterations'] === undefined) return false;
     return true;
 }
 
@@ -87,7 +90,7 @@ export function ResolvedLimitsFromJSONTyped(json: any, ignoreDiscriminator: bool
         'waitingTimeoutSeconds': json['waiting_timeout_seconds'],
         'maxOutputTokens': json['max_output_tokens'] == null ? undefined : json['max_output_tokens'],
         'maxEstimatedCostUsd': json['max_estimated_cost_usd'] == null ? undefined : json['max_estimated_cost_usd'],
-        'maxIterations': json['max_iterations'],
+        'maxIterations': json['max_iterations'] == null ? undefined : json['max_iterations'],
     };
 }
 

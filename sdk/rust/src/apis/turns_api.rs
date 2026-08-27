@@ -1064,11 +1064,10 @@ pub async fn list_turn_traces(
     }
 }
 
-/// Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, one named partition with `tenant_key`, or the default partition with `default_tenant=true`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
+/// Returns newest-first durable Turn state. Exact filters combine with AND. An App credential without a tenant constraint may list all tenant partitions in that App, or one of them with `tenant_key`. A tenant-constrained credential is always scoped to its partition. The opaque cursor is bound to the normalized filter set and credential tenant scope. Agent filtering uses the persisted Agent ID; an `agent_key` is owner-namespaced lookup input, not a Turn relationship.  ## `ended=true` makes this a reconciliation feed  Set it and the same operation reverses into a feed: every Turn that reached a terminal status, **oldest first by the moment it ended**, each appearing exactly once. Walk it and append by `id`.  This is the backstop for settlement. `turn.ended` webhooks are delivered at least once, which narrows the window but does not close it: a delivery that never lands leaves a turn nobody settles, and that failure is silent — no error, just a ledger row that was never written. Reading the feed to the end is how you find out.  The default listing cannot do that job. Newest-first over current state means a turn that ends while you page moves under you, and filtering by terminal status gives you a set with no position in it. Ending order is the only order you can resume.  Start with `ended_since`, or with no position at all to begin at the oldest retained turn. Then send back `next_cursor`, which in this mode is present on every response including an empty page, so a consumer that catches up keeps its position without special-casing. Keep going while `has_more` is true; when it is false you are caught up and can wait before asking again.  `complete_through` is returned in this mode and is the instant the feed is complete to. Turns that ended after it are held back until their settling transactions are certainly visible, because a turn that appeared behind your cursor would be one you never see again. It trails the present by a bounded interval, so a consumer is always slightly behind and never wrong; it is also the number to alarm on, since a `complete_through` that stops advancing means settlement has stalled rather than that nothing ended.  A cursor carries its mode, so one from the default listing cannot resume the feed and the reverse is also refused. Erased Conversations take their Turns with them, so a turn deleted before you read it never appears; reconcile before you erase.
 pub async fn list_turns(
     configuration: &configuration::Configuration,
     tenant_key: Option<&str>,
-    default_tenant: Option<bool>,
     user_key: Option<&str>,
     conversation_id: Option<&str>,
     agent_id: Option<&str>,
@@ -1081,7 +1080,6 @@ pub async fn list_turns(
 ) -> Result<models::TurnList, Error<ListTurnsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_query_tenant_key = tenant_key;
-    let p_query_default_tenant = default_tenant;
     let p_query_user_key = user_key;
     let p_query_conversation_id = conversation_id;
     let p_query_agent_id = agent_id;
@@ -1097,9 +1095,6 @@ pub async fn list_turns(
 
     if let Some(ref param_value) = p_query_tenant_key {
         req_builder = req_builder.query(&[("tenant_key", &param_value.to_string())]);
-    }
-    if let Some(ref param_value) = p_query_default_tenant {
-        req_builder = req_builder.query(&[("default_tenant", &param_value.to_string())]);
     }
     if let Some(ref param_value) = p_query_user_key {
         req_builder = req_builder.query(&[("user_key", &param_value.to_string())]);

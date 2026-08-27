@@ -65,19 +65,19 @@ export interface ToolCallbackContext {
      */
     toolName: string;
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ToolCallbackContext
      */
     turnId: string;
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ToolCallbackContext
      */
     conversationId: string | null;
     /**
-     * Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ToolCallbackContext
      */

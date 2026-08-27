@@ -45,14 +45,12 @@ export interface AllocateCreditsOperationRequest {
 
 export interface ListCreditAccountsRequest {
     tenantKey?: string;
-    defaultTenant?: boolean;
     cursor?: string;
     limit?: number;
 }
 
 export interface ListCreditAllocationsRequest {
     tenantKey?: string;
-    defaultTenant?: boolean;
     cursor?: string;
     limit?: number;
 }
@@ -129,10 +127,6 @@ export class CreditsApi extends runtime.BaseAPI {
             queryParameters['tenant_key'] = requestParameters['tenantKey'];
         }
 
-        if (requestParameters['defaultTenant'] != null) {
-            queryParameters['default_tenant'] = requestParameters['defaultTenant'];
-        }
-
         if (requestParameters['cursor'] != null) {
             queryParameters['cursor'] = requestParameters['cursor'];
         }
@@ -190,10 +184,6 @@ export class CreditsApi extends runtime.BaseAPI {
 
         if (requestParameters['tenantKey'] != null) {
             queryParameters['tenant_key'] = requestParameters['tenantKey'];
-        }
-
-        if (requestParameters['defaultTenant'] != null) {
-            queryParameters['default_tenant'] = requestParameters['defaultTenant'];
         }
 
         if (requestParameters['cursor'] != null) {

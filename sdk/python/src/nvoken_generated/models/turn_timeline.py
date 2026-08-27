@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.turn_timeline_step import TurnTimelineStep
@@ -30,13 +30,13 @@ class TurnTimeline(BaseModel):
     """
     TurnTimeline
     """ # noqa: E501
-    turn_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    turn_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
-    app_id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `app_` prefix. Treat the body as opaque.")
+    app_id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     tenant_key: Optional[StrictStr]
     user_key: Optional[StrictStr]
-    agent_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Null when the Turn used inline behavior.")
+    agent_id: Optional[StrictStr] = Field(description="Null when the Turn used inline behavior.")
     accepted_at: datetime
     ended_at: Optional[datetime]
     status: Optional[StrictStr]
@@ -48,52 +48,6 @@ class TurnTimeline(BaseModel):
     erased_at: Optional[datetime]
     steps: List[TurnTimelineStep]
     __properties: ClassVar[List[str]] = ["turn_id", "conversation_id", "content_expires_at", "app_id", "tenant_key", "user_key", "agent_id", "accepted_at", "ended_at", "status", "stop_reason", "failure_code", "attempt_count", "active_execution_ms", "waiting_execution_ms", "erased_at", "steps"]
-
-    @field_validator('turn_id')
-    def turn_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('app_id')
-    def app_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('agent_id')
-    def agent_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.anonymous_access import AnonymousAccess
@@ -34,8 +34,8 @@ class App(BaseModel):
     """
     App
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="The generated nvoken app identifier.")
-    org_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Durable owning Org. Nullable only during the staged console migration and tightened after every existing App is claimed. ")
+    id: StrictStr = Field(description="The generated nvoken app identifier.")
+    org_id: Optional[StrictStr] = Field(description="Durable owning Org. Nullable only during the staged console migration and tightened after every existing App is claimed. ")
     name: StrictStr = Field(description="The unique host-chosen name for this app.")
     external_ref: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(description="Transitional console-owner reference retained only to stamp existing Apps into Orgs during rollout. It is not an authorization boundary and is removed by the gated cleanup migration. ")
     display_name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(description="Human-facing label; `name` stays the unique handle.")
@@ -48,29 +48,6 @@ class App(BaseModel):
     created_at: datetime
     archived_at: Optional[datetime] = Field(description="When the App was archived, or null while it is live. An archived App refuses admission and grant-minting with `409 app_archived` while every read, settlement, erasure, configuration, and revocation path stays open. Its credentials keep authenticating. ")
     __properties: ClassVar[List[str]] = ["id", "org_id", "name", "external_ref", "display_name", "callback_timeout_seconds", "default_rate_limits", "machine_concurrency_limits", "browser_access", "anonymous_access", "credit_policy", "created_at", "archived_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^app_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('org_id')
-    def org_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^org_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

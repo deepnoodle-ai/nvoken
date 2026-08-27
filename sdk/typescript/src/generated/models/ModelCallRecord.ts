@@ -63,19 +63,19 @@ import {
  */
 export interface ModelCallRecord {
     /**
-     * Opaque identifier with the public `mcall_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
     id: string;
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
     turnId: string | null;
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
@@ -89,7 +89,7 @@ export interface ModelCallRecord {
      */
     contentExpiresAt: Date | null;
     /**
-     * Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
@@ -113,13 +113,13 @@ export interface ModelCallRecord {
      */
     behaviorSourceKind: ModelCallRecordBehaviorSourceKindEnum | null;
     /**
-     * Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
     agentId: string | null;
     /**
-     * Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */
@@ -137,7 +137,7 @@ export interface ModelCallRecord {
      */
     effectiveLimits: ResolvedLimits | null;
     /**
-     * Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof ModelCallRecord
      */

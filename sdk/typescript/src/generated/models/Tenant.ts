@@ -28,17 +28,17 @@ import {
  */
 export interface Tenant {
     /**
-     * Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Tenant
      */
     id: string;
     /**
-     * The interned key, or null for the App's default tenant.
+     * The host's opaque key for this tenant.
      * @type {string}
      * @memberof Tenant
      */
-    tenantKey: string | null;
+    tenantKey: string;
     /**
      *
      * @type {TenantCredits}

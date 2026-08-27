@@ -19,7 +19,7 @@ import json
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict
 from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
 from typing import Optional, Set
@@ -30,7 +30,7 @@ class CreditAccount(BaseModel):
     """
     One tenant's persistent, non-expiring spending capacity. These exact USD counters are enforcement facts, not an invoice or payment record. Deleting runtime transcripts never restores used credits.
     """ # noqa: E501
-    tenant_key: Optional[StrictStr] = Field(description="Null identifies the App's default tenant.")
+    tenant_key: StrictStr
     allocated: Money
     used: Money
     held: Money
@@ -91,11 +91,6 @@ class CreditAccount(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of available
         if self.available:
             _dict['available'] = self.available.to_dict()
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
-
         return _dict
 
     @classmethod

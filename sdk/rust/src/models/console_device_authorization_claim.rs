@@ -20,7 +20,7 @@ pub struct ConsoleDeviceAuthorizationClaim {
     /// Five-minute App issuer bearer, returned only to the authenticated console Worker.
     #[serde(rename = "issuer_token")]
     pub issuer_token: String,
-    /// Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "app_id")]
     pub app_id: String,
     #[serde(rename = "app_name")]

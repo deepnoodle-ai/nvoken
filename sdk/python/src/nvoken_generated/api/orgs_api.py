@@ -44,7 +44,7 @@ class OrgsApi:
     @validate_call
     async def archive_org(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -118,7 +118,7 @@ class OrgsApi:
     @validate_call
     async def archive_org_with_http_info(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -192,7 +192,7 @@ class OrgsApi:
     @validate_call
     async def archive_org_without_preload_content(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -326,7 +326,7 @@ class OrgsApi:
     @validate_call
     async def get_org(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -398,7 +398,7 @@ class OrgsApi:
     @validate_call
     async def get_org_with_http_info(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -470,7 +470,7 @@ class OrgsApi:
     @validate_call
     async def get_org_without_preload_content(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1169,7 +1169,7 @@ class OrgsApi:
     @validate_call
     async def restore_org(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1242,7 +1242,7 @@ class OrgsApi:
     @validate_call
     async def restore_org_with_http_info(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1315,7 +1315,7 @@ class OrgsApi:
     @validate_call
     async def restore_org_without_preload_content(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1448,7 +1448,7 @@ class OrgsApi:
     @validate_call
     async def update_org(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         update_org_request: UpdateOrgRequest,
         _request_timeout: Union[
             None,
@@ -1525,7 +1525,7 @@ class OrgsApi:
     @validate_call
     async def update_org_with_http_info(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         update_org_request: UpdateOrgRequest,
         _request_timeout: Union[
             None,
@@ -1602,7 +1602,7 @@ class OrgsApi:
     @validate_call
     async def update_org_without_preload_content(
         self,
-        org_id: Annotated[str, Field(strict=True)],
+        org_id: StrictStr,
         update_org_request: UpdateOrgRequest,
         _request_timeout: Union[
             None,

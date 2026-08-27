@@ -122,8 +122,7 @@ type RotateProviderKeyInput struct {
 
 type AllocateCreditsInput struct {
 	Amount         Money
-	TenantKey      *string
-	DefaultTenant  *bool
+	TenantKey      string
 	Reference      *string
 	IdempotencyKey string
 }

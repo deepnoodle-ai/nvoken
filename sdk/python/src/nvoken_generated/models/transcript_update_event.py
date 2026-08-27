@@ -32,7 +32,7 @@ class TranscriptUpdateEvent(BaseModel):
     The saved frame, and the only one. Messages append by `sequence` and are never sent twice. Changes are an append log keyed by `(turn_id, revision)`; fold to the highest revision for current state. Within one frame apply messages before changes, so a turn is never marked settled before its final message exists.
     """ # noqa: E501
     type: StrictStr
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `conv_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     messages: List[ConversationMessage]
     turn_changes: List[TurnChange]
@@ -45,19 +45,6 @@ class TranscriptUpdateEvent(BaseModel):
         """Validates the enum"""
         if value not in set(['transcript.update']):
             raise ValueError("must be one of enum values ('transcript.update')")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

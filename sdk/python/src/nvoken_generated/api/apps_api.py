@@ -55,7 +55,7 @@ class AppsApi:
     @validate_call
     async def activate_app_signing_key(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -137,7 +137,7 @@ class AppsApi:
     @validate_call
     async def activate_app_signing_key_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -219,7 +219,7 @@ class AppsApi:
     @validate_call
     async def activate_app_signing_key_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -367,7 +367,7 @@ class AppsApi:
     @validate_call
     async def archive_app(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -440,7 +440,7 @@ class AppsApi:
     @validate_call
     async def archive_app_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -513,7 +513,7 @@ class AppsApi:
     @validate_call
     async def archive_app_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -646,7 +646,7 @@ class AppsApi:
     @validate_call
     async def create_app_client_key(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         create_client_key_request: CreateClientKeyRequest,
         _request_timeout: Union[
             None,
@@ -724,7 +724,7 @@ class AppsApi:
     @validate_call
     async def create_app_client_key_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         create_client_key_request: CreateClientKeyRequest,
         _request_timeout: Union[
             None,
@@ -802,7 +802,7 @@ class AppsApi:
     @validate_call
     async def create_app_client_key_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         create_client_key_request: CreateClientKeyRequest,
         _request_timeout: Union[
             None,
@@ -956,7 +956,7 @@ class AppsApi:
     @validate_call
     async def get_app(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1028,7 +1028,7 @@ class AppsApi:
     @validate_call
     async def get_app_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1100,7 +1100,7 @@ class AppsApi:
     @validate_call
     async def get_app_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1232,7 +1232,7 @@ class AppsApi:
     @validate_call
     async def issue_anonymous_token(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
@@ -1319,7 +1319,7 @@ class AppsApi:
     @validate_call
     async def issue_anonymous_token_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
@@ -1406,7 +1406,7 @@ class AppsApi:
     @validate_call
     async def issue_anonymous_token_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         origin: Annotated[str, Field(min_length=1, strict=True, max_length=2048, description="One canonical browser origin configured on the App.")],
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
         anonymous_token_request: AnonymousTokenRequest,
@@ -1574,7 +1574,7 @@ class AppsApi:
     @validate_call
     async def list_app_client_keys(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1646,7 +1646,7 @@ class AppsApi:
     @validate_call
     async def list_app_client_keys_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1718,7 +1718,7 @@ class AppsApi:
     @validate_call
     async def list_app_client_keys_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1850,7 +1850,7 @@ class AppsApi:
     @validate_call
     async def list_app_signing_keys(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1923,7 +1923,7 @@ class AppsApi:
     @validate_call
     async def list_app_signing_keys_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1996,7 +1996,7 @@ class AppsApi:
     @validate_call
     async def list_app_signing_keys_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -2421,7 +2421,7 @@ class AppsApi:
     @validate_call
     async def mint_app_signing_key(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         mint_app_signing_key_request: MintAppSigningKeyRequest,
         _request_timeout: Union[
             None,
@@ -2499,7 +2499,7 @@ class AppsApi:
     @validate_call
     async def mint_app_signing_key_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         mint_app_signing_key_request: MintAppSigningKeyRequest,
         _request_timeout: Union[
             None,
@@ -2577,7 +2577,7 @@ class AppsApi:
     @validate_call
     async def mint_app_signing_key_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         mint_app_signing_key_request: MintAppSigningKeyRequest,
         _request_timeout: Union[
             None,
@@ -3026,7 +3026,7 @@ class AppsApi:
     @validate_call
     async def restore_app(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3099,7 +3099,7 @@ class AppsApi:
     @validate_call
     async def restore_app_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3172,7 +3172,7 @@ class AppsApi:
     @validate_call
     async def restore_app_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3305,7 +3305,7 @@ class AppsApi:
     @validate_call
     async def retire_app_signing_key(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -3387,7 +3387,7 @@ class AppsApi:
     @validate_call
     async def retire_app_signing_key_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -3469,7 +3469,7 @@ class AppsApi:
     @validate_call
     async def retire_app_signing_key_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         purpose: AppSigningKeyPurpose,
         version: Annotated[int, Field(strict=True, ge=1)],
         _request_timeout: Union[
@@ -3617,8 +3617,8 @@ class AppsApi:
     @validate_call
     async def revoke_app_client_key(
         self,
-        app_id: Annotated[str, Field(strict=True)],
-        key_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
+        key_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3693,8 +3693,8 @@ class AppsApi:
     @validate_call
     async def revoke_app_client_key_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
-        key_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
+        key_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3769,8 +3769,8 @@ class AppsApi:
     @validate_call
     async def revoke_app_client_key_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
-        key_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
+        key_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -3908,7 +3908,7 @@ class AppsApi:
     @validate_call
     async def update_app(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         update_app_request: UpdateAppRequest,
         _request_timeout: Union[
             None,
@@ -3986,7 +3986,7 @@ class AppsApi:
     @validate_call
     async def update_app_with_http_info(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         update_app_request: UpdateAppRequest,
         _request_timeout: Union[
             None,
@@ -4064,7 +4064,7 @@ class AppsApi:
     @validate_call
     async def update_app_without_preload_content(
         self,
-        app_id: Annotated[str, Field(strict=True)],
+        app_id: StrictStr,
         update_app_request: UpdateAppRequest,
         _request_timeout: Union[
             None,

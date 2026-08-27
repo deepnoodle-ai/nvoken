@@ -18,9 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
-from typing_extensions import Annotated
 from nvoken_generated.models.tenant_credits import TenantCredits
 from typing import Optional, Set
 from typing_extensions import Self
@@ -30,22 +29,12 @@ class Tenant(BaseModel):
     """
     Tenant
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `tnt_` prefix. Treat the body as opaque.")
-    tenant_key: Optional[StrictStr] = Field(description="The interned key, or null for the App's default tenant.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
+    tenant_key: StrictStr = Field(description="The host's opaque key for this tenant.")
     credits: TenantCredits
     last_turn_at: Optional[datetime] = Field(description="When this tenant last had a turn admitted, or null if it never has. Read from retained Turn facts, so Conversation deletion does not change it. ")
     created_at: datetime = Field(description="When the key was first interned, by any path.")
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "credits", "last_turn_at", "created_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^tnt_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^tnt_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -89,11 +78,6 @@ class Tenant(BaseModel):
         # override the default output from pydantic by calling `to_dict()` of credits
         if self.credits:
             _dict['credits'] = self.credits.to_dict()
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
-
         # set to None if last_turn_at (nullable) is None
         # and model_fields_set contains the field
         if self.last_turn_at is None and "last_turn_at" in self.model_fields_set:

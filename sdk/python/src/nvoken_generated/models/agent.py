@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.agent_owner import AgentOwner
@@ -30,7 +30,7 @@ class Agent(BaseModel):
     """
     Agent
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `agent_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     agent_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="Caller-owned key, unique only inside one explicit Agent owner namespace.")
     name: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     owner: AgentOwner
@@ -39,16 +39,6 @@ class Agent(BaseModel):
     updated_at: datetime
     archived_at: Optional[datetime]
     __properties: ClassVar[List[str]] = ["id", "agent_key", "name", "owner", "current_revision", "created_at", "updated_at", "archived_at"]
-
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^agent_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
 
     model_config = ConfigDict(
         validate_by_name=True,

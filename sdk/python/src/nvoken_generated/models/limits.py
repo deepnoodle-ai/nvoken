@@ -26,14 +26,14 @@ from pydantic_core import to_jsonable_python
 
 class Limits(BaseModel):
     """
-    Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply all three time limits and the iteration limit. Output-token and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
+    Optional requested limits. Total time bounds the entire turn, active time bounds model and tool execution, and waiting time bounds the cumulative time parked for host or callback tool results. Installation defaults supply the three time limits. Iteration, output-token, and estimated-cost limits are unlimited when omitted. Installation maxima may be lower than the schema's numeric range.
     """ # noqa: E501
     total_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     active_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     waiting_timeout_seconds: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="Optional cumulative external-waiting SLA. When omitted, host and callback ToolCalls may remain pending indefinitely; waiting does not consume the Turn's total or active execution budgets. ")
     max_output_tokens: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
     max_estimated_cost_usd: Optional[Union[Annotated[float, Field(multiple_of=0.0000010, strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="A cost ceiling for this turn, in USD, estimated from list prices. It does not reserve funds and is not a bill.  The model must have a known price. If it does not, the turn fails with `cost_estimate_unavailable` — and where nvoken can tell in advance, it refuses before calling the provider at all, so you are not charged for a turn it cannot police.  Hitting the ceiling is not itself a failure. If the turn can stop cleanly it ends `incomplete` with `stop_reason: max_estimated_cost` and keeps everything it produced. ")
-    max_iterations: Optional[Annotated[int, Field(strict=True, ge=1)]] = None
+    max_iterations: Optional[Annotated[int, Field(strict=True, ge=1)]] = Field(default=None, description="The number of model calls this turn may make. Omitted means the turn carries no cap of its own: nvoken never invents one, and the loop runs until the agent stops or the installation ceiling (`TURN_MAX_ITERATIONS`) halts a runaway. A behavior may set a cap, and a request may only narrow it. ")
     __properties: ClassVar[List[str]] = ["total_timeout_seconds", "active_timeout_seconds", "waiting_timeout_seconds", "max_output_tokens", "max_estimated_cost_usd", "max_iterations"]
 
     model_config = ConfigDict(

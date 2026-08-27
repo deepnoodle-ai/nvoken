@@ -42,13 +42,13 @@ import {
  */
 export interface SubmitHostToolResultsResponse {
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof SubmitHostToolResultsResponse
      */
     turnId: string;
     /**
-     * Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof SubmitHostToolResultsResponse
      */

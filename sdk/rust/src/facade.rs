@@ -888,37 +888,23 @@ impl Client {
     pub async fn list_credit_accounts(
         &self,
         tenant_key: Option<&str>,
-        default_tenant: Option<bool>,
         cursor: Option<&str>,
         limit: Option<u32>,
     ) -> Result<models::CreditAccountList, NvokenError> {
-        apis::credits_api::list_credit_accounts(
-            self.raw(),
-            tenant_key,
-            default_tenant,
-            cursor,
-            limit,
-        )
-        .await
-        .map_err(api_error)
+        apis::credits_api::list_credit_accounts(self.raw(), tenant_key, cursor, limit)
+            .await
+            .map_err(api_error)
     }
 
     pub async fn list_credit_allocations(
         &self,
         tenant_key: Option<&str>,
-        default_tenant: Option<bool>,
         cursor: Option<&str>,
         limit: Option<u32>,
     ) -> Result<models::CreditAllocationList, NvokenError> {
-        apis::credits_api::list_credit_allocations(
-            self.raw(),
-            tenant_key,
-            default_tenant,
-            cursor,
-            limit,
-        )
-        .await
-        .map_err(api_error)
+        apis::credits_api::list_credit_allocations(self.raw(), tenant_key, cursor, limit)
+            .await
+            .map_err(api_error)
     }
 
     pub async fn list_mcp_tools(

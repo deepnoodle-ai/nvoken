@@ -35,7 +35,7 @@ import {
  */
 export interface Credential {
     /**
-     * Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Credential
      */
@@ -65,13 +65,13 @@ export interface Credential {
      */
     type: CredentialType;
     /**
-     * Opaque identifier with the public `app_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Credential
      */
     appId?: string | null;
     /**
-     * Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Credential
      */
@@ -89,7 +89,7 @@ export interface Credential {
      */
     expiresAt?: Date | null;
     /**
-     * Opaque identifier with the public `cred_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Credential
      */

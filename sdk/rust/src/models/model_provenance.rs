@@ -22,10 +22,10 @@ pub struct ModelProvenance {
     pub served_model: String,
     #[serde(rename = "provider_key_source")]
     pub provider_key_source: ProviderKeySource,
-    /// Opaque identifier with the public `pkey_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "provider_key_id", skip_serializing_if = "Option::is_none")]
     pub provider_key_id: Option<String>,
-    /// Opaque identifier with the public `ver_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(
         rename = "provider_key_version_id",
         skip_serializing_if = "Option::is_none"

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AdmissionAttempt {
-    /// Opaque identifier with the public `adm_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "id")]
     pub id: String,
     #[serde(rename = "attempted_at")]
@@ -44,10 +44,10 @@ pub struct AdmissionAttempt {
     /// Raw owner-qualified lookup key, or null for ID, inline, or browser selection.
     #[serde(rename = "agent_key", deserialize_with = "Option::deserialize")]
     pub agent_key: Option<String>,
-    /// Opaque identifier with the public `agent_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "agent_id", deserialize_with = "Option::deserialize")]
     pub agent_id: Option<String>,
-    /// Opaque AgentRevision identifier with the public `arev_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Treat the body as opaque.
     #[serde(rename = "agent_revision_id", deserialize_with = "Option::deserialize")]
     pub agent_revision_id: Option<String>,
     #[serde(
@@ -55,10 +55,10 @@ pub struct AdmissionAttempt {
         deserialize_with = "Option::deserialize"
     )]
     pub effective_behavior_digest: Option<String>,
-    /// Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "memory_space_id", deserialize_with = "Option::deserialize")]
     pub memory_space_id: Option<String>,
-    /// Opaque identifier with the public `conv_` prefix. Treat the body as opaque.
+    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
     pub conversation_id: Option<String>,
     #[serde(rename = "provider", deserialize_with = "Option::deserialize")]

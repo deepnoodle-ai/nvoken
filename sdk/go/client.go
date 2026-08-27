@@ -1104,7 +1104,6 @@ func (c *Client) AllocateCredits(ctx context.Context, input AllocateCreditsInput
 	}
 	body := generated.AllocateCreditsRequest{
 		Amount:         input.Amount,
-		DefaultTenant:  input.DefaultTenant,
 		IdempotencyKey: input.IdempotencyKey,
 		Reference:      input.Reference,
 		TenantKey:      input.TenantKey,

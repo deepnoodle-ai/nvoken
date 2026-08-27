@@ -44,14 +44,14 @@ class Turn(BaseModel):
     """
     One durable Turn. Trusted reads include behavior details and all coordinates. A browser projection may omit machine-only fields while retaining this same response schema. An exact admission replay after content erasure returns a content-free projection with `deduplicated` and `erased_at`; content-bearing optional fields remain absent or null.
     """ # noqa: E501
-    id: Annotated[str, Field(strict=True)] = Field(description="Opaque identifier with the public `turn_` prefix. Treat the body as opaque.")
+    id: StrictStr = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     tenant_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     user_key: Optional[StrictStr] = Field(default=None, description="Optional actor attributed to this Turn.")
     behavior_source: Optional[TurnBehaviorSource] = None
     effective_behavior: Optional[BehaviorInput] = Field(default=None, description="Present on point reads and results; null or omitted from list projections.")
     effective_behavior_digest: Optional[Annotated[str, Field(strict=True)]] = None
-    conversation_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Null for a standalone Turn.")
-    memory_space_id: Optional[Annotated[str, Field(strict=True)]] = Field(description="Opaque identifier with the public `mspc_` prefix. Treat the body as opaque.")
+    conversation_id: Optional[StrictStr] = Field(description="Null for a standalone Turn.")
+    memory_space_id: Optional[StrictStr] = Field(description="RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.")
     memory: Optional[TurnMemorySelection] = Field(default=None, description="The resolved memory selection; null means no MemorySpace.")
     content_expires_at: Optional[datetime] = Field(description="Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work. ")
     triggered_by: Optional[TurnTrigger] = None
@@ -79,16 +79,6 @@ class Turn(BaseModel):
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["id", "tenant_key", "user_key", "behavior_source", "effective_behavior", "effective_behavior_digest", "conversation_id", "memory_space_id", "memory", "content_expires_at", "triggered_by", "child_turn_counts", "context", "deduplicated", "status", "stop_reason", "credit_block", "attempt", "error", "usage", "provenance", "structured_output", "structured_output_provenance", "metadata", "limits", "active_execution_ms", "deadline_at", "created_at", "updated_at", "ended_at", "erased_at", "tool_calls"]
 
-    @field_validator('id')
-    def id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^turn_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
     @field_validator('effective_behavior_digest')
     def effective_behavior_digest_validate_regular_expression(cls, value):
         """Validates the regular expression"""
@@ -100,32 +90,6 @@ class Turn(BaseModel):
 
         if not re.match(r"^sha256:[0-9a-f]{64}$", value):
             raise ValueError(r"must validate the regular expression /^sha256:[0-9a-f]{64}$/")
-        return value
-
-    @field_validator('conversation_id')
-    def conversation_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^conv_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
-        return value
-
-    @field_validator('memory_space_id')
-    def memory_space_id_validate_regular_expression(cls, value):
-        """Validates the regular expression"""
-        if value is None:
-            return value
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        if not re.match(r"^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$", value):
-            raise ValueError(r"must validate the regular expression /^mspc_[0-7][0-9abcdefghjkmnpqrstvwxyz]{25}$/")
         return value
 
     model_config = ConfigDict(

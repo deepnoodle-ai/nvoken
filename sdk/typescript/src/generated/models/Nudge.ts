@@ -35,13 +35,13 @@ import {
  */
 export interface Nudge {
     /**
-     * Opaque identifier with the public `nudge_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Nudge
      */
     id: string;
     /**
-     * Opaque identifier with the public `turn_` prefix. Treat the body as opaque.
+     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
      * @type {string}
      * @memberof Nudge
      */

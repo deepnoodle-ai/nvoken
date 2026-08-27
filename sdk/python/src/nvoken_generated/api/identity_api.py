@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, StrictStr
 from typing import Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.create_credential_request import CreateCredentialRequest
@@ -348,7 +348,7 @@ class IdentityApi:
     @validate_call
     async def get_credential(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -417,7 +417,7 @@ class IdentityApi:
     @validate_call
     async def get_credential_with_http_info(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -486,7 +486,7 @@ class IdentityApi:
     @validate_call
     async def get_credential_without_preload_content(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1164,7 +1164,7 @@ class IdentityApi:
     @validate_call
     async def revoke_credential(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1233,7 +1233,7 @@ class IdentityApi:
     @validate_call
     async def revoke_credential_with_http_info(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1302,7 +1302,7 @@ class IdentityApi:
     @validate_call
     async def revoke_credential_without_preload_content(
         self,
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1432,7 +1432,7 @@ class IdentityApi:
     async def rotate_credential(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         rotate_credential_request: RotateCredentialRequest,
         _request_timeout: Union[
             None,
@@ -1511,7 +1511,7 @@ class IdentityApi:
     async def rotate_credential_with_http_info(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         rotate_credential_request: RotateCredentialRequest,
         _request_timeout: Union[
             None,
@@ -1590,7 +1590,7 @@ class IdentityApi:
     async def rotate_credential_without_preload_content(
         self,
         idempotency_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)],
-        credential_id: Annotated[str, Field(strict=True)],
+        credential_id: StrictStr,
         rotate_credential_request: RotateCredentialRequest,
         _request_timeout: Union[
             None,
