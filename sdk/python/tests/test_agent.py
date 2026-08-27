@@ -36,7 +36,7 @@ from nvoken.facade import (
 
 @pytest.mark.asyncio
 async def test_agent_lookup_is_explicit_and_awaited() -> None:
-    resource = SimpleNamespace(id="agent_01kc514000e008000000000001", agent_key="analyst")
+    resource = SimpleNamespace(id="47fc63e5-ae78-727c-ab52-a2872fe8728f", agent_key="analyst")
 
     class Agents:
         async def list_agents(self, owner, **kwargs):
@@ -48,13 +48,13 @@ async def test_agent_lookup_is_explicit_and_awaited() -> None:
     client._raw = SimpleNamespace(agents=Agents())
     client._agents = AgentCollection(client)
     agent = await client.agent("analyst", owned_by=OwnedBy("acme", "alice"))
-    assert agent.id == "agent_01kc514000e008000000000001"
+    assert agent.id == "47fc63e5-ae78-727c-ab52-a2872fe8728f"
     assert agent.key == "analyst"
 
 
 @pytest.mark.asyncio
 async def test_agent_create_generates_idempotency_key_when_omitted() -> None:
-    resource = SimpleNamespace(id="agent_01kc514000e008000000000001", agent_key="analyst")
+    resource = SimpleNamespace(id="47fc63e5-ae78-727c-ab52-a2872fe8728f", agent_key="analyst")
 
     class Agents:
         async def create_agent(self, idempotency_key, request):
@@ -68,7 +68,7 @@ async def test_agent_create_generates_idempotency_key_when_omitted() -> None:
     created = await client.agents.create(
         "analyst", behavior=Behavior("Analyze", "openai/gpt-5"),
     )
-    assert created.id == "agent_01kc514000e008000000000001"
+    assert created.id == "47fc63e5-ae78-727c-ab52-a2872fe8728f"
 
 
 def test_inline_request_keeps_actor_memory_conversation_and_behavior_independent() -> None:
@@ -123,8 +123,8 @@ def test_bind_tools_is_an_immutable_handler_map() -> None:
 
 def test_turn_recovery_is_local() -> None:
     client = object.__new__(Client)
-    handle = client.turn("turn_01kc514000e008000000000003", tenant="acme", user="alice")
-    assert (handle.id, handle.tenant, handle.user) == ("turn_01kc514000e008000000000003", "acme", "alice")
+    handle = client.turn("8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", user="alice")
+    assert (handle.id, handle.tenant, handle.user) == ("8f57d547-fa52-75fa-947d-41e21909db99", "acme", "alice")
 
 
 def test_inline_memory_requires_namespace_and_user_actor() -> None:
@@ -139,9 +139,9 @@ def test_inline_memory_requires_namespace_and_user_actor() -> None:
 
 
 def test_conversation_selection_is_discriminated_and_keeps_create_options() -> None:
-    by_id = ConversationRef.by_id("conv_01kc514000e008000000000003")
+    by_id = ConversationRef.by_id("f67d1424-7634-75c9-bf52-fa7039407969")
     assert isinstance(by_id, ConversationById)
-    assert by_id.to_wire(None) == {"mode": "continue", "conversation_id": "conv_01kc514000e008000000000003"}
+    assert by_id.to_wire(None) == {"mode": "continue", "conversation_id": "f67d1424-7634-75c9-bf52-fa7039407969"}
 
     by_key = ConversationRef.by_key(
         "case-42",
@@ -184,7 +184,7 @@ def test_conversation_limits_only_narrow_and_tenant_lock_ignores_actor() -> None
 async def test_turn_status_uses_result_snapshot_and_actor_assertions() -> None:
     source = SimpleNamespace(
         actual_instance=SimpleNamespace(
-            kind="agent_revision", agent_id="agent_01kc514000e008000000000001", agent_revision_id="arev_01kc514000e008000000000001",
+            kind="agent_revision", agent_id="47fc63e5-ae78-727c-ab52-a2872fe8728f", agent_revision_id="4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd",
         ),
     )
     resource = SimpleNamespace(
@@ -194,7 +194,7 @@ async def test_turn_status_uses_result_snapshot_and_actor_assertions() -> None:
 
     class Turns:
         async def get_turn_result(self, turn_id, **kwargs):
-            assert turn_id == "turn_01kc514000e008000000000003"
+            assert turn_id == "8f57d547-fa52-75fa-947d-41e21909db99"
             assert kwargs["_headers"] == {
                 "X-Nvoken-Tenant-Key": "acme",
                 "X-Nvoken-User-Key": "alice",
@@ -203,20 +203,20 @@ async def test_turn_status_uses_result_snapshot_and_actor_assertions() -> None:
 
     client = object.__new__(Client)
     client._raw = SimpleNamespace(turns=Turns())
-    snapshot = await Turn(client, "turn_01kc514000e008000000000003", tenant="acme", user="alice").status()
+    snapshot = await Turn(client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", user="alice").status()
     assert snapshot.status == "running"
     assert snapshot.messages == ("working",)
     assert snapshot.text is None
-    assert snapshot.agent_id == "agent_01kc514000e008000000000001"
+    assert snapshot.agent_id == "47fc63e5-ae78-727c-ab52-a2872fe8728f"
     assert not hasattr(snapshot, "resource")
 
 
 @pytest.mark.asyncio
 async def test_missing_tool_handler_leaves_waiting_turn_unmodified() -> None:
-    call = SimpleNamespace(id="call_01kc514000e008000000000001", name="lookup", mode="host", arguments={"id": 1})
+    call = SimpleNamespace(id="9f8fd6b3-9060-783d-b759-45c8ec70e8cb", name="lookup", mode="host", arguments={"id": 1})
     client = object.__new__(Client)
     client._raw = SimpleNamespace(turns=SimpleNamespace())
-    turn = Turn(client, "turn_01kc514000e008000000000003", tenant="acme")
+    turn = Turn(client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme")
     assert await turn._run_host_tools(SimpleNamespace(tool_calls=[call])) is False
 
 
@@ -233,15 +233,15 @@ async def test_tool_replay_dedupes_known_calls_and_passes_context() -> None:
         contexts.append((arguments, context.turn_id, context.tool_call_id))
         return {"ok": True}
 
-    known = SimpleNamespace(id="call_01kc514000e008000000000001", name="lookup", mode="host", arguments={"id": 1})
-    unknown = SimpleNamespace(id="call_01kc514000e008000000000002", name="other", mode="host", arguments={"id": 2})
+    known = SimpleNamespace(id="9f8fd6b3-9060-783d-b759-45c8ec70e8cb", name="lookup", mode="host", arguments={"id": 1})
+    unknown = SimpleNamespace(id="8b6c8687-a698-7aeb-8440-29729d2fc4b7", name="other", mode="host", arguments={"id": 2})
     client = object.__new__(Client)
     client._raw = SimpleNamespace(turns=Turns())
-    turn = Turn(client, "turn_01kc514000e008000000000003", tenant="acme", tools={"lookup": lookup})
+    turn = Turn(client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", tools={"lookup": lookup})
     resource = SimpleNamespace(tool_calls=[known, unknown])
     assert await turn._run_host_tools(resource) is True
     assert await turn._run_host_tools(resource) is False
-    assert contexts == [({"id": 1}, "turn_01kc514000e008000000000003", "call_01kc514000e008000000000001")]
+    assert contexts == [({"id": 1}, "8f57d547-fa52-75fa-947d-41e21909db99", "9f8fd6b3-9060-783d-b759-45c8ec70e8cb")]
     assert len(submissions) == 1
     assert len(submissions[0]["results"]) == 1
 
@@ -264,10 +264,10 @@ async def test_failed_tool_submission_clears_local_replay_guard() -> None:
         calls += 1
         return {"ok": True}
 
-    call = SimpleNamespace(id="call_01kc514000e008000000000001", name="lookup", mode="host", arguments={})
+    call = SimpleNamespace(id="9f8fd6b3-9060-783d-b759-45c8ec70e8cb", name="lookup", mode="host", arguments={})
     client = object.__new__(Client)
     client._raw = SimpleNamespace(turns=Turns())
-    turn = Turn(client, "turn_01kc514000e008000000000003", tenant="acme", tools={"lookup": lookup})
+    turn = Turn(client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", tools={"lookup": lookup})
     with pytest.raises(Exception):
         await turn._run_host_tools(SimpleNamespace(tool_calls=[call]))
     assert await turn._run_host_tools(SimpleNamespace(tool_calls=[call])) is True
@@ -283,16 +283,16 @@ async def test_cancelled_tool_handler_clears_local_replay_guard() -> None:
         entered.set()
         await asyncio.Event().wait()
 
-    call = SimpleNamespace(id="call_01kc514000e008000000000001", name="lookup", mode="host", arguments={})
+    call = SimpleNamespace(id="9f8fd6b3-9060-783d-b759-45c8ec70e8cb", name="lookup", mode="host", arguments={})
     client = object.__new__(Client)
     client._raw = SimpleNamespace(turns=SimpleNamespace())
-    turn = Turn(client, "turn_01kc514000e008000000000003", tenant="acme", tools={"lookup": lookup})
+    turn = Turn(client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", tools={"lookup": lookup})
     task = asyncio.create_task(turn._run_host_tools(SimpleNamespace(tool_calls=[call])))
     await entered.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert "call_01kc514000e008000000000001" not in turn._handled_tool_call_ids
+    assert "9f8fd6b3-9060-783d-b759-45c8ec70e8cb" not in turn._handled_tool_call_ids
 
 
 @pytest.mark.asyncio
@@ -335,7 +335,7 @@ async def test_turn_stream_carries_recovery_assertions() -> None:
 
         async def aiter_lines(self):
             yield "event: message.delta"
-            yield 'data: {"turn_id":"turn_01kc514000e008000000000003","attempt":1,"message_id":"msg_01kc514000e008000000000001","content_index":0,"kind":"text","delta":"hi"}'
+            yield 'data: {"turn_id":"8f57d547-fa52-75fa-947d-41e21909db99","attempt":1,"message_id":"102002f7-649e-7a77-85c2-7f1695adb24e","content_index":0,"kind":"text","delta":"hi"}'
             yield ""
 
         async def aclose(self):
@@ -343,7 +343,7 @@ async def test_turn_stream_carries_recovery_assertions() -> None:
 
     class Turns:
         async def stream_turn_without_preload_content(self, turn_id, **kwargs):
-            assert turn_id == "turn_01kc514000e008000000000003"
+            assert turn_id == "8f57d547-fa52-75fa-947d-41e21909db99"
             assert kwargs["_headers"] == {
                 "X-Nvoken-Tenant-Key": "acme",
                 "X-Nvoken-User-Key": "alice",
@@ -355,7 +355,7 @@ async def test_turn_stream_carries_recovery_assertions() -> None:
     stream = _read_stream(
         client,
         conversation_id=None,
-        turn_id="turn_01kc514000e008000000000003",
+        turn_id="8f57d547-fa52-75fa-947d-41e21909db99",
         reducer=Reducer(),
         deltas=True,
         access_headers={
@@ -364,7 +364,7 @@ async def test_turn_stream_carries_recovery_assertions() -> None:
         },
     )
     event = await anext(stream)
-    assert event.data["turn_id"] == "turn_01kc514000e008000000000003"
+    assert event.data["turn_id"] == "8f57d547-fa52-75fa-947d-41e21909db99"
     await stream.aclose()
 
 
@@ -385,7 +385,7 @@ async def test_turn_stream_reconnects_after_transport_failure(monkeypatch) -> No
         async def aiter_lines(self):
             yield "id: cursor-1"
             yield "event: message.delta"
-            yield 'data: {"turn_id":"turn_01kc514000e008000000000003","attempt":1,"message_id":"msg_01kc514000e008000000000001","content_index":0,"kind":"text","delta":"hi"}'
+            yield 'data: {"turn_id":"8f57d547-fa52-75fa-947d-41e21909db99","attempt":1,"message_id":"102002f7-649e-7a77-85c2-7f1695adb24e","content_index":0,"kind":"text","delta":"hi"}'
             yield ""
 
         async def aclose(self):
@@ -409,7 +409,7 @@ async def test_turn_stream_reconnects_after_transport_failure(monkeypatch) -> No
     stream = _read_stream(
         client,
         conversation_id=None,
-        turn_id="turn_01kc514000e008000000000003",
+        turn_id="8f57d547-fa52-75fa-947d-41e21909db99",
         reducer=Reducer(),
         deltas=True,
     )
@@ -474,7 +474,7 @@ async def test_turn_result_raises_typed_execution_and_timeout_errors() -> None:
     )
     turn = Turn(
         client,
-        "turn_01kc514000e00800000000000a",
+        "ca2779a8-1755-7ea1-aed1-9e84834989cd",
         tenant="acme",
         admission=TurnAdmission("idem-1", False),
     )
@@ -498,7 +498,7 @@ async def test_turn_result_raises_typed_execution_and_timeout_errors() -> None:
     )
     waiting = Turn(
         client,
-        "turn_01kc514000e00800000000000b",
+        "ac35fb8c-65ce-7b16-b612-be4f87a1c0ab",
         tenant="acme",
         admission=TurnAdmission("idem-2", False),
     )

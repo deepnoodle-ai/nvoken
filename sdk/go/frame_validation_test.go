@@ -7,7 +7,7 @@ import (
 
 func TestReducerRefusesTurnChangeMissingTerminal(t *testing.T) {
 	change := map[string]any{
-		"turn_id":                  "turn_01kc514000e008000000000001",
+		"turn_id":                  "476dd7be-97a1-78f3-8096-d7032468a80a",
 		"conversation_id":          nil,
 		"content_expires_at":       nil,
 		"revision":                 1,
@@ -49,7 +49,7 @@ func TestReducerRefusesTurnChangeMissingTerminal(t *testing.T) {
 	if err := reducer.Apply(StreamEvent{Type: "transcript.update", Data: data}); err != nil {
 		t.Fatalf("reducer refused a complete change: %v", err)
 	}
-	if !reducer.Settled("turn_01kc514000e008000000000001") {
+	if !reducer.Settled("476dd7be-97a1-78f3-8096-d7032468a80a") {
 		t.Fatal("complete terminal change did not settle the Turn")
 	}
 }

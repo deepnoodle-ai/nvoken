@@ -2891,9 +2891,9 @@ type AdmissionAttempt struct {
 	Provider  *string          `json:"provider"`
 	RequestID *string          `json:"request_id"`
 
-	// TenantKey The tenant key as sent, or null for the App's default tenant. It is
-	// raw text, not a resolved reference: a refused attempt commonly
-	// names a tenant that was never interned.
+	// TenantKey The tenant key as sent, or null when nvoken refused the request
+	// before reading one. It is raw text, not a resolved reference: a
+	// refused attempt commonly names a tenant that was never interned.
 	TenantKey *string `json:"tenant_key"`
 
 	// TurnID The admitted Turn, or null for a refusal. It carries no
@@ -4354,8 +4354,8 @@ type CreditAllocationList struct {
 
 // CreditBlock defines model for CreditBlock.
 type CreditBlock struct {
-	// TenantKey Account that could not fund the next provider attempt; null means the App's default tenant.
-	TenantKey *string `json:"tenant_key"`
+	// TenantKey Account that could not fund the next provider attempt.
+	TenantKey string `json:"tenant_key"`
 }
 
 // CreditPolicy Whether nvoken refuses a turn whose tenant has no available credits.
@@ -10968,13 +10968,14 @@ type ClientInterface interface {
 
 	// RegisterAppWithBody Register an app
 	//
-	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id` and independent callback and webhook
-	// HMAC keys. The plaintext signing keys are returned only in this
-	// response; store them in the receiver's secret manager. nvoken stores
-	// only authenticated ciphertext and selects a key from the durable App
-	// scope of each delivery. Registration is unavailable when the service's
-	// encryption keyring is not configured.
+	// Registers one host application, returning the generated `app_id` and
+	// independent callback and webhook HMAC keys. Tenants are interned by
+	// the first request that names one, so a new App has none. The
+	// plaintext signing keys are returned only in this response; store
+	// them in the receiver's secret manager. nvoken stores only
+	// authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the
+	// service's encryption keyring is not configured.
 	//
 	// Registration requires an Org console presentation or installation-admin
 	// key; an App key cannot mint siblings. Org callers always create
@@ -10991,13 +10992,14 @@ type ClientInterface interface {
 
 	// RegisterApp Register an app
 	//
-	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id` and independent callback and webhook
-	// HMAC keys. The plaintext signing keys are returned only in this
-	// response; store them in the receiver's secret manager. nvoken stores
-	// only authenticated ciphertext and selects a key from the durable App
-	// scope of each delivery. Registration is unavailable when the service's
-	// encryption keyring is not configured.
+	// Registers one host application, returning the generated `app_id` and
+	// independent callback and webhook HMAC keys. Tenants are interned by
+	// the first request that names one, so a new App has none. The
+	// plaintext signing keys are returned only in this response; store
+	// them in the receiver's secret manager. nvoken stores only
+	// authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the
+	// service's encryption keyring is not configured.
 	//
 	// Registration requires an Org console presentation or installation-admin
 	// key; an App key cannot mint siblings. Org callers always create
@@ -11863,10 +11865,9 @@ type ClientInterface interface {
 	// evidence. To remove transcripts, delete the Conversations; the facts and
 	// their spend stay.
 	//
-	// The default tenant is never deletable. Deleting a funded tenant
-	// destroys its allocation history, and allocations cannot be recreated
-	// with their original identity, so the released amount is written to the
-	// operator log at deletion.
+	// Deleting a funded tenant destroys its allocation history, and
+	// allocations cannot be recreated with their original identity, so the
+	// released amount is written to the operator log at deletion.
 	//
 	// Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
 	DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12688,13 +12689,14 @@ func (c *Client) ListApps(ctx context.Context, params *ListAppsParams, reqEditor
 
 // RegisterAppWithBody Register an app
 //
-// Registers one host application and creates its default tenant,
-// returning the generated `app_id` and independent callback and webhook
-// HMAC keys. The plaintext signing keys are returned only in this
-// response; store them in the receiver's secret manager. nvoken stores
-// only authenticated ciphertext and selects a key from the durable App
-// scope of each delivery. Registration is unavailable when the service's
-// encryption keyring is not configured.
+// Registers one host application, returning the generated `app_id` and
+// independent callback and webhook HMAC keys. Tenants are interned by
+// the first request that names one, so a new App has none. The
+// plaintext signing keys are returned only in this response; store
+// them in the receiver's secret manager. nvoken stores only
+// authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the
+// service's encryption keyring is not configured.
 //
 // Registration requires an Org console presentation or installation-admin
 // key; an App key cannot mint siblings. Org callers always create
@@ -12721,13 +12723,14 @@ func (c *Client) RegisterAppWithBody(ctx context.Context, contentType string, bo
 
 // RegisterApp Register an app
 //
-// Registers one host application and creates its default tenant,
-// returning the generated `app_id` and independent callback and webhook
-// HMAC keys. The plaintext signing keys are returned only in this
-// response; store them in the receiver's secret manager. nvoken stores
-// only authenticated ciphertext and selects a key from the durable App
-// scope of each delivery. Registration is unavailable when the service's
-// encryption keyring is not configured.
+// Registers one host application, returning the generated `app_id` and
+// independent callback and webhook HMAC keys. Tenants are interned by
+// the first request that names one, so a new App has none. The
+// plaintext signing keys are returned only in this response; store
+// them in the receiver's secret manager. nvoken stores only
+// authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the
+// service's encryption keyring is not configured.
 //
 // Registration requires an Org console presentation or installation-admin
 // key; an App key cannot mint siblings. Org callers always create
@@ -14343,10 +14346,9 @@ func (c *Client) ListTenants(ctx context.Context, params *ListTenantsParams, req
 // evidence. To remove transcripts, delete the Conversations; the facts and
 // their spend stay.
 //
-// The default tenant is never deletable. Deleting a funded tenant
-// destroys its allocation history, and allocations cannot be recreated
-// with their original identity, so the released amount is written to the
-// operator log at deletion.
+// Deleting a funded tenant destroys its allocation history, and
+// allocations cannot be recreated with their original identity, so the
+// released amount is written to the operator log at deletion.
 //
 // Corresponds with DELETE /v1/tenants/{tenant_id} (the `DeleteTenant` operationId).
 func (c *Client) DeleteTenant(ctx context.Context, tenantID TenantID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -20825,13 +20827,14 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterAppWithBodyWithResponse Register an app
 	//
-	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id` and independent callback and webhook
-	// HMAC keys. The plaintext signing keys are returned only in this
-	// response; store them in the receiver's secret manager. nvoken stores
-	// only authenticated ciphertext and selects a key from the durable App
-	// scope of each delivery. Registration is unavailable when the service's
-	// encryption keyring is not configured.
+	// Registers one host application, returning the generated `app_id` and
+	// independent callback and webhook HMAC keys. Tenants are interned by
+	// the first request that names one, so a new App has none. The
+	// plaintext signing keys are returned only in this response; store
+	// them in the receiver's secret manager. nvoken stores only
+	// authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the
+	// service's encryption keyring is not configured.
 	//
 	// Registration requires an Org console presentation or installation-admin
 	// key; an App key cannot mint siblings. Org callers always create
@@ -20848,13 +20851,14 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterAppWithResponse Register an app
 	//
-	// Registers one host application and creates its default tenant,
-	// returning the generated `app_id` and independent callback and webhook
-	// HMAC keys. The plaintext signing keys are returned only in this
-	// response; store them in the receiver's secret manager. nvoken stores
-	// only authenticated ciphertext and selects a key from the durable App
-	// scope of each delivery. Registration is unavailable when the service's
-	// encryption keyring is not configured.
+	// Registers one host application, returning the generated `app_id` and
+	// independent callback and webhook HMAC keys. Tenants are interned by
+	// the first request that names one, so a new App has none. The
+	// plaintext signing keys are returned only in this response; store
+	// them in the receiver's secret manager. nvoken stores only
+	// authenticated ciphertext and selects a key from the durable App
+	// scope of each delivery. Registration is unavailable when the
+	// service's encryption keyring is not configured.
 	//
 	// Registration requires an Org console presentation or installation-admin
 	// key; an App key cannot mint siblings. Org callers always create
@@ -21796,10 +21800,9 @@ type ClientWithResponsesInterface interface {
 	// evidence. To remove transcripts, delete the Conversations; the facts and
 	// their spend stay.
 	//
-	// The default tenant is never deletable. Deleting a funded tenant
-	// destroys its allocation history, and allocations cannot be recreated
-	// with their original identity, so the released amount is written to the
-	// operator log at deletion.
+	// Deleting a funded tenant destroys its allocation history, and
+	// allocations cannot be recreated with their original identity, so the
+	// released amount is written to the operator log at deletion.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -30570,13 +30573,14 @@ func (c *ClientWithResponses) ListAppsWithResponse(ctx context.Context, params *
 
 // RegisterAppWithBodyWithResponse Register an app
 //
-// Registers one host application and creates its default tenant,
-// returning the generated `app_id` and independent callback and webhook
-// HMAC keys. The plaintext signing keys are returned only in this
-// response; store them in the receiver's secret manager. nvoken stores
-// only authenticated ciphertext and selects a key from the durable App
-// scope of each delivery. Registration is unavailable when the service's
-// encryption keyring is not configured.
+// Registers one host application, returning the generated `app_id` and
+// independent callback and webhook HMAC keys. Tenants are interned by
+// the first request that names one, so a new App has none. The
+// plaintext signing keys are returned only in this response; store
+// them in the receiver's secret manager. nvoken stores only
+// authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the
+// service's encryption keyring is not configured.
 //
 // Registration requires an Org console presentation or installation-admin
 // key; an App key cannot mint siblings. Org callers always create
@@ -30599,13 +30603,14 @@ func (c *ClientWithResponses) RegisterAppWithBodyWithResponse(ctx context.Contex
 
 // RegisterAppWithResponse Register an app
 //
-// Registers one host application and creates its default tenant,
-// returning the generated `app_id` and independent callback and webhook
-// HMAC keys. The plaintext signing keys are returned only in this
-// response; store them in the receiver's secret manager. nvoken stores
-// only authenticated ciphertext and selects a key from the durable App
-// scope of each delivery. Registration is unavailable when the service's
-// encryption keyring is not configured.
+// Registers one host application, returning the generated `app_id` and
+// independent callback and webhook HMAC keys. Tenants are interned by
+// the first request that names one, so a new App has none. The
+// plaintext signing keys are returned only in this response; store
+// them in the receiver's secret manager. nvoken stores only
+// authenticated ciphertext and selects a key from the durable App
+// scope of each delivery. Registration is unavailable when the
+// service's encryption keyring is not configured.
 //
 // Registration requires an Org console presentation or installation-admin
 // key; an App key cannot mint siblings. Org callers always create
@@ -31997,10 +32002,9 @@ func (c *ClientWithResponses) ListTenantsWithResponse(ctx context.Context, param
 // evidence. To remove transcripts, delete the Conversations; the facts and
 // their spend stay.
 //
-// The default tenant is never deletable. Deleting a funded tenant
-// destroys its allocation history, and allocations cannot be recreated
-// with their original identity, so the released amount is written to the
-// operator log at deletion.
+// Deleting a funded tenant destroys its allocation history, and
+// allocations cannot be recreated with their original identity, so the
+// released amount is written to the operator log at deletion.
 //
 // Returns a wrapper object for the known response body format(s).
 //

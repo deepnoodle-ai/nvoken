@@ -40,7 +40,7 @@ func TestEnvironmentAuthenticationCreatesNoCredentialsFile(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("environment-backed command created credentials file: %v", err)
 	}
-	if !strings.Contains(result.Stdout, `"credential_id": "cred_01kc514000e008000000000002"`) {
+	if !strings.Contains(result.Stdout, `"credential_id": "f4f537ef-55f6-7f5d-8e3f-83b67fe3e1f6"`) {
 		t.Fatalf("JSON output = %s", result.Stdout)
 	}
 }
@@ -72,7 +72,7 @@ func TestEndpointAndCredentialPrecedenceAreIndependent(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "credentials")
 	authstore.SetPathOverride(path)
-	if err := authstore.PutProfile("saved", authstore.Profile{Endpoint: "https://wrong.example", Token: "profile-token", CredentialID: "cred_01kc514000e008000000000003"}, true); err != nil {
+	if err := authstore.PutProfile("saved", authstore.Profile{Endpoint: "https://wrong.example", Token: "profile-token", CredentialID: "b64184f4-3622-7fce-b6ba-8e91560a5790"}, true); err != nil {
 		t.Fatal(err)
 	}
 	authstore.SetPathOverride("")
@@ -152,8 +152,8 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"authentication": map[string]any{
-				"credential_id": "cred_01kc514000e008000000000004",
-				"app_id":        "app_01kc514000e008000000000002",
+				"credential_id": "8b446382-da99-7486-a4bc-3cf1df05f91a",
+				"app_id":        "f10c774d-8f44-752b-ae47-ab3ec9a7776d",
 				"type":          "app",
 				"method":        "api_key",
 			},
@@ -172,7 +172,7 @@ func TestAuthLoginVerifiesAPIKeyAndSavesNamedProfile(t *testing.T) {
 	authstore.SetPathOverride(path)
 	profile, err := authstore.ResolveProfile("work")
 	authstore.SetPathOverride("")
-	if err != nil || profile.Token != "nvk_machine.secret" || profile.Endpoint != server.URL || !profile.Default || profile.CredentialID != "cred_01kc514000e008000000000004" {
+	if err != nil || profile.Token != "nvk_machine.secret" || profile.Endpoint != server.URL || !profile.Default || profile.CredentialID != "8b446382-da99-7486-a4bc-3cf1df05f91a" {
 		t.Fatalf("saved profile = %#v, %v", profile, err)
 	}
 	if !json.Valid([]byte(result.Stdout)) || !strings.Contains(result.Stdout, `"profile": "work"`) || strings.Contains(result.Stdout, "nvk_machine.secret") {
@@ -210,7 +210,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 	remoteCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		remoteCalls++
-		if r.URL.Path != "/v1/identity/credentials/cred_01kc514000e008000000000005/revoke" || r.Method != http.MethodPost {
+		if r.URL.Path != "/v1/identity/credentials/f3a5f23e-1c87-7d6c-b30b-9875ebeef83a/revoke" || r.Method != http.MethodPost {
 			http.NotFound(w, r)
 			return
 		}
@@ -219,7 +219,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":         "cred_01kc514000e008000000000005",
+			"id":         "f3a5f23e-1c87-7d6c-b30b-9875ebeef83a",
 			"name":       "saved",
 			"prefix":     "nvk_saved",
 			"status":     "revoked",
@@ -235,7 +235,7 @@ func TestLogoutIsLocalAndRevokeCleansUpAfterRemoteSuccess(t *testing.T) {
 	profile := authstore.Profile{
 		Endpoint:     server.URL,
 		Token:        "saved-token",
-		CredentialID: "cred_01kc514000e008000000000005",
+		CredentialID: "f3a5f23e-1c87-7d6c-b30b-9875ebeef83a",
 		CreatedAt:    "2026-07-21T12:00:00Z",
 	}
 	if err := authstore.PutProfile("saved", profile, true); err != nil {
@@ -273,6 +273,6 @@ func writeIdentityFixture(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": "acct_test", "created_at": "2026-07-21T12:00:00Z",
-		"authentication": map[string]any{"credential_id": "cred_01kc514000e008000000000002", "app_id": "app_01kc514000e008000000000002", "type": "app", "method": "api_key"},
+		"authentication": map[string]any{"credential_id": "f4f537ef-55f6-7f5d-8e3f-83b67fe3e1f6", "app_id": "f10c774d-8f44-752b-ae47-ab3ec9a7776d", "type": "app", "method": "api_key"},
 	})
 }

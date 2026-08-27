@@ -73,8 +73,8 @@
       "status": 200,
       "body": {
         "secret": "nvk_example.secret",
-        "credential_id": "cred_01kc514000e008000000000001",
-        "app_id": "app_01kc514000e008000000000001",
+        "credential_id": "50b963ee-a07c-7099-8b36-7884d1b5d457",
+        "app_id": "3215b8a9-28f9-720d-80b9-6d736e94f377",
         "app_name": "Acme Support",
         "credential_type": "app",
         "label": "curtis-mbp",

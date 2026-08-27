@@ -57,7 +57,7 @@ func TestTurnAdmissionRetryReusesGeneratedIdempotencyKey(t *testing.T) {
 			return
 		}
 		writer.WriteHeader(http.StatusAccepted)
-		_, _ = writer.Write([]byte(`{"id":"turn_01kc514000e00800000000000c","status":"queued"}`))
+		_, _ = writer.Write([]byte(`{"id":"2d668a41-2603-7d68-b6f9-6f22b4e53e14","status":"queued"}`))
 	}))
 	defer server.Close()
 
@@ -73,7 +73,7 @@ func TestTurnAdmissionRetryReusesGeneratedIdempotencyKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start Turn: %v", err)
 	}
-	if turn.ID() != "turn_01kc514000e00800000000000c" || turn.IdempotencyKey() == "" {
+	if turn.ID() != "2d668a41-2603-7d68-b6f9-6f22b4e53e14" || turn.IdempotencyKey() == "" {
 		t.Fatalf("Turn handle = %#v", turn)
 	}
 	if len(keys) != 2 || keys[0] == "" || keys[0] != keys[1] || keys[0] != turn.IdempotencyKey() {
@@ -89,13 +89,13 @@ func TestRecoveredTurnUsesExplicitAccessAndDrivesHostTool(t *testing.T) {
 		}
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_01kc514000e008000000000009/result" && !settled:
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/f106972a-8e62-7183-8a65-d0a97c934cf5/result" && !settled:
 			_, _ = writer.Write([]byte(`{
-				"turn":{"id":"turn_01kc514000e008000000000009","status":"waiting","ended_at":null,
-				"tool_calls":[{"id":"call_01kc514000e008000000000001","name":"lookup_order","mode":"host","status":"pending","arguments":{"order_id":"42"},"updated_at":"2026-08-26T12:00:00Z"}]},
+				"turn":{"id":"f106972a-8e62-7183-8a65-d0a97c934cf5","status":"waiting","ended_at":null,
+				"tool_calls":[{"id":"9f8fd6b3-9060-783d-b759-45c8ec70e8cb","name":"lookup_order","mode":"host","status":"pending","arguments":{"order_id":"42"},"updated_at":"2026-08-26T12:00:00Z"}]},
 				"messages":[],"output_text":null
 			}`))
-		case request.Method == http.MethodPost && request.URL.Path == "/v1/turns/turn_01kc514000e008000000000009/tool-results":
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/turns/f106972a-8e62-7183-8a65-d0a97c934cf5/tool-results":
 			var body struct {
 				Results []struct {
 					ToolCallID string `json:"tool_call_id"`
@@ -105,14 +105,14 @@ func TestRecoveredTurnUsesExplicitAccessAndDrivesHostTool(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 				t.Fatalf("decode host result: %v", err)
 			}
-			if len(body.Results) != 1 || body.Results[0].ToolCallID != "call_01kc514000e008000000000001" {
+			if len(body.Results) != 1 || body.Results[0].ToolCallID != "9f8fd6b3-9060-783d-b759-45c8ec70e8cb" {
 				t.Fatalf("host results = %#v", body.Results)
 			}
 			settled = true
 			writer.WriteHeader(http.StatusAccepted)
-			_, _ = writer.Write([]byte(`{"content_expires_at":null,"conversation_id":null,"results":[],"status":"queued","tool_calls":[],"turn_id":"turn_01kc514000e008000000000009"}`))
-		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/turn_01kc514000e008000000000009/result":
-			_, _ = writer.Write([]byte(`{"turn":{"id":"turn_01kc514000e008000000000009","status":"completed","ended_at":"2026-08-26T12:00:01Z"},"messages":[],"output_text":"found"}`))
+			_, _ = writer.Write([]byte(`{"content_expires_at":null,"conversation_id":null,"results":[],"status":"queued","tool_calls":[],"turn_id":"f106972a-8e62-7183-8a65-d0a97c934cf5"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/turns/f106972a-8e62-7183-8a65-d0a97c934cf5/result":
+			_, _ = writer.Write([]byte(`{"turn":{"id":"f106972a-8e62-7183-8a65-d0a97c934cf5","status":"completed","ended_at":"2026-08-26T12:00:01Z"},"messages":[],"output_text":"found"}`))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -124,11 +124,11 @@ func TestRecoveredTurnUsesExplicitAccessAndDrivesHostTool(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 	called := false
-	turn := client.Turn("turn_01kc514000e008000000000009", TurnAccess{TenantKey: "acme", UserKey: "alice"}).BindTools(Tool{
+	turn := client.Turn("f106972a-8e62-7183-8a65-d0a97c934cf5", TurnAccess{TenantKey: "acme", UserKey: "alice"}).BindTools(Tool{
 		Name: "lookup_order",
 		Handler: func(_ context.Context, input any, toolContext TurnToolContext) (any, error) {
 			called = true
-			if toolContext.TurnID != "turn_01kc514000e008000000000009" || toolContext.ToolCallID != "call_01kc514000e008000000000001" {
+			if toolContext.TurnID != "f106972a-8e62-7183-8a65-d0a97c934cf5" || toolContext.ToolCallID != "9f8fd6b3-9060-783d-b759-45c8ec70e8cb" {
 				t.Fatalf("tool context = %#v", toolContext)
 			}
 			arguments, ok := input.(map[string]any)

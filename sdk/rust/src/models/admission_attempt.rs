@@ -26,7 +26,7 @@ pub struct AdmissionAttempt {
     /// The status the caller received.
     #[serde(rename = "http_status")]
     pub http_status: u32,
-    /// The tenant key as sent, or null for the App's default tenant. It is raw text, not a resolved reference: a refused attempt commonly names a tenant that was never interned.
+    /// The tenant key as sent, or null when nvoken refused the request before reading one. It is raw text, not a resolved reference: a refused attempt commonly names a tenant that was never interned.
     #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
     pub tenant_key: Option<String>,
     /// Optional Turn actor as sent or resolved from a browser grant.

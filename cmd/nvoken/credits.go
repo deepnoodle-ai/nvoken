@@ -11,12 +11,12 @@ import (
 func registerCreditCommands(app *cli.App) {
 	credits := app.Group("credits").Description("View tenant credit accounts and add Credits")
 	credits.Command("accounts").Description("List tenant credit accounts").Flags(
-		cli.String("tenant-key").Help("Select one non-default tenant"),
+		cli.String("tenant-key").Help("Filter to one tenant"),
 		cli.String("cursor").Help("Opaque continuation cursor"),
 		cli.Int("limit").Help("Maximum page size"),
 	).Run(runCreditAccounts)
 	credits.Command("allocations").Description("List append-only credit allocations").Flags(
-		cli.String("tenant-key").Help("Select one non-default tenant"),
+		cli.String("tenant-key").Help("Filter to one tenant"),
 		cli.String("cursor").Help("Opaque continuation cursor"),
 		cli.Int("limit").Help("Maximum page size"),
 	).Run(runCreditAllocations)

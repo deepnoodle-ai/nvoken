@@ -28,7 +28,7 @@ func TestUsageTextUsesTurnVocabulary(t *testing.T) {
 func TestProviderKeyUsageTextUsesTurnVocabulary(t *testing.T) {
 	var output bytes.Buffer
 	usage := nvoken.ProviderKeyUsage{
-		ID:       "pkey_01kc5153ahfwtaxmge0z0vvcs1",
+		ID:       "385f4825-eca6-7768-907a-c2aa277ed80e",
 		Provider: "future_provider",
 		Scope:    "app",
 		Turns:    3,

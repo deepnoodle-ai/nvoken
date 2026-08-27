@@ -65,9 +65,9 @@ export interface AdmissionAttempt {
      */
     httpStatus: number;
     /**
-     * The tenant key as sent, or null for the App's default tenant. It is
-     * raw text, not a resolved reference: a refused attempt commonly
-     * names a tenant that was never interned.
+     * The tenant key as sent, or null when nvoken refused the request
+     * before reading one. It is raw text, not a resolved reference: a
+     * refused attempt commonly names a tenant that was never interned.
      *
      * @type {string}
      * @memberof AdmissionAttempt

@@ -64,12 +64,12 @@ func TestMintClientTokenMatchesPublishedV2Vector(t *testing.T) {
 func TestMintClientTokenRequiresClosedMemoryAndConversationGrants(t *testing.T) {
 	key := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
 	base := ClientTokenClaims{
-		AppID:              "app_01kc514000e008000000000001",
-		KeyID:              "ckey_01kc514000e008000000000001",
+		AppID:              "3215b8a9-28f9-720d-80b9-6d736e94f377",
+		KeyID:              "0778b813-8aae-7ef3-ae64-a03d8c1efe6f",
 		Subject:            "alice",
 		TenantKey:          "acme",
-		AgentID:            "agent_01kc514000e008000000000001",
-		AgentRevisionID:    "arev_01kc514000e008000000000001",
+		AgentID:            "47fc63e5-ae78-727c-ab52-a2872fe8728f",
+		AgentRevisionID:    "4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd",
 		MemoryAccess:       BrowserNoMemory(),
 		ConversationAccess: BrowserStandaloneOnly(),
 		Lifetime:           time.Minute,

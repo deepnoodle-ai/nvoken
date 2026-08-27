@@ -12,7 +12,7 @@ import (
 )
 
 func TestProviderKeyLifecycleMethods(t *testing.T) {
-	const credentialID = "pkey_01kc5153ahfwtaxmge0z0vvcsg"
+	const credentialID = "6e1640dd-7af9-75b1-88fe-19595a7d8b3d"
 	secretRequests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Authorization") != "Bearer test-key" {
@@ -170,7 +170,7 @@ func providerKeyFixture(id, status string, version int) string {
 		"tenant_key":          nil,
 		"status":              status,
 		"version":             version,
-		"version_id":          "ver_01kc5153ahfwtaxmge0z0vvcsh",
+		"version_id":          "b266f9af-7e11-7da2-ad44-d7d359b898f2",
 		"previous_version_id": nil,
 		"version_status":      status,
 		"expires_at":          nil,

@@ -2410,13 +2410,14 @@ paths:
       operationId: registerApp
       summary: Register an app
       description: |
-        Registers one host application and creates its default tenant,
-        returning the generated `app_id` and independent callback and webhook
-        HMAC keys. The plaintext signing keys are returned only in this
-        response; store them in the receiver's secret manager. nvoken stores
-        only authenticated ciphertext and selects a key from the durable App
-        scope of each delivery. Registration is unavailable when the service's
-        encryption keyring is not configured.
+        Registers one host application, returning the generated `app_id` and
+        independent callback and webhook HMAC keys. Tenants are interned by
+        the first request that names one, so a new App has none. The
+        plaintext signing keys are returned only in this response; store
+        them in the receiver's secret manager. nvoken stores only
+        authenticated ciphertext and selects a key from the durable App
+        scope of each delivery. Registration is unavailable when the
+        service's encryption keyring is not configured.
 
         Registration requires an Org console presentation or installation-admin
         key; an App key cannot mint siblings. Org callers always create
@@ -3684,10 +3685,9 @@ paths:
         evidence. To remove transcripts, delete the Conversations; the facts and
         their spend stay.
 
-        The default tenant is never deletable. Deleting a funded tenant
-        destroys its allocation history, and allocations cannot be recreated
-        with their original identity, so the released amount is written to the
-        operator log at deletion.
+        Deleting a funded tenant destroys its allocation history, and
+        allocations cannot be recreated with their original identity, so the
+        released amount is written to the operator log at deletion.
       parameters:
         - name: tenant_id
           in: path
@@ -3704,7 +3704,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: The tenant has runtime history, or is the default tenant.
+          description: The tenant has runtime history.
           content:
             application/json:
               schema:
@@ -4984,12 +4984,8 @@ components:
         - tenant_key
       properties:
         tenant_key:
-          oneOf:
-            - type: string
-            - type: 'null'
-          description: >-
-            Account that could not fund the next provider attempt; null means
-            the App's default tenant.
+          type: string
+          description: Account that could not fund the next provider attempt.
     ProviderStaticKey:
       type: object
       additionalProperties: false
@@ -11613,9 +11609,9 @@ components:
             - string
             - 'null'
           description: |
-            The tenant key as sent, or null for the App's default tenant. It is
-            raw text, not a resolved reference: a refused attempt commonly
-            names a tenant that was never interned.
+            The tenant key as sent, or null when nvoken refused the request
+            before reading one. It is raw text, not a resolved reference: a
+            refused attempt commonly names a tenant that was never interned.
         user_key:
           type:
             - string

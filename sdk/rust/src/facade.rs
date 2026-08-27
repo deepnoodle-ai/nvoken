@@ -2103,23 +2103,23 @@ mod tests {
     #[test]
     fn turn_snapshot_flattens_the_high_level_result() {
         let client = Client::with_base_url("test", "http://localhost");
-        let mut turn = client.turn("turn_01kc514000e008000000000003", "acme", None);
+        let mut turn = client.turn("8f57d547-fa52-75fa-947d-41e21909db99", "acme", None);
         let source = models::StoredTurnBehaviorSource::new(
             models::stored_turn_behavior_source::Kind::AgentRevision,
-            "agent_01kc514000e008000000000001".into(),
-            "arev_01kc514000e008000000000001".into(),
+            "47fc63e5-ae78-727c-ab52-a2872fe8728f".into(),
+            "4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd".into(),
             1,
         );
         let resource = models::Turn {
-            id: "turn_01kc514000e008000000000003".into(),
+            id: "8f57d547-fa52-75fa-947d-41e21909db99".into(),
             tenant_key: "acme".into(),
             status: models::TurnStatus::Running,
             behavior_source: Some(Box::new(models::TurnBehaviorSource::AgentRevision(
                 Box::new(source),
             ))),
             structured_output: Some(HashMap::from([("score".into(), Value::from(9))])),
-            memory_space_id: Some("mspc_01kc514000e008000000000001".into()),
-            conversation_id: Some("conv_01kc514000e008000000000001".into()),
+            memory_space_id: Some("b1d4c373-50e5-77d6-a4c3-20b23c06e787".into()),
+            conversation_id: Some("18325d9f-b9bc-797d-9259-96ece372defd".into()),
             ..models::Turn::default()
         };
         let snapshot = turn.snapshot_from_wire(models::TurnResult::new(
@@ -2132,28 +2132,28 @@ mod tests {
         assert_eq!(snapshot.behavior_source, BehaviorSourceKind::AgentRevision);
         assert_eq!(
             snapshot.agent_id.as_deref(),
-            Some("agent_01kc514000e008000000000001")
+            Some("47fc63e5-ae78-727c-ab52-a2872fe8728f")
         );
         assert_eq!(
             snapshot.agent_revision_id.as_deref(),
-            Some("arev_01kc514000e008000000000001")
+            Some("4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd")
         );
         assert_eq!(
             snapshot.memory_space_id.as_deref(),
-            Some("mspc_01kc514000e008000000000001")
+            Some("b1d4c373-50e5-77d6-a4c3-20b23c06e787")
         );
         assert_eq!(
             snapshot.conversation_id.as_deref(),
-            Some("conv_01kc514000e008000000000001")
+            Some("18325d9f-b9bc-797d-9259-96ece372defd")
         );
     }
 
     #[tokio::test]
     async fn missing_tool_handler_leaves_waiting_turn_unmodified() {
         let client = Client::with_base_url("test", "http://localhost");
-        let turn = client.turn("turn_01kc514000e008000000000003", "acme", None);
+        let turn = client.turn("8f57d547-fa52-75fa-947d-41e21909db99", "acme", None);
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_01kc514000e008000000000001".into();
+        call.id = "9f8fd6b3-9060-783d-b759-45c8ec70e8cb".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::from([("id".into(), Value::from(1))]));
@@ -2179,7 +2179,7 @@ mod tests {
         });
         let turn = client
             .turn(
-                "turn_01kc514000e008000000000003",
+                "8f57d547-fa52-75fa-947d-41e21909db99",
                 "acme",
                 Some("alice".into()),
             )
@@ -2194,8 +2194,8 @@ mod tests {
         };
         let resource = models::Turn {
             tool_calls: vec![
-                call("call_01kc514000e008000000000001", "lookup"),
-                call("call_01kc514000e008000000000002", "other"),
+                call("9f8fd6b3-9060-783d-b759-45c8ec70e8cb", "lookup"),
+                call("8b6c8687-a698-7aeb-8440-29729d2fc4b7", "other"),
             ],
             ..models::Turn::default()
         };
@@ -2203,13 +2203,13 @@ mod tests {
         assert!(!turn.run_host_tools(&resource).await.unwrap());
         let requests = server.await.unwrap();
         assert_eq!(requests.len(), 1);
-        assert!(requests[0].contains("call_01kc514000e008000000000001"));
-        assert!(!requests[0].contains("call_01kc514000e008000000000002"));
+        assert!(requests[0].contains("9f8fd6b3-9060-783d-b759-45c8ec70e8cb"));
+        assert!(!requests[0].contains("8b6c8687-a698-7aeb-8440-29729d2fc4b7"));
         assert_eq!(
             *contexts.lock().await,
             vec![ToolContext {
-                turn_id: "turn_01kc514000e008000000000003".into(),
-                tool_call_id: "call_01kc514000e008000000000001".into(),
+                turn_id: "8f57d547-fa52-75fa-947d-41e21909db99".into(),
+                tool_call_id: "9f8fd6b3-9060-783d-b759-45c8ec70e8cb".into(),
             }]
         );
     }
@@ -2222,7 +2222,7 @@ mod tests {
         let calls = StdArc::new(Mutex::new(0));
         let handler_calls = calls.clone();
         let turn = client
-            .turn("turn_01kc514000e008000000000003", "acme", None)
+            .turn("8f57d547-fa52-75fa-947d-41e21909db99", "acme", None)
             .bind_tools([Tool::new("lookup", move |arguments, _context| {
                 let calls = handler_calls.clone();
                 async move {
@@ -2231,7 +2231,7 @@ mod tests {
                 }
             })]);
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_01kc514000e008000000000001".into();
+        call.id = "9f8fd6b3-9060-783d-b759-45c8ec70e8cb".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::new());
@@ -2252,7 +2252,7 @@ mod tests {
         let entered_tx = StdArc::new(StdMutex::new(Some(entered_tx)));
         let signal = entered_tx.clone();
         let turn = client
-            .turn("turn_01kc514000e008000000000003", "acme", None)
+            .turn("8f57d547-fa52-75fa-947d-41e21909db99", "acme", None)
             .bind_tools([Tool::new("lookup", move |_arguments, _context| {
                 let signal = signal.clone();
                 async move {
@@ -2264,7 +2264,7 @@ mod tests {
             })]);
         let handled = turn.handled_tool_call_ids.clone();
         let mut call = models::ToolCallSummary::default();
-        call.id = "call_01kc514000e008000000000001".into();
+        call.id = "9f8fd6b3-9060-783d-b759-45c8ec70e8cb".into();
         call.name = "lookup".into();
         call.mode = models::ToolCallMode::Host;
         call.arguments = Some(HashMap::new());
@@ -2279,7 +2279,7 @@ mod tests {
         assert!(!handled
             .lock()
             .unwrap()
-            .contains("call_01kc514000e008000000000001"));
+            .contains("9f8fd6b3-9060-783d-b759-45c8ec70e8cb"));
     }
 
     #[tokio::test]
@@ -2339,7 +2339,7 @@ mod tests {
     #[test]
     fn lifecycle_resource_refresh_preserves_bound_tools() {
         let archived = models::Agent {
-            id: "agent_01kc514000e008000000000001".into(),
+            id: "47fc63e5-ae78-727c-ab52-a2872fe8728f".into(),
             agent_key: "analyst".into(),
             name: "Analyst".into(),
             ..models::Agent::default()
@@ -2363,7 +2363,7 @@ mod tests {
     async fn result_reports_typed_execution_and_timeout_errors_with_recovery_context() {
         let timestamp = chrono::DateTime::parse_from_rfc3339("2026-08-26T12:00:00Z").unwrap();
         let failed_resource = models::Turn {
-            id: "turn_01kc514000e00800000000000a".into(),
+            id: "ca2779a8-1755-7ea1-aed1-9e84834989cd".into(),
             tenant_key: "acme".into(),
             status: models::TurnStatus::Failed,
             ended_at: Some(timestamp),
@@ -2374,14 +2374,14 @@ mod tests {
                 .unwrap();
         let (base_url, server) = response_server(vec![(200, failed_body)]).await;
         let client = Client::with_base_url("test", base_url);
-        let mut failed = client.turn("turn_01kc514000e00800000000000a", "acme", None);
+        let mut failed = client.turn("ca2779a8-1755-7ea1-aed1-9e84834989cd", "acme", None);
         failed.admission = Some(TurnAdmission {
             idempotency_key: "idem-failed".into(),
             deduplicated: false,
         });
         match failed.result(None).await {
             Err(NvokenError::TurnExecution(error)) => {
-                assert_eq!(error.result.turn.id, "turn_01kc514000e00800000000000a");
+                assert_eq!(error.result.turn.id, "ca2779a8-1755-7ea1-aed1-9e84834989cd");
                 assert_eq!(
                     error.result.admission.unwrap().idempotency_key,
                     "idem-failed"
@@ -2399,7 +2399,7 @@ mod tests {
             futures_util::future::pending::<()>().await;
         });
         let client = Client::with_base_url("test", base_url);
-        let mut running = client.turn("turn_01kc514000e00800000000000b", "acme", None);
+        let mut running = client.turn("ac35fb8c-65ce-7b16-b612-be4f87a1c0ab", "acme", None);
         running.admission = Some(TurnAdmission {
             idempotency_key: "idem-running".into(),
             deduplicated: false,
@@ -2408,7 +2408,7 @@ mod tests {
             Err(NvokenError::TurnTimeout(error)) => {
                 assert_eq!(
                     error.turn.as_ref().unwrap().id,
-                    "turn_01kc514000e00800000000000b"
+                    "ac35fb8c-65ce-7b16-b612-be4f87a1c0ab"
                 );
                 assert_eq!(error.idempotency_key.as_deref(), Some("idem-running"));
             }
@@ -2434,14 +2434,14 @@ mod tests {
     fn recovery_requests_carry_tenant_and_user_assertions() {
         let client = Client::with_base_url("test", "http://localhost");
         let turn = client.turn(
-            "turn_01kc514000e008000000000003",
+            "8f57d547-fa52-75fa-947d-41e21909db99",
             "acme",
             Some("alice".into()),
         );
         let request = turn
             .request(
                 reqwest::Method::GET,
-                "/v1/turns/turn_01kc514000e008000000000003/result",
+                "/v1/turns/8f57d547-fa52-75fa-947d-41e21909db99/result",
             )
             .build()
             .unwrap();

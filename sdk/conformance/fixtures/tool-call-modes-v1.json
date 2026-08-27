@@ -2,7 +2,7 @@
   "note": "One waiting turn's whole tool-call collection. `answerable` is every call carrying arguments — the calls a machine credential may settle, which after PRD 062 includes an acknowledged callback delivery. `host` is the narrower set this caller must actually run: answerable and `mode: host`. A host that filters only on arguments runs work nvoken is already delivering, and doubles the side effect.",
   "tool_calls": [
     {
-      "id": "call_01kc5153ahfwtaxmge0z0vvcs5",
+      "id": "63779fde-08fe-71c9-a953-873cd55651a4",
       "name": "lookup_order",
       "mode": "host",
       "status": "pending",
@@ -11,7 +11,7 @@
       "updated_at": "2026-07-21T12:00:03Z"
     },
     {
-      "id": "call_01kc5153ahfwtaxmge0z0vvcs6",
+      "id": "96da0f81-1aea-7bf6-9b33-373db60d7240",
       "name": "open_ticket",
       "mode": "callback",
       "status": "pending",
@@ -20,21 +20,21 @@
       "updated_at": "2026-07-21T12:00:04Z"
     },
     {
-      "id": "call_01kc5153ahfwtaxmge0z0vvcs7",
+      "id": "06eb8d58-9853-7042-b320-83a0d5363ef3",
       "name": "nvoken_fetch",
       "mode": "builtin",
       "status": "completed",
       "updated_at": "2026-07-21T12:00:01Z"
     },
     {
-      "id": "call_01kc5153ahfwtaxmge0z0vvcs8",
+      "id": "5c65a680-3556-73a7-8fb9-beaedee22b25",
       "name": "support__lookup",
       "mode": "mcp",
       "status": "running",
       "updated_at": "2026-07-21T12:00:02Z"
     },
     {
-      "id": "call_01kc5153ahfwtaxmge0z0vvcs9",
+      "id": "a916e656-1d8d-7130-86b3-b98dac06a6ec",
       "name": "lookup_order",
       "mode": "host",
       "status": "completed",
@@ -42,8 +42,8 @@
     }
   ],
   "answerable": [
-    "call_01kc5153ahfwtaxmge0z0vvcs5",
-    "call_01kc5153ahfwtaxmge0z0vvcs6"
+    "63779fde-08fe-71c9-a953-873cd55651a4",
+    "96da0f81-1aea-7bf6-9b33-373db60d7240"
   ],
-  "host": ["call_01kc5153ahfwtaxmge0z0vvcs5"]
+  "host": ["63779fde-08fe-71c9-a953-873cd55651a4"]
 }

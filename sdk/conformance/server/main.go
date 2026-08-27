@@ -13,14 +13,14 @@ import (
 )
 
 const (
-	agentID         = "agent_01kc5153ahfwtaxmge0z0vvcs0"
-	agentRevisionID = "arev_01kc5153ahfwtaxmge0z0vvcs9"
-	conversationID  = "conv_01kc5153ahfwtaxmge0z0vvcs1"
-	turnID          = "turn_01kc5153ahfwtaxmge0z0vvcs2"
-	waitID          = "turn_01kc5153ahfwtaxmge0z0vvcs8"
-	toolCallID      = "call_01kc5153ahfwtaxmge0z0vvcs5"
+	agentID         = "e1ec4be4-ffd5-7789-83bc-fb8f0f1eb276"
+	agentRevisionID = "0ff8916e-8d05-7324-ac7c-487b2bd361c4"
+	conversationID  = "db4eaf24-1ac6-776e-8f98-badc6d0dc764"
+	turnID          = "33b82f49-6105-75f4-b829-3e5d1f2f3dba"
+	waitID          = "10d4c33e-928d-7d54-91bd-f411a1f5c600"
+	toolCallID      = "63779fde-08fe-71c9-a953-873cd55651a4"
 	exactModelID    = "experimental/model?variant=雪%#1"
-	allocationID    = "alloc_01kc5153ahfwtaxmge0z0vvcsg"
+	allocationID    = "5b22a5fa-89ea-7100-bac8-fe3b4889da9b"
 )
 
 type state struct {
@@ -135,12 +135,12 @@ func serveCredits(response http.ResponseWriter, request *http.Request) bool {
 				Amount   string `json:"amount"`
 				Currency string `json:"currency"`
 			} `json:"amount"`
-			DefaultTenant  bool   `json:"default_tenant"`
+			TenantKey      string `json:"tenant_key"`
 			IdempotencyKey string `json:"idempotency_key"`
 		}
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil ||
 			body.Amount.Amount != "25.000000" || body.Amount.Currency != "USD" ||
-			!body.DefaultTenant || body.IdempotencyKey == "" {
+			body.TenantKey != "acme" || body.IdempotencyKey == "" {
 			writeError(response, http.StatusBadRequest, "invalid_request", "Credit allocation did not round-trip")
 			return true
 		}
@@ -186,7 +186,7 @@ func creditAllocation() map[string]any {
 }
 
 func serveMemorySpaces(response http.ResponseWriter, request *http.Request) bool {
-	const memorySpaceID = "mspc_01kc5153ahfwtaxmge0z0vvct0"
+	const memorySpaceID = "6f4aa16c-33a8-7f0f-8eed-08e88bfd526e"
 	resource := func() map[string]any {
 		return map[string]any{
 			"id": memorySpaceID, "tenant_key": "acme", "scope": "tenant",
@@ -720,21 +720,21 @@ func toolCallRecords() map[string]any {
 		"items": []any{
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_01kc5153ahfwtaxmge0z0vvcs4", "mode": "builtin",
+				"id": "611bd610-16cd-7f66-9466-3fdd2ba25423", "mode": "builtin",
 				"name": "nvoken_fetch", "status": "completed", "iteration": 1,
 				"created_at": "2026-08-08T17:02:11Z", "ended_at": "2026-08-08T17:02:12Z", "attempts": 1,
 				"result_origin": "builtin",
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_01kc5153ahfwtaxmge0z0vvcs5", "mode": "host",
+				"id": "63779fde-08fe-71c9-a953-873cd55651a4", "mode": "host",
 				"name": "ask_user", "status": "running", "iteration": 1,
 				"created_at": "2026-08-08T17:02:13Z", "ended_at": nil, "attempts": 0,
 				"result_origin": nil,
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_01kc5153ahfwtaxmge0z0vvcs6", "mode": "callback",
+				"id": "96da0f81-1aea-7bf6-9b33-373db60d7240", "mode": "callback",
 				"name": "create_ticket", "status": "completed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:14Z", "ended_at": "2026-08-08T17:02:19Z", "attempts": 0,
 				"result_origin": "callback",
@@ -742,7 +742,7 @@ func toolCallRecords() map[string]any {
 			},
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_01kc5153ahfwtaxmge0z0vvcs7", "mode": "mcp",
+				"id": "06eb8d58-9853-7042-b320-83a0d5363ef3", "mode": "mcp",
 				"name": "support__lookup", "status": "failed", "iteration": 2,
 				"created_at": "2026-08-08T17:02:20Z", "ended_at": "2026-08-08T17:02:22Z", "attempts": 1,
 				"result_origin": "mcp",
@@ -752,7 +752,7 @@ func toolCallRecords() map[string]any {
 			// is host even though the mode is callback.
 			map[string]any{
 				"turn_id": turnID, "conversation_id": conversationID, "content_expires_at": nil,
-				"id": "call_01kc5153ahfwtaxmge0z0vvcsa", "mode": "callback",
+				"id": "13cff7a1-c1a2-7ed9-b1d1-d9ac7f34d5b8", "mode": "callback",
 				"name": "run_migration", "status": "completed", "iteration": 3,
 				"created_at": "2026-08-08T17:02:23Z", "ended_at": "2026-08-08T17:09:41Z", "attempts": 0,
 				"result_origin": "host",
@@ -830,7 +830,7 @@ func (s *state) conversation(response http.ResponseWriter, request *http.Request
 	case strings.HasSuffix(path, "/compactions") && request.Method == http.MethodGet:
 		writeJSON(response, http.StatusOK, map[string]any{
 			"items": []any{map[string]any{
-				"id":             "comp_01kc5153ahfwtaxmge0z0vvcs2",
+				"id":             "0fcd800d-f140-77fb-a589-88c2b5915eac",
 				"turn_id":        turnID,
 				"covers_through": 2,
 				"status":         "applied",
@@ -1056,7 +1056,7 @@ func turnResult() map[string]any {
 	composed["structured_output"] = map[string]any{"answer": "world"}
 	composed["structured_output_provenance"] = map[string]any{
 		"source":        "tool_call",
-		"tool_call_id":  "call_01kc5153ahfwtaxmge0z0vvecs",
+		"tool_call_id":  "f72debf2-5686-740c-82c1-3bd0e1dda710",
 		"schema_sha256": "abababababababababababababababababababababababababababababababab",
 	}
 	return map[string]any{
@@ -1132,7 +1132,7 @@ func validAgentFilter(query url.Values) bool {
 
 func firstMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs3",
+		"id":                 "89f5ce23-9fb3-7a9e-9c7f-2dcb44c41346",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
@@ -1148,7 +1148,7 @@ func firstMessage() map[string]any {
 // secondMessageID is the assistant message the preview below is building. The
 // preview carries it, so the handoff to the saved message updates a row that
 // already has its permanent identity.
-const secondMessageID = "msg_01kc5153ahfwtaxmge0z0vvcs4"
+const secondMessageID = "85770b50-8915-79ac-b01c-6eb1548ea9b8"
 
 func secondMessage() map[string]any {
 	return map[string]any{
@@ -1167,7 +1167,7 @@ func secondMessage() map[string]any {
 
 func firstResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs5",
+		"id":                 "f84e45a3-ad13-77b3-80c0-648971cf33d7",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,
@@ -1187,7 +1187,7 @@ func firstResultAssistantMessage() map[string]any {
 
 func secondResultAssistantMessage() map[string]any {
 	return map[string]any{
-		"id":                 "msg_01kc5153ahfwtaxmge0z0vvcs6",
+		"id":                 "f29873b8-b85b-7b39-9f19-743348119f04",
 		"conversation_id":    conversationID,
 		"content_expires_at": nil,
 		"agent_id":           agentID,

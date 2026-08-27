@@ -507,13 +507,11 @@ class Client:
         *,
         amount: Mapping[str, Any],
         idempotency_key: str,
-        tenant_key: str | None = None,
-        default_tenant: bool = False,
+        tenant_key: str,
         reference: str | None = None,
     ):
         request = AllocateCreditsRequest.from_dict({
             "tenant_key": tenant_key,
-            "default_tenant": default_tenant,
             "amount": dict(amount),
             "reference": reference,
             "idempotency_key": idempotency_key,
@@ -578,25 +576,23 @@ class Client:
             raise normalize_error(error) from error
 
     async def list_credit_accounts(
-        self, *, tenant_key: str | None = None, default_tenant: bool | None = None,
+        self, *, tenant_key: str | None = None,
         cursor: str | None = None, limit: int | None = None,
     ):
         try:
             return await self.raw.credits.list_credit_accounts(
-                tenant_key=tenant_key, default_tenant=default_tenant,
-                cursor=cursor, limit=limit,
+                tenant_key=tenant_key, cursor=cursor, limit=limit,
             )
         except ApiException as error:
             raise normalize_error(error) from error
 
     async def list_credit_allocations(
-        self, *, tenant_key: str | None = None, default_tenant: bool | None = None,
+        self, *, tenant_key: str | None = None,
         cursor: str | None = None, limit: int | None = None,
     ):
         try:
             return await self.raw.credits.list_credit_allocations(
-                tenant_key=tenant_key, default_tenant=default_tenant,
-                cursor=cursor, limit=limit,
+                tenant_key=tenant_key, cursor=cursor, limit=limit,
             )
         except ApiException as error:
             raise normalize_error(error) from error

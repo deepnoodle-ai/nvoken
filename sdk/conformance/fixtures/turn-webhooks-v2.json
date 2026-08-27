@@ -114,17 +114,17 @@
   "example_ended_payload": {
     "nvoken": {
       "schema_version": 2,
-      "delivery_id": "dlvr_01kc514000e008000000000001",
+      "delivery_id": "5febe64f-6207-7df6-a0c7-c6d635c6d2a4",
       "event": "turn.ended",
       "sequence": 2,
-      "turn_id": "turn_01kc514000e008000000000001",
-      "conversation_id": "conv_01kc514000e008000000000001",
+      "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
+      "conversation_id": "18325d9f-b9bc-797d-9259-96ece372defd",
       "memory_space_id": null,
       "content_expires_at": null,
       "behavior_source": {
         "kind": "agent_revision",
-        "agent_id": "agent_01kc514000e008000000000006",
-        "agent_revision_id": "arev_01kc514000e008000000000005",
+        "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
+        "agent_revision_id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de",
         "revision": 1
       },
       "tenant_key": "acme",
@@ -138,17 +138,17 @@
   "example_waiting_payload": {
     "nvoken": {
       "schema_version": 2,
-      "delivery_id": "dlvr_01kc514000e008000000000002",
+      "delivery_id": "bc40254e-0055-78da-abd2-88fdefddc3bd",
       "event": "turn.waiting",
       "sequence": 1,
-      "turn_id": "turn_01kc514000e008000000000001",
-      "conversation_id": "conv_01kc514000e008000000000001",
+      "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
+      "conversation_id": "18325d9f-b9bc-797d-9259-96ece372defd",
       "memory_space_id": null,
       "content_expires_at": null,
       "behavior_source": {
         "kind": "agent_revision",
-        "agent_id": "agent_01kc514000e008000000000006",
-        "agent_revision_id": "arev_01kc514000e008000000000005",
+        "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
+        "agent_revision_id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de",
         "revision": 1
       },
       "tenant_key": "acme",
@@ -156,23 +156,23 @@
     },
     "turn": {
       "status": "waiting",
-      "waiting_tool_call_ids": ["call_01kc514000e008000000000001"]
+      "waiting_tool_call_ids": ["9f8fd6b3-9060-783d-b759-45c8ec70e8cb"]
     }
   },
   "example_budget_hold_payload": {
     "nvoken": {
       "schema_version": 2,
-      "delivery_id": "dlvr_01kc514000e008000000000003",
+      "delivery_id": "e5382722-4ef2-717a-963a-9674d80f0a29",
       "event": "turn.budget_hold",
       "sequence": 2,
-      "turn_id": "turn_01kc514000e008000000000001",
-      "conversation_id": "conv_01kc514000e008000000000001",
+      "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
+      "conversation_id": "18325d9f-b9bc-797d-9259-96ece372defd",
       "memory_space_id": null,
       "content_expires_at": null,
       "behavior_source": {
         "kind": "agent_revision",
-        "agent_id": "agent_01kc514000e008000000000006",
-        "agent_revision_id": "arev_01kc514000e008000000000005",
+        "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
+        "agent_revision_id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de",
         "revision": 1
       },
       "tenant_key": "acme",

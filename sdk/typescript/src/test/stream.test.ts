@@ -130,7 +130,7 @@ function turnUpdate(
       content_expires_at: null,
       messages: [],
       turn_changes: [{
-        turn_id: "turn_01kc514000e008000000000001",
+        turn_id: "476dd7be-97a1-78f3-8096-d7032468a80a",
         conversation_id: null,
         content_expires_at: null,
         revision,

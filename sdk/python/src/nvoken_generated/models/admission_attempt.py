@@ -36,7 +36,7 @@ class AdmissionAttempt(BaseModel):
     outcome: AdmissionOutcome
     error_code: Optional[ErrorCode] = Field(description="The refusal code, or null when the turn was admitted.")
     http_status: Annotated[int, Field(le=599, strict=True, ge=100)] = Field(description="The status the caller received.")
-    tenant_key: Optional[StrictStr] = Field(description="The tenant key as sent, or null for the App's default tenant. It is raw text, not a resolved reference: a refused attempt commonly names a tenant that was never interned. ")
+    tenant_key: Optional[StrictStr] = Field(description="The tenant key as sent, or null when nvoken refused the request before reading one. It is raw text, not a resolved reference: a refused attempt commonly names a tenant that was never interned. ")
     user_key: Optional[StrictStr] = Field(description="Optional Turn actor as sent or resolved from a browser grant.")
     behavior_source_kind: Optional[StrictStr] = Field(description="Resolved source kind, or null when admission was refused before behavior selection completed. ")
     agent_owner_kind: Optional[StrictStr] = Field(description="Raw owner namespace for a key selector, otherwise null.")
