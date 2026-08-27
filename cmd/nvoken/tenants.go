@@ -17,7 +17,7 @@ func registerTenantCommands(app *cli.App) {
 	).Run(runTenantList)
 	tenants.Command("delete").
 		Description("Delete a tenant that has never run work").
-		AddArg(requiredArg("tenant-id", "Opaque non-default tenant ID")).
+		AddArg(requiredArg("tenant-id", "Opaque tenant ID")).
 		Run(runTenantDelete)
 }
 

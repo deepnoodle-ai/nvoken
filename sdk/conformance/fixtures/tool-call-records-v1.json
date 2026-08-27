@@ -2,9 +2,9 @@
   "tool_calls": {
     "items": [
       {
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
-        "id": "call_01kc5153ahfwtaxmge0z0vvcs4",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+        "id": "611bd610-16cd-7f66-9466-3fdd2ba25423",
         "content_expires_at": null,
         "mode": "builtin",
         "name": "nvoken_fetch",
@@ -16,9 +16,9 @@
         "result_origin": "builtin"
       },
       {
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
-        "id": "call_01kc5153ahfwtaxmge0z0vvcs5",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+        "id": "63779fde-08fe-71c9-a953-873cd55651a4",
         "content_expires_at": null,
         "mode": "host",
         "name": "ask_user",
@@ -30,9 +30,9 @@
         "result_origin": null
       },
       {
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
-        "id": "call_01kc5153ahfwtaxmge0z0vvcs6",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+        "id": "96da0f81-1aea-7bf6-9b33-373db60d7240",
         "content_expires_at": null,
         "mode": "callback",
         "name": "create_ticket",
@@ -49,9 +49,9 @@
         "result_origin": "callback"
       },
       {
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
-        "id": "call_01kc5153ahfwtaxmge0z0vvcs7",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+        "id": "06eb8d58-9853-7042-b320-83a0d5363ef3",
         "content_expires_at": null,
         "mode": "mcp",
         "name": "support__lookup",
@@ -63,9 +63,9 @@
         "result_origin": "mcp"
       },
       {
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
-        "id": "call_01kc5153ahfwtaxmge0z0vvcsa",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+        "id": "13cff7a1-c1a2-7ed9-b1d1-d9ac7f34d5b8",
         "content_expires_at": null,
         "mode": "callback",
         "name": "run_migration",
@@ -92,17 +92,17 @@
     "request": {
       "nvoken": {
         "schema_version": 2,
-        "delivery_id": "dlvr_01kc5153ahfwtaxmge0z0vvcs8",
-        "tool_call_id": "call_01kc5153ahfwtaxmge0z0vvcs6",
+        "delivery_id": "ecd9e55f-77d6-7166-8a27-f3b63f584e2f",
+        "tool_call_id": "96da0f81-1aea-7bf6-9b33-373db60d7240",
         "tool_name": "create_ticket",
-        "turn_id": "turn_01kc5153ahfwtaxmge0z0vvcs2",
-        "conversation_id": "conv_01kc5153ahfwtaxmge0z0vvcs1",
+        "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
         "memory_space_id": null,
         "content_expires_at": null,
         "behavior_source": {
           "kind": "agent_revision",
-          "agent_id": "agent_01kc5153ahfwtaxmge0z0vvcs0",
-          "agent_revision_id": "arev_01kc5153ahfwtaxmge0z0vvcs9",
+          "agent_id": "e1ec4be4-ffd5-7789-83bc-fb8f0f1eb276",
+          "agent_revision_id": "0ff8916e-8d05-7324-ac7c-487b2bd361c4",
           "revision": 1
         },
         "tenant_key": "acme",

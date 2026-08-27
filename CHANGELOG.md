@@ -8,6 +8,24 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Fixed: the Python facade still sent `default_tenant`.** 0.32.0 removed it
+  from the generated client but not from `allocate_credits`,
+  `list_credit_accounts`, or `list_credit_allocations`, so all three raised
+  `TypeError` on the published package. `tenant_key` is now required for an
+  allocation, as the contract has always said. Python is the only SDK this
+  could reach — the other three would not compile.
+- **`CreditBlock.tenant_key` is no longer nullable.** The service's type
+  cannot produce the null, so every consumer was unwrapping a value that is
+  always present. Typed clients change shape: Rust drops the `Option`, Python
+  the `Optional`, TypeScript the `| null`.
+- **Registering an App no longer claims to create a tenant, and deleting one
+  no longer claims to refuse a default.** Neither has been true since the
+  default tenant was removed.
+- **Retired identifier shapes are gone from fixtures and tests**, and the
+  repository gate now rejects them anywhere in tracked sources — including one
+  assembled by string interpolation, which is how the last of them survived
+  the 0.32.0 sweep.
+
 ## 0.32.0 - 2026-08-27
 
 - **Breaking: identifiers are canonical UUIDs, and nothing validates their

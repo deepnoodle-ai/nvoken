@@ -469,9 +469,9 @@ mod tests {
                     "type": "message.delta",
                     "conversation_id": null,
                     "content_expires_at": null,
-                    "turn_id": "turn_01kc514000e008000000000001",
+                    "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
                     "attempt": 1,
-                    "message_id": "msg_01kc514000e008000000000001",
+                    "message_id": "102002f7-649e-7a77-85c2-7f1695adb24e",
                     "content_index": 0,
                     "kind": "text",
                     "delta": fragment,
@@ -490,7 +490,7 @@ mod tests {
                     "type": "stream.resync",
                     "conversation_id": null,
                     "content_expires_at": null,
-                    "turn_id": "turn_01kc514000e008000000000001",
+                    "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
                     "reason": "live_delivery_gap"
                 }),
             ))
@@ -498,7 +498,7 @@ mod tests {
         assert!(reducer.snapshot().previews.is_empty());
 
         let change = models::TurnChange::new(
-            "turn_01kc514000e008000000000001".into(),
+            "476dd7be-97a1-78f3-8096-d7032468a80a".into(),
             None,
             None,
             2,
@@ -528,9 +528,9 @@ mod tests {
         let snapshot = reducer.snapshot();
         assert_eq!(
             snapshot.turn_changes[0].turn_id,
-            "turn_01kc514000e008000000000001"
+            "476dd7be-97a1-78f3-8096-d7032468a80a"
         );
-        assert!(reducer.settled("turn_01kc514000e008000000000001"));
+        assert!(reducer.settled("476dd7be-97a1-78f3-8096-d7032468a80a"));
         assert_eq!(snapshot.cursor.as_deref(), Some("cursor-2"));
     }
 
@@ -541,7 +541,7 @@ mod tests {
             client
                 .raw()
                 .client
-                .get("http://localhost/v1/turns/turn_01kc514000e008000000000001/stream"),
+                .get("http://localhost/v1/turns/476dd7be-97a1-78f3-8096-d7032468a80a/stream"),
             Some("acme"),
             Some("alice"),
         )

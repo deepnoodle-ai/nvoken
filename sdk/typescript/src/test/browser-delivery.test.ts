@@ -127,7 +127,7 @@ test("anonymous exchange uses target Conversation fields and no credential", asy
   let seenBody: Record<string, unknown> | undefined;
   const token = await issueAnonymousToken({
     baseUrl: `${BASE_URL}/`,
-    appId: "app_01kc514000e008000000000001",
+    appId: "3215b8a9-28f9-720d-80b9-6d736e94f377",
     idempotencyKey: "anonymous-exchange-1",
     visitorToken: "visitor-1",
     fetch: async (_input, init) => {
@@ -138,12 +138,12 @@ test("anonymous exchange uses target Conversation fields and no credential", asy
         access_token_expires_in_seconds: 900,
         visitor_token: "visitor-2",
         visitor_token_expires_at: "2027-08-17T12:00:00Z",
-        conversation_id: "conv_01kc514000e008000000000001",
+        conversation_id: "18325d9f-b9bc-797d-9259-96ece372defd",
       }, { status: 201 });
     },
   });
 
-  assert.equal(token.conversationId, "conv_01kc514000e008000000000001");
+  assert.equal(token.conversationId, "18325d9f-b9bc-797d-9259-96ece372defd");
   assert.deepEqual(seenBody, { visitor_token: "visitor-1" });
   assert.equal(seenHeaders.get("Idempotency-Key"), "anonymous-exchange-1");
   assert.equal(seenHeaders.get("Authorization"), null);

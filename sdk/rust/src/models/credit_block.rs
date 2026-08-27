@@ -13,13 +13,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CreditBlock {
-    /// Account that could not fund the next provider attempt; null means the App's default tenant.
-    #[serde(rename = "tenant_key", deserialize_with = "Option::deserialize")]
-    pub tenant_key: Option<String>,
+    /// Account that could not fund the next provider attempt.
+    #[serde(rename = "tenant_key")]
+    pub tenant_key: String,
 }
 
 impl CreditBlock {
-    pub fn new(tenant_key: Option<String>) -> CreditBlock {
+    pub fn new(tenant_key: String) -> CreditBlock {
         CreditBlock { tenant_key }
     }
 }

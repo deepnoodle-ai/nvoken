@@ -9,7 +9,7 @@ import (
 )
 
 func TestIdentityLifecycleMethods(t *testing.T) {
-	const credentialID = "cred_01kc5153ahfwtaxmge0z0vvcsg"
+	const credentialID = "2a69daf1-e8ad-7b66-9b31-d77bb1aef9c0"
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requests++
@@ -19,7 +19,7 @@ func TestIdentityLifecycleMethods(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity":
-			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","app_id":"app_01kc514000e008000000000002","type":"app","tenant_key":null,"method":"api_key"}}`))
+			_, _ = writer.Write([]byte(`{"authentication":{"credential_id":"` + credentialID + `","app_id":"f10c774d-8f44-752b-ae47-ab3ec9a7776d","type":"app","tenant_key":null,"method":"api_key"}}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/v1/identity/credentials":
 			if request.URL.Query().Get("status") != "active" || request.URL.Query().Get("cursor") != "page-2" || request.URL.Query().Get("limit") != "10" {
 				t.Errorf("list query = %q", request.URL.RawQuery)

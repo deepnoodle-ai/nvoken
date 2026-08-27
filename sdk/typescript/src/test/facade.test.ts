@@ -5,7 +5,7 @@ import { Client, defineHostTool, NvokenError, TurnTimeoutError } from "../index.
 
 const BASE_URL = "https://runtime.example.test";
 const TURN_ID = "019b0a12-8d51-7f34-aed2-0e07c1bdb322";
-const AGENT_ID = "agent_01kc5153ahfwtaxmge0z0vvcs0";
+const AGENT_ID = "e1ec4be4-ffd5-7789-83bc-fb8f0f1eb276";
 const NOW = "2026-07-21T12:00:00Z";
 
 test("shared conformance server uses the current model contract", async (t) => {
@@ -143,7 +143,7 @@ test("the facade copies only its six behavior fields", async () => {
       return Response.json(wireAgent(), { status: 201 });
     }
     return Response.json({
-      id: "arev_01kc514000e008000000000001",
+      id: "4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd",
       agent_id: AGENT_ID,
       revision: 2,
       behavior: {
@@ -356,7 +356,7 @@ test("Agent publish keeps one generated idempotency key across retries", async (
       return Response.json({ code: "unavailable", message: "retry" }, { status: 503 });
     }
     return Response.json({
-      id: "arev_01kc514000e008000000000002",
+      id: "9efb3e8b-9e59-732d-883e-2d9b8433a9ca",
       agent_id: AGENT_ID,
       revision: 2,
       behavior: { instructions: "Updated.", model: "openai/gpt-5" },
@@ -396,7 +396,7 @@ test("result drives a bound host tool once before returning", async () => {
         conversation_id: null,
         content_expires_at: null,
         status: "running",
-        results: [{ tool_call_id: "call_01kc514000e008000000000001", status: "completed", deduplicated: false }],
+        results: [{ tool_call_id: "9f8fd6b3-9060-783d-b759-45c8ec70e8cb", status: "completed", deduplicated: false }],
         tool_calls: [],
       }, { status: 202 });
     }
@@ -404,7 +404,7 @@ test("result drives a bound host tool once before returning", async () => {
     if (resultReads === 1) {
       return turnResult("waiting", {
         tool_calls: [{
-          id: "call_01kc514000e008000000000001",
+          id: "9f8fd6b3-9060-783d-b759-45c8ec70e8cb",
           name: "lookup",
           mode: "host",
           status: "pending",
@@ -454,7 +454,7 @@ test("result drives a bound host tool once before returning", async () => {
   const submission = requests.find((request) => request.path.endsWith("/tool-results"));
   assert.deepEqual(submission?.body, {
     results: [{
-      tool_call_id: "call_01kc514000e008000000000001",
+      tool_call_id: "9f8fd6b3-9060-783d-b759-45c8ec70e8cb",
       content: { city: "Boston", forecast: "Sunny" },
     }],
   });

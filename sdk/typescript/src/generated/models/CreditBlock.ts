@@ -20,11 +20,11 @@ import { mapValues } from '../runtime.js';
  */
 export interface CreditBlock {
     /**
-     * Account that could not fund the next provider attempt; null means the App's default tenant.
+     * Account that could not fund the next provider attempt.
      * @type {string}
      * @memberof CreditBlock
      */
-    tenantKey: string | null;
+    tenantKey: string;
 }
 
 /**

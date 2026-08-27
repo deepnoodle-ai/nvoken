@@ -18,7 +18,7 @@ import re  # noqa: F401
 import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -27,7 +27,7 @@ class CreditBlock(BaseModel):
     """
     CreditBlock
     """ # noqa: E501
-    tenant_key: Optional[StrictStr] = Field(description="Account that could not fund the next provider attempt; null means the App's default tenant.")
+    tenant_key: StrictStr = Field(description="Account that could not fund the next provider attempt.")
     additional_properties: Dict[str, Any] = {}
     __properties: ClassVar[List[str]] = ["tenant_key"]
 
@@ -76,11 +76,6 @@ class CreditBlock(BaseModel):
         if self.additional_properties is not None:
             for _key, _value in self.additional_properties.items():
                 _dict[_key] = _value
-
-        # set to None if tenant_key (nullable) is None
-        # and model_fields_set contains the field
-        if self.tenant_key is None and "tenant_key" in self.model_fields_set:
-            _dict['tenant_key'] = None
 
         return _dict
 

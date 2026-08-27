@@ -2,15 +2,15 @@
   "version": 1,
   "note": "Credits are persistent tenant spending capacity, not a recurring allowance. Allocations append funding and exact USD Money values preserve six decimal places.",
   "allocation_request": {
+    "tenant_key": "acme",
     "amount": {
       "amount": "25.000000",
       "currency": "USD"
     },
-    "default_tenant": true,
     "idempotency_key": "credits-conformance-1"
   },
   "account": {
-    "tenant_key": null,
+    "tenant_key": "acme",
     "allocated": {
       "amount": "25.000000",
       "currency": "USD"
@@ -32,8 +32,8 @@
     "updated_at": "2026-08-08T12:00:00Z"
   },
   "allocation": {
-    "id": "alloc_01kc5153ahfwtaxmge0z0vvcsg",
-    "tenant_key": null,
+    "id": "019b0a14-1f30-7d62-8c05-3e97a4b1d208",
+    "tenant_key": "acme",
     "amount": {
       "amount": "25.000000",
       "currency": "USD"
@@ -43,7 +43,7 @@
     "created_at": "2026-08-01T00:00:00Z"
   },
   "credit_block": {
-    "tenant_key": null,
+    "tenant_key": "acme",
     "required": {
       "amount": "0.500000",
       "currency": "USD"

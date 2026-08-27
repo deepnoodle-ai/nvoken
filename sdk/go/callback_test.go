@@ -14,12 +14,12 @@ import (
 func TestVerifyCallbackRequiresTargetToolName(t *testing.T) {
 	const (
 		key        = "0123456789abcdef0123456789abcdef"
-		deliveryID = "dlvr_01kc514000e008000000000001"
-		toolCallID = "call_01kc514000e008000000000001"
+		deliveryID = "5febe64f-6207-7df6-a0c7-c6d635c6d2a4"
+		toolCallID = "9f8fd6b3-9060-783d-b759-45c8ec70e8cb"
 	)
 	now := time.Unix(1784635200, 0)
 	context := `"schema_version":2,"delivery_id":"` + deliveryID + `","tool_call_id":"` + toolCallID +
-		`","turn_id":"turn_01kc514000e008000000000001","conversation_id":null,"memory_space_id":null,"content_expires_at":null,` +
+		`","turn_id":"476dd7be-97a1-78f3-8096-d7032468a80a","conversation_id":null,"memory_space_id":null,"content_expires_at":null,` +
 		`"behavior_source":{"kind":"inline","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},` +
 		`"tenant_key":"acme","user_key":null`
 	body := `{"nvoken":{` + context + `},"input":{}}`
@@ -31,7 +31,7 @@ func TestVerifyCallbackRequiresTargetToolName(t *testing.T) {
 	named := `{"nvoken":{` + context + `,"tool_name":"open_ticket"},"input":{}}`
 	header = signedDeliveryHeader(key, []byte(named), deliveryID, toolCallID, now)
 	verified, err := VerifyCallback([]byte(key), header, []byte(named), now)
-	if err != nil || verified.ToolName != "open_ticket" || verified.Envelope.Nvoken.TurnID != "turn_01kc514000e008000000000001" {
+	if err != nil || verified.ToolName != "open_ticket" || verified.Envelope.Nvoken.TurnID != "476dd7be-97a1-78f3-8096-d7032468a80a" {
 		t.Fatalf("verified callback = %#v err=%v", verified, err)
 	}
 }

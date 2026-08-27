@@ -1,11 +1,11 @@
 {
   "version": 1,
   "note": "An Agent is stable, owner-namespaced, reusable behavior. AgentRevision is its immutable snapshot. A Turn selects an exact revision at admission; no intermediate tenant resource is required.",
-  "agent_id": "agent_01kc514000e008000000000006",
-  "agent_revision_id": "arev_01kc514000e008000000000005",
+  "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
+  "agent_revision_id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de",
   "reference_fields": {
-    "agent_id": "agent_01kc514000e008000000000006",
-    "agent_revision_id": "arev_01kc514000e008000000000005"
+    "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
+    "agent_revision_id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de"
   },
   "rules": {
     "stable_resource_id": true,
@@ -76,7 +76,7 @@
       }
     },
     "response": {
-      "id": "agent_01kc514000e008000000000006",
+      "id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
       "agent_key": "support",
       "name": "Billing support",
       "owner": { "kind": "app" },
@@ -87,8 +87,8 @@
     }
   },
   "revision": {
-    "id": "arev_01kc514000e008000000000005",
-    "agent_id": "agent_01kc514000e008000000000006",
+    "id": "6169cd04-e6f8-7ef0-bd3b-88595905d3de",
+    "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
     "revision": 1,
     "behavior": {
       "instructions": "You are a concise billing support agent.",
@@ -107,7 +107,7 @@
     "behavior": {
       "kind": "agent",
       "agent": {
-        "agent_id": "agent_01kc514000e008000000000006",
+        "agent_id": "763c35c5-8d46-7e1a-a1f6-b3074ee93268",
         "revision": "current"
       }
     },
