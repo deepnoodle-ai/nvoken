@@ -8,12 +8,16 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.33.0 - 2026-08-28
+
 - **Fixed: the Python facade still sent `default_tenant`.** 0.32.0 removed it
   from the generated client but not from `allocate_credits`,
-  `list_credit_accounts`, or `list_credit_allocations`, so all three raised
-  `TypeError` on the published package. `tenant_key` is now required for an
-  allocation, as the contract has always said. Python is the only SDK this
-  could reach — the other three would not compile.
+  `list_credit_accounts`, or `list_credit_allocations`. The two listing calls
+  raised `ValidationError` on the published package; the allocation quietly
+  dropped the argument, because the generated request model discards keys it
+  does not declare. `tenant_key` is now required for an allocation, as the
+  contract has always said. Python is the only SDK this could reach — the
+  other three would not compile.
 - **`CreditBlock.tenant_key` is no longer nullable.** The service's type
   cannot produce the null, so every consumer was unwrapping a value that is
   always present. Typed clients change shape: Rust drops the `Option`, Python
