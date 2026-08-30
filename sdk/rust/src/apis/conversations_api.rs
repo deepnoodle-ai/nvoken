@@ -654,7 +654,7 @@ pub async fn stream_conversation(
     }
 }
 
-/// Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+/// Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
 pub async fn update_conversation(
     configuration: &configuration::Configuration,
     conversation_id: &str,

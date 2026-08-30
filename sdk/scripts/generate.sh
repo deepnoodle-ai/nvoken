@@ -41,6 +41,12 @@ perl -0pi -e '
   s/^    ClientInterface:$/    BrowserClientInterface:/m;
 ' "$SPEC"
 
+# The two nullable policy fields on UpdateConversationRequest need three Go
+# states: omitted, explicit null, and a replacement value. Enabling oapi-codegen's
+# nullable type globally would change every nullable response projection, so add
+# exact generator-only annotations to these fields instead.
+python3 sdk/scripts/annotate_go_nullable_updates.py "$SPEC"
+
 curl --fail --silent --show-error --location \
   "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/${OPENAPI_GENERATOR_VERSION}/openapi-generator-cli-${OPENAPI_GENERATOR_VERSION}.jar" \
   --output "$JAR"

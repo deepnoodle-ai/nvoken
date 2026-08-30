@@ -8,6 +8,17 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.34.0 - 2026-08-30
+
+- **Conversations can change retention and compaction after creation.**
+  `updateConversation` accepts a replacement policy or `null` to clear one;
+  replacing retention recalculates `expires_at` from the update time.
+- **Continuing an existing keyed Conversation is tolerant of changed creation
+  options.** Retention, compaction, and metadata are initial values used only
+  when the Conversation is first created. Later continue-or-create requests
+  preserve the stored configuration instead of returning
+  `conversation_options_conflict`.
+
 ## 0.33.0 - 2026-08-28
 
 - **Fixed: the Python facade still sent `default_tenant`.** 0.32.0 removed it

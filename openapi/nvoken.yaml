@@ -1895,11 +1895,13 @@ paths:
       tags:
         - Conversations
       operationId: updateConversation
-      summary: Update Conversation metadata or refresh retention
+      summary: Update Conversation configuration
       description: |
-        Replaces metadata, refreshes `expires_at` from the stored retention
-        policy, or does both. This operation cannot add behavior, memory, or
-        actor defaults to a Conversation.
+        Replaces metadata, retention, or compaction, or refreshes `expires_at`
+        from the stored retention policy. A `null` retention or compaction
+        clears that policy. Replacing retention recalculates `expires_at` from
+        the time of this update. This operation cannot add behavior, memory,
+        or actor defaults to a Conversation.
       requestBody:
         required: true
         content:
@@ -6905,7 +6907,6 @@ components:
         - turn_erased
         - idempotency_conflict
         - conversation_key_conflict
-        - conversation_options_conflict
         - conversation_active
         - turn_active
         - turn_conversation_bound
@@ -7226,6 +7227,11 @@ components:
     ContinueOrCreateTurnConversation:
       type: object
       additionalProperties: false
+      description: |
+        Resolves the existing Conversation in the exact owner/key namespace or
+        creates it atomically. `retention`, `compaction`, and `metadata` are
+        used only when a Conversation is created. When the key already exists,
+        nvoken preserves the stored Conversation configuration and metadata.
       required:
         - mode
         - conversation_key
@@ -7242,10 +7248,17 @@ components:
           $ref: '#/components/schemas/ConversationActivePolicy'
         retention:
           $ref: '#/components/schemas/RetentionPolicy'
+          description: >-
+            Initial retention policy, used only when the Conversation is
+            created.
         compaction:
           $ref: '#/components/schemas/CompactionPolicy'
+          description: >-
+            Initial compaction policy, used only when the Conversation is
+            created.
         metadata:
           $ref: '#/components/schemas/ConversationMetadata'
+          description: Initial metadata, used only when the Conversation is created.
     TurnContextItem:
       type: object
       additionalProperties: false
@@ -9486,13 +9499,29 @@ components:
         metadata:
           $ref: '#/components/schemas/ConversationMetadata'
           description: Complete JSON metadata object to store on the Conversation.
+        retention:
+          oneOf:
+            - $ref: '#/components/schemas/RetentionPolicy'
+            - type: 'null'
+          description: |
+            Complete retention policy to store, or `null` to retain the
+            Conversation until explicit deletion. Replacing the policy
+            recalculates `expires_at` from the update time.
+        compaction:
+          oneOf:
+            - $ref: '#/components/schemas/CompactionPolicy'
+            - type: 'null'
+          description: >-
+            Complete compaction policy to store, or `null` to disable automatic
+            compaction.
         refresh_retention:
           type: boolean
           const: true
           description: |
             Recomputes `expires_at` from the Conversation's stored retention
-            policy without changing that policy. Refused when no retention
-            policy exists.
+            policy without changing that policy. If `retention` is also
+            supplied, replacement already performs this refresh. Refused when
+            no retention policy exists and `retention` is omitted.
     ForkConversationRequest:
       type: object
       additionalProperties: false

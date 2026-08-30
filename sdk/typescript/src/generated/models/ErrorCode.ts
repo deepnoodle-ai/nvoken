@@ -32,7 +32,6 @@ export const ErrorCode = {
     TurnErased: 'turn_erased',
     IdempotencyConflict: 'idempotency_conflict',
     ConversationKeyConflict: 'conversation_key_conflict',
-    ConversationOptionsConflict: 'conversation_options_conflict',
     ConversationActive: 'conversation_active',
     TurnActive: 'turn_active',
     TurnConversationBound: 'turn_conversation_bound',

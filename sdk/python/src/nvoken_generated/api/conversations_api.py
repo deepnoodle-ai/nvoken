@@ -2817,9 +2817,9 @@ class ConversationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> Conversation:
-        """Update Conversation metadata or refresh retention
+        """Update Conversation configuration
 
-        Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+        Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
 
         :param conversation_id: (required)
         :type conversation_id: str
@@ -2895,9 +2895,9 @@ class ConversationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> ApiResponse[Conversation]:
-        """Update Conversation metadata or refresh retention
+        """Update Conversation configuration
 
-        Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+        Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
 
         :param conversation_id: (required)
         :type conversation_id: str
@@ -2973,9 +2973,9 @@ class ConversationsApi:
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
     ) -> RESTResponseType:
-        """Update Conversation metadata or refresh retention
+        """Update Conversation configuration
 
-        Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+        Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
 
         :param conversation_id: (required)
         :type conversation_id: str

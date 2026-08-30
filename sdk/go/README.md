@@ -178,3 +178,18 @@ response, err := client.Raw().ListConversationsWithResponse(ctx, params)
 
 `Raw()` is the generated OpenAPI client. Its request and response types match
 the published HTTP contract exactly.
+
+Nullable update fields preserve write intent. Use `nullable.NewNullNullable`
+to send JSON `null`, `nullable.NewNullableWithValue` to replace a value, or the
+zero value to omit the field and leave it unchanged:
+
+```go
+request := generated.UpdateConversationJSONRequestBody{
+	Retention: nullable.NewNullNullable[generated.RetentionPolicy](),
+}
+response, err := client.Raw().UpdateConversationWithResponse(
+	ctx,
+	conversationID,
+	request,
+)
+```

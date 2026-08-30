@@ -40,7 +40,6 @@ class ErrorCode(str, Enum):
     TURN_ERASED = 'turn_erased'
     IDEMPOTENCY_CONFLICT = 'idempotency_conflict'
     CONVERSATION_KEY_CONFLICT = 'conversation_key_conflict'
-    CONVERSATION_OPTIONS_CONFLICT = 'conversation_options_conflict'
     CONVERSATION_ACTIVE = 'conversation_active'
     TURN_ACTIVE = 'turn_active'
     TURN_CONVERSATION_BOUND = 'turn_conversation_bound'

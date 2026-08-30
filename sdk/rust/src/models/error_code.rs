@@ -42,8 +42,6 @@ pub enum ErrorCode {
     IdempotencyConflict,
     #[serde(rename = "conversation_key_conflict")]
     ConversationKeyConflict,
-    #[serde(rename = "conversation_options_conflict")]
-    ConversationOptionsConflict,
     #[serde(rename = "conversation_active")]
     ConversationActive,
     #[serde(rename = "turn_active")]
@@ -115,7 +113,6 @@ impl std::fmt::Display for ErrorCode {
             Self::TurnErased => write!(f, "turn_erased"),
             Self::IdempotencyConflict => write!(f, "idempotency_conflict"),
             Self::ConversationKeyConflict => write!(f, "conversation_key_conflict"),
-            Self::ConversationOptionsConflict => write!(f, "conversation_options_conflict"),
             Self::ConversationActive => write!(f, "conversation_active"),
             Self::TurnActive => write!(f, "turn_active"),
             Self::TurnConversationBound => write!(f, "turn_conversation_bound"),

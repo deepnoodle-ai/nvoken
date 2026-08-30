@@ -32,10 +32,13 @@ Do not hand-edit generated transports. The exact generated paths are listed in
 
 `sdk/scripts/generate.sh` generates from an isolated copy of the snapshot. It
 renames the browser `ClientInterface` schema only in the Go generator input,
-because oapi-codegen reserves that name for its transport interface. It also
-repairs a small set of discriminator unions emitted incorrectly by the Rust
-generator. JSON names and the committed public contract remain unchanged, and
-every workaround fails loudly if the expected generated shape moves.
+because oapi-codegen reserves that name for its transport interface. That
+isolated input also receives Go-only type annotations preserving omitted, null,
+and replacement as distinct states for nullable Conversation policy updates,
+without changing every nullable response field. Generation also repairs a small
+set of discriminator unions emitted incorrectly by the Rust generator. JSON
+names and the committed public contract remain unchanged, and every workaround
+fails loudly if the expected generated shape moves.
 
 Handwritten facade code belongs in the language package outside its generated
 directory. Preserve these cross-language reliability rules:
