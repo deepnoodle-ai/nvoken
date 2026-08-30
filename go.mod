@@ -14,6 +14,7 @@ require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/oapi-codegen/nullable v1.1.0 // indirect
 	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/yuin/goldmark v1.8.5 // indirect
 	golang.org/x/sys v0.47.0 // indirect

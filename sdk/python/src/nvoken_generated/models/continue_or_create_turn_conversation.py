@@ -30,15 +30,15 @@ from pydantic_core import to_jsonable_python
 
 class ContinueOrCreateTurnConversation(BaseModel):
     """
-    ContinueOrCreateTurnConversation
+    Resolves the existing Conversation in the exact owner/key namespace or creates it atomically. `retention`, `compaction`, and `metadata` are used only when a Conversation is created. When the key already exists, nvoken preserves the stored Conversation configuration and metadata.
     """ # noqa: E501
     mode: StrictStr
     conversation_key: Annotated[str, Field(min_length=1, strict=True, max_length=255)]
     owner: ConversationOwner
     if_active: Optional[ConversationActivePolicy] = ConversationActivePolicy.REJECT
-    retention: Optional[RetentionPolicy] = None
-    compaction: Optional[CompactionPolicy] = None
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Application-owned JSON metadata stored without interpretation.")
+    retention: Optional[RetentionPolicy] = Field(default=None, description="Initial retention policy, used only when the Conversation is created.")
+    compaction: Optional[CompactionPolicy] = Field(default=None, description="Initial compaction policy, used only when the Conversation is created.")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Initial metadata, used only when the Conversation is created.")
     __properties: ClassVar[List[str]] = ["mode", "conversation_key", "owner", "if_active", "retention", "compaction", "metadata"]
 
     @field_validator('mode')

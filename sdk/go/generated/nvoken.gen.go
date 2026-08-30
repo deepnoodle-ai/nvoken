@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -980,7 +981,6 @@ const (
 	ErrorCodeBudgetExceeded                  ErrorCode = "budget_exceeded"
 	ErrorCodeConversationActive              ErrorCode = "conversation_active"
 	ErrorCodeConversationKeyConflict         ErrorCode = "conversation_key_conflict"
-	ErrorCodeConversationOptionsConflict     ErrorCode = "conversation_options_conflict"
 	ErrorCodeCostEstimateUnavailable         ErrorCode = "cost_estimate_unavailable"
 	ErrorCodeForbidden                       ErrorCode = "forbidden"
 	ErrorCodeIdempotencyConflict             ErrorCode = "idempotency_conflict"
@@ -1033,8 +1033,6 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeConversationActive:
 		return true
 	case ErrorCodeConversationKeyConflict:
-		return true
-	case ErrorCodeConversationOptionsConflict:
 		return true
 	case ErrorCodeCostEstimateUnavailable:
 		return true
@@ -3745,12 +3743,12 @@ type ConsoleDeviceAuthorizationStatus string
 // Null while it is nonterminal and for conversation-bound work.
 type ContentExpiresAt = time.Time
 
-// ContinueOrCreateTurnConversation defines model for ContinueOrCreateTurnConversation.
+// ContinueOrCreateTurnConversation Resolves the existing Conversation in the exact owner/key namespace or
+// creates it atomically. `retention`, `compaction`, and `metadata` are
+// used only when a Conversation is created. When the key already exists,
+// nvoken preserves the stored Conversation configuration and metadata.
 type ContinueOrCreateTurnConversation struct {
-	// Compaction Durable Conversation context-compaction policy. Omission of model uses the
-	// installing Turn's primary model. An explicit model must be
-	// cataloged and use the same provider. Later Turns automatically
-	// use this resolved policy and the latest Conversation summary.
+	// Compaction Initial compaction policy, used only when the Conversation is created.
 	Compaction      *CompactionPolicy `json:"compaction,omitempty"`
 	ConversationKey ConversationKey   `json:"conversation_key"`
 
@@ -3771,25 +3769,12 @@ type ContinueOrCreateTurnConversation struct {
 	// never permits `supersede`.
 	IfActive *ConversationActivePolicy `json:"if_active,omitempty"`
 
-	// Metadata Application-owned JSON metadata stored without interpretation.
+	// Metadata Initial metadata, used only when the Conversation is created.
 	Metadata *ConversationMetadata                `json:"metadata,omitempty"`
 	Mode     ContinueOrCreateTurnConversationMode `json:"mode"`
 	Owner    ConversationOwner                    `json:"owner"`
 
-	// Retention How long a Conversation can sit unused before nvoken deletes it. When the
-	// window passes, the Conversation and everything under it are erased, exactly
-	// as `DELETE /v1/conversations/{conversation_id}` would.
-	//
-	// The clock measures idle time, not age: it resets every time a turn
-	// starts and every time one finishes. A long-running turn can never
-	// expire out from under you.
-	//
-	// Expiry and explicit erasure never cancel active work. A Conversation
-	// holding a nonterminal Turn is skipped by expiry and refused by
-	// explicit erasure until that Turn becomes terminal.
-	//
-	// Omitting retention retains the Conversation until it is deleted explicitly,
-	// which stays the default.
+	// Retention Initial retention policy, used only when the Conversation is created.
 	Retention *RetentionPolicy `json:"retention,omitempty"`
 }
 
@@ -7217,18 +7202,28 @@ type UpdateAppRequest struct {
 
 // UpdateConversationRequest defines model for UpdateConversationRequest.
 type UpdateConversationRequest struct {
+	// Compaction Complete compaction policy to store, or `null` to disable automatic compaction.
+	Compaction nullable.Nullable[CompactionPolicy] `json:"compaction,omitempty"`
+
 	// Metadata Complete JSON metadata object to store on the Conversation.
 	Metadata *ConversationMetadata `json:"metadata,omitempty"`
 
 	// RefreshRetention Recomputes `expires_at` from the Conversation's stored retention
-	// policy without changing that policy. Refused when no retention
-	// policy exists.
+	// policy without changing that policy. If `retention` is also
+	// supplied, replacement already performs this refresh. Refused when
+	// no retention policy exists and `retention` is omitted.
 	RefreshRetention *UpdateConversationRequestRefreshRetention `json:"refresh_retention,omitempty"`
+
+	// Retention Complete retention policy to store, or `null` to retain the
+	// Conversation until explicit deletion. Replacing the policy
+	// recalculates `expires_at` from the update time.
+	Retention nullable.Nullable[RetentionPolicy] `json:"retention,omitempty"`
 }
 
 // UpdateConversationRequestRefreshRetention Recomputes `expires_at` from the Conversation's stored retention
-// policy without changing that policy. Refused when no retention
-// policy exists.
+// policy without changing that policy. If `retention` is also
+// supplied, replacement already performs this refresh. Refused when
+// no retention policy exists and `retention` is omitted.
 type UpdateConversationRequestRefreshRetention bool
 
 // UpdateOrgRequest defines model for UpdateOrgRequest.
@@ -11387,22 +11382,26 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/conversations/{conversation_id} (the `GetConversation` operationId).
 	GetConversation(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateConversationWithBody Update Conversation metadata or refresh retention
+	// UpdateConversationWithBody Update Conversation configuration
 	//
-	// Replaces metadata, refreshes `expires_at` from the stored retention
-	// policy, or does both. This operation cannot add behavior, memory, or
-	// actor defaults to a Conversation.
+	// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+	// from the stored retention policy. A `null` retention or compaction
+	// clears that policy. Replacing retention recalculates `expires_at` from
+	// the time of this update. This operation cannot add behavior, memory,
+	// or actor defaults to a Conversation.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /v1/conversations/{conversation_id} (the `UpdateConversation` operationId).
 	UpdateConversationWithBody(ctx context.Context, conversationID ConversationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateConversation Update Conversation metadata or refresh retention
+	// UpdateConversation Update Conversation configuration
 	//
-	// Replaces metadata, refreshes `expires_at` from the stored retention
-	// policy, or does both. This operation cannot add behavior, memory, or
-	// actor defaults to a Conversation.
+	// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+	// from the stored retention policy. A `null` retention or compaction
+	// clears that policy. Replacing retention recalculates `expires_at` from
+	// the time of this update. This operation cannot add behavior, memory,
+	// or actor defaults to a Conversation.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -13408,11 +13407,13 @@ func (c *Client) GetConversation(ctx context.Context, conversationID Conversatio
 	return c.Client.Do(req)
 }
 
-// UpdateConversationWithBody Update Conversation metadata or refresh retention
+// UpdateConversationWithBody Update Conversation configuration
 //
-// Replaces metadata, refreshes `expires_at` from the stored retention
-// policy, or does both. This operation cannot add behavior, memory, or
-// actor defaults to a Conversation.
+// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+// from the stored retention policy. A `null` retention or compaction
+// clears that policy. Replacing retention recalculates `expires_at` from
+// the time of this update. This operation cannot add behavior, memory,
+// or actor defaults to a Conversation.
 //
 // Takes any type of body and a specified content type.
 //
@@ -13429,11 +13430,13 @@ func (c *Client) UpdateConversationWithBody(ctx context.Context, conversationID 
 	return c.Client.Do(req)
 }
 
-// UpdateConversation Update Conversation metadata or refresh retention
+// UpdateConversation Update Conversation configuration
 //
-// Replaces metadata, refreshes `expires_at` from the stored retention
-// policy, or does both. This operation cannot add behavior, memory, or
-// actor defaults to a Conversation.
+// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+// from the stored retention policy. A `null` retention or compaction
+// clears that policy. Replacing retention recalculates `expires_at` from
+// the time of this update. This operation cannot add behavior, memory,
+// or actor defaults to a Conversation.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -21274,22 +21277,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/conversations/{conversation_id} (the `GetConversation` operationId).
 	GetConversationWithResponse(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*GetConversationHTTPResponse, error)
 
-	// UpdateConversationWithBodyWithResponse Update Conversation metadata or refresh retention
+	// UpdateConversationWithBodyWithResponse Update Conversation configuration
 	//
-	// Replaces metadata, refreshes `expires_at` from the stored retention
-	// policy, or does both. This operation cannot add behavior, memory, or
-	// actor defaults to a Conversation.
+	// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+	// from the stored retention policy. A `null` retention or compaction
+	// clears that policy. Replacing retention recalculates `expires_at` from
+	// the time of this update. This operation cannot add behavior, memory,
+	// or actor defaults to a Conversation.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/conversations/{conversation_id} (the `UpdateConversation` operationId).
 	UpdateConversationWithBodyWithResponse(ctx context.Context, conversationID ConversationID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateConversationHTTPResponse, error)
 
-	// UpdateConversationWithResponse Update Conversation metadata or refresh retention
+	// UpdateConversationWithResponse Update Conversation configuration
 	//
-	// Replaces metadata, refreshes `expires_at` from the stored retention
-	// policy, or does both. This operation cannot add behavior, memory, or
-	// actor defaults to a Conversation.
+	// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+	// from the stored retention policy. A `null` retention or compaction
+	// clears that policy. Replacing retention recalculates `expires_at` from
+	// the time of this update. This operation cannot add behavior, memory,
+	// or actor defaults to a Conversation.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -31200,11 +31207,13 @@ func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, c
 	return ParseGetConversationHTTPResponse(rsp)
 }
 
-// UpdateConversationWithBodyWithResponse Update Conversation metadata or refresh retention
+// UpdateConversationWithBodyWithResponse Update Conversation configuration
 //
-// Replaces metadata, refreshes `expires_at` from the stored retention
-// policy, or does both. This operation cannot add behavior, memory, or
-// actor defaults to a Conversation.
+// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+// from the stored retention policy. A `null` retention or compaction
+// clears that policy. Replacing retention recalculates `expires_at` from
+// the time of this update. This operation cannot add behavior, memory,
+// or actor defaults to a Conversation.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -31217,11 +31226,13 @@ func (c *ClientWithResponses) UpdateConversationWithBodyWithResponse(ctx context
 	return ParseUpdateConversationHTTPResponse(rsp)
 }
 
-// UpdateConversationWithResponse Update Conversation metadata or refresh retention
+// UpdateConversationWithResponse Update Conversation configuration
 //
-// Replaces metadata, refreshes `expires_at` from the stored retention
-// policy, or does both. This operation cannot add behavior, memory, or
-// actor defaults to a Conversation.
+// Replaces metadata, retention, or compaction, or refreshes `expires_at`
+// from the stored retention policy. A `null` retention or compaction
+// clears that policy. Replacing retention recalculates `expires_at` from
+// the time of this update. This operation cannot add behavior, memory,
+// or actor defaults to a Conversation.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

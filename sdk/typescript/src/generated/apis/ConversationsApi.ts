@@ -720,8 +720,8 @@ export class ConversationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
-     * Update Conversation metadata or refresh retention
+     * Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+     * Update Conversation configuration
      */
     async updateConversationRaw(requestParameters: UpdateConversationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Conversation>> {
         const requestOptions = await this.updateConversationRequestOpts(requestParameters);
@@ -731,8 +731,8 @@ export class ConversationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Replaces metadata, refreshes `expires_at` from the stored retention policy, or does both. This operation cannot add behavior, memory, or actor defaults to a Conversation.
-     * Update Conversation metadata or refresh retention
+     * Replaces metadata, retention, or compaction, or refreshes `expires_at` from the stored retention policy. A `null` retention or compaction clears that policy. Replacing retention recalculates `expires_at` from the time of this update. This operation cannot add behavior, memory, or actor defaults to a Conversation.
+     * Update Conversation configuration
      */
     async updateConversation(requestParameters: UpdateConversationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Conversation> {
         const response = await this.updateConversationRaw(requestParameters, initOverrides);

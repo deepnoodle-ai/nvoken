@@ -19,6 +19,8 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 from typing import Any, ClassVar, Dict, Optional
+from nvoken_generated.models.compaction_policy import CompactionPolicy
+from nvoken_generated.models.retention_policy import RetentionPolicy
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -28,8 +30,10 @@ class UpdateConversationRequest(BaseModel):
     UpdateConversationRequest
     """ # noqa: E501
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Complete JSON metadata object to store on the Conversation.")
-    refresh_retention: Optional[StrictBool] = Field(default=None, description="Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. Refused when no retention policy exists. ")
-    __properties: ClassVar[List[str]] = ["metadata", "refresh_retention"]
+    retention: Optional[RetentionPolicy] = Field(default=None, description="Complete retention policy to store, or `null` to retain the Conversation until explicit deletion. Replacing the policy recalculates `expires_at` from the update time. ")
+    compaction: Optional[CompactionPolicy] = Field(default=None, description="Complete compaction policy to store, or `null` to disable automatic compaction.")
+    refresh_retention: Optional[StrictBool] = Field(default=None, description="Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. If `retention` is also supplied, replacement already performs this refresh. Refused when no retention policy exists and `retention` is omitted. ")
+    __properties: ClassVar[List[str]] = ["metadata", "retention", "compaction", "refresh_retention"]
 
     @field_validator('refresh_retention')
     def refresh_retention_validate_enum(cls, value):
@@ -80,6 +84,22 @@ class UpdateConversationRequest(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of retention
+        if self.retention:
+            _dict['retention'] = self.retention.to_dict()
+        # override the default output from pydantic by calling `to_dict()` of compaction
+        if self.compaction:
+            _dict['compaction'] = self.compaction.to_dict()
+        # set to None if retention (nullable) is None
+        # and model_fields_set contains the field
+        if self.retention is None and "retention" in self.model_fields_set:
+            _dict['retention'] = None
+
+        # set to None if compaction (nullable) is None
+        # and model_fields_set contains the field
+        if self.compaction is None and "compaction" in self.model_fields_set:
+            _dict['compaction'] = None
+
         return _dict
 
     @classmethod
@@ -93,6 +113,8 @@ class UpdateConversationRequest(BaseModel):
 
         _obj = cls.model_validate({
             "metadata": obj.get("metadata"),
+            "retention": RetentionPolicy.from_dict(obj["retention"]) if obj.get("retention") is not None else None,
+            "compaction": CompactionPolicy.from_dict(obj["compaction"]) if obj.get("compaction") is not None else None,
             "refresh_retention": obj.get("refresh_retention")
         })
         return _obj

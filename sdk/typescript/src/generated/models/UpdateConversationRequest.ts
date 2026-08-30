@@ -13,6 +13,21 @@
  */
 
 import { mapValues } from '../runtime.js';
+import type { CompactionPolicy } from './CompactionPolicy.js';
+import {
+    CompactionPolicyFromJSON,
+    CompactionPolicyFromJSONTyped,
+    CompactionPolicyToJSON,
+    CompactionPolicyToJSONTyped,
+} from './CompactionPolicy.js';
+import type { RetentionPolicy } from './RetentionPolicy.js';
+import {
+    RetentionPolicyFromJSON,
+    RetentionPolicyFromJSONTyped,
+    RetentionPolicyToJSON,
+    RetentionPolicyToJSONTyped,
+} from './RetentionPolicy.js';
+
 /**
  *
  * @export
@@ -26,9 +41,25 @@ export interface UpdateConversationRequest {
      */
     metadata?: { [key: string]: any; };
     /**
+     * Complete retention policy to store, or `null` to retain the
+     * Conversation until explicit deletion. Replacing the policy
+     * recalculates `expires_at` from the update time.
+     *
+     * @type {RetentionPolicy}
+     * @memberof UpdateConversationRequest
+     */
+    retention?: RetentionPolicy | null;
+    /**
+     * Complete compaction policy to store, or `null` to disable automatic compaction.
+     * @type {CompactionPolicy}
+     * @memberof UpdateConversationRequest
+     */
+    compaction?: CompactionPolicy | null;
+    /**
      * Recomputes `expires_at` from the Conversation's stored retention
-     * policy without changing that policy. Refused when no retention
-     * policy exists.
+     * policy without changing that policy. If `retention` is also
+     * supplied, replacement already performs this refresh. Refused when
+     * no retention policy exists and `retention` is omitted.
      *
      * @type {UpdateConversationRequestRefreshRetentionEnum}
      * @memberof UpdateConversationRequest
@@ -64,6 +95,8 @@ export function UpdateConversationRequestFromJSONTyped(json: any, ignoreDiscrimi
     return {
 
         'metadata': json['metadata'] == null ? undefined : json['metadata'],
+        'retention': json['retention'] == null ? undefined : RetentionPolicyFromJSON(json['retention']),
+        'compaction': json['compaction'] == null ? undefined : CompactionPolicyFromJSON(json['compaction']),
         'refreshRetention': json['refresh_retention'] == null ? undefined : json['refresh_retention'],
     };
 }
@@ -80,6 +113,8 @@ export function UpdateConversationRequestToJSONTyped(value?: UpdateConversationR
     return {
 
         'metadata': value['metadata'],
+        'retention': RetentionPolicyToJSON(value['retention']),
+        'compaction': CompactionPolicyToJSON(value['compaction']),
         'refresh_retention': value['refreshRetention'],
     };
 }

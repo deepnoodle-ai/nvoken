@@ -16,7 +16,23 @@ pub struct UpdateConversationRequest {
     /// Complete JSON metadata object to store on the Conversation.
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<std::collections::HashMap<String, serde_json::Value>>,
-    /// Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. Refused when no retention policy exists.
+    /// Complete retention policy to store, or `null` to retain the Conversation until explicit deletion. Replacing the policy recalculates `expires_at` from the update time.
+    #[serde(
+        rename = "retention",
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub retention: Option<Option<Box<models::RetentionPolicy>>>,
+    /// Complete compaction policy to store, or `null` to disable automatic compaction.
+    #[serde(
+        rename = "compaction",
+        default,
+        with = "::serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub compaction: Option<Option<Box<models::CompactionPolicy>>>,
+    /// Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. If `retention` is also supplied, replacement already performs this refresh. Refused when no retention policy exists and `retention` is omitted.
     #[serde(rename = "refresh_retention", skip_serializing_if = "Option::is_none")]
     pub refresh_retention: Option<RefreshRetention>,
 }
@@ -25,11 +41,13 @@ impl UpdateConversationRequest {
     pub fn new() -> UpdateConversationRequest {
         UpdateConversationRequest {
             metadata: None,
+            retention: None,
+            compaction: None,
             refresh_retention: None,
         }
     }
 }
-/// Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. Refused when no retention policy exists.
+/// Recomputes `expires_at` from the Conversation's stored retention policy without changing that policy. If `retention` is also supplied, replacement already performs this refresh. Refused when no retention policy exists and `retention` is omitted.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum RefreshRetention {
     #[serde(rename = "true")]

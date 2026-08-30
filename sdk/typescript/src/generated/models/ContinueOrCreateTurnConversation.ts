@@ -43,6 +43,10 @@ import {
 } from './ConversationActivePolicy.js';
 
 /**
+ * Resolves the existing Conversation in the exact owner/key namespace or
+ * creates it atomically. `retention`, `compaction`, and `metadata` are
+ * used only when a Conversation is created. When the key already exists,
+ * nvoken preserves the stored Conversation configuration and metadata.
  *
  * @export
  * @interface ContinueOrCreateTurnConversation
@@ -73,19 +77,19 @@ export interface ContinueOrCreateTurnConversation {
      */
     ifActive?: ConversationActivePolicy;
     /**
-     *
+     * Initial retention policy, used only when the Conversation is created.
      * @type {RetentionPolicy}
      * @memberof ContinueOrCreateTurnConversation
      */
     retention?: RetentionPolicy;
     /**
-     *
+     * Initial compaction policy, used only when the Conversation is created.
      * @type {CompactionPolicy}
      * @memberof ContinueOrCreateTurnConversation
      */
     compaction?: CompactionPolicy;
     /**
-     * Application-owned JSON metadata stored without interpretation.
+     * Initial metadata, used only when the Conversation is created.
      * @type {{ [key: string]: any; }}
      * @memberof ContinueOrCreateTurnConversation
      */

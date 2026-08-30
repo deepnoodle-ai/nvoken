@@ -11,6 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
+/// ContinueOrCreateTurnConversation : Resolves the existing Conversation in the exact owner/key namespace or creates it atomically. `retention`, `compaction`, and `metadata` are used only when a Conversation is created. When the key already exists, nvoken preserves the stored Conversation configuration and metadata.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ContinueOrCreateTurnConversation {
     #[serde(rename = "mode")]
@@ -21,16 +22,19 @@ pub struct ContinueOrCreateTurnConversation {
     pub owner: Box<models::ConversationOwner>,
     #[serde(rename = "if_active", skip_serializing_if = "Option::is_none")]
     pub if_active: Option<models::ConversationActivePolicy>,
+    /// Initial retention policy, used only when the Conversation is created.
     #[serde(rename = "retention", skip_serializing_if = "Option::is_none")]
     pub retention: Option<Box<models::RetentionPolicy>>,
+    /// Initial compaction policy, used only when the Conversation is created.
     #[serde(rename = "compaction", skip_serializing_if = "Option::is_none")]
     pub compaction: Option<Box<models::CompactionPolicy>>,
-    /// Application-owned JSON metadata stored without interpretation.
+    /// Initial metadata, used only when the Conversation is created.
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 impl ContinueOrCreateTurnConversation {
+    /// Resolves the existing Conversation in the exact owner/key namespace or creates it atomically. `retention`, `compaction`, and `metadata` are used only when a Conversation is created. When the key already exists, nvoken preserves the stored Conversation configuration and metadata.
     pub fn new(
         mode: Mode,
         conversation_key: String,
