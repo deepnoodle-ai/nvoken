@@ -26,8 +26,9 @@ jobs:
           cache-dependency-path: |
             sdk/typescript/package-lock.json
             examples/typescript-agent-tools/package-lock.json
+            examples/typescript-browser-direct/package-lock.json
             examples/typescript-chat/package-lock.json
-            examples/typescript-invoke-showcase/package-lock.json
+            examples/typescript-turn-showcase/package-lock.json
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
