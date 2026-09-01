@@ -101,12 +101,13 @@ alone and keeps the stream cheap to fan out to many readers. It also means a
 client cannot render described media from the stream by itself; retrieving the
 bytes is outside the protocol today, recorded as I13.
 
-Every frame carries `conversation_id` and `content_expires_at`. A
-Conversation-bound frame carries its Conversation ID and has no content expiry.
-A standalone Turn has no Conversation ID; it receives a non-null expiry after
-settlement, and its frames and messages carry that same authority boundary.
-This lets clients discard private content on schedule without first resolving
-another resource.
+No frame repeats the scope you chose when you opened the route. Scope lives
+on the rows: every message and change inside a `transcript.update` carries its
+own `conversation_id` and `content_expires_at`. A Conversation-bound row
+carries its Conversation ID and has no content expiry. A standalone Turn's
+rows have no Conversation ID and receive a non-null expiry once the Turn
+settles, so a client can discard private content on schedule without first
+resolving another resource.
 
 ## Durable and ephemeral frames
 
