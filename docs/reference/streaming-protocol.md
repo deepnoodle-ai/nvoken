@@ -518,7 +518,7 @@ Defaults from `normalizedStreamConfig`, all configurable:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| Poll interval | 5s | Reconciliation drain, in case a commit wake was lost |
+| Poll interval | 2s | Reconciliation drain, in case a commit wake was lost |
 | Keepalive | 15s | `: keepalive` comment on an idle stream |
 | Max lifetime | 55m ±10% | Then `connection.closing`, `rotate` or `idle` |
 | Write timeout | 10s | Slow consumer is dropped |
