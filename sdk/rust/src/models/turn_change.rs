@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn's terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,7 +11,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// TurnChange : One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change carries what a turn's own projection carries about where it stands: `terminal` for whether this change is the end, `stop_reason` for a turn that ended, `credit_block` for one held on credits, and `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them. You never need a second request to find out why a turn is not moving.
+/// TurnChange : One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change has two kinds of field. The log fields are always present and describe the step itself: `turn_id`, `conversation_id`, `content_expires_at`, `revision`, `status`, `terminal`, `current`, `through_message_sequence`, `error`, `structured_output`, and `occurred_at`; a nullable one is `null` when it has no value. The detail fields describe where the turn stands now, so they are present only on the change that is still the turn's current state (`current: true`) and omitted from every replayed earlier change: `stop_reason` for a turn that ended, `credit_block` for one held on credits, `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them, `usage` and `provenance` for its model calls, `structured_output_provenance`, and `final_answer_message_id`. Read detail from the current change alone and you never need a second request to find out why a turn is not moving.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TurnChange {
     /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
@@ -33,23 +33,16 @@ pub struct TurnChange {
     /// Whether this change is the turn's end. It is exactly `status IN (completed, incomplete, failed, cancelled)`, computed here so you never restate that set — read this rather than testing the status against a list of your own, and a status added later cannot silently change what your code believes.  It describes *this change*, not the turn's current state. A replayed `running` change reports `false` even after the turn has ended, which is what keeps the ordering rule intact: fold messages before changes and a turn is never settled before its final message exists.
     #[serde(rename = "terminal")]
     pub terminal: bool,
-    /// Why the turn stopped. Present once it has stopped, so an `incomplete` change names the limit that ran out.
-    #[serde(
-        rename = "stop_reason",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub stop_reason: Option<Option<models::TurnStopReason>>,
-    /// Present while the turn is on budget hold for spending capacity.
-    #[serde(
-        rename = "credit_block",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub credit_block: Option<Option<Box<models::CreditBlock>>>,
-    /// Every tool call this turn has made, with its current status. Omitted when the turn has made none. A tool call changing state is itself a change, so a failed or long-running call is visible before its result message arrives, and a client that was disconnected sees it on replay.
+    /// Whether this change is still the turn's current state as of the read that produced it. At most one change per turn in a frame or snapshot carries `true`, and only that change carries the detail fields. A replayed change is `false` even though it was current when it happened.
+    #[serde(rename = "current")]
+    pub current: bool,
+    /// Why the turn stopped. Present on the current change once the turn has stopped, so an `incomplete` change names the limit that ran out. Absent otherwise.
+    #[serde(rename = "stop_reason", skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<models::TurnStopReason>,
+    /// Present on the current change while the turn is on budget hold for spending capacity. Omitted for browser client tokens.
+    #[serde(rename = "credit_block", skip_serializing_if = "Option::is_none")]
+    pub credit_block: Option<Box<models::CreditBlock>>,
+    /// Every tool call this turn has made, with its current status. Present on the current change, as `[]` when the turn has made none, and omitted from replayed changes. A tool call changing state is itself a change, so a failed or long-running call is visible before its result message arrives, and a client that was disconnected sees it on replay.
     #[serde(rename = "tool_calls", skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<models::ToolCallSummary>>,
     #[serde(
@@ -59,35 +52,32 @@ pub struct TurnChange {
     pub through_message_sequence: Option<u64>,
     #[serde(rename = "error", deserialize_with = "Option::deserialize")]
     pub error: Option<Box<models::TurnFailure>>,
-    #[serde(
-        rename = "usage",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub usage: Option<Option<Box<models::ModelUsage>>>,
-    #[serde(
-        rename = "provenance",
-        default,
-        with = "::serde_with::rust::double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub provenance: Option<Option<Box<models::ModelProvenance>>>,
+    /// Model usage summed across the turn's recorded model calls. Present on the current terminal change of a turn that made one. Omitted for browser client tokens.
+    #[serde(rename = "usage", skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Box<models::ModelUsage>>,
+    /// Which provider and model served the turn's latest recorded call. Present on the current terminal change of a turn that made one. Omitted for browser client tokens.
+    #[serde(rename = "provenance", skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Box<models::ModelProvenance>>,
     #[serde(rename = "structured_output", deserialize_with = "Option::deserialize")]
     pub structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
+    /// Present on the current terminal change of a turn that produced `structured_output`.
     #[serde(
         rename = "structured_output_provenance",
-        default,
-        with = "::serde_with::rust::double_option",
         skip_serializing_if = "Option::is_none"
     )]
-    pub structured_output_provenance: Option<Option<Box<models::StructuredOutputProvenance>>>,
+    pub structured_output_provenance: Option<Box<models::StructuredOutputProvenance>>,
+    /// The message that is this turn's answer: its last assistant message, present on the current change once the turn settled `completed` with stop reason `end_turn`, and absent otherwise. This is the stream's spelling of `phase: final_answer`, which ordinary reads work out for you and a stream frame cannot.
+    #[serde(
+        rename = "final_answer_message_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub final_answer_message_id: Option<String>,
     #[serde(rename = "occurred_at")]
     pub occurred_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl TurnChange {
-    /// One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change carries what a turn's own projection carries about where it stands: `terminal` for whether this change is the end, `stop_reason` for a turn that ended, `credit_block` for one held on credits, and `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them. You never need a second request to find out why a turn is not moving.
+    /// One lifecycle step of one turn, as the stream and the JSON transcript deliver it. Order changes by `revision` and fold to the highest one to get current state.  **A turn is over when a change for it carries `terminal: true`.** That is the terminal signal, and there is no other. Because it is saved it replays on reconnect at any cursor, so a turn that settled while you were away is still settled when you return.  A change has two kinds of field. The log fields are always present and describe the step itself: `turn_id`, `conversation_id`, `content_expires_at`, `revision`, `status`, `terminal`, `current`, `through_message_sequence`, `error`, `structured_output`, and `occurred_at`; a nullable one is `null` when it has no value. The detail fields describe where the turn stands now, so they are present only on the change that is still the turn's current state (`current: true`) and omitted from every replayed earlier change: `stop_reason` for a turn that ended, `credit_block` for one held on credits, `tool_calls` for what its tools are doing, with `arguments` on the ones waiting for you to run them, `usage` and `provenance` for its model calls, `structured_output_provenance`, and `final_answer_message_id`. Read detail from the current change alone and you never need a second request to find out why a turn is not moving.
     pub fn new(
         turn_id: String,
         conversation_id: Option<String>,
@@ -95,6 +85,7 @@ impl TurnChange {
         revision: u64,
         status: models::TurnStatus,
         terminal: bool,
+        current: bool,
         through_message_sequence: Option<u64>,
         error: Option<models::TurnFailure>,
         structured_output: Option<std::collections::HashMap<String, serde_json::Value>>,
@@ -107,6 +98,7 @@ impl TurnChange {
             revision,
             status,
             terminal,
+            current,
             stop_reason: None,
             credit_block: None,
             tool_calls: None,
@@ -120,6 +112,7 @@ impl TurnChange {
             provenance: None,
             structured_output,
             structured_output_provenance: None,
+            final_answer_message_id: None,
             occurred_at,
         }
     }

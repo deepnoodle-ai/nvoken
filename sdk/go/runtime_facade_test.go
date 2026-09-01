@@ -113,8 +113,8 @@ func TestBehaviorExposesOnlyPortableFields(t *testing.T) {
 func TestReducerSettlesOnTargetTurnChange(t *testing.T) {
 	reducer := NewReducer()
 	event := StreamEvent{ID: "cursor-1", Type: "transcript.update", Data: json.RawMessage(`{
-		"type":"transcript.update","cursor":"cursor-1","conversation_id":null,"content_expires_at":null,
-		"messages":[],"turn_changes":[{"turn_id":"476dd7be-97a1-78f3-8096-d7032468a80a","revision":2,"status":"completed","terminal":true,"conversation_id":null,"content_expires_at":null,"through_message_sequence":null,"occurred_at":"2026-01-01T00:00:00Z","error":null,"structured_output":null}]
+		"type":"transcript.update","cursor":"cursor-1","has_more":false,
+		"messages":[],"turn_changes":[{"turn_id":"476dd7be-97a1-78f3-8096-d7032468a80a","revision":2,"status":"completed","terminal":true,"current":true,"conversation_id":null,"content_expires_at":null,"through_message_sequence":null,"occurred_at":"2026-01-01T00:00:00Z","error":null,"structured_output":null}]
 	}`)}
 	if err := reducer.Apply(event); err != nil {
 		t.Fatal(err)

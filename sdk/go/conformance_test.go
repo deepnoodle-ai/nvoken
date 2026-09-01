@@ -172,10 +172,10 @@ func TestTurnUpdatesStopsAtTerminalFrame(t *testing.T) {
 		streamRequests++
 		writer.Header().Set("Content-Type", "text/event-stream")
 		_, _ = fmt.Fprint(writer, "id: cursor-1\nevent: transcript.update\ndata: "+strings.ReplaceAll(`{
-			"type":"transcript.update","conversation_id":null,"content_expires_at":null,
+			"type":"transcript.update","has_more":false,
 			"messages":[],"turn_changes":[{
 				"turn_id":"turn_stream","conversation_id":null,"content_expires_at":null,
-				"revision":2,"status":"completed","terminal":true,
+				"revision":2,"status":"completed","terminal":true,"current":true,
 				"through_message_sequence":null,"error":null,"structured_output":null,
 				"occurred_at":"2026-08-26T12:00:00Z"
 			}],"cursor":"cursor-1"

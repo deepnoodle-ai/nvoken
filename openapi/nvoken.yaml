@@ -75,22 +75,34 @@ info:
 
     Caller-owned keys are names in explicit owner namespaces. Service-owned IDs
 
-    are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_`
-    prefixes.
+    are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution
 
-    Paths take IDs; key resolution uses exact request or query coordinates.
+    uses exact request or query coordinates.
 
 
     ## Streams
 
 
-    A Turn stream closes after that Turn becomes terminal. A Conversation stream
+    A Turn stream closes with `connection.closing` reason `settled` once that
 
-    follows current and future Turns and may stay open while idle. Both use the
+    Turn's terminal change is delivered. A Conversation stream follows current
 
-    same frame vocabulary. A Conversation-bound Turn cursor may resume on its
+    and future Turns and may stay open while idle. Both routes accept the same
 
-    Conversation stream; a standalone Turn cursor cannot.
+    `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame
+
+    vocabulary. A Conversation-bound Turn cursor may resume on its Conversation
+
+    stream; a standalone Turn cursor cannot.
+
+
+    Reconnect with your last saved `cursor` after any close but `settled`.
+
+    Honor the `retry:` delay the stream opens with, and back off when the
+
+    server keeps refusing the connection: a flat retry from every client is
+
+    what turns an outage into a load spike.
 servers:
   - url: /
     description: Current nvoken installation
@@ -531,33 +543,27 @@ paths:
       operationId: streamTurn
       summary: Follow one Turn over Server-Sent Events
       description: |
-        Carries only this turn's durable transcript updates and optional live
-        previews, then closes after its terminal change is delivered. The
-        cursor is scoped to the Turn and never reveals an internal
-        carrier Conversation for a standalone turn.
+        Carries only this turn's saved transcript updates and optional live
+        previews. Without a cursor the stream starts at the turn's first
+        message, so nothing that predates the turn is replayed. Once the
+        turn's terminal change is delivered the server writes
+        `connection.closing` with reason `settled` and closes; a turn that had
+        already settled when you connected delivers its rows and settles the
+        same way. The cursor is scoped to the Turn and never reveals an
+        internal carrier Conversation for a standalone turn.
       parameters:
-        - $ref: '#/components/parameters/Cursor'
-        - name: deltas
-          in: query
-          description: Include id-less preview frames. Defaults to true.
-          schema:
-            type: boolean
-            default: true
-        - name: Last-Event-ID
-          in: header
-          description: >-
-            Opaque cursor from the last durable update; ignored when the cursor
-            query parameter is supplied.
-          schema:
-            type: string
-            minLength: 1
+        - $ref: '#/components/parameters/StreamCursor'
+        - $ref: '#/components/parameters/StreamDeltas'
+        - $ref: '#/components/parameters/LastEventID'
       responses:
         '200':
-          description: A resumable stream that closes after terminal settlement.
+          description: >-
+            A resumable stream that closes with reason `settled` after the
+            terminal change.
           content:
             text/event-stream:
               schema:
-                $ref: '#/components/schemas/ConversationStreamEvent'
+                $ref: '#/components/schemas/StreamEvent'
         '400':
           $ref: '#/components/responses/InvalidRequest'
         '401':
@@ -2108,22 +2114,25 @@ paths:
       operationId: streamConversation
       summary: Follow current and future Turns in a Conversation
       description: |
-        Streams Conversation events and may remain open while idle. A cursor
-        issued for a Turn in this Conversation is accepted; a standalone Turn
-        cursor is not.
+        Streams saved transcript updates and optional live previews for every
+        Turn in the Conversation, current and future, and may remain open
+        while idle. Without a cursor it starts at the Conversation's first
+        message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot.
+        A cursor issued for a Turn in this Conversation is accepted; a
+        standalone Turn cursor is not.
       parameters:
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            type: string
+        - $ref: '#/components/parameters/StreamCursor'
+        - $ref: '#/components/parameters/StreamDeltas'
+        - $ref: '#/components/parameters/LastEventID'
       responses:
         '200':
-          description: Server-sent Conversation and Turn events.
+          description: >-
+            Server-sent transcript updates and previews for the Conversation's
+            Turns.
           content:
             text/event-stream:
               schema:
-                $ref: '#/components/schemas/ConversationStreamEvent'
+                $ref: '#/components/schemas/StreamEvent'
         '400':
           $ref: '#/components/responses/InvalidRequest'
         '401':
@@ -4682,6 +4691,42 @@ components:
       schema:
         type: string
         minLength: 1
+    StreamCursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Resume position: the `cursor` of the last `transcript.update` you
+        applied, which is also that frame's SSE `id`. It is bound to the scope
+        that issued it. A Turn cursor is accepted by that Turn's stream and by
+        its Conversation's stream; a Conversation cursor only by the
+        Conversation stream. Wins over `Last-Event-ID` when both are sent.
+      schema:
+        type: string
+        minLength: 1
+    StreamDeltas:
+      name: deltas
+      in: query
+      required: false
+      description: |
+        Whether to send the id-less `message.delta` and `stream.resync`
+        frames. Defaults to true. With `false` the connection carries only
+        saved frames and `connection.closing`; replay, resumption, and
+        settlement are unchanged.
+      schema:
+        type: boolean
+        default: true
+    LastEventID:
+      name: Last-Event-ID
+      in: header
+      required: false
+      description: |
+        The resume position, as `EventSource`-style clients send it on
+        reconnect. Same value and scope rules as `cursor`, which wins when
+        both are present. At most one header, and never blank.
+      schema:
+        type: string
+        minLength: 1
     Limit:
       name: limit
       in: query
@@ -6486,13 +6531,15 @@ components:
 
             turn settled carries `commentary` forever, and no later frame
 
-            corrects it. On the stream, derive the answer instead. A turn has
+            corrects it. On the stream, read `final_answer_message_id` on the
 
-            a final answer only once it settled `completed` with stop reason
+            turn's current change instead. It names the turn's last assistant
 
-            `end_turn`, and that answer is the turn's last assistant message.
+            message once the turn settled `completed` with stop reason
 
-            That is the same rule nvoken applies.
+            `end_turn`, and is absent otherwise: the same rule nvoken applies
+
+            when it works out `phase` on read.
         created_at:
           type: string
           format: date-time
@@ -6520,6 +6567,7 @@ components:
         - revision
         - status
         - terminal
+        - current
         - through_message_sequence
         - error
         - structured_output
@@ -6534,12 +6582,21 @@ components:
         saved it replays on reconnect at any cursor, so a turn that settled
         while you were away is still settled when you return.
 
-        A change carries what a turn's own projection carries about where it
-        stands: `terminal` for whether this change is the end, `stop_reason`
-        for a turn that ended, `credit_block` for one held on credits, and
-        `tool_calls` for what its tools are doing, with `arguments` on the ones
-        waiting for you to run them. You never need a second request to find
-        out why a turn is not moving.
+        A change has two kinds of field. The log fields are always present and
+        describe the step itself: `turn_id`, `conversation_id`,
+        `content_expires_at`, `revision`, `status`, `terminal`, `current`,
+        `through_message_sequence`, `error`, `structured_output`, and
+        `occurred_at`; a nullable one is `null` when it has no value. The
+        detail fields describe where the turn stands now, so they are present
+        only on the change that is still the turn's current state
+        (`current: true`) and omitted from every replayed earlier change:
+        `stop_reason` for a turn that ended, `credit_block` for one held on
+        credits, `tool_calls` for what its tools are doing, with `arguments` on
+        the ones waiting for you to run them, `usage` and `provenance` for its
+        model calls, `structured_output_provenance`, and
+        `final_answer_message_id`. Read detail from the current change alone
+        and you never need a second request to find out why a turn is not
+        moving.
       properties:
         turn_id:
           $ref: '#/components/schemas/TurnID'
@@ -6569,27 +6626,37 @@ components:
             ended, which is what keeps the ordering rule intact: fold messages
             before changes and a turn is never settled before its final
             message exists.
-        stop_reason:
-          oneOf:
-            - $ref: '#/components/schemas/TurnStopReason'
-            - type: 'null'
+        current:
+          type: boolean
           description: |
-            Why the turn stopped. Present once it has stopped, so an
-            `incomplete` change names the limit that ran out.
+            Whether this change is still the turn's current state as of the
+            read that produced it. At most one change per turn in a frame or
+            snapshot carries `true`, and only that change carries the detail
+            fields. A replayed change is `false` even though it was current
+            when it happened.
+        stop_reason:
+          allOf:
+            - $ref: '#/components/schemas/TurnStopReason'
+          description: |
+            Why the turn stopped. Present on the current change once the turn
+            has stopped, so an `incomplete` change names the limit that ran
+            out. Absent otherwise.
         credit_block:
-          oneOf:
+          allOf:
             - $ref: '#/components/schemas/CreditBlock'
-            - type: 'null'
-          description: Present while the turn is on budget hold for spending capacity.
+          description: |
+            Present on the current change while the turn is on budget hold for
+            spending capacity. Omitted for browser client tokens.
         tool_calls:
           type: array
           items:
             $ref: '#/components/schemas/ToolCallSummary'
           description: |
             Every tool call this turn has made, with its current status.
-            Omitted when the turn has made none. A tool call changing state is
-            itself a change, so a failed or long-running call is visible
-            before its result message arrives, and a client that was
+            Present on the current change, as `[]` when the turn has made
+            none, and omitted from replayed changes. A tool call changing
+            state is itself a change, so a failed or long-running call is
+            visible before its result message arrives, and a client that was
             disconnected sees it on replay.
         through_message_sequence:
           oneOf:
@@ -6602,22 +6669,39 @@ components:
             - $ref: '#/components/schemas/TurnFailure'
             - type: 'null'
         usage:
-          oneOf:
+          allOf:
             - $ref: '#/components/schemas/ModelUsage'
-            - type: 'null'
+          description: |
+            Model usage summed across the turn's recorded model calls. Present
+            on the current terminal change of a turn that made one. Omitted
+            for browser client tokens.
         provenance:
-          oneOf:
+          allOf:
             - $ref: '#/components/schemas/ModelProvenance'
-            - type: 'null'
+          description: |
+            Which provider and model served the turn's latest recorded call.
+            Present on the current terminal change of a turn that made one.
+            Omitted for browser client tokens.
         structured_output:
           oneOf:
             - type: object
               additionalProperties: true
             - type: 'null'
         structured_output_provenance:
-          oneOf:
+          allOf:
             - $ref: '#/components/schemas/StructuredOutputProvenance'
-            - type: 'null'
+          description: |
+            Present on the current terminal change of a turn that produced
+            `structured_output`.
+        final_answer_message_id:
+          allOf:
+            - $ref: '#/components/schemas/ConversationMessageID'
+          description: |
+            The message that is this turn's answer: its last assistant
+            message, present on the current change once the turn settled
+            `completed` with stop reason `end_turn`, and absent otherwise.
+            This is the stream's spelling of `phase: final_answer`, which
+            ordinary reads work out for you and a stream frame cannot.
         occurred_at:
           type: string
           format: date-time
@@ -6625,10 +6709,9 @@ components:
       type: object
       required:
         - type
-        - conversation_id
-        - content_expires_at
         - messages
         - turn_changes
+        - has_more
         - cursor
       description: |
         The saved frame, and the only one. Messages append by `sequence` and
@@ -6636,6 +6719,11 @@ components:
         `(turn_id, revision)`; fold to the highest revision for current
         state. Within one frame apply messages before changes, so a turn is
         never marked settled before its final message exists.
+
+        Scope lives on the rows: every message and change carries its own
+        `conversation_id` and `content_expires_at`, so the frame repeats
+        neither. A page is cut when it reaches the server's row or byte
+        budget; `has_more` says another page follows immediately.
       properties:
         type:
           type: string
@@ -6643,12 +6731,6 @@ components:
             - transcript.update
           x-enum-varnames:
             - EventTranscriptUpdate
-        conversation_id:
-          oneOf:
-            - $ref: '#/components/schemas/ConversationID'
-            - type: 'null'
-        content_expires_at:
-          $ref: '#/components/schemas/ContentExpiresAt'
         messages:
           type: array
           items:
@@ -6657,6 +6739,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TurnChange'
+        has_more:
+          type: boolean
+          description: |
+            Whether saved rows past `cursor` were already known when this page
+            was cut, so the next `transcript.update` follows without waiting
+            for new work. `false` means you are caught up as of this frame.
         cursor:
           type: string
           minLength: 1
@@ -6667,12 +6755,11 @@ components:
       type: object
       required:
         - type
-        - conversation_id
-        - content_expires_at
         - turn_id
         - attempt
         - message_id
         - content_index
+        - offset
         - kind
         - delta
         - emitted_at
@@ -6683,12 +6770,6 @@ components:
             - message.delta
           x-enum-varnames:
             - EventMessageDelta
-        conversation_id:
-          oneOf:
-            - $ref: '#/components/schemas/ConversationID'
-            - type: 'null'
-        content_expires_at:
-          $ref: '#/components/schemas/ContentExpiresAt'
         turn_id:
           $ref: '#/components/schemas/TurnID'
         attempt:
@@ -6703,6 +6784,21 @@ components:
         content_index:
           type: integer
           minimum: 0
+          description: |
+            Which content block of the message this fragment extends, counted
+            from 0 in the order the model opened them. It is a preview
+            coordinate only: reasoning blocks are never saved, so the saved
+            message's `content` array can be shorter and this index is not a
+            position in it.
+        offset:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            Where this fragment starts within its block: the UTF-8 byte length
+            of every earlier fragment for the same `(message_id,
+            content_index)`. When it exceeds what you have accumulated, a
+            frame was lost; discard the block and wait for the saved message.
         kind:
           $ref: '#/components/schemas/MessageDeltaKind'
         delta:
@@ -6729,15 +6825,20 @@ components:
       description: |
         A live preview of a message the model is writing. Not saved, never
         replayed, and never a message. Accumulate it by `(message_id,
-        content_index)` and discard it under the rules in Streaming above.
+        content_index)`, and discard what you accumulated when: a delta for
+        the same Turn arrives with a higher `attempt`; a `stream.resync` names
+        the Turn or, with no `turn_id`, the whole Conversation; the saved
+        message with the same `message_id` lands; or a change for the Turn
+        carries `terminal: true`, after which no later preview for that Turn
+        is rendered.
 
         Reasoning previews travel here like any other kind, on machine and
-        browser streams alike. What an end user sees is your application's
-        decision, made in your application. Reasoning is watchable and not
-        stored: no content block carries it, and no read returns it. Watch the
-        stream if you want to see the model think. A turn that runs under
-        explicit `reasoning` controls emits no reasoning previews at all, to
-        either audience.
+        browser streams alike, because the stream is the only place reasoning
+        exists: no content block carries it, and no read returns it, so a
+        browser that could not watch it here could never see it. What an end
+        user sees is your application's decision, made in your application. A
+        turn that runs under explicit `reasoning` controls emits no reasoning
+        previews at all, to either audience.
     MessageDeltaKind:
       type: string
       enum:
@@ -6759,8 +6860,6 @@ components:
       type: object
       required:
         - type
-        - conversation_id
-        - content_expires_at
         - reason
       properties:
         type:
@@ -6769,27 +6868,21 @@ components:
             - stream.resync
           x-enum-varnames:
             - EventStreamResync
-        conversation_id:
-          oneOf:
-            - $ref: '#/components/schemas/ConversationID'
-            - type: 'null'
-        content_expires_at:
-          $ref: '#/components/schemas/ContentExpiresAt'
         turn_id:
           allOf:
             - $ref: '#/components/schemas/TurnID'
           description: |
-            The Turn whose previews are void. Absent means every
-            Turn in the Conversation: an absent field is scope, where a null
-            identifier would be scope wearing an identifier's name.
+            The Turn whose previews are void. On a Turn stream it is always
+            present and names that Turn. On a Conversation stream it is
+            present when one Turn's previews are void and absent when every
+            preview in the Conversation is: an absent field is scope, where a
+            null identifier would be scope wearing an identifier's name.
         reason:
           $ref: '#/components/schemas/StreamResyncReason'
     ConnectionClosingEvent:
       type: object
       required:
         - type
-        - conversation_id
-        - content_expires_at
         - reason
       properties:
         type:
@@ -6798,17 +6891,13 @@ components:
             - connection.closing
           x-enum-varnames:
             - EventConnectionClosing
-        conversation_id:
-          oneOf:
-            - $ref: '#/components/schemas/ConversationID'
-            - type: 'null'
-        content_expires_at:
-          $ref: '#/components/schemas/ContentExpiresAt'
         reason:
           $ref: '#/components/schemas/ConnectionClosingReason'
       description: |
-        This connection is closing. The stream continues and the turn is
-        unaffected, so reconnect with your last `cursor`.
+        This connection is closing. Every reason but `settled` means the
+        stream continues and the turn is unaffected, so reconnect with your
+        last `cursor`. `settled` means a Turn stream has delivered its turn's
+        terminal change and has nothing left to send.
 
         There is no cursor here. You already track your last durable one,
         because you need it to survive a connection that drops without saying
@@ -6830,51 +6919,47 @@ components:
     ConnectionClosingReason:
       type: string
       enum:
+        - settled
         - rotate
         - idle
         - slow_consumer
       x-enum-varnames:
+        - ReasonSettled
         - ReasonRotate
         - ReasonIdle
         - ReasonSlowConsumer
-      description: >
-        Why this connection is closing. `rotate` means the server is cycling the
-        connection, so reconnect now
-
-        with your last `cursor`. `idle` means no turn is running and the
-
-        server is reclaiming the connection, so reconnect when you next need
-
-        to read; nothing is lost while you are away. `slow_consumer` means
-
-        this connection could not keep up with what was being written to it
-
-        and was dropped; reconnect, and read faster or buffer more.
-
+      description: |
+        Why this connection is closing. `settled` means this Turn stream has
+        delivered the turn's terminal change and is done; do not reconnect,
+        and read the Turn if you want its composed result. `rotate` means the
+        server is cycling the connection, so reconnect now with your last
+        `cursor`. `idle` means no turn is running and the server is reclaiming
+        the connection, so reconnect when you next need to read; nothing is
+        lost while you are away. `slow_consumer` means this connection could
+        not keep up with what was being written to it and was dropped;
+        reconnect, and read faster or buffer more.
 
         Expect new values here over time. Treat a value you do not recognize
-
         as `rotate` and reconnect with your last `cursor`. Reconnecting is
-
-        always safe.
+        always safe: a settled turn answers with its rows and `settled` again.
     PreviewMessageID:
       type: string
       description: |
         The identifier the saved assistant message will carry when this
-        iteration lands, with the same `msg_` prefix every message ID has. Key
-        your preview by it and the handoff becomes an update to a row that
-        already has its permanent identity, rather than one row disappearing
-        and another taking its place.
+        iteration lands. Key your preview by it and the handoff becomes an
+        update to a row that already has its permanent identity, rather than
+        one row disappearing and another taking its place.
 
         It is allocated when the model starts writing, so every preview of one
         message carries it. It is stable within one attempt; a retried attempt
         allocates a new one, which is harmless, because a higher `attempt`
         already voids every earlier preview.
-    ConversationStreamEvent:
+    StreamEvent:
       description: |
-        The JSON value carried by one SSE `data:` field. Switch on `type`.
-        Saved `transcript.update` frames carry the resume cursor as both
-        payload data and SSE `id`; preview and control frames never carry IDs.
+        The JSON value carried by one SSE `data:` field, on the Turn and the
+        Conversation stream alike. Switch on `type`. Saved `transcript.update`
+        frames carry the resume cursor as both payload data and SSE `id`;
+        preview and control frames never carry IDs.
 
         New frame types may appear here over time, and existing ones may gain
         fields. Handle the types you know and ignore the rest.
@@ -9729,6 +9814,7 @@ components:
         - conversation
         - messages
         - compactions
+        - cursor
         - captured_at
       properties:
         conversation:
@@ -9741,6 +9827,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConversationCompaction'
+        cursor:
+          type: string
+          minLength: 1
+          description: |
+            The stream position of this snapshot. Open the Conversation stream
+            with it as `cursor` and you receive exactly what happened after
+            the snapshot was captured, with neither overlap nor gap.
         captured_at:
           type: string
           format: date-time
@@ -12544,10 +12637,11 @@ components:
             details:
               app_id: 019b0a12-8d51-7f34-aed2-0e07c1bdb320
     RateLimited:
-      description: >-
+      description: |
         A durable App, tenant, or opaque-user admission limit refused fresh
-        work, or deployment ingress rate limited the request. No Turn is
-        created.
+        work, the credential or App already holds its ceiling of open streams
+        (`details.scope` is `streams`), or deployment ingress rate limited the
+        request. No Turn is created and no stream is opened.
       headers:
         Retry-After:
           schema:

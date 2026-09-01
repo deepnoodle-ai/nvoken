@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn\'s terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -39,11 +39,6 @@ import {
     ConversationOwnerKindToJSON,
 } from '../models/ConversationOwnerKind.js';
 import {
-    type ConversationStreamEvent,
-    ConversationStreamEventFromJSON,
-    ConversationStreamEventToJSON,
-} from '../models/ConversationStreamEvent.js';
-import {
     type CreateConversationRequest,
     CreateConversationRequestFromJSON,
     CreateConversationRequestToJSON,
@@ -58,6 +53,11 @@ import {
     ForkConversationRequestFromJSON,
     ForkConversationRequestToJSON,
 } from '../models/ForkConversationRequest.js';
+import {
+    type StreamEvent,
+    StreamEventFromJSON,
+    StreamEventToJSON,
+} from '../models/StreamEvent.js';
 import {
     type TranscriptSnapshot,
     TranscriptSnapshotFromJSON,
@@ -115,6 +115,8 @@ export interface ListConversationsRequest {
 export interface StreamConversationRequest {
     conversationId: string;
     cursor?: string;
+    deltas?: boolean;
+    lastEventID?: string;
 }
 
 export interface UpdateConversationOperationRequest {
@@ -632,7 +634,15 @@ export class ConversationsApi extends runtime.BaseAPI {
             queryParameters['cursor'] = requestParameters['cursor'];
         }
 
+        if (requestParameters['deltas'] != null) {
+            queryParameters['deltas'] = requestParameters['deltas'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters['lastEventID'] != null) {
+            headerParameters['Last-Event-ID'] = String(requestParameters['lastEventID']);
+        }
 
         if (this.configuration && this.configuration.accessToken) {
             const token = this.configuration.accessToken;
@@ -655,21 +665,21 @@ export class ConversationsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Streams Conversation events and may remain open while idle. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
+     * Streams saved transcript updates and optional live previews for every Turn in the Conversation, current and future, and may remain open while idle. Without a cursor it starts at the Conversation\'s first message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
      * Follow current and future Turns in a Conversation
      */
-    async streamConversationRaw(requestParameters: StreamConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ConversationStreamEvent>> {
+    async streamConversationRaw(requestParameters: StreamConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<StreamEvent>> {
         const requestOptions = await this.streamConversationRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ConversationStreamEventFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => StreamEventFromJSON(jsonValue));
     }
 
     /**
-     * Streams Conversation events and may remain open while idle. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
+     * Streams saved transcript updates and optional live previews for every Turn in the Conversation, current and future, and may remain open while idle. Without a cursor it starts at the Conversation\'s first message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
      * Follow current and future Turns in a Conversation
      */
-    async streamConversation(requestParameters: StreamConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ConversationStreamEvent> {
+    async streamConversation(requestParameters: StreamConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<StreamEvent> {
         const response = await this.streamConversationRaw(requestParameters, initOverrides);
         return await response.value();
     }

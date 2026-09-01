@@ -9,15 +9,15 @@ import (
 // stream payload this SDK decodes. scripts/check_go_frame_keys.py holds this
 // table against the published OpenAPI contract.
 var requiredFrameKeys = map[string][]string{
-	"TranscriptUpdateEvent": {"type", "conversation_id", "content_expires_at", "messages", "turn_changes", "cursor"},
+	"TranscriptUpdateEvent": {"type", "messages", "turn_changes", "has_more", "cursor"},
 	"MessageDeltaEvent": {
-		"type", "conversation_id", "content_expires_at", "turn_id", "attempt",
-		"message_id", "content_index", "kind", "delta", "emitted_at",
+		"type", "turn_id", "attempt", "message_id", "content_index", "offset",
+		"kind", "delta", "emitted_at",
 	},
-	"StreamResyncEvent": {"type", "conversation_id", "content_expires_at", "reason"},
+	"StreamResyncEvent": {"type", "reason"},
 	"TurnChange": {
-		"turn_id", "conversation_id", "content_expires_at", "revision", "status",
-		"terminal", "through_message_sequence", "error", "structured_output", "occurred_at",
+		"turn_id", "conversation_id", "content_expires_at", "revision", "status", "terminal",
+		"current", "through_message_sequence", "error", "structured_output", "occurred_at",
 	},
 	"ConversationMessage": {
 		"id", "conversation_id", "content_expires_at", "turn_id", "sequence", "role", "content", "created_at",

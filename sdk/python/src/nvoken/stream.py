@@ -71,10 +71,12 @@ class Reducer:
             return
         update = TranscriptUpdateEvent.from_dict(event.data)
         assert update is not None
+        # A saved message replaces only the preview that was building it. The
+        # Turn's next message may already be accumulating, and dropping that
+        # prefix loses text no later delta restores.
         for message in update.messages:
             self._messages[message.sequence] = message
-            if message.role.value == "assistant" and message.turn_id:
-                self._discard_previews(message.turn_id)
+            self._discard_message_previews(message.id)
         for change in update.turn_changes:
             self._changes[(change.turn_id, change.revision)] = change
             if is_turn_over(change):
@@ -126,6 +128,13 @@ class Reducer:
             key: preview for key, preview in self._previews.items() if preview.turn_id != turn_id
         }
         self._latest_attempts.pop(turn_id, None)
+
+    def _discard_message_previews(self, message_id: str) -> None:
+        self._previews = {
+            key: preview
+            for key, preview in self._previews.items()
+            if preview.message_id != message_id
+        }
 
 
 async def stream_conversation(

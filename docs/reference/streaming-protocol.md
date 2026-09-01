@@ -141,13 +141,15 @@ read it later.
 
 ## Two frames that are not events
 
-The stream opens with a bare `retry: 1000` control frame: no `event:`, no
-`data:`. It sets the client's reconnect delay to 1000 ms.
+A stream that stays open writes a bare `retry: 1000` control frame once its
+opening replay is done: no `event:`, no `data:`. It sets the client's reconnect
+delay to 1000 ms. A Turn stream that settles during that replay never writes
+it, because there is nothing to reconnect to.
 
 Every 15 seconds an idle stream emits an SSE comment line, `: keepalive`.
 
 Neither carries a payload. A parser that assumes every dispatched frame has
-JSON `data` will fail on the very first frame of every stream. All four SDKs
+JSON `data` will fail on one of the first frames of most streams. All four SDKs
 special-case this, each with a comment saying so, because each one hit it
 against the real runtime.
 
@@ -155,14 +157,18 @@ against the real runtime.
 
 ### `transcript.update`
 
-Ordered `messages` and `turn_changes`, plus `conversation_id`,
-`content_expires_at`, and a `cursor` in the payload that matches the SSE `id`.
-On a Turn stream both arrays carry only that Turn's rows. On a Conversation
-stream they may interleave rows from multiple Turns.
+Ordered `messages` and `turn_changes`, a `has_more` flag, and a `cursor` in
+the payload that matches the SSE `id`. Scope lives on the rows: every message
+and change carries its own `conversation_id` and `content_expires_at`, and the
+frame repeats neither. On a Turn stream both arrays carry only that Turn's
+rows. On a Conversation stream they may interleave rows from multiple Turns.
 
 Empty pages are not sent. The server advances its internal watermark but only
 writes a frame when there is at least one message or change, so every
-`transcript.update` you receive is non-empty.
+`transcript.update` you receive is non-empty. A page is cut at 200 rows or
+1 MiB of message content; `has_more: true` says the next page was already
+known when this one was cut and follows at once, so a client rebuilding a long
+transcript can hold its render until it sees `false`.
 
 Apply messages before lifecycle changes from the same frame. Otherwise a UI can
 show a turn as complete before its final message exists.
@@ -175,10 +181,17 @@ anywhere. Read `GET /v1/turns/{turn_id}/result` if you want the composed result.
 
 A change carries the facts a status alone leaves open: `terminal` for whether
 this change is the ending, `stop_reason` for a turn that stopped short,
-`credit_block` for one waiting on an account, and `tool_calls` for where each
-call in the turn got to, with `mode` on every entry and `arguments` on the ones
-you may settle.
-A client can recover from the change stream alone.
+`credit_block` for one waiting on an account, `tool_calls` for where each call
+in the turn got to, with `mode` on every entry and `arguments` on the ones you
+may settle, and `final_answer_message_id` for which message is the answer once
+the turn completed with `end_turn`. A client can recover from the change
+stream alone.
+
+Those detail fields ride only on the change marked `current: true`, the one
+that is still the turn's latest revision when the server reads it. A replayed
+earlier change carries the log fields and nothing else, so `current` is how
+you tell an omitted `tool_calls` from an empty one: on a current change it is
+present, `[]` when the turn has made no calls.
 
 Read `terminal` rather than testing `status` against a set of your own. There
 are eight statuses and four are terminal, so the mistake worth designing out is
@@ -204,7 +217,13 @@ The one preview frame. Identity is the pair:
 required and allocated when the model starts writing, so keying a rendered
 preview by it makes the handoff an update to a row that already has its
 permanent identity rather than one row disappearing and another taking its
-place. `content_index` separates concurrent content blocks within one message.
+place. `content_index` separates concurrent content blocks within one message;
+it is the provider's index while writing, not a position in the saved
+message's `content`, which never stores reasoning blocks. `offset` is the
+UTF-8 byte length of the fragments that came before this one in the same
+block, so a client that compares it with what it has accumulated can tell a
+lost fragment from a slow one and discard the block instead of rendering a
+hole.
 
 `kind` says what the fragment is — `text`, `thinking`, or `tool_arguments` —
 and `delta` carries it, for every kind. One accumulator handles all three.
@@ -219,8 +238,8 @@ which iteration this is.
 
 The server validates every delta before forwarding and silently drops
 malformed ones: `attempt` at least 1, a non-empty `message_id` and `delta`,
-`content_index` at least 0, a non-zero `emitted_at`, a kind it knows, and
-`tool_call_id` and `name` present exactly on `tool_arguments`.
+`content_index` and `offset` at least 0, a non-zero `emitted_at`, a kind it
+knows, and `tool_call_id` and `name` present exactly on `tool_arguments`.
 
 Reasoning is watchable and unstored. No content block carries it and no read
 returns it, so the stream is the only place to see the model think. A turn
@@ -239,31 +258,37 @@ already on its way.
 
 `turn_id` is present when only one Turn's previews are void and absent when
 every preview in a Conversation is void. Absent is scope: discard previews for
-the whole Conversation. It is an absent
-field rather than a null identifier, because a null identifier is scope wearing
-an identifier's name.
+the whole Conversation. It is an absent field rather than a null identifier,
+because a null identifier is scope wearing an identifier's name. A Turn stream
+always names its Turn.
 
-The Turn route never emits this frame when `deltas=false`, because the server only
-subscribes to the live bus when previews are enabled and resyncs originate from
-that subscription.
+Neither route emits this frame when `deltas=false`: there are no previews to
+invalidate.
 
 ### `connection.closing`
 
-**This frame never speaks about a turn.** Terminal state is a durable change;
-connection close is a connection event; no reason value couples them. Three
-reasons:
+**This frame speaks about the connection.** Terminal state is a durable
+change; connection close is a connection event. One reason, `settled`, also
+tells you the stream itself is done. Four reasons:
 
+- **`settled`** means a Turn stream has delivered the turn's terminal change
+  and has nothing left to send. Do not reconnect; read the Turn if you want its
+  composed result. A stream opened on a turn that already settled replays its
+  rows and closes the same way.
 - **`rotate`** means the server is cycling the connection. Reconnect now with
   your last durable cursor. It fires on server shutdown, or when a connection
-  that carried traffic reaches its 55 minute lifetime.
+  that carried traffic reaches its lifetime, 55 minutes give or take ten
+  percent so one deploy's clients do not all rotate together.
 - **`idle`** means the server is reclaiming a connection nothing was waiting
   on. Reconnect when you next need to read; nothing is lost while you are away.
 - **`slow_consumer`** means this connection could not keep up with what was
   being written to it and was dropped. Reconnect, and read faster or buffer
   more. The frame is best effort: a consumer too slow to accept the frame
-  before it may be too slow to accept this one.
+  before it may be too slow to accept this one. It starts on a blank line so a
+  frame cut off mid-write cannot swallow it.
 
-Treat a reason you do not recognize as `rotate`. Reconnecting is always safe.
+Treat a reason you do not recognize as `rotate`. Reconnecting is always safe,
+and a settled turn answers a reconnect with its rows and `settled` again.
 
 There is no cursor on this frame. A client already tracks its last durable one,
 because it needs that to survive a connection that drops without saying
@@ -285,7 +310,9 @@ The rules, in the order a client should apply them:
 3. **Discard on resync.** Scoped to one Turn, or the whole Conversation when
    `turn_id` is absent.
 4. **Discard when the saved message lands.** A durable message supersedes the
-   preview that was building it.
+   preview with the same `message_id`, and only that one. The turn's next
+   message may already be accumulating, and dropping it loses a prefix no
+   later delta restores.
 5. **Discard on terminal status**, and refuse later previews for that
    Turn. A settled turn cannot produce more provisional output.
 
@@ -469,9 +496,13 @@ park the turn this way. Only host tools and undelivered callbacks do. See
 
 Browser clients authenticate with a client token and receive the same frames as
 machine callers, reasoning previews included. What differs is the payload: one
-schema per resource, with the fields a browser may not see simply omitted —
-Agent and user identity, message phase, copy origin, host provenance, and the
-credit block. There are no parallel browser schemas.
+schema per resource, with the fields a browser may not see simply omitted. On a
+message that is `agent_id`, `user_key`, and `copied_from_message_id`; on a
+change and on a Turn it is `usage`, `provenance`, and `credit_block`; and a
+Turn additionally loses `triggered_by` and its child counts. `phase` stays,
+because a chat surface needs to know which message is the answer. There are no
+parallel browser schemas, and the stream and the JSON reads apply the same
+projection.
 
 Preview, resync, and end frames are identical for both audiences.
 
@@ -486,30 +517,36 @@ Defaults from `normalizedStreamConfig`, all configurable:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| Poll interval | 1s | Durable drain cadence |
+| Poll interval | 5s | Reconciliation drain, in case a commit wake was lost |
 | Keepalive | 15s | `: keepalive` comment on an idle stream |
-| Max lifetime | 55m | Then `connection.closing`, `rotate` or `idle` |
+| Max lifetime | 55m ±10% | Then `connection.closing`, `rotate` or `idle` |
 | Write timeout | 10s | Slow consumer is dropped |
-| Suggested retry | 1000ms | Sent as the opening `retry:` frame |
+| Page budget | 200 rows or 1 MiB | One `transcript.update`; `has_more` marks a cut |
+| Open streams | 1000 per credential, 4000 per App | Per instance; a refusal is `429 rate_limited` with `details.scope: streams` |
+| Suggested retry | 1000ms | Sent as the `retry:` frame after the opening replay |
 
 A connection that carried nothing for its whole lifetime is reclaimed as
 `idle`; one that carried traffic rotates. Both mean reconnect, and the
-difference is only how soon.
+difference is only how soon. Back off when reconnects keep failing: the
+server's `retry:` is a floor for a healthy server, not a cadence for a down
+one.
 
-On a Turn stream, `deltas=false` turns off previews and nothing else. Replay,
-resumption, and termination are unchanged. You also stop receiving
-`stream.resync`, since there are no previews to invalidate. Conversation
-streams always include the live preview path.
+Both routes accept the same `cursor`, `Last-Event-ID`, and `deltas` inputs.
+`deltas=false` turns off previews and nothing else. Replay, resumption, and
+termination are unchanged. You also stop receiving `stream.resync`, since
+there are no previews to invalidate.
 
 Previews travel over a separate fan-out bus, not the database. In a
 single-process deployment that bus is in memory. Across processes it is Redis,
 and the daemon refuses to start in `cloud_tasks` execution mode without
 `REDIS_URL`, precisely so a multi-instance deployment cannot silently serve
-durable frames with no previews. Durable frames never depend on the bus.
+durable frames with no previews. Durable frames never depend on the bus: every
+commit also publishes a payload-free wake on it, so a connection drains within
+fan-out latency, and the poll is the fallback when a wake is lost.
 
-Per connected client per poll tick the server issues one transcript query and
-nothing else. Terminal closure on the Turn route is driven by the durable
-change it already read, not by a second Turn lookup.
+A Turn stream opened without a cursor starts at the turn's first row. Terminal
+closure on the Turn route is driven by the durable change it already read, not
+by a second Turn lookup.
 
 ## Errors are not frames
 
@@ -541,13 +578,6 @@ changed and why.
 Items marked **(wire)** change what the server sends or what the contract
 promises, so they land in the service and reach this repository when the
 contract is published. Everything else is local to this repository.
-
-### Protocol semantics
-
-**P7. Preview loss is only detectable when the server volunteers it.**
-Ephemeral frames carry no sequence numbers, so a client cannot notice a gap on
-its own. It is entirely dependent on `stream.resync` arriving. That is fine
-while the gap detection is correct, and undetectable if it ever is not.
 
 ### Naming and vocabulary
 
@@ -638,17 +668,11 @@ server gets a steady 1 request per second per client from every SDK. The
 subscription raises the stakes: an idle connection now reconnects on the same
 flat delay it used while a turn was running.
 
-**C9. Go caps a single frame at 2 MiB.** `readSSE` sets a bounded
-`bufio.Scanner` buffer ([`sdk/go/stream.go`](../../sdk/go/stream.go)). A
-`transcript.update` can carry up to 200 messages, so a large replay page can
-exceed it and error the stream. The other three have no such limit. Media does
-not contribute, since transcript content describes images and documents rather
-than inlining them.
-
-**C11. A Turn stream still scans its durable carrier from the Turn's first
-row.** That carrier is intentionally hidden for a standalone Turn, and the
-route filters every emitted frame to the selected Turn. The public semantics
-are direct even though the storage scan remains transcript-backed.
+**C12. No SDK checks `offset`.** The server now stamps every delta with the
+byte offset of its fragment, so a lost preview frame is detectable by the
+client. All four reducers still accumulate blindly and rely on
+`stream.resync`; comparing `offset` against the accumulated length and
+discarding the block on a mismatch is the natural next step.
 
 ### Conformance coverage
 
@@ -662,7 +686,7 @@ tests it against a local fake; the other three do not test it at all.
 In this repository:
 
 - [`openapi/nvoken.yaml`](../../openapi/nvoken.yaml). The contract snapshot.
-  The frame schema is `ConversationStreamEvent`.
+  The frame schema is `StreamEvent`.
 - [`docs/design/004-protocol-end-state.md`](../design/004-protocol-end-state.md).
   The end state this document now describes, and the path that got here.
 - [`docs/guides/sdk-development.md`](../guides/sdk-development.md). How a

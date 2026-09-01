@@ -109,13 +109,11 @@ impl Reducer {
                 ))
             })?;
         // Messages before changes, so a turn is never marked settled before its
-        // final message exists.
+        // final message exists. A saved message replaces only the preview that
+        // was building it: the turn's next message may already be accumulating,
+        // and dropping that prefix loses text no later delta restores.
         for message in update.messages {
-            if message.role == models::ConversationMessageRole::Assistant {
-                if let Some(turn_id) = &message.turn_id {
-                    self.discard_previews(turn_id);
-                }
-            }
+            self.discard_message_previews(&message.id);
             self.messages.insert(message.sequence, message);
         }
         for change in update.turn_changes {
@@ -190,6 +188,11 @@ impl Reducer {
         self.previews
             .retain(|_, preview| preview.turn_id != turn_id);
         self.latest_attempts.remove(turn_id);
+    }
+
+    fn discard_message_previews(&mut self, message_id: &str) {
+        self.previews
+            .retain(|_, preview| preview.message_id != message_id);
     }
 }
 
@@ -467,12 +470,11 @@ mod tests {
                 "message.delta",
                 json!({
                     "type": "message.delta",
-                    "conversation_id": null,
-                    "content_expires_at": null,
                     "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
                     "attempt": 1,
                     "message_id": "102002f7-649e-7a77-85c2-7f1695adb24e",
                     "content_index": 0,
+                    "offset": 0,
                     "kind": "text",
                     "delta": fragment,
                     "emitted_at": "2026-08-26T12:00:00Z"
@@ -488,8 +490,6 @@ mod tests {
                 "stream.resync",
                 json!({
                     "type": "stream.resync",
-                    "conversation_id": null,
-                    "content_expires_at": null,
                     "turn_id": "476dd7be-97a1-78f3-8096-d7032468a80a",
                     "reason": "live_delivery_gap"
                 }),
@@ -504,6 +504,7 @@ mod tests {
             2,
             models::TurnStatus::Completed,
             true,
+            true,
             None,
             None,
             None,
@@ -511,10 +512,9 @@ mod tests {
         );
         let update = models::TranscriptUpdateEvent::new(
             models::transcript_update_event::Type::EventTranscriptUpdate,
-            None,
-            None,
             Vec::new(),
             vec![change],
+            false,
             "cursor-2".into(),
         );
         reducer

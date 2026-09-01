@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn's terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,31 +11,26 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// MessageDeltaEvent : A live preview of a message the model is writing. Not saved, never replayed, and never a message. Accumulate it by `(message_id, content_index)` and discard it under the rules in Streaming above.  Reasoning previews travel here like any other kind, on machine and browser streams alike. What an end user sees is your application's decision, made in your application. Reasoning is watchable and not stored: no content block carries it, and no read returns it. Watch the stream if you want to see the model think. A turn that runs under explicit `reasoning` controls emits no reasoning previews at all, to either audience.
+/// MessageDeltaEvent : A live preview of a message the model is writing. Not saved, never replayed, and never a message. Accumulate it by `(message_id, content_index)`, and discard what you accumulated when: a delta for the same Turn arrives with a higher `attempt`; a `stream.resync` names the Turn or, with no `turn_id`, the whole Conversation; the saved message with the same `message_id` lands; or a change for the Turn carries `terminal: true`, after which no later preview for that Turn is rendered.  Reasoning previews travel here like any other kind, on machine and browser streams alike, because the stream is the only place reasoning exists: no content block carries it, and no read returns it, so a browser that could not watch it here could never see it. What an end user sees is your application's decision, made in your application. A turn that runs under explicit `reasoning` controls emits no reasoning previews at all, to either audience.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageDeltaEvent {
     #[serde(rename = "type")]
     pub r#type: Type,
-    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
-    #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
-    pub conversation_id: Option<String>,
-    /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
-    #[serde(
-        rename = "content_expires_at",
-        deserialize_with = "Option::deserialize"
-    )]
-    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
     #[serde(rename = "turn_id")]
     pub turn_id: String,
     /// Execution attempt that emitted this preview. Discard provisional output from earlier attempts when this value increases.
     #[serde(rename = "attempt")]
     pub attempt: u64,
-    /// The identifier the saved assistant message will carry when this iteration lands, with the same `msg_` prefix every message ID has. Key your preview by it and the handoff becomes an update to a row that already has its permanent identity, rather than one row disappearing and another taking its place.  It is allocated when the model starts writing, so every preview of one message carries it. It is stable within one attempt; a retried attempt allocates a new one, which is harmless, because a higher `attempt` already voids every earlier preview.
+    /// The identifier the saved assistant message will carry when this iteration lands. Key your preview by it and the handoff becomes an update to a row that already has its permanent identity, rather than one row disappearing and another taking its place.  It is allocated when the model starts writing, so every preview of one message carries it. It is stable within one attempt; a retried attempt allocates a new one, which is harmless, because a higher `attempt` already voids every earlier preview.
     #[serde(rename = "message_id")]
     pub message_id: String,
+    /// Which content block of the message this fragment extends, counted from 0 in the order the model opened them. It is a preview coordinate only: reasoning blocks are never saved, so the saved message's `content` array can be shorter and this index is not a position in it.
     #[serde(rename = "content_index")]
     pub content_index: u32,
+    /// Where this fragment starts within its block: the UTF-8 byte length of every earlier fragment for the same `(message_id, content_index)`. When it exceeds what you have accumulated, a frame was lost; discard the block and wait for the saved message.
+    #[serde(rename = "offset")]
+    pub offset: u64,
     #[serde(rename = "kind")]
     pub kind: models::MessageDeltaKind,
     /// The fragment, for every kind. One accumulator handles all of them.
@@ -52,27 +47,25 @@ pub struct MessageDeltaEvent {
 }
 
 impl MessageDeltaEvent {
-    /// A live preview of a message the model is writing. Not saved, never replayed, and never a message. Accumulate it by `(message_id, content_index)` and discard it under the rules in Streaming above.  Reasoning previews travel here like any other kind, on machine and browser streams alike. What an end user sees is your application's decision, made in your application. Reasoning is watchable and not stored: no content block carries it, and no read returns it. Watch the stream if you want to see the model think. A turn that runs under explicit `reasoning` controls emits no reasoning previews at all, to either audience.
+    /// A live preview of a message the model is writing. Not saved, never replayed, and never a message. Accumulate it by `(message_id, content_index)`, and discard what you accumulated when: a delta for the same Turn arrives with a higher `attempt`; a `stream.resync` names the Turn or, with no `turn_id`, the whole Conversation; the saved message with the same `message_id` lands; or a change for the Turn carries `terminal: true`, after which no later preview for that Turn is rendered.  Reasoning previews travel here like any other kind, on machine and browser streams alike, because the stream is the only place reasoning exists: no content block carries it, and no read returns it, so a browser that could not watch it here could never see it. What an end user sees is your application's decision, made in your application. A turn that runs under explicit `reasoning` controls emits no reasoning previews at all, to either audience.
     pub fn new(
         r#type: Type,
-        conversation_id: Option<String>,
-        content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
         turn_id: String,
         attempt: u64,
         message_id: String,
         content_index: u32,
+        offset: u64,
         kind: models::MessageDeltaKind,
         delta: String,
         emitted_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> MessageDeltaEvent {
         MessageDeltaEvent {
             r#type,
-            conversation_id,
-            content_expires_at,
             turn_id,
             attempt,
             message_id,
             content_index,
+            offset,
             kind,
             delta,
             tool_call_id: None,

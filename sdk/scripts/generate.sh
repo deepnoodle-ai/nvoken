@@ -126,7 +126,7 @@ perl -0pi -e 's/^pub mod default_api;\n//m' sdk/rust/src/apis/mod.rs
 # "missing field `type`" or "missing field `mode`", and every one it encodes
 # carries the discriminator twice. The exact literal field on each closed
 # branch already discriminates these unions.
-for model in conversation_content_block citation tool_declaration conversation_stream_event turn_conversation; do
+for model in conversation_content_block citation tool_declaration stream_event turn_conversation; do
   perl -0pi -e '
     die "no internal tag in '"${model}"'; update sdk/scripts/generate.sh\n"
       unless s/#\[serde\(tag = "(?:type|mode)"\)\]/#[serde(untagged)]/;

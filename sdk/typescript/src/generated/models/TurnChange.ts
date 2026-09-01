@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn\'s terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -80,12 +80,21 @@ import {
  * saved it replays on reconnect at any cursor, so a turn that settled
  * while you were away is still settled when you return.
  *
- * A change carries what a turn's own projection carries about where it
- * stands: `terminal` for whether this change is the end, `stop_reason`
- * for a turn that ended, `credit_block` for one held on credits, and
- * `tool_calls` for what its tools are doing, with `arguments` on the ones
- * waiting for you to run them. You never need a second request to find
- * out why a turn is not moving.
+ * A change has two kinds of field. The log fields are always present and
+ * describe the step itself: `turn_id`, `conversation_id`,
+ * `content_expires_at`, `revision`, `status`, `terminal`, `current`,
+ * `through_message_sequence`, `error`, `structured_output`, and
+ * `occurred_at`; a nullable one is `null` when it has no value. The
+ * detail fields describe where the turn stands now, so they are present
+ * only on the change that is still the turn's current state
+ * (`current: true`) and omitted from every replayed earlier change:
+ * `stop_reason` for a turn that ended, `credit_block` for one held on
+ * credits, `tool_calls` for what its tools are doing, with `arguments` on
+ * the ones waiting for you to run them, `usage` and `provenance` for its
+ * model calls, `structured_output_provenance`, and
+ * `final_answer_message_id`. Read detail from the current change alone
+ * and you never need a second request to find out why a turn is not
+ * moving.
  *
  * @export
  * @interface TurnChange
@@ -141,24 +150,39 @@ export interface TurnChange {
      */
     terminal: boolean;
     /**
-     * Why the turn stopped. Present once it has stopped, so an
-     * `incomplete` change names the limit that ran out.
+     * Whether this change is still the turn's current state as of the
+     * read that produced it. At most one change per turn in a frame or
+     * snapshot carries `true`, and only that change carries the detail
+     * fields. A replayed change is `false` even though it was current
+     * when it happened.
+     *
+     * @type {boolean}
+     * @memberof TurnChange
+     */
+    current: boolean;
+    /**
+     * Why the turn stopped. Present on the current change once the turn
+     * has stopped, so an `incomplete` change names the limit that ran
+     * out. Absent otherwise.
      *
      * @type {TurnStopReason}
      * @memberof TurnChange
      */
-    stopReason?: TurnStopReason | null;
+    stopReason?: TurnStopReason;
     /**
-     * Present while the turn is on budget hold for spending capacity.
+     * Present on the current change while the turn is on budget hold for
+     * spending capacity. Omitted for browser client tokens.
+     *
      * @type {CreditBlock}
      * @memberof TurnChange
      */
-    creditBlock?: CreditBlock | null;
+    creditBlock?: CreditBlock;
     /**
      * Every tool call this turn has made, with its current status.
-     * Omitted when the turn has made none. A tool call changing state is
-     * itself a change, so a failed or long-running call is visible
-     * before its result message arrives, and a client that was
+     * Present on the current change, as `[]` when the turn has made
+     * none, and omitted from replayed changes. A tool call changing
+     * state is itself a change, so a failed or long-running call is
+     * visible before its result message arrives, and a client that was
      * disconnected sees it on replay.
      *
      * @type {Array<ToolCallSummary>}
@@ -178,17 +202,23 @@ export interface TurnChange {
      */
     error: TurnFailure | null;
     /**
+     * Model usage summed across the turn's recorded model calls. Present
+     * on the current terminal change of a turn that made one. Omitted
+     * for browser client tokens.
      *
      * @type {ModelUsage}
      * @memberof TurnChange
      */
-    usage?: ModelUsage | null;
+    usage?: ModelUsage;
     /**
+     * Which provider and model served the turn's latest recorded call.
+     * Present on the current terminal change of a turn that made one.
+     * Omitted for browser client tokens.
      *
      * @type {ModelProvenance}
      * @memberof TurnChange
      */
-    provenance?: ModelProvenance | null;
+    provenance?: ModelProvenance;
     /**
      *
      * @type {{ [key: string]: any; }}
@@ -196,11 +226,24 @@ export interface TurnChange {
      */
     structuredOutput: { [key: string]: any; } | null;
     /**
+     * Present on the current terminal change of a turn that produced
+     * `structured_output`.
      *
      * @type {StructuredOutputProvenance}
      * @memberof TurnChange
      */
-    structuredOutputProvenance?: StructuredOutputProvenance | null;
+    structuredOutputProvenance?: StructuredOutputProvenance;
+    /**
+     * The message that is this turn's answer: its last assistant
+     * message, present on the current change once the turn settled
+     * `completed` with stop reason `end_turn`, and absent otherwise.
+     * This is the stream's spelling of `phase: final_answer`, which
+     * ordinary reads work out for you and a stream frame cannot.
+     *
+     * @type {string}
+     * @memberof TurnChange
+     */
+    finalAnswerMessageId?: string;
     /**
      *
      * @type {Date}
@@ -221,6 +264,7 @@ export function instanceOfTurnChange(value: object): value is TurnChange {
     if (!('revision' in value) || value['revision'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if (!('terminal' in value) || value['terminal'] === undefined) return false;
+    if (!('current' in value) || value['current'] === undefined) return false;
     if (!('throughMessageSequence' in value) || value['throughMessageSequence'] === undefined) return false;
     if (!('error' in value) || value['error'] === undefined) return false;
     if (!('structuredOutput' in value) || value['structuredOutput'] === undefined) return false;
@@ -244,6 +288,7 @@ export function TurnChangeFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'revision': json['revision'],
         'status': TurnStatusFromJSON(json['status']),
         'terminal': json['terminal'],
+        'current': json['current'],
         'stopReason': json['stop_reason'] == null ? undefined : TurnStopReasonFromJSON(json['stop_reason']),
         'creditBlock': json['credit_block'] == null ? undefined : CreditBlockFromJSON(json['credit_block']),
         'toolCalls': json['tool_calls'] == null ? undefined : ((json['tool_calls'] as Array<any>).map(ToolCallSummaryFromJSON)),
@@ -253,6 +298,7 @@ export function TurnChangeFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'provenance': json['provenance'] == null ? undefined : ModelProvenanceFromJSON(json['provenance']),
         'structuredOutput': json['structured_output'],
         'structuredOutputProvenance': json['structured_output_provenance'] == null ? undefined : StructuredOutputProvenanceFromJSON(json['structured_output_provenance']),
+        'finalAnswerMessageId': json['final_answer_message_id'] == null ? undefined : json['final_answer_message_id'],
         'occurredAt': (new Date(json['occurred_at'])),
     };
 }
@@ -274,6 +320,7 @@ export function TurnChangeToJSONTyped(value?: TurnChange | null, ignoreDiscrimin
         'revision': value['revision'],
         'status': TurnStatusToJSON(value['status']),
         'terminal': value['terminal'],
+        'current': value['current'],
         'stop_reason': TurnStopReasonToJSON(value['stopReason']),
         'credit_block': CreditBlockToJSON(value['creditBlock']),
         'tool_calls': value['toolCalls'] == null ? undefined : ((value['toolCalls'] as Array<any>).map(ToolCallSummaryToJSON)),
@@ -283,6 +330,7 @@ export function TurnChangeToJSONTyped(value?: TurnChange | null, ignoreDiscrimin
         'provenance': ModelProvenanceToJSON(value['provenance']),
         'structured_output': value['structuredOutput'],
         'structured_output_provenance': StructuredOutputProvenanceToJSON(value['structuredOutputProvenance']),
+        'final_answer_message_id': value['finalAnswerMessageId'],
         'occurred_at': value['occurredAt'].toISOString(),
     };
 }
