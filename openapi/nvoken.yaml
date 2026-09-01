@@ -12639,9 +12639,8 @@ components:
     RateLimited:
       description: |
         A durable App, tenant, or opaque-user admission limit refused fresh
-        work, the credential or App already holds its ceiling of open streams
-        (`details.scope` is `streams`), or deployment ingress rate limited the
-        request. No Turn is created and no stream is opened.
+        work, or deployment ingress rate limited the request. No Turn is
+        created and no stream is opened.
       headers:
         Retry-After:
           schema:

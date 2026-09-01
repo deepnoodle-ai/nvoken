@@ -523,7 +523,6 @@ Defaults from `normalizedStreamConfig`, all configurable:
 | Max lifetime | 55m ±10% | Then `connection.closing`, `rotate` or `idle` |
 | Write timeout | 10s | Slow consumer is dropped |
 | Page budget | 200 rows or 1 MiB | One `transcript.update`; `has_more` marks a cut |
-| Open streams | 1000 per credential, 4000 per App | Per instance; a refusal is `429 rate_limited` with `details.scope: streams` |
 | Suggested retry | 1000ms | Sent as the `retry:` frame after the opening replay |
 
 A connection that carried nothing for its whole lifetime is reclaimed as
