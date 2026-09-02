@@ -19,16 +19,12 @@ jobs:
           cache-dependency-path: |
             go.sum
             sdk/go/go.sum
-      - uses: actions/setup-node@v6
+      - uses: pnpm/setup@v2
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            sdk/typescript/package-lock.json
-            examples/typescript-agent-tools/package-lock.json
-            examples/typescript-browser-direct/package-lock.json
-            examples/typescript-chat/package-lock.json
-            examples/typescript-turn-showcase/package-lock.json
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          install: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

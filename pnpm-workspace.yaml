@@ -1,0 +1,6 @@
+# ABOUTME: Defines the TypeScript SDK and examples as one pnpm workspace.
+# ABOUTME: Keeps local SDK dependencies linked and managed by one lockfile.
+
+packages:
+  - "sdk/typescript"
+  - "examples/typescript-*"

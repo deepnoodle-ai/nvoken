@@ -22,7 +22,7 @@ facade-check:
 generate: sdk-generate
 
 openapi-check:
-	npx --yes @redocly/cli@$(REDOCLY_VERSION) lint openapi/nvoken.yaml
+	pnpm --package=@redocly/cli@$(REDOCLY_VERSION) dlx redocly lint openapi/nvoken.yaml
 
 release:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=x.y.z"; exit 1; fi

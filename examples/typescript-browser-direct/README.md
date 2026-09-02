@@ -48,8 +48,9 @@ the authenticated session, never from request-body claims.
 ## Build
 
 ```bash
-npm install
-npm run build
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --filter nvoken-typescript-browser-direct-example... build
 ```
 
 This example type-checks rather than running: the stubs must be connected to a

@@ -14,7 +14,7 @@ Generated request-shaped APIs remain available under `client.raw()`.
 ## Install
 
 ```bash
-npm install @deepnoodle/nvoken
+pnpm add @deepnoodle/nvoken
 ```
 
 Node.js 20 or newer is supported. The browser entry uses Web-standard APIs and
@@ -422,9 +422,10 @@ either is refused, the controller disables that one action with
 From the repository root:
 
 ```bash
-npm ci --prefix sdk/typescript
-npm run build --prefix sdk/typescript
-npm test --prefix sdk/typescript
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --filter @deepnoodle/nvoken build
+pnpm --filter @deepnoodle/nvoken test
 ```
 
 The focused SDK gate also compiles the root TypeScript examples:

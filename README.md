@@ -12,7 +12,7 @@ authoritative OpenAPI contract, and publishes that contract here.
 
 ```bash
 # TypeScript
-npm install @deepnoodle/nvoken
+pnpm add @deepnoodle/nvoken
 
 # Python
 pip install nvoken
@@ -109,6 +109,8 @@ The committed generated clients make ordinary builds self-contained. Run the
 complete gate with:
 
 ```bash
+corepack enable
+pnpm install --frozen-lockfile
 make check
 ```
 

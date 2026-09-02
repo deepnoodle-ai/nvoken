@@ -97,7 +97,7 @@ def main() -> int:
     patterns = [item for item in manifest.get("files", []) if not item.startswith("!")]
     if not DIST.exists():
         print(
-            "sdk/typescript/dist is missing; run npm run build first",
+            "sdk/typescript/dist is missing; run pnpm --filter @deepnoodle/nvoken build first",
             file=sys.stderr,
         )
         return 1

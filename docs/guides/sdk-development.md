@@ -65,9 +65,10 @@ four unrelated tests.
 (cd sdk/go && GOWORK=off go test ./...)
 
 # TypeScript
-npm ci --prefix sdk/typescript
-npm run build --prefix sdk/typescript
-npm test --prefix sdk/typescript
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --filter @deepnoodle/nvoken build
+pnpm --filter @deepnoodle/nvoken test
 
 # Python
 python3 -m venv sdk/python/.venv

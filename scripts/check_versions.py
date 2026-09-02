@@ -29,12 +29,6 @@ def package_versions(root: Path) -> dict[str, str]:
     typescript = json.loads(
         (root / "sdk/typescript/package.json").read_text(encoding="utf-8")
     )["version"]
-    # npm records the package's own version twice in the lockfile and rewrites
-    # both on install. Neither is read by a consumer, which is why 0.29.0 sat
-    # here through four releases; check them so the next bump cannot skip it.
-    lockfile = json.loads(
-        (root / "sdk/typescript/package-lock.json").read_text(encoding="utf-8")
-    )
     python = tomllib.loads(
         (root / "sdk/python/pyproject.toml").read_text(encoding="utf-8")
     )["project"]["version"]
@@ -46,8 +40,6 @@ def package_versions(root: Path) -> dict[str, str]:
             root / "sdk/go/version.go", GO_VERSION_PATTERN, "Go SDK"
         ),
         "TypeScript": str(typescript),
-        "TypeScript lockfile": str(lockfile["version"]),
-        "TypeScript lockfile package": str(lockfile["packages"][""]["version"]),
         "TypeScript source": source_version(
             root / "sdk/typescript/src/version.ts",
             TYPESCRIPT_VERSION_PATTERN,
