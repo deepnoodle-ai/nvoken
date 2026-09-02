@@ -172,63 +172,45 @@ entries from `package.json`.
 
 ## Contract change
 
-### C1. `getConversationTranscript` gains a bounded tail mode
+### C1. `getConversationTranscript` gains a bounded window
 
-Service-side. This repository adopts the published `openapi/nvoken.yaml` and
-regenerates. Everything below is the proposal the service should implement;
-the SDK takes whatever is published.
+Service-side, and decided in the service repository: the
+[bounded transcript read proposal](https://github.com/deepnoodle-ai/nvoken-cloud/blob/main/docs/proposals/2026-09-02-bounded-transcript-read.md)
+in `nvoken-cloud` (2026-09-02) is the contract proposal and replaces the
+table that stood here. It reconciles this document with PRD 074's
+supersession, which had settled the resume position and left the bound
+undecided. This repository adopts the published `openapi/nvoken.yaml` and
+regenerates; the SDK takes whatever is published.
 
-Query parameters on `GET /v1/conversations/{conversation_id}/transcript`:
+The shape, in brief. Two optional query parameters on
+`GET /v1/conversations/{conversation_id}/transcript`: `limit`, 1 to 200,
+selects the newest window; `page_token`, an opaque continuation from
+`next_page_token`, returns the window before the previous one at the same
+cut. Two required fields on `TranscriptSnapshot`: `has_more` and
+`next_page_token`. With neither parameter the operation is unchanged. `cursor`
+on a bounded read is the committed head observed in the same read snapshot,
+and every page of one walk carries the cursor of the cut that started it, so
+older paging never moves the resume position.
 
-| Name | Type | Meaning |
-| --- | --- | --- |
-| `tail` | boolean, default false | Select the newest bounded window instead of the whole transcript. |
-| `limit` | integer 1..200, default 50 | Maximum messages in the window. Only meaningful with `tail` or `page_token`. |
-| `page_token` | string | Opaque continuation from `next_page_token`. Fetches the preceding window at the original fixed cut. Mutually exclusive with `tail`. |
-
-Response additions to `TranscriptSnapshot`, present in tail and page modes:
-
-| Field | Type | Meaning |
-| --- | --- | --- |
-| `has_more` | boolean | Whether an older window exists. |
-| `next_page_token` | string or null | Continuation for the next older window. |
-
-Semantics, restored from the pre-cut description of `getSessionTranscript`:
-
-- In tail mode `messages` is at most `limit` newest messages in canonical
-  ascending sequence order. `cursor` is the exact committed head observed
-  before message selection, so the Conversation stream opened with it delivers
-  everything committed afterward with neither overlap nor gap.
-- `conversation` is the point-in-time resource, including `active_turn_id`
-  and `active_turn_status`. This is how a resumed page learns a Turn is
-  mid-flight before the first frame lands.
-- Each older page is ascending, carries `has_more` and `next_page_token`, and
-  carries the original `cursor`. Older paging never moves the resume position.
-- Without `tail` or `page_token` the operation is unchanged.
-- `page_token` is deliberately not spelled `cursor`. DIRECTION's one-name rule
-  is about the resume position; a paging continuation is a different value
-  and giving it the same name is how a client sends one where the other is
-  expected.
-
-Not proposed: `tail` or `order` on `listConversationMessages`. One bounded
-read is enough, and a second spelling of the same capability is the
-redundancy DIRECTION refuses.
-
-Not proposed: the pre-cut tail's per-Turn lifecycle records. The controller
-needs only the active Turn, which `conversation` supplies. If a renderer later
-needs why a settled Turn stopped, that is a separate proposal.
+What changed from the earlier draft of this section: there is no `tail`
+flag, because `limit` alone selects the window and a second parameter meaning
+"honour the first" only added a mutual-exclusion rule. Still not proposed:
+`before` or `order` on `listConversationMessages`, the pre-cut tail's per-Turn
+lifecycle records, and its incremental drain mode. The proposal records why.
 
 **This repository, once published:** `make sdk-generate`, then
 `make sdk-generate-check`, `make openapi-check`, `make facade-check`. The
 operation stays in `RAW_ONLY`, so parity needs no change. `sdk/operations.json`
 is regenerated from the contract and tracks IDs, methods, and paths only, so
-it does not change.
+it does not change. `readTranscriptWindow` in `conversation-controller.ts`
+passes `limit` and `pageToken` and takes `hasMore` and `nextPageToken` from
+the response; the client-side trim goes away. That function is the only place
+the parameters appear.
 
-**If the service change lags:** the controller's bootstrap code path is the
-same call without `tail` and `limit`, trimmed client-side to the newest 50.
-Correct, not bounded on the wire. Ship it behind the same function so the two
-parameters are the only diff, and do not call the feature done until the
-bounded form is in.
+**Until the service change lands:** the controller's bootstrap code path is
+the same call without parameters, trimmed client-side to the newest 50.
+Correct, not bounded on the wire, and the README says so. Do not call the
+feature done until the bounded form is in.
 
 ## SDK changes
 
