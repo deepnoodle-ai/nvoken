@@ -2086,6 +2086,30 @@ paths:
         - Conversations
       operationId: getConversationTranscript
       summary: Read a Conversation transcript snapshot
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: |
+            Return at most this many of the newest messages at one committed
+            cut. Absent with no `page_token` the whole transcript is returned,
+            which is the operation's original behavior. Absent with a
+            `page_token` the default is 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: page_token
+          in: query
+          required: false
+          description: |
+            Opaque continuation from a previous response's `next_page_token`.
+            Returns the window that precedes the one that issued it, at the same
+            cut. A token is bound to the Conversation that minted it; it is not
+            a `cursor` and the two are not interchangeable.
+          schema:
+            type: string
+            minLength: 1
       responses:
         '200':
           description: A consistent transcript snapshot.
@@ -2093,6 +2117,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TranscriptSnapshot'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -9815,6 +9841,8 @@ components:
         - messages
         - compactions
         - cursor
+        - has_more
+        - next_page_token
         - captured_at
       properties:
         conversation:
@@ -9833,7 +9861,22 @@ components:
           description: |
             The stream position of this snapshot. Open the Conversation stream
             with it as `cursor` and you receive exactly what happened after
-            the snapshot was captured, with neither overlap nor gap.
+            the snapshot was captured, with neither overlap nor gap. On a
+            bounded read the cursor is the head of the cut the window was
+            selected from, and every page of one walk carries the first page's
+            cursor, so paging older history never moves the resume position.
+        has_more:
+          type: boolean
+          description: |
+            Whether older messages exist below this window. Always false on an
+            unbounded read.
+        next_page_token:
+          type:
+            - string
+            - 'null'
+          description: |
+            Continuation for the next older window at the same cut. Null when
+            `has_more` is false.
         captured_at:
           type: string
           format: date-time
