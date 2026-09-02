@@ -55,10 +55,17 @@ pub struct StreamPreview {
     pub name: Option<String>,
 }
 
+/// Folds durable frames and provisional previews into one current view.
+///
+/// A Turn's lifecycle is folded, not logged: the highest revision seen for
+/// each Turn is kept and nothing earlier. The change's own `current` flag
+/// cannot substitute for that fold — it means "current as of the read that
+/// produced this frame", so two frames for one Turn would otherwise leave two
+/// stored changes both claiming to be current.
 #[derive(Debug, Default)]
 pub struct Reducer {
     messages: BTreeMap<u64, models::ConversationMessage>,
-    changes: BTreeMap<(String, u64), models::TurnChange>,
+    changes: BTreeMap<String, models::TurnChange>,
     previews: BTreeMap<(String, u32), StreamPreview>,
     latest_attempts: BTreeMap<String, u64>,
     terminal_turns: BTreeSet<String>,
@@ -121,8 +128,12 @@ impl Reducer {
                 self.terminal_turns.insert(change.turn_id.clone());
                 self.discard_previews(&change.turn_id);
             }
-            self.changes
-                .insert((change.turn_id.clone(), change.revision), change);
+            match self.changes.get(&change.turn_id) {
+                Some(current) if current.revision >= change.revision => {}
+                _ => {
+                    self.changes.insert(change.turn_id.clone(), change);
+                }
+            }
         }
         let cursor = event
             .id

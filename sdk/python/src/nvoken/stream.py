@@ -45,11 +45,18 @@ class ReducedSnapshot:
 
 
 class Reducer:
-    """Fold durable transcript frames and provisional deltas into one view."""
+    """Fold durable transcript frames and provisional deltas into one view.
+
+    A Turn's lifecycle is folded, not logged: the highest revision seen for
+    each Turn is kept and nothing earlier. The change's own ``current`` flag
+    cannot substitute for that fold — it means "current as of the read that
+    produced this frame", so two frames for one Turn would otherwise leave two
+    stored changes both claiming to be current.
+    """
 
     def __init__(self) -> None:
         self._messages: dict[int, ConversationMessage] = {}
-        self._changes: dict[tuple[str, int], TurnChange] = {}
+        self._changes: dict[str, TurnChange] = {}
         self._previews: dict[tuple[str, int], StreamPreview] = {}
         self._latest_attempts: dict[str, int] = {}
         self._terminal_turns: set[str] = set()
@@ -78,7 +85,9 @@ class Reducer:
             self._messages[message.sequence] = message
             self._discard_message_previews(message.id)
         for change in update.turn_changes:
-            self._changes[(change.turn_id, change.revision)] = change
+            current = self._changes.get(change.turn_id)
+            if current is None or change.revision > current.revision:
+                self._changes[change.turn_id] = change
             if is_turn_over(change):
                 self._terminal_turns.add(change.turn_id)
                 self._discard_previews(change.turn_id)
@@ -90,9 +99,7 @@ class Reducer:
     def snapshot(self) -> ReducedSnapshot:
         return ReducedSnapshot(
             messages=sorted(self._messages.values(), key=lambda message: message.sequence),
-            turn_changes=sorted(
-                self._changes.values(), key=lambda change: (change.turn_id, change.revision)
-            ),
+            turn_changes=sorted(self._changes.values(), key=lambda change: change.turn_id),
             previews=sorted(
                 self._previews.values(), key=lambda preview: (preview.message_id, preview.content_index)
             ),

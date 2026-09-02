@@ -65,6 +65,12 @@ type streamPreviewKey struct {
 
 // Reducer folds replayable durable frames and provisional previews into one
 // current view. Durable frames are idempotent by identity and revision.
+//
+// A Turn's lifecycle is folded, not logged: the reducer keeps the highest
+// revision seen for each Turn and nothing earlier. The change's own `current`
+// flag cannot substitute for that fold — it means "current as of the read that
+// produced this frame", so two frames for one Turn would otherwise leave two
+// stored changes both claiming to be current.
 type Reducer struct {
 	messages       map[int64]ConversationMessage
 	changes        map[string]TurnChange
@@ -135,8 +141,9 @@ func (r *Reducer) Apply(event StreamEvent) error {
 			r.discardMessagePreviews(string(message.ID))
 		}
 		for _, change := range update.TurnChanges {
-			key := fmt.Sprintf("%s:%d", change.TurnID, change.Revision)
-			r.changes[key] = change
+			if current, ok := r.changes[change.TurnID]; !ok || change.Revision > current.Revision {
+				r.changes[change.TurnID] = change
+			}
 			if change.Terminal {
 				r.terminalTurns[change.TurnID] = struct{}{}
 				r.discardPreviews(change.TurnID)
@@ -166,12 +173,7 @@ func (r *Reducer) Snapshot() ReducedSnapshot {
 	for _, change := range r.changes {
 		changes = append(changes, change)
 	}
-	sort.Slice(changes, func(i, j int) bool {
-		if changes[i].TurnID == changes[j].TurnID {
-			return changes[i].Revision < changes[j].Revision
-		}
-		return changes[i].TurnID < changes[j].TurnID
-	})
+	sort.Slice(changes, func(i, j int) bool { return changes[i].TurnID < changes[j].TurnID })
 	previews := make([]StreamPreview, 0, len(r.previews))
 	for _, preview := range r.previews {
 		previews = append(previews, preview)

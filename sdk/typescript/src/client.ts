@@ -949,9 +949,8 @@ class TurnHandle<TOutput extends object> implements Turn<TOutput> {
       })) {
         reducer.apply(frame);
         const reduced = reducer.snapshot();
-        const change = reduced.turnChanges
-          .filter((item) => item.turnId === this.id)
-          .sort((left, right) => right.revision - left.revision)[0];
+        // The reducer folds to one change per Turn, so this is the current one.
+        const change = reduced.turnChanges.find((item) => item.turnId === this.id);
         if (change?.toolCalls) await this.driveTools(change.toolCalls, scope.signal);
         snapshot = mergeStreamSnapshot(snapshot, reduced, this.id);
         yield { snapshot };
@@ -1128,9 +1127,7 @@ function mergeStreamSnapshot<TOutput extends object>(
   turnId: string,
 ): TurnSnapshot<TOutput> {
   const messages = reduced.messages.filter((message) => message.turnId === turnId);
-  const change = reduced.turnChanges
-    .filter((item) => item.turnId === turnId)
-    .sort((left, right) => right.revision - left.revision)[0];
+  const change = reduced.turnChanges.find((item) => item.turnId === turnId);
   const savedText = change?.status === "completed" && change.stopReason === "end_turn"
     ? assistantText(messages)
     : null;
