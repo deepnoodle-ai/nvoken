@@ -122,16 +122,31 @@ perl -0pi -e 's/^pub mod default_api;\n//m' sdk/rust/src/apis/mod.rs
 # The Rust generator makes discriminator unions internally tagged while also
 # retaining the required discriminator field on each branch model. Serde
 # consumes that field before decoding the branch, so otherwise every valid
-# transcript block, citation, tool declaration, and stream frame fails with
-# "missing field `type`" or "missing field `mode`", and every one it encodes
+# transcript block, citation, tool declaration, stream frame, Agent owner,
+# Conversation owner, and memory selection fails with "missing field `type`",
+# "missing field `kind`", or "missing field `scope`", and every one it encodes
 # carries the discriminator twice. The exact literal field on each closed
-# branch already discriminates these unions.
-for model in conversation_content_block citation tool_declaration stream_event turn_conversation; do
+# branch already discriminates these unions. `Agent.owner` and
+# `Conversation.owner` are required, so with the tag left in place no Agent
+# or Conversation response decodes at all.
+#
+# A new discriminator union that is not listed here ships broken. The
+# guard below fails generation when one appears, so add it to this list.
+for model in \
+  conversation_content_block citation tool_declaration stream_event turn_conversation \
+  agent_owner conversation_owner default_memory_policy memory_space_selector \
+  turn_behavior_selection turn_behavior_source turn_memory_selection \
+  delivery_behavior_source browser_conversation_access browser_memory_access; do
   perl -0pi -e '
     die "no internal tag in '"${model}"'; update sdk/scripts/generate.sh\n"
-      unless s/#\[serde\(tag = "(?:type|mode)"\)\]/#[serde(untagged)]/;
+      unless s/#\[serde\(tag = "(?:type|mode|kind|scope|default_scope)"\)\]/#[serde(untagged)]/;
   ' "sdk/rust/src/models/${model}.rs"
 done
+if grep -rl 'serde(tag = ' sdk/rust/src/models >/dev/null; then
+  echo "internally tagged Rust unions remain; add them to the untagged list in sdk/scripts/generate.sh:" >&2
+  grep -rl 'serde(tag = ' sdk/rust/src/models >&2
+  exit 1
+fi
 
 find \
   sdk/typescript/src/generated \

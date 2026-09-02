@@ -8,6 +8,18 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **The Rust SDK decodes Agent and Conversation responses.** Ten generated
+  discriminator unions — `AgentOwner`, `ConversationOwner`,
+  `DefaultMemoryPolicy`, `MemorySpaceSelector`, `TurnBehaviorSelection`,
+  `TurnBehaviorSource`, `TurnMemorySelection`, `DeliveryBehaviorSource`,
+  `BrowserConversationAccess`, and `BrowserMemoryAccess` — were internally
+  tagged while each branch also declared the tag as a required field, so serde
+  consumed the discriminator and every decode failed with a missing `kind`,
+  `scope`, or `default_scope`. `Agent.owner` and `Conversation.owner` are
+  required, so no Agent or Conversation response decoded at all, and every
+  encode carried the discriminator twice. The generator now rewrites these
+  unions the way it already rewrote transcript blocks and stream frames, and
+  fails generation if a new tagged union appears without being listed.
 - **Fixed: a saved message discarded every preview of its Turn.** All four
   reducers dropped the previews of the Turn's next message when an earlier one
   landed, losing a prefix no later delta restores. They now discard only the

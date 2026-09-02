@@ -12,7 +12,7 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "scope")]
+#[serde(untagged)]
 pub enum BrowserMemoryAccess {
     #[serde(rename = "none")]
     None(Box<models::BrowserNoMemoryAccess>),

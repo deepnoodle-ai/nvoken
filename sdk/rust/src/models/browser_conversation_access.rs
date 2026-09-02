@@ -12,7 +12,7 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "scope")]
+#[serde(untagged)]
 pub enum BrowserConversationAccess {
     #[serde(rename = "standalone_only")]
     StandaloneOnly(Box<models::BrowserStandaloneOnlyAccess>),
