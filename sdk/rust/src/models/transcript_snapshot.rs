@@ -19,9 +19,15 @@ pub struct TranscriptSnapshot {
     pub messages: Vec<models::ConversationMessage>,
     #[serde(rename = "compactions")]
     pub compactions: Vec<models::ConversationCompaction>,
-    /// The stream position of this snapshot. Open the Conversation stream with it as `cursor` and you receive exactly what happened after the snapshot was captured, with neither overlap nor gap.
+    /// The stream position of this snapshot. Open the Conversation stream with it as `cursor` and you receive exactly what happened after the snapshot was captured, with neither overlap nor gap. On a bounded read the cursor is the head of the cut the window was selected from, and every page of one walk carries the first page's cursor, so paging older history never moves the resume position.
     #[serde(rename = "cursor")]
     pub cursor: String,
+    /// Whether older messages exist below this window. Always false on an unbounded read.
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
+    /// Continuation for the next older window at the same cut. Null when `has_more` is false.
+    #[serde(rename = "next_page_token", deserialize_with = "Option::deserialize")]
+    pub next_page_token: Option<String>,
     #[serde(rename = "captured_at")]
     pub captured_at: chrono::DateTime<chrono::FixedOffset>,
 }
@@ -32,6 +38,8 @@ impl TranscriptSnapshot {
         messages: Vec<models::ConversationMessage>,
         compactions: Vec<models::ConversationCompaction>,
         cursor: String,
+        has_more: bool,
+        next_page_token: Option<String>,
         captured_at: chrono::DateTime<chrono::FixedOffset>,
     ) -> TranscriptSnapshot {
         TranscriptSnapshot {
@@ -39,6 +47,8 @@ impl TranscriptSnapshot {
             messages,
             compactions,
             cursor,
+            has_more,
+            next_page_token,
             captured_at,
         }
     }

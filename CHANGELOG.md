@@ -20,10 +20,13 @@ without republishing every artifact.
   encode carried the discriminator twice. The generator now rewrites these
   unions the way it already rewrote transcript blocks and stream frames, and
   fails generation if a new tagged union appears without being listed.
+- **`getConversationTranscript` takes `limit` and `page_token`.** The raw operation in all four SDKs returns the newest window at one committed cut and `TranscriptSnapshot` carries `has_more` and `next_page_token`; with neither parameter the read is the whole transcript as before. `nvoken conversation transcript` gains matching `--limit` and `--page-token` flags and stays a whole-transcript export without them.
 - **A headless conversation controller for the browser.** `createConversation`
   and `createAnonymousConversation` in `@deepnoodle/nvoken/browser` hold a
   resumable conversation: state and transitions, no rendering, no framework.
-  Resuming is one transcript read plus a stream from the position it observed;
+  Resuming is one transcript read plus a stream from the position it observed,
+  and both that read and each older page are bounded on the wire to 50
+  messages rather than trimmed after the fact;
   a send whose outcome is unknown is retryable under the same idempotency key
   rather than becoming a second Turn, or discarded to reopen the composer;
   every action reports enabled, in flight, or disabled with a reason; a Turn status this version does not know is

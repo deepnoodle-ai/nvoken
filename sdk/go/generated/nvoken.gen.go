@@ -6492,9 +6492,20 @@ type TranscriptSnapshot struct {
 
 	// Cursor The stream position of this snapshot. Open the Conversation stream
 	// with it as `cursor` and you receive exactly what happened after
-	// the snapshot was captured, with neither overlap nor gap.
-	Cursor   string                `json:"cursor"`
+	// the snapshot was captured, with neither overlap nor gap. On a
+	// bounded read the cursor is the head of the cut the window was
+	// selected from, and every page of one walk carries the first page's
+	// cursor, so paging older history never moves the resume position.
+	Cursor string `json:"cursor"`
+
+	// HasMore Whether older messages exist below this window. Always false on an
+	// unbounded read.
+	HasMore  bool                  `json:"has_more"`
 	Messages []ConversationMessage `json:"messages"`
+
+	// NextPageToken Continuation for the next older window at the same cut. Null when
+	// `has_more` is false.
+	NextPageToken *string `json:"next_page_token"`
 }
 
 // TranscriptUpdateEvent The saved frame, and the only one. Messages append by `sequence` and
@@ -7752,6 +7763,21 @@ type StreamConversationParams struct {
 	// reconnect. Same value and scope rules as `cursor`, which wins when
 	// both are present. At most one header, and never blank.
 	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
+}
+
+// GetConversationTranscriptParams defines parameters for GetConversationTranscript.
+type GetConversationTranscriptParams struct {
+	// Limit Return at most this many of the newest messages at one committed
+	// cut. Absent with no `page_token` the whole transcript is returned,
+	// which is the operation's original behavior. Absent with a
+	// `page_token` the default is 100.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// PageToken Opaque continuation from a previous response's `next_page_token`.
+	// Returns the window that precedes the one that issued it, at the same
+	// cut. A token is bound to the Conversation that minted it; it is not
+	// a `cursor` and the two are not interchangeable.
+	PageToken *string `form:"page_token,omitempty" json:"page_token,omitempty"`
 }
 
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
@@ -11567,7 +11593,7 @@ type ClientInterface interface {
 	// GetConversationTranscript Read a Conversation transcript snapshot
 	//
 	// Corresponds with GET /v1/conversations/{conversation_id}/transcript (the `GetConversationTranscript` operationId).
-	GetConversationTranscript(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetConversationTranscript(ctx context.Context, conversationID ConversationID, params *GetConversationTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCreditAccounts List tenant credit accounts
 	//
@@ -13669,8 +13695,8 @@ func (c *Client) StreamConversation(ctx context.Context, conversationID Conversa
 // GetConversationTranscript Read a Conversation transcript snapshot
 //
 // Corresponds with GET /v1/conversations/{conversation_id}/transcript (the `GetConversationTranscript` operationId).
-func (c *Client) GetConversationTranscript(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetConversationTranscriptRequest(c.Server, conversationID)
+func (c *Client) GetConversationTranscript(ctx context.Context, conversationID ConversationID, params *GetConversationTranscriptParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConversationTranscriptRequest(c.Server, conversationID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -17297,7 +17323,7 @@ func NewStreamConversationRequest(server string, conversationID ConversationID, 
 }
 
 // NewGetConversationTranscriptRequest constructs an http.Request for the GetConversationTranscript method
-func NewGetConversationTranscriptRequest(server string, conversationID ConversationID) (*http.Request, error) {
+func NewGetConversationTranscriptRequest(server string, conversationID ConversationID, params *GetConversationTranscriptParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -17320,6 +17346,45 @@ func NewGetConversationTranscriptRequest(server string, conversationID Conversat
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page_token", *params.PageToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -21511,7 +21576,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/conversations/{conversation_id}/transcript (the `GetConversationTranscript` operationId).
-	GetConversationTranscriptWithResponse(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*GetConversationTranscriptHTTPResponse, error)
+	GetConversationTranscriptWithResponse(ctx context.Context, conversationID ConversationID, params *GetConversationTranscriptParams, reqEditors ...RequestEditorFn) (*GetConversationTranscriptHTTPResponse, error)
 
 	// ListCreditAccountsWithResponse List tenant credit accounts
 	//
@@ -25958,6 +26023,8 @@ type GetConversationTranscriptHTTPResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *TranscriptSnapshot
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *Unauthenticated
 	// JSON403 the response for an HTTP 403 `application/json` response
@@ -25977,6 +26044,11 @@ type GetConversationTranscriptHTTPResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetConversationTranscriptHTTPResponse) GetJSON200() *TranscriptSnapshot {
 	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetConversationTranscriptHTTPResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -31490,8 +31562,8 @@ func (c *ClientWithResponses) StreamConversationWithResponse(ctx context.Context
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /v1/conversations/{conversation_id}/transcript (the `GetConversationTranscript` operationId).
-func (c *ClientWithResponses) GetConversationTranscriptWithResponse(ctx context.Context, conversationID ConversationID, reqEditors ...RequestEditorFn) (*GetConversationTranscriptHTTPResponse, error) {
-	rsp, err := c.GetConversationTranscript(ctx, conversationID, reqEditors...)
+func (c *ClientWithResponses) GetConversationTranscriptWithResponse(ctx context.Context, conversationID ConversationID, params *GetConversationTranscriptParams, reqEditors ...RequestEditorFn) (*GetConversationTranscriptHTTPResponse, error) {
+	rsp, err := c.GetConversationTranscript(ctx, conversationID, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -35964,6 +36036,13 @@ func ParseGetConversationTranscriptHTTPResponse(rsp *http.Response) (*GetConvers
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthenticated

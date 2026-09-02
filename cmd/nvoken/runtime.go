@@ -93,7 +93,7 @@ func registerRuntimeCommands(app *cli.App) {
 	conversations.Command("create").Description("Create a Conversation from exact JSON").Flags(cli.String("file", "f").Required()).Run(runConversationCreate)
 	conversations.Command("delete").AddArg(requiredArg("conversation-id", "Opaque Conversation ID")).Run(runConversationDelete)
 	conversations.Command("messages").AddArg(requiredArg("conversation-id", "Opaque Conversation ID")).Flags(cli.String("cursor"), cli.Int("limit")).Run(runConversationMessages)
-	conversations.Command("transcript").AddArg(requiredArg("conversation-id", "Opaque Conversation ID")).Run(runConversationTranscript)
+	conversations.Command("transcript").AddArg(requiredArg("conversation-id", "Opaque Conversation ID")).Flags(cli.Int("limit"), cli.String("page-token")).Run(runConversationTranscript)
 
 	memories := app.Group("memory-space").Description("Manage tenant- and user-scoped MemorySpaces")
 	memories.Command("get").AddArg(requiredArg("memory-space-id", "Opaque MemorySpace ID")).Run(runMemorySpaceGet)
@@ -420,7 +420,7 @@ func runConversationTranscript(command *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	response, err := client.GetConversationTranscriptWithResponse(command.Context(), command.Arg(0))
+	response, err := client.GetConversationTranscriptWithResponse(command.Context(), command.Arg(0), &generated.GetConversationTranscriptParams{Limit: optionalInt(command.Int("limit")), PageToken: optionalString(command.String("page-token"))})
 	if err != nil {
 		return err
 	}

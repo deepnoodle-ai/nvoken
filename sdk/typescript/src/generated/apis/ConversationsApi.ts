@@ -89,6 +89,8 @@ export interface GetConversationRequest {
 
 export interface GetConversationTranscriptRequest {
     conversationId: string;
+    limit?: number;
+    pageToken?: string;
 }
 
 export interface ListConversationCompactionsRequest {
@@ -381,6 +383,14 @@ export class ConversationsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['pageToken'] != null) {
+            queryParameters['page_token'] = requestParameters['pageToken'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
