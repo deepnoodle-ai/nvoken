@@ -378,7 +378,9 @@ What it guarantees:
   `reconnect()` is for when neither has.
 - **Retry never duplicates a Turn.** A send whose outcome is unknown becomes
   `send.status === "uncertain"`, and `retrySend()` repeats the same input under
-  the same idempotency key.
+  the same idempotency key. `discardSend()` is the way out when retries keep
+  failing: it reopens the composer without cancelling anything, and a Turn that
+  was in fact admitted shows up through the stream like any other.
 - **The UI never guesses.** Every action reports `enabled`, `in_flight`, or
   `disabled` with a stated reason.
 - **Unknown states stay visible.** A Turn status this SDK version does not know

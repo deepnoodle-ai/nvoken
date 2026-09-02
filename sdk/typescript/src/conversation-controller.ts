@@ -38,7 +38,8 @@ export type ConversationDisabledReason =
   | "no_pending_send"
   | "no_turn"
   | "not_authorized"
-  | "not_connected"
+  /** The recovery the action performs is not needed: nothing was lost. */
+  | "nothing_to_recover"
   | "operation_in_flight";
 
 /**
@@ -125,6 +126,7 @@ export interface ConversationSnapshot {
   startOver: ConversationReset;
   retryAuthorization: ConversationAction;
   reconnect: ConversationAction;
+  discardSend: ConversationAction;
   recovery: ConversationRecovery;
 }
 
@@ -147,6 +149,15 @@ export interface ConversationController {
   send(input: TurnInput): Promise<ConversationSendReceipt>;
   /** Retry an uncertain send with the same input and the same key. */
   retrySend(): Promise<ConversationSendReceipt>;
+  /**
+   * Give up on an uncertain send and reopen the composer.
+   *
+   * Local only: nothing is cancelled, and the Turn may already exist. If it
+   * does, the stream reports it like any other Turn. What is lost is the
+   * ability to retry under the same key, which is the point — a page whose
+   * retries keep failing needs a way out that is not a reload.
+   */
+  discardSend(): void;
   retryAuthorization(): Promise<void>;
   interrupt(): Promise<void>;
   reconnect(): Promise<void>;
@@ -657,6 +668,13 @@ class ConversationControllerImpl implements ConversationController {
     return this.admitPending();
   }
 
+  discardSend(): void {
+    this.requireEnabled(this.discardSendAction(), "discardSend");
+    this.pendingSend = undefined;
+    this.sendError = undefined;
+    this.publish();
+  }
+
   async retryAuthorization(): Promise<void> {
     this.requireEnabled(this.retryAuthorizationAction(), "retryAuthorization");
     try {
@@ -1123,9 +1141,22 @@ class ConversationControllerImpl implements ConversationController {
     return disabled("no_pending_send");
   }
 
+  private discardSendAction(): ConversationAction {
+    if (this.destroyed) return disabled("destroyed");
+    if (this.pendingSend?.status === "admitting") return disabled("operation_in_flight");
+    return this.pendingSend?.status === "uncertain" ? enabled() : disabled("no_pending_send");
+  }
+
   private retryAuthorizationAction(): ConversationAction {
     if (this.destroyed) return disabled("destroyed");
-    return this.authorization.status === "lost" ? enabled() : disabled("operation_in_flight");
+    switch (this.authorization.status) {
+      case "lost": return enabled();
+      case "authorizing":
+      case "renewing": return inFlight();
+      // Intact authorization is not a failure to retry, and reporting
+      // `operation_in_flight` for it told a page something was running.
+      case "ready": return disabled("nothing_to_recover");
+    }
   }
 
   private interruptAction(): ConversationAction {
@@ -1141,7 +1172,15 @@ class ConversationControllerImpl implements ConversationController {
     if (this.destroyed) return disabled("destroyed");
     if (!this.authorizationUsable()) return disabled("authorization_required");
     if (this.connectionDenied) return disabled("not_authorized");
-    return this.connection.status === "error" ? enabled() : disabled("not_connected");
+    switch (this.connection.status) {
+      case "error": return enabled();
+      case "connecting":
+      case "reconnecting": return inFlight();
+      case "no_conversation": return disabled("conversation_missing");
+      // A live connection is not one to re-establish. The old reason here
+      // was `not_connected`, which said the opposite of the truth.
+      case "connected": return disabled("nothing_to_recover");
+    }
   }
 
   private historyAction(): ConversationAction {
@@ -1217,6 +1256,7 @@ class ConversationControllerImpl implements ConversationController {
       startOver: Object.freeze(startOver),
       retryAuthorization: Object.freeze(this.retryAuthorizationAction()),
       reconnect: Object.freeze(this.reconnectAction()),
+      discardSend: Object.freeze(this.discardSendAction()),
       recovery: Object.freeze({ ...this.recovery }),
     });
   }

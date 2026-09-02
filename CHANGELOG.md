@@ -25,8 +25,8 @@ without republishing every artifact.
   resumable conversation: state and transitions, no rendering, no framework.
   Resuming is one transcript read plus a stream from the position it observed;
   a send whose outcome is unknown is retryable under the same idempotency key
-  rather than becoming a second Turn; every action reports enabled, in flight,
-  or disabled with a reason; a Turn status this version does not know is
+  rather than becoming a second Turn, or discarded to reopen the composer;
+  every action reports enabled, in flight, or disabled with a reason; a Turn status this version does not know is
   reported as unknown rather than finished; and memory is bounded to 500
   messages, 8 previews, and 64 KiB per preview. An anonymous visitor needs no
   account and the page carries no application credential.

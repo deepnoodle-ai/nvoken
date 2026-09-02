@@ -348,6 +348,114 @@ test("an uncertain send is retryable with the same input and the same key", asyn
   }
 });
 
+test("discarding an uncertain send reopens the composer under a fresh key", async () => {
+  const admissions: Array<Record<string, unknown>> = [];
+  let admissionAttempts = 0;
+  const client = createBrowserClient({
+    baseUrl: "https://discard.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname === "/v1/turns") {
+        admissions.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        admissionAttempts += 1;
+        if (admissionAttempts === 1) throw new TypeError("response was lost");
+        return admissionResponse();
+      }
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    await waitFor(controller, (snapshot) => snapshot.connection.status === "connected");
+    assert.deepEqual(controller.getSnapshot().discardSend, {
+      status: "disabled",
+      reason: "no_pending_send",
+    });
+    assert.throws(() => controller.discardSend(), (error: unknown) => isInvalidState(error, "no_pending_send"));
+
+    await assert.rejects(() => controller.send("first draft"));
+    const uncertain = controller.getSnapshot();
+    assert.equal(uncertain.send.status, "uncertain");
+    assert.equal(uncertain.discardSend.status, "enabled");
+    // Retrying is the one way to send *this* draft; discarding is the one way
+    // to send anything else. Both are on offer, and the page picks.
+    assert.deepEqual(uncertain.send.action, { status: "enabled" });
+
+    controller.discardSend();
+    const reopened = controller.getSnapshot();
+    assert.deepEqual(reopened.send, { status: "idle", action: { status: "enabled" } });
+    assert.deepEqual(reopened.discardSend, { status: "disabled", reason: "no_pending_send" });
+    await assert.rejects(
+      () => controller.retrySend(),
+      (error: unknown) => isInvalidState(error, "no_pending_send"),
+    );
+
+    // Nothing was cancelled, so the next send is a different logical request
+    // rather than a retry of the discarded one.
+    const receipt = await controller.send("second draft");
+    assert.equal(receipt.turnId, TURN_ID);
+    assert.equal(admissions.length, 2);
+    assert.notEqual(admissions[0].idempotency_key, admissions[1].idempotency_key);
+    assert.equal(admissions[1].input, "second draft");
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("recovery actions say nothing is lost rather than that something is running", async () => {
+  const client = createBrowserClient({
+    baseUrl: "https://intact.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    // A stream being opened is a reconnect in flight, not one that is refused.
+    assert.equal(controller.getSnapshot().connection.status, "connecting");
+    assert.deepEqual(controller.getSnapshot().reconnect, { status: "in_flight" });
+
+    const connected = await waitFor(
+      controller,
+      (snapshot) => snapshot.connection.status === "connected",
+    );
+    assert.deepEqual(connected.reconnect, { status: "disabled", reason: "nothing_to_recover" });
+    assert.deepEqual(connected.retryAuthorization, {
+      status: "disabled",
+      reason: "nothing_to_recover",
+    });
+    await assert.rejects(
+      () => controller.reconnect(),
+      (error: unknown) => isInvalidState(error, "nothing_to_recover"),
+    );
+  } finally {
+    controller.destroy();
+  }
+
+  const unbound = createConversation({
+    client,
+    conversation: { key: "support", ownedByUser: "visitor-1" },
+  });
+  try {
+    // No Conversation yet, so there is no stream to re-establish.
+    assert.deepEqual(unbound.getSnapshot().reconnect, {
+      status: "disabled",
+      reason: "conversation_missing",
+    });
+  } finally {
+    unbound.destroy();
+  }
+});
+
 test("anonymous controllers coordinate one exchange and persist only namespaced opaque continuity", async () => {
   const values = new Map<string, string>();
   const seenKeys: string[] = [];
@@ -464,6 +572,9 @@ test("anonymous renewal honors Retry-After while the still-valid token remains u
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
     assert.equal(renewing.send.action.status, "enabled");
+    // An authorization attempt is running; a manual retry is not refused, it
+    // is already happening.
+    assert.deepEqual(renewing.retryAuthorization, { status: "in_flight" });
     assert.equal(clock.nextDelay, 5_000);
   } finally {
     controller.destroy();
