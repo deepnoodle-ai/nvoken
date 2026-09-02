@@ -20,6 +20,14 @@ without republishing every artifact.
   encode carried the discriminator twice. The generator now rewrites these
   unions the way it already rewrote transcript blocks and stream frames, and
   fails generation if a new tagged union appears without being listed.
+- **`Conversation.transcript()` in all four SDKs.** Reading a Conversation back
+  is what a chat does on every reload, so it left `raw()` and joined the
+  Conversation facade in Go, Python, Rust, and TypeScript. It takes `limit` and
+  `page_token`, returns the Conversation resource, its messages, its
+  compactions, and the `cursor` a stream resumes from, and every page of one
+  walk carries the cursor of the cut the walk started from. The handle must
+  name a Conversation by id; a key-bound handle learns its id from the
+  admission of its first Turn.
 - **`getConversationTranscript` takes `limit` and `page_token`.** The raw operation in all four SDKs returns the newest window at one committed cut and `TranscriptSnapshot` carries `has_more` and `next_page_token`; with neither parameter the read is the whole transcript as before. `nvoken conversation transcript` gains matching `--limit` and `--page-token` flags and stays a whole-transcript export without them.
 - **A headless conversation controller for the browser.** `createConversation`
   and `createAnonymousConversation` in `@deepnoodle/nvoken/browser` hold a

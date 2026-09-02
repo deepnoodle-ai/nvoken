@@ -79,6 +79,25 @@ Use `NoneMemory()`, `TenantMemory(namespace)`, or `UserMemory(namespace)` to
 choose memory explicitly. A tenant MemorySpace can be intentionally shared
 across several users; user memory requires a Turn user.
 
+Read a Conversation back with `Transcript`. It returns the Conversation
+resource, its messages, its compactions, and the `Cursor` a stream resumes
+from, so one read restores a page:
+
+```go
+window, err := conversation.Transcript(ctx, nvoken.TranscriptOptions{Limit: 50})
+for window.HasMore {
+	window, err = conversation.Transcript(ctx, nvoken.TranscriptOptions{
+		Limit:     50,
+		PageToken: *window.NextPageToken,
+	})
+}
+```
+
+Every page of one walk carries the cursor of the cut the walk started from, so
+paging back through older history never moves the stream's resume position. The
+handle must name a Conversation by ID; a key-bound handle learns its ID from
+the admission of its first Turn.
+
 Calls through Conversation handles for the same effective Conversation are
 serialized by their shared Client inside the current Go process. Durable
 concurrency policy remains a service concern; wire-exact conflict controls stay

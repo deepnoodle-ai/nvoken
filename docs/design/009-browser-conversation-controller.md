@@ -560,9 +560,13 @@ switched it onto `limit` and `page_token`. The contract as published has no
 ## Follow-up raised by D0
 
 Reading a Conversation's recent transcript is common for machine callers too,
-and it still needs `raw()`. The facade has `Conversation.start/run/text` and
-no read at all. Now that C1 has landed, a
-`Conversation.transcript({ limit, pageToken })` returning the bounded snapshot,
-in four languages, would satisfy D0 for that operation and let the controller
-drop its last `raw()` call. That is a facade design decision carried by its own
-PR, not a reason to have held this series.
+and it needed `raw()`: the facade had `Conversation.start/run/text` and no read
+at all. `Conversation.transcript` in four languages closes that gap and is
+carried by its own PR, deepnoodle-ai/nvoken#109, as this section always said it
+would be.
+
+The controller still makes its own `raw()` call. The facade method is on the
+`Conversation` handle, which the browser entry does not expose and which
+requires a tenant a browser client does not assert, so pointing
+`readTranscriptWindow` at it is a browser-surface decision that PR states
+rather than settles.
