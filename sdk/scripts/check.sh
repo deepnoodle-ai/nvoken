@@ -44,18 +44,10 @@ export NVOKEN_CONFORMANCE_URL="$BASE_URL"
   GOWORK=off go test ./... -count=1
 )
 
-npm ci --prefix sdk/typescript
-npm run build --prefix sdk/typescript
-npm test --prefix sdk/typescript
+pnpm install --frozen-lockfile
+pnpm --recursive run build
+pnpm --filter @deepnoodle/nvoken test
 python3 sdk/scripts/check_package_files.py
-npm ci --prefix examples/typescript-turn-showcase
-npm run build --prefix examples/typescript-turn-showcase
-npm ci --prefix examples/typescript-agent-tools
-npm run build --prefix examples/typescript-agent-tools
-npm ci --prefix examples/typescript-chat
-npm run build --prefix examples/typescript-chat
-npm ci --prefix examples/typescript-browser-direct
-npm run build --prefix examples/typescript-browser-direct
 
 python3 -m venv sdk/python/.venv
 sdk/python/.venv/bin/python -m pip install --quiet --upgrade pip

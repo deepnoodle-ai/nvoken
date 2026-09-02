@@ -5,8 +5,9 @@ line becomes a Turn, and `conversation.text()` waits for its final assistant
 answer before accepting the next line.
 
 ```bash
-npm install
-npm run build
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --filter nvoken-typescript-chat-example... build
 ```
 
 Run it against nvoken with an App credential and a model your provider account
@@ -16,7 +17,7 @@ can use:
 NVOKEN_API_KEY='<app-key>' \
 NVOKEN_MODEL_PROVIDER='anthropic' \
 NVOKEN_MODEL='claude-sonnet-5' \
-npm start
+pnpm --filter nvoken-typescript-chat-example start
 ```
 
 `NVOKEN_BASE_URL` defaults to `http://localhost:8080`.

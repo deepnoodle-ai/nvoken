@@ -8,10 +8,9 @@ proves that the committed transcript carries forward.
 Build it as part of the repository SDK gate:
 
 ```bash
-npm ci --prefix sdk/typescript
-npm run build --prefix sdk/typescript
-npm ci --prefix examples/typescript-agent-tools
-npm run build --prefix examples/typescript-agent-tools
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --filter nvoken-typescript-agent-tools... build
 ```
 
 For a live run, start nvoken and provide an App credential plus a model your
@@ -21,7 +20,7 @@ provider account can use:
 NVOKEN_API_KEY='<app-key>' \
 NVOKEN_MODEL_PROVIDER='anthropic' \
 NVOKEN_MODEL='claude-sonnet-5' \
-npm run check --prefix examples/typescript-agent-tools
+pnpm --filter nvoken-typescript-agent-tools check
 ```
 
 The handler uses the stable ToolCall ID as the host-side idempotency key.

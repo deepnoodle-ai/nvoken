@@ -1,0 +1,5 @@
+{
+  "name": "nvoken-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.25.0"
+}

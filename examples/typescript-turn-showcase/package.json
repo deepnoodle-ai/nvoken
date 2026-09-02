@@ -6,10 +6,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/showcase.js",
-    "check": "npm run build && npm start"
+    "check": "pnpm run build && pnpm start"
   },
   "dependencies": {
-    "@deepnoodle/nvoken": "file:../../sdk/typescript"
+    "@deepnoodle/nvoken": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.0.15",

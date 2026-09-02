@@ -19,31 +19,26 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v6
-      # Node 24 bundles an npm newer than the 11.5.1 trusted-publishing
-      # minimum, so the CLI needs no separate upgrade step.
-      # setup-node v7 no longer exports the dummy NODE_AUTH_TOKEN that made npm
-      # choose token authentication instead of GitHub OIDC trusted publishing.
-      - uses: actions/setup-node@v7
+      # pnpm 11 supports npm trusted publishing through GitHub OIDC. This action
+      # reads the exact pnpm version from the root packageManager field and
+      # installs the release workflow's Node runtime without npm.
+      - uses: pnpm/setup@v2
         with:
-          node-version: 24
-          package-manager-cache: false
+          runtime: node@24
+          install: false
       - name: Verify trusted-publishing runtime
         run: |
           node --version
-          npm_version="$(npm --version)"
-          echo "npm ${npm_version}"
-          node - "${npm_version}" <<'NODE'
-          const [major, minor] = process.argv[2].split('.').map(Number)
-          if (major < 11 || (major === 11 && minor < 5)) {
-            throw new Error('npm 11.5.1 or newer is required for trusted publishing')
-          }
-          NODE
+          expected_pnpm="$(node --print "require('./package.json').packageManager.split('@')[1]")"
+          actual_pnpm="$(pnpm --version)"
+          echo "pnpm ${actual_pnpm}"
+          test "${actual_pnpm}" = "${expected_pnpm}"
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "NODE_AUTH_TOKEN must be unset so npm uses OIDC trusted publishing" >&2
+            echo "NODE_AUTH_TOKEN must be unset so pnpm uses OIDC trusted publishing" >&2
             exit 1
           fi
           if [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
-            echo "NPM_CONFIG_USERCONFIG must be unset so npm has no token-auth configuration" >&2
+            echo "NPM_CONFIG_USERCONFIG must be unset so pnpm has no token-auth configuration" >&2
             exit 1
           fi
           test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
@@ -56,25 +51,22 @@ jobs:
             echo "tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
             exit 1
           fi
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @deepnoodle/nvoken build
+      - run: pnpm --filter @deepnoodle/nvoken test
+      - run: pnpm publish --dry-run --ignore-scripts
         working-directory: sdk/typescript
-      - run: npm run build
-        working-directory: sdk/typescript
-      - run: npm test
-        working-directory: sdk/typescript
-      - run: npm publish --dry-run --ignore-scripts
-        working-directory: sdk/typescript
-      - run: npm publish
+      - run: pnpm publish
         working-directory: sdk/typescript
       - name: Verify the public registry artifact
         working-directory: sdk/typescript
         run: |
           # publish succeeds before the registry's read replica catches up, so a
-          # single `npm view` right after publish can 404 on a version that is
+          # single `pnpm view` right after publish can 404 on a version that is
           # live. Retry with backoff instead of failing the release on that lag.
           version="$(node --print "require('./package.json').version")"
           for attempt in 1 2 3 4 5 6; do
-            published="$(npm view "@deepnoodle/nvoken@${version}" version 2>/dev/null || true)"
+            published="$(pnpm view "@deepnoodle/nvoken@${version}" version 2>/dev/null || true)"
             if [ "${published}" = "${version}" ]; then
               echo "registry serves @deepnoodle/nvoken@${version}"
               exit 0
