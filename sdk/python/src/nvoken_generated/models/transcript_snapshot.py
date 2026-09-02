@@ -18,8 +18,8 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, ClassVar, Dict, List
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.conversation import Conversation
 from nvoken_generated.models.conversation_compaction import ConversationCompaction
@@ -35,9 +35,11 @@ class TranscriptSnapshot(BaseModel):
     conversation: Conversation
     messages: List[ConversationMessage]
     compactions: List[ConversationCompaction]
-    cursor: Annotated[str, Field(min_length=1, strict=True)] = Field(description="The stream position of this snapshot. Open the Conversation stream with it as `cursor` and you receive exactly what happened after the snapshot was captured, with neither overlap nor gap. ")
+    cursor: Annotated[str, Field(min_length=1, strict=True)] = Field(description="The stream position of this snapshot. Open the Conversation stream with it as `cursor` and you receive exactly what happened after the snapshot was captured, with neither overlap nor gap. On a bounded read the cursor is the head of the cut the window was selected from, and every page of one walk carries the first page's cursor, so paging older history never moves the resume position. ")
+    has_more: StrictBool = Field(description="Whether older messages exist below this window. Always false on an unbounded read. ")
+    next_page_token: Optional[StrictStr] = Field(description="Continuation for the next older window at the same cut. Null when `has_more` is false. ")
     captured_at: datetime
-    __properties: ClassVar[List[str]] = ["conversation", "messages", "compactions", "cursor", "captured_at"]
+    __properties: ClassVar[List[str]] = ["conversation", "messages", "compactions", "cursor", "has_more", "next_page_token", "captured_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -95,6 +97,11 @@ class TranscriptSnapshot(BaseModel):
                 if _item_compactions:
                     _items.append(_item_compactions.to_dict())
             _dict['compactions'] = _items
+        # set to None if next_page_token (nullable) is None
+        # and model_fields_set contains the field
+        if self.next_page_token is None and "next_page_token" in self.model_fields_set:
+            _dict['next_page_token'] = None
+
         return _dict
 
     @classmethod
@@ -111,6 +118,8 @@ class TranscriptSnapshot(BaseModel):
             "messages": [ConversationMessage.from_dict(_item) for _item in obj["messages"]] if obj.get("messages") is not None else None,
             "compactions": [ConversationCompaction.from_dict(_item) for _item in obj["compactions"]] if obj.get("compactions") is not None else None,
             "cursor": obj.get("cursor"),
+            "has_more": obj.get("has_more"),
+            "next_page_token": obj.get("next_page_token"),
             "captured_at": obj.get("captured_at")
         })
         return _obj

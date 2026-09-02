@@ -62,12 +62,31 @@ export interface TranscriptSnapshot {
     /**
      * The stream position of this snapshot. Open the Conversation stream
      * with it as `cursor` and you receive exactly what happened after
-     * the snapshot was captured, with neither overlap nor gap.
+     * the snapshot was captured, with neither overlap nor gap. On a
+     * bounded read the cursor is the head of the cut the window was
+     * selected from, and every page of one walk carries the first page's
+     * cursor, so paging older history never moves the resume position.
      *
      * @type {string}
      * @memberof TranscriptSnapshot
      */
     cursor: string;
+    /**
+     * Whether older messages exist below this window. Always false on an
+     * unbounded read.
+     *
+     * @type {boolean}
+     * @memberof TranscriptSnapshot
+     */
+    hasMore: boolean;
+    /**
+     * Continuation for the next older window at the same cut. Null when
+     * `has_more` is false.
+     *
+     * @type {string}
+     * @memberof TranscriptSnapshot
+     */
+    nextPageToken: string | null;
     /**
      *
      * @type {Date}
@@ -84,6 +103,8 @@ export function instanceOfTranscriptSnapshot(value: object): value is Transcript
     if (!('messages' in value) || value['messages'] === undefined) return false;
     if (!('compactions' in value) || value['compactions'] === undefined) return false;
     if (!('cursor' in value) || value['cursor'] === undefined) return false;
+    if (!('hasMore' in value) || value['hasMore'] === undefined) return false;
+    if (!('nextPageToken' in value) || value['nextPageToken'] === undefined) return false;
     if (!('capturedAt' in value) || value['capturedAt'] === undefined) return false;
     return true;
 }
@@ -102,6 +123,8 @@ export function TranscriptSnapshotFromJSONTyped(json: any, ignoreDiscriminator: 
         'messages': ((json['messages'] as Array<any>).map(ConversationMessageFromJSON)),
         'compactions': ((json['compactions'] as Array<any>).map(ConversationCompactionFromJSON)),
         'cursor': json['cursor'],
+        'hasMore': json['has_more'],
+        'nextPageToken': json['next_page_token'],
         'capturedAt': (new Date(json['captured_at'])),
     };
 }
@@ -121,6 +144,8 @@ export function TranscriptSnapshotToJSONTyped(value?: TranscriptSnapshot | null,
         'messages': ((value['messages'] as Array<any>).map(ConversationMessageToJSON)),
         'compactions': ((value['compactions'] as Array<any>).map(ConversationCompactionToJSON)),
         'cursor': value['cursor'],
+        'has_more': value['hasMore'],
+        'next_page_token': value['nextPageToken'],
         'captured_at': value['capturedAt'].toISOString(),
     };
 }

@@ -1232,6 +1232,8 @@ class ConversationsApi:
     async def get_conversation_transcript(
         self,
         conversation_id: StrictStr,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100. ")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1250,6 +1252,10 @@ class ConversationsApi:
 
         :param conversation_id: (required)
         :type conversation_id: str
+        :param limit: Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100.
+        :type limit: int
+        :param page_token: Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable.
+        :type page_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1274,6 +1280,8 @@ class ConversationsApi:
 
         _param = self._get_conversation_transcript_serialize(
             conversation_id=conversation_id,
+            limit=limit,
+            page_token=page_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1282,6 +1290,7 @@ class ConversationsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TranscriptSnapshot",
+            '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
@@ -1304,6 +1313,8 @@ class ConversationsApi:
     async def get_conversation_transcript_with_http_info(
         self,
         conversation_id: StrictStr,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100. ")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1322,6 +1333,10 @@ class ConversationsApi:
 
         :param conversation_id: (required)
         :type conversation_id: str
+        :param limit: Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100.
+        :type limit: int
+        :param page_token: Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable.
+        :type page_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1346,6 +1361,8 @@ class ConversationsApi:
 
         _param = self._get_conversation_transcript_serialize(
             conversation_id=conversation_id,
+            limit=limit,
+            page_token=page_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1354,6 +1371,7 @@ class ConversationsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TranscriptSnapshot",
+            '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
@@ -1376,6 +1394,8 @@ class ConversationsApi:
     async def get_conversation_transcript_without_preload_content(
         self,
         conversation_id: StrictStr,
+        limit: Annotated[Optional[Annotated[int, Field(le=200, strict=True, ge=1)]], Field(description="Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100. ")] = None,
+        page_token: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True)]], Field(description="Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable. ")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1394,6 +1414,10 @@ class ConversationsApi:
 
         :param conversation_id: (required)
         :type conversation_id: str
+        :param limit: Return at most this many of the newest messages at one committed cut. Absent with no `page_token` the whole transcript is returned, which is the operation's original behavior. Absent with a `page_token` the default is 100.
+        :type limit: int
+        :param page_token: Opaque continuation from a previous response's `next_page_token`. Returns the window that precedes the one that issued it, at the same cut. A token is bound to the Conversation that minted it; it is not a `cursor` and the two are not interchangeable.
+        :type page_token: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1418,6 +1442,8 @@ class ConversationsApi:
 
         _param = self._get_conversation_transcript_serialize(
             conversation_id=conversation_id,
+            limit=limit,
+            page_token=page_token,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1426,6 +1452,7 @@ class ConversationsApi:
 
         _response_types_map: Dict[str, Optional[str]] = {
             '200': "TranscriptSnapshot",
+            '400': "ErrorResponse",
             '401': "ErrorResponse",
             '403': "ErrorResponse",
             '404': "ErrorResponse",
@@ -1443,6 +1470,8 @@ class ConversationsApi:
     def _get_conversation_transcript_serialize(
         self,
         conversation_id,
+        limit,
+        page_token,
         _request_auth,
         _content_type,
         _headers,
@@ -1467,6 +1496,14 @@ class ConversationsApi:
         if conversation_id is not None:
             _path_params['conversation_id'] = conversation_id
         # process the query parameters
+        if limit is not None:
+
+            _query_params.append(('limit', limit))
+
+        if page_token is not None:
+
+            _query_params.append(('page_token', page_token))
+
         # process the header parameters
         # process the form parameters
         # process the body parameter

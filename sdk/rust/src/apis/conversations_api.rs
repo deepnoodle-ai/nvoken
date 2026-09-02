@@ -73,6 +73,7 @@ pub enum GetConversationError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetConversationTranscriptError {
+    Status400(models::ErrorResponse),
     Status401(models::ErrorResponse),
     Status403(models::ErrorResponse),
     Status404(models::ErrorResponse),
@@ -355,9 +356,13 @@ pub async fn get_conversation(
 pub async fn get_conversation_transcript(
     configuration: &configuration::Configuration,
     conversation_id: &str,
+    limit: Option<u32>,
+    page_token: Option<&str>,
 ) -> Result<models::TranscriptSnapshot, Error<GetConversationTranscriptError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_conversation_id = conversation_id;
+    let p_query_limit = limit;
+    let p_query_page_token = page_token;
 
     let uri_str = format!(
         "{}/v1/conversations/{conversation_id}/transcript",
@@ -366,6 +371,12 @@ pub async fn get_conversation_transcript(
     );
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_page_token {
+        req_builder = req_builder.query(&[("page_token", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
