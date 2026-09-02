@@ -20,6 +20,43 @@ without republishing every artifact.
   encode carried the discriminator twice. The generator now rewrites these
   unions the way it already rewrote transcript blocks and stream frames, and
   fails generation if a new tagged union appears without being listed.
+- **A headless conversation controller for the browser.** `createConversation`
+  and `createAnonymousConversation` in `@deepnoodle/nvoken/browser` hold a
+  resumable conversation: state and transitions, no rendering, no framework.
+  Resuming is one transcript read plus a stream from the position it observed;
+  a send whose outcome is unknown is retryable under the same idempotency key
+  rather than becoming a second Turn; every action reports enabled, in flight,
+  or disabled with a reason; a Turn status this version does not know is
+  reported as unknown rather than finished; and memory is bounded to 500
+  messages, 8 previews, and 64 KiB per preview. An anonymous visitor needs no
+  account and the page carries no application credential.
+- **`Turn.interrupt()` in all four SDKs.** Stopping a running Turn and keeping
+  what it produced is what a stop button does, so it left `raw()` and joined
+  the Turn facade in Go, Python, Rust, and TypeScript. It returns the Turn's
+  state as of the request, which is often still running; settlement stays the
+  stream's to report.
+- **`Turn.admission` reports the Conversation admission resolved to.**
+  TypeScript's `Turn` and `TurnResult` now carry `conversationId` beside the
+  idempotency key and the deduplicated flag, so a `continue_or_create` caller
+  learns which Conversation it landed in without a second request. Present on a
+  Turn from `start()`, absent on one recovered by id.
+- **The reducer folds lifecycle changes instead of logging them.** All four
+  reducers key `turn_changes` by `turn_id` and keep the highest revision, so a
+  reduced snapshot holds one current change per Turn. Every consumer already
+  folded the log again; the change's own `current` flag could not stand in for
+  it, because two frames for one Turn left two entries both claiming to be
+  current. **Breaking:** a consumer reading `turn_changes` as a history of
+  revisions now sees only the newest one per Turn.
+- **The stream reports when it is reconnecting.** `onConnectionChange` on
+  `StreamLoopOptions` and `RawStreamOptions` fires `connected` after each
+  successful connect and `reconnecting` before each retry delay. A deliberate
+  close was already visible as a `connection.closing` frame; a silent drop was
+  not.
+- **The TypeScript reducer takes bounds and an initial snapshot.** `Reducer`
+  accepts `initial`, `maxMessages`, `maxPreviews`, and `maxPreviewBytes`, and
+  gains `merge()` for folding an older REST page in without moving the live
+  cursor. Message eviction removes whole settled Turns oldest first and never
+  cuts into a live one; preview truncation lands on a code-point boundary.
 - **Fixed: a saved message discarded every preview of its Turn.** All four
   reducers dropped the previews of the Turn's next message when an earlier one
   landed, losing a prefix no later delta restores. They now discard only the

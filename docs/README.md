@@ -23,6 +23,11 @@ Read it before proposing a change to either.
   the accepted facade: awaited Agent lookup, direct `start`/`run`/`text`,
   independent behavior, memory, Conversation, and actor coordinates, and an
   exact raw-transport escape hatch
+- [The browser conversation controller](design/009-browser-conversation-controller.md),
+  the plan for a resumable headless conversation in a page: one bounded
+  transcript read to resume, a reducer that folds to current state rather than
+  logging revisions, `Turn.admission`, and the rule that no common developer
+  operation may require `raw()`
 - [SDK and contract development](guides/sdk-development.md)
 - [CLI development and release](guides/cli.md)
 - [Receiving signed deliveries](reference/callback-receivers.md) — the key

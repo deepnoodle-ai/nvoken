@@ -291,3 +291,31 @@ function refuseMachineCredential(token: string): string {
   }
   return token;
 }
+
+// The headless conversation controller. It is browser-only by construction:
+// it holds a BrowserClient, coordinates anonymous grants through Web Locks,
+// and reads window storage. A server caller reaching for it has taken a wrong
+// turn, so it lives here and not at the package root.
+export {
+  createAnonymousConversation,
+  createConversation,
+  type ConversationAction,
+  type ConversationActivity,
+  type ConversationAuthorization,
+  type ConversationClock,
+  type ConversationConnection,
+  type ConversationController,
+  type ConversationDisabledReason,
+  type ConversationHistory,
+  type ConversationInterruption,
+  type ConversationMode,
+  type ConversationRecovery,
+  type ConversationReset,
+  type ConversationSendReceipt,
+  type ConversationSendState,
+  type ConversationSnapshot,
+  type ConversationStorage,
+  type ConversationStorageAdapter,
+  type CreateAnonymousConversationOptions,
+  type CreateConversationOptions,
+} from "./conversation-controller.js";
