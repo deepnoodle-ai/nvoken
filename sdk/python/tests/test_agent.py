@@ -511,3 +511,66 @@ async def test_turn_result_raises_typed_execution_and_timeout_errors() -> None:
         await waiting.result(timeout=0.001)
     assert timeout.value.turn is waiting
     assert timeout.value.idempotency_key == "idem-2"
+
+
+@pytest.mark.asyncio
+async def test_interrupt_returns_the_post_request_state_and_no_transcript() -> None:
+    observed: dict[str, object] = {}
+
+    class Turns:
+        async def interrupt_turn(self, turn_id, **kwargs):
+            observed["turn_id"] = turn_id
+            observed["headers"] = kwargs.get("_headers")
+            # Mid-step the runtime records the request and leaves it running.
+            return SimpleNamespace(
+                status="running",
+                structured_output=None,
+                behavior_source=SimpleNamespace(
+                    actual_instance=SimpleNamespace(
+                        kind="agent_revision",
+                        agent_id="47fc63e5-ae78-727c-ab52-a2872fe8728f",
+                        agent_revision_id="4bd8b3ea-8b41-7f22-bb52-8f6bb61a4f76",
+                    ),
+                ),
+                memory_space_id=None,
+                conversation_id="18325d9f-b9bc-797d-9259-96ece372defd",
+                content_expires_at=None,
+            )
+
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    snapshot = await Turn(
+        client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme", user="alice",
+    ).interrupt()
+
+    assert observed["turn_id"] == "8f57d547-fa52-75fa-947d-41e21909db99"
+    assert observed["headers"] == {"X-Nvoken-Tenant-Key": "acme", "X-Nvoken-User-Key": "alice"}
+    assert snapshot.status == "running"
+    assert snapshot.conversation_id == "18325d9f-b9bc-797d-9259-96ece372defd"
+    # The interrupt response is the Turn resource alone; the transcript stays
+    # the stream's to deliver.
+    assert snapshot.messages == ()
+    assert snapshot.text is None
+
+
+@pytest.mark.asyncio
+async def test_interrupting_a_finished_turn_returns_it_unchanged() -> None:
+    class Turns:
+        async def interrupt_turn(self, turn_id, **kwargs):
+            return SimpleNamespace(
+                status="completed",
+                structured_output=None,
+                behavior_source=SimpleNamespace(
+                    actual_instance=SimpleNamespace(kind="inline"),
+                ),
+                memory_space_id=None,
+                conversation_id=None,
+                content_expires_at=None,
+            )
+
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(turns=Turns())
+    snapshot = await Turn(
+        client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme",
+    ).interrupt()
+    assert snapshot.status == "completed"

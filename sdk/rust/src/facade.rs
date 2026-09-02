@@ -1697,6 +1697,41 @@ impl Turn {
         Ok(self.snapshot_from_wire(result))
     }
 
+    /// Asks the Turn to stop at its next clean stopping point, keeping what it
+    /// produced.
+    ///
+    /// The snapshot is the Turn's state as of the request, which is often
+    /// still running: mid-step the runtime records the request and stops at the
+    /// next checkpoint. Settlement is the stream's to report, so follow
+    /// [`Turn::updates`] or [`Turn::result`] for it rather than reading this
+    /// status as final. Interrupting a Turn that already ended returns it
+    /// unchanged and is not an error. The snapshot carries no messages, because
+    /// the interrupt response is the Turn resource alone.
+    pub async fn interrupt(&mut self) -> Result<TurnSnapshot, NvokenError> {
+        let path = format!("/v1/turns/{}/interrupt", crate::apis::urlencode(&self.id));
+        // No body. The contract declares no request body for this operation,
+        // and the other three SDKs' generated clients send none either.
+        let response = self
+            .request(reqwest::Method::POST, &path)
+            .header(reqwest::header::CONTENT_LENGTH, 0)
+            .send()
+            .await
+            .map_err(api_error)?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(NvokenError::Api(format!(
+                "Turn interrupt returned HTTP {status}: {body}"
+            )));
+        }
+        let turn: models::Turn = response.json().await.map_err(api_error)?;
+        Ok(self.snapshot_from_wire(models::TurnResult {
+            turn: Box::new(turn),
+            messages: Vec::new(),
+            output_text: None,
+        }))
+    }
+
     pub async fn result(self, timeout: Option<Duration>) -> Result<TurnResult, NvokenError> {
         let recovery = self.clone();
         match timeout {
@@ -2280,6 +2315,45 @@ mod tests {
             .lock()
             .unwrap()
             .contains("9f8fd6b3-9060-783d-b759-45c8ec70e8cb"));
+    }
+
+    const RUNNING_TURN: &str = r#"{"id":"476dd7be-97a1-78f3-8096-d7032468a80a","status":"running","tenant_key":"acme","attempt":1,"active_execution_ms":1,"conversation_id":"18325d9f-b9bc-797d-9259-96ece372defd","memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","deadline_at":null,"ended_at":null,"error":null,"stop_reason":null,"structured_output":null,"tool_calls":[]}"#;
+
+    const COMPLETED_TURN: &str = r#"{"id":"476dd7be-97a1-78f3-8096-d7032468a80a","status":"completed","tenant_key":"acme","attempt":1,"active_execution_ms":1,"conversation_id":null,"memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:01Z","deadline_at":null,"ended_at":"2026-01-01T00:00:01Z","error":null,"stop_reason":"end_turn","structured_output":null,"tool_calls":[]}"#;
+
+    #[tokio::test]
+    async fn interrupt_returns_the_post_request_state_and_sends_no_body() {
+        let (base_url, server) = response_server(vec![(200, RUNNING_TURN.to_string())]).await;
+        let client = Client::with_base_url("test", base_url);
+        let mut turn = client.turn("476dd7be-97a1-78f3-8096-d7032468a80a", "acme", None);
+
+        // Mid-step the runtime records the request and leaves the Turn running.
+        let snapshot = turn.interrupt().await.unwrap();
+        assert_eq!(snapshot.status, models::TurnStatus::Running);
+        assert_eq!(
+            snapshot.conversation_id.as_deref(),
+            Some("18325d9f-b9bc-797d-9259-96ece372defd")
+        );
+        // The interrupt response is the Turn resource alone; the transcript
+        // stays the stream's to deliver.
+        assert!(snapshot.messages.is_empty());
+        assert!(snapshot.text.is_none());
+
+        let requests = server.await.unwrap();
+        assert!(requests[0]
+            .starts_with("POST /v1/turns/476dd7be-97a1-78f3-8096-d7032468a80a/interrupt HTTP/1.1"));
+        // The contract declares no request body for this operation.
+        assert!(requests[0].contains("content-length: 0"));
+    }
+
+    #[tokio::test]
+    async fn interrupting_a_finished_turn_returns_it_unchanged() {
+        let (base_url, server) = response_server(vec![(200, COMPLETED_TURN.to_string())]).await;
+        let client = Client::with_base_url("test", base_url);
+        let mut turn = client.turn("476dd7be-97a1-78f3-8096-d7032468a80a", "acme", None);
+        let snapshot = turn.interrupt().await.unwrap();
+        assert_eq!(snapshot.status, models::TurnStatus::Completed);
+        server.await.unwrap();
     }
 
     #[tokio::test]

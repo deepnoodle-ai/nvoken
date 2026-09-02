@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/deepnoodle-ai/nvoken/sdk/go/generated"
 )
 
 func TestAgentLookupAndStartKeepOwnerActorAndContinuitySeparate(t *testing.T) {
@@ -448,5 +450,67 @@ func TestRecoveredTurnRequiresTenantOnFirstOperation(t *testing.T) {
 	var sdkError *Error
 	if !errors.As(err, &sdkError) || sdkError.Category != ErrorValidation {
 		t.Fatalf("missing tenant error = %v", err)
+	}
+}
+
+func TestInterruptReturnsThePostRequestStateAndSendsNoBody(t *testing.T) {
+	var method, path string
+	var bodyLength int64
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		method, path, bodyLength = request.Method, request.URL.Path, request.ContentLength
+		writer.Header().Set("Content-Type", "application/json")
+		// Mid-step the runtime records the request and leaves the Turn running.
+		_, _ = writer.Write([]byte(`{"id":"476dd7be-97a1-78f3-8096-d7032468a80a","status":"running","tenant_key":"acme","attempt":1,"active_execution_ms":1,"conversation_id":"18325d9f-b9bc-797d-9259-96ece372defd","memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","deadline_at":null,"ended_at":null,"error":null,"stop_reason":null,"structured_output":null,"tool_calls":[]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.Turn("476dd7be-97a1-78f3-8096-d7032468a80a", TurnAccess{TenantKey: "acme"}).
+		Interrupt(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if method != http.MethodPost || path != "/v1/turns/476dd7be-97a1-78f3-8096-d7032468a80a/interrupt" {
+		t.Fatalf("request = %s %s", method, path)
+	}
+	// The contract declares no request body for this operation.
+	if bodyLength > 0 {
+		t.Fatalf("body length = %d, want 0", bodyLength)
+	}
+	if snapshot.Resource.Status != generated.TurnStatusRunning {
+		t.Fatalf("status = %v, want running", snapshot.Resource.Status)
+	}
+	if snapshot.Resource.ConversationID == nil || *snapshot.Resource.ConversationID != "18325d9f-b9bc-797d-9259-96ece372defd" {
+		t.Fatalf("conversation = %#v", snapshot.Resource.ConversationID)
+	}
+	// The interrupt response is the Turn resource alone; the transcript stays
+	// the stream's to deliver.
+	if len(snapshot.Messages) != 0 || snapshot.OutputText != nil {
+		t.Fatalf("snapshot carried transcript detail: %#v", snapshot)
+	}
+}
+
+func TestInterruptingAFinishedTurnReturnsItUnchanged(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"id":"476dd7be-97a1-78f3-8096-d7032468a80a","status":"completed","tenant_key":"acme","attempt":1,"active_execution_ms":1,"conversation_id":null,"memory_space_id":null,"content_expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","deadline_at":null,"ended_at":"2026-01-01T00:00:01Z","error":null,"stop_reason":"end_turn","structured_output":null,"tool_calls":[]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := client.Turn("476dd7be-97a1-78f3-8096-d7032468a80a", TurnAccess{TenantKey: "acme"}).
+		Interrupt(context.Background())
+	if err != nil {
+		t.Fatalf("interrupting a finished Turn must not error: %v", err)
+	}
+	if snapshot.Resource.Status != generated.TurnStatusCompleted {
+		t.Fatalf("status = %v, want completed", snapshot.Resource.Status)
 	}
 }

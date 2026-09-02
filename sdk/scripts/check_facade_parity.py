@@ -77,8 +77,14 @@ RAW_ONLY = {
     "listApps",
     # Conversation, MemorySpace, and Turn administration stays request-shaped
     # under raw(). The workflow facade binds Conversation selection during
-    # admission and exposes a Turn's status, result, and updates; it does not
-    # duplicate the complete resource-management APIs.
+    # admission and exposes a Turn's status, result, updates, and interrupt; it
+    # does not duplicate the complete resource-management APIs.
+    #
+    # `interruptTurn` is deliberately absent from this set. Stopping a running
+    # turn is what a stop button does, and a stop button is an ordinary part of
+    # building a chat, not administration — so it belongs on the Turn facade in
+    # all four languages. It takes no query parameters and no body, so parity
+    # passes by construction and this note is the only record of the decision.
     "cancelNudge",
     "cancelTurn",
     "createConversation",
@@ -94,7 +100,6 @@ RAW_ONLY = {
     "getTrace",
     "getTurn",
     "getTurnTimeline",
-    "interruptTurn",
     "listAgentRevisions",
     "listConversationCompactions",
     "listConversationMessages",

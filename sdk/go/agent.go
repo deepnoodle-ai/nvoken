@@ -307,6 +307,30 @@ func (t *Turn) Status(ctx context.Context) (*TurnSnapshot, error) {
 	}, nil
 }
 
+// Interrupt asks the Turn to stop at its next clean stopping point, keeping
+// what it produced.
+//
+// The snapshot is the Turn's state as of the request, which is often still
+// running: mid-step the runtime records the request and stops at the next
+// checkpoint. Settlement is the stream's to report, so follow Updates or
+// Result for it rather than reading this status as final. Interrupting a Turn
+// that already ended returns it unchanged and does not error. The snapshot
+// carries no messages, because the interrupt response is the Turn resource
+// alone.
+func (t *Turn) Interrupt(ctx context.Context) (*TurnSnapshot, error) {
+	if err := t.validateAccess(); err != nil {
+		return nil, err
+	}
+	response, err := t.client.raw.InterruptTurnWithResponse(ctx, t.id, t.requestEditor())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return &TurnSnapshot{Resource: *response.JSON200}, nil
+}
+
 func (t *Turn) Result(ctx context.Context) (*TurnResult, error) {
 	interval := t.wait.PollInterval
 	if interval <= 0 {

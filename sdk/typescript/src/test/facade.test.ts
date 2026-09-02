@@ -475,3 +475,106 @@ test("a recovered Turn can finish without another admission", async () => {
   assert.equal(result.text, "Recovered");
   assert.deepEqual(paths, [`/v1/turns/${TURN_ID}/result`]);
 });
+
+const CONVERSATION_ID = "db4eaf24-1ac6-776e-8f98-badc6d0dc764";
+
+test("admission reports the Conversation continue_or_create resolved to", async () => {
+  const client = clientWith(async () => Response.json(
+    { ...wireTurn("queued", { conversation_id: CONVERSATION_ID }), deduplicated: true },
+    { status: 202 },
+  ));
+
+  const turn = await client.inline({
+    instructions: "Be useful.",
+    model: "anthropic/claude-sonnet-5",
+  }).start("hello", {
+    tenant: "acme",
+    user: "alice",
+    conversation: { key: "support", owner: "user" },
+  });
+
+  // The Conversation the service picked is only in this response. Without it
+  // a caller has to ask again for a fact it already received.
+  assert.equal(turn.admission?.conversationId, CONVERSATION_ID);
+  assert.equal(turn.admission?.deduplicated, true);
+  assert.match(String(turn.admission?.idempotencyKey), /^nvoken-/);
+});
+
+test("a standalone Turn admission reports no Conversation", async () => {
+  const client = clientWith(async () => Response.json(
+    { ...wireTurn(), deduplicated: false },
+    { status: 202 },
+  ));
+  const turn = await client.inline({
+    instructions: "Be useful.",
+    model: "anthropic/claude-sonnet-5",
+  }).start("hello", { tenant: "acme" });
+  assert.equal(turn.admission?.conversationId, null);
+});
+
+test("bindTools keeps the admission it was given", async () => {
+  const client = clientWith(async () => Response.json(
+    { ...wireTurn("queued", { conversation_id: CONVERSATION_ID }), deduplicated: false },
+    { status: 202 },
+  ));
+  const turn = await client.inline({
+    instructions: "Be useful.",
+    model: "anthropic/claude-sonnet-5",
+  }).start("hello", { tenant: "acme" });
+  assert.deepEqual(turn.bindTools({}).admission, turn.admission);
+});
+
+test("a recovered Turn has no admission to report", () => {
+  const client = clientWith(async () => turnResult("running"));
+  assert.equal(client.turn(TURN_ID, { tenant: "acme" }).admission, undefined);
+});
+
+test("interrupt posts an empty body and returns the state after the request", async () => {
+  const calls: Array<{ method: string; path: string; body: string }> = [];
+  const client = clientWith(async (input, init) => {
+    const url = new URL(String(input));
+    calls.push({
+      method: init?.method ?? "GET",
+      path: url.pathname,
+      body: String(init?.body ?? ""),
+    });
+    // Mid-step the runtime records the request and leaves the Turn running.
+    return Response.json(wireTurn("running", { conversation_id: CONVERSATION_ID }));
+  });
+
+  const snapshot = await client.turn(TURN_ID, { tenant: "acme" }).interrupt();
+
+  assert.deepEqual(calls.map((call) => call.method), ["POST"]);
+  assert.equal(calls[0].path, `/v1/turns/${TURN_ID}/interrupt`);
+  // The contract declares no request body, so the generated client sends
+  // none. Nothing here retypes an empty object the operation never takes.
+  assert.equal(calls[0].body, "");
+  assert.equal(snapshot.status, "running");
+  assert.equal(snapshot.conversationId, CONVERSATION_ID);
+  // The interrupt response is the Turn resource alone; the transcript stays
+  // the stream's to deliver.
+  assert.deepEqual(snapshot.messages, []);
+  assert.equal(snapshot.text, null);
+});
+
+test("interrupting a Turn that already ended returns it unchanged", async () => {
+  const client = clientWith(async () => Response.json(
+    wireTurn("completed", { stop_reason: "end_turn" }),
+  ));
+  const snapshot = await client.turn(TURN_ID, { tenant: "acme" }).interrupt();
+  assert.equal(snapshot.status, "completed");
+  assert.equal(snapshot.stopReason, "end_turn");
+});
+
+test("interrupt goes through the retry wrapper like any other call", async () => {
+  let attempts = 0;
+  const client = clientWith(async () => {
+    attempts += 1;
+    if (attempts === 1) return new Response("", { status: 503 });
+    return Response.json(wireTurn("running"));
+  }, 3);
+
+  const snapshot = await client.turn(TURN_ID, { tenant: "acme" }).interrupt();
+  assert.equal(attempts, 2);
+  assert.equal(snapshot.status, "running");
+});

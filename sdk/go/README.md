@@ -135,11 +135,16 @@ turn := client.Turn("turn_...", nvoken.TurnAccess{
 
 snapshot, err := turn.Status(ctx)
 result, err := turn.Result(ctx)
+stopping, err := turn.Interrupt(ctx)
 ```
 
 `Status` is passive: it reads the current Turn plus its produced messages and
 final-answer text without driving tools. `Result` drives bound host tools and
-waits for a terminal Turn. Failed and cancelled work returns a
+waits for a terminal Turn. `Interrupt` asks the Turn to stop at its next clean
+stopping point and keep what it produced; it returns the Turn's state as of the
+request, which is often still running, so follow `Updates` or `Result` for
+settlement. Interrupting a Turn that already ended returns it unchanged and is
+not an error. Failed and cancelled work returns a
 `TurnExecutionError` carrying the complete terminal result. A local timeout
 returns `TurnTimeoutError` with the Turn and idempotency key needed for recovery.
 If the admission transport fails before its outcome is known,

@@ -39,6 +39,7 @@ test("emitted Client declarations hide implementation seams", () => {
   const declaration = readFileSync(join(distDir, "client.d.ts"), "utf8");
   for (const member of [
     "admit",
+    "interruptTurn",
     "readTurnResult",
     "submitToolResults",
     "turnFrames",

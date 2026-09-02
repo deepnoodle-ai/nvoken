@@ -129,10 +129,18 @@ let answer = conversation
     .await?;
 
 // Synchronous: no request until status/result/updates is used.
-let recovered = client.turn(saved_turn_id, "acme", Some("alice".into()));
+let mut recovered = client.turn(saved_turn_id, "acme", Some("alice".into()));
+// Stop a running Turn and keep what it produced.
+let stopping = recovered.interrupt().await?;
 let result = recovered.result(None).await?;
 # Ok(()) }
 ```
+
+`interrupt` returns the Turn's state as of the request, which is often still
+running: mid-step the runtime records the request and stops at the next
+checkpoint. Follow `updates` or `result` for settlement rather than reading that
+status as final. Interrupting a Turn that already ended returns it unchanged and
+is not an error.
 
 ## Agent lifecycle and exact OpenAPI access
 

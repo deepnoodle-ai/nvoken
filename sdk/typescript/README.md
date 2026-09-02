@@ -239,6 +239,24 @@ const recovered = client.turn("turn_…", {
 const completed = await recovered.result();
 ```
 
+Stop a running Turn and keep what it produced:
+
+```ts
+const stopping = await recovered.interrupt();
+console.log(stopping.status); // often still "running"
+```
+
+`interrupt()` returns the Turn's state as of the request. Mid-step the runtime
+records the request and stops at the next checkpoint, so follow `updates()` or
+`result()` for settlement rather than reading that status as final.
+Interrupting a Turn that already ended returns it unchanged and does not throw.
+
+`start()` returns a Turn carrying `admission`: the idempotency key, whether the
+request was deduplicated, and the Conversation it resolved to. That last one is
+the only place a `continue_or_create` caller learns which Conversation it landed
+in. A Turn recovered with `client.turn(id)` has no admission to report, so
+`admission` is `undefined` there.
+
 A local timeout or abort only detaches the caller. It does not cancel durable
 work. If admission transport is uncertain, `TurnTimeoutError.idempotencyKey`
 retains the key needed to retry the exact logical request safely. If waiting

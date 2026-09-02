@@ -42,6 +42,7 @@ import type {
   TurnBehaviorSelection,
   TurnConversation,
   TurnMemorySelection,
+  Turn as GeneratedTurn,
   TurnResult as GeneratedTurnResult,
 } from "./generated/models/index.js";
 import { Configuration, ResponseError } from "./generated/runtime.js";
@@ -79,6 +80,7 @@ import type {
   ToolHandlers,
   Turn,
   TurnAccessContext,
+  TurnAdmission,
   TurnLimits,
   TurnResult,
   TurnSnapshot,
@@ -494,7 +496,11 @@ export class Client {
         resource.id,
         { ...context },
         handlers,
-        { idempotencyKey, deduplicated: resource.deduplicated ?? false },
+        {
+          idempotencyKey,
+          deduplicated: resource.deduplicated ?? false,
+          conversationId: resource.conversationId,
+        },
       );
     } catch (error) {
       const normalized = await normalizeError(error);
@@ -522,6 +528,21 @@ export class Client {
   ): Promise<GeneratedTurnResult> {
     return this.request(
       () => this.exact.turns.getTurnResult(
+        { turnId },
+        contextOverride(context, signal),
+      ),
+      signal,
+    );
+  }
+
+  /** @internal */
+  async interruptTurn(
+    turnId: string,
+    context: TurnAccessContext,
+    signal?: AbortSignal,
+  ): Promise<GeneratedTurn> {
+    return this.request(
+      () => this.exact.turns.interruptTurn(
         { turnId },
         contextOverride(context, signal),
       ),
@@ -564,6 +585,7 @@ export class Client {
         signal: options.signal,
         timeoutMs: options.timeoutMs,
         reconnectTimeoutMs: this.streamReconnectTimeoutMs,
+        onConnectionChange: options.onConnectionChange,
       },
     );
   }
@@ -589,6 +611,7 @@ export class Client {
         signal: options.signal,
         timeoutMs: options.timeoutMs,
         reconnectTimeoutMs: this.streamReconnectTimeoutMs,
+        onConnectionChange: options.onConnectionChange,
       },
     );
   }
@@ -874,7 +897,7 @@ class TurnHandle<TOutput extends object> implements Turn<TOutput> {
     readonly id: string,
     private readonly context: TurnAccessContext,
     private readonly handlers: ToolHandlers,
-    private readonly admission: TurnResult<TOutput>["admission"],
+    readonly admission: TurnAdmission | undefined,
   ) {}
 
   bindTools(handlers: ToolHandlers): Turn<TOutput> {
@@ -889,6 +912,15 @@ class TurnHandle<TOutput extends object> implements Turn<TOutput> {
 
   async status(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>> {
     return snapshotOf<TOutput>(await this.client.readTurnResult(this.id, this.context, signal));
+  }
+
+  async interrupt(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>> {
+    // The interrupt response is the Turn resource alone: it carries the
+    // Turn's own state and none of its transcript. Reporting no messages is
+    // honest here — a stop button asks what the Turn is doing now, and the
+    // stream is what delivers what it said.
+    const resource = await this.client.interruptTurn(this.id, this.context, signal);
+    return turnSnapshotOf<TOutput>(resource, [], null);
   }
 
   async result(options: WaitOptions = {}): Promise<TurnResult<TOutput>> {
@@ -1094,29 +1126,37 @@ function conversationIdentity(
 }
 
 function snapshotOf<TOutput extends object>(result: GeneratedTurnResult): TurnSnapshot<TOutput> {
-  const source = result.turn.behaviorSource;
+  return turnSnapshotOf<TOutput>(result.turn, result.messages, result.outputText);
+}
+
+function turnSnapshotOf<TOutput extends object>(
+  turn: GeneratedTurn,
+  messages: ConversationMessage[],
+  text: string | null,
+): TurnSnapshot<TOutput> {
+  const source = turn.behaviorSource;
   return {
-    status: result.turn.status,
-    messages: result.messages,
-    text: result.outputText,
-    structuredOutput: result.turn.structuredOutput as TOutput | null,
+    status: turn.status,
+    messages,
+    text,
+    structuredOutput: turn.structuredOutput as TOutput | null,
     behaviorSource: source?.kind === "agent_revision"
       ? "agent_revision"
       : source?.kind === "inline" ? "inline" : undefined,
     agentId: source?.kind === "agent_revision" ? source.agentId : null,
     agentRevisionId: source?.kind === "agent_revision" ? source.agentRevisionId : null,
-    memorySpaceId: result.turn.memorySpaceId,
-    conversationId: result.turn.conversationId,
-    contentExpiresAt: result.turn.contentExpiresAt,
-    stopReason: result.turn.stopReason,
-    error: result.turn.error,
+    memorySpaceId: turn.memorySpaceId,
+    conversationId: turn.conversationId,
+    contentExpiresAt: turn.contentExpiresAt,
+    stopReason: turn.stopReason,
+    error: turn.error,
   };
 }
 
 function resultOf<TOutput extends object>(
   turn: Turn<TOutput>,
   result: GeneratedTurnResult,
-  admission: TurnResult<TOutput>["admission"],
+  admission: TurnAdmission | undefined,
 ): TurnResult<TOutput> {
   return { ...snapshotOf<TOutput>(result), turn, admission };
 }

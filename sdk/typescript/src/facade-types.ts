@@ -187,6 +187,11 @@ export interface StreamOptions {
 export interface RawStreamOptions extends StreamOptions {
   cursor?: string;
   deltas?: boolean;
+  /**
+   * Reports when the transport is up and when it is about to reconnect, so a
+   * long-lived consumer can say "reconnecting" rather than look frozen.
+   */
+  onConnectionChange?: (state: "connected" | "reconnecting") => void;
 }
 
 export interface TurnSnapshot<TOutput extends object = JsonObject> {
@@ -204,13 +209,26 @@ export interface TurnSnapshot<TOutput extends object = JsonObject> {
   error: TurnFailure | null;
 }
 
+/**
+ * What admitting this Turn resolved.
+ *
+ * `conversationId` is here because admission is where a caller learns it and
+ * nowhere else does: `continue_or_create` picks or creates the Conversation
+ * server-side, and a browser page's first anonymous Turn has no Conversation
+ * to name until it lands in one. Without this the only way to ask is a second
+ * request for a fact the first response already carried.
+ */
+export interface TurnAdmission {
+  readonly idempotencyKey: string;
+  readonly deduplicated: boolean;
+  /** Null for a standalone Turn. */
+  readonly conversationId: string | null;
+}
+
 export interface TurnResult<TOutput extends object = JsonObject>
   extends TurnSnapshot<TOutput> {
   turn: Turn<TOutput>;
-  admission?: {
-    idempotencyKey: string;
-    deduplicated: boolean;
-  };
+  admission?: TurnAdmission;
 }
 
 export interface TurnUpdate<TOutput extends object = JsonObject> {
@@ -219,10 +237,23 @@ export interface TurnUpdate<TOutput extends object = JsonObject> {
 
 export interface Turn<TOutput extends object = JsonObject> {
   readonly id: string;
+  /** Present on a Turn returned by start(); absent on a recovered turn(id). */
+  readonly admission?: TurnAdmission;
   bindTools(handlers: ToolHandlers): Turn<TOutput>;
   status(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>>;
   result(options?: WaitOptions): Promise<TurnResult<TOutput>>;
   updates(options?: StreamOptions): AsyncIterable<TurnUpdate<TOutput>>;
+  /**
+   * Asks the Turn to stop at its next clean stopping point, keeping what it
+   * produced.
+   *
+   * Returns the Turn's state as of the request, which is often still running:
+   * mid-step the runtime records the request and stops at the next checkpoint.
+   * Settlement is the stream's to report, so follow `updates()` or `result()`
+   * for it rather than reading the returned status as final. Interrupting a
+   * Turn that already ended returns it unchanged and does not throw.
+   */
+  interrupt(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>>;
 }
 
 export interface Conversation<TOutput extends object = JsonObject> {
