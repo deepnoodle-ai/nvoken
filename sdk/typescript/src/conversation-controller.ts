@@ -1025,11 +1025,14 @@ class ConversationControllerImpl implements ConversationController {
   private async refreshConversationClaim(): Promise<void> {
     if (!this.conversationId) return;
     try {
+      // The claim is the Conversation resource; a window of one message is
+      // the smallest read that carries it.
       const snapshot = await readTranscriptWindow(
         this.authority.client,
         this.conversationId,
         null,
         this.lifetime.signal,
+        1,
       );
       if (this.destroyed) return;
       this.conversationClaim = snapshot.conversation;
@@ -1336,15 +1339,14 @@ interface TranscriptWindow {
 }
 
 /**
- * One bounded window of a Conversation transcript, newest first when `before`
- * is null and the window preceding `before` otherwise.
+ * One bounded window of a Conversation transcript: the newest `limit` messages
+ * when `pageToken` is null, and the window preceding that token otherwise.
  *
- * The bounded form of this operation — `tail`, `limit`, and `page_token` on
- * `GET /v1/conversations/{id}/transcript`, design 009 C1 — is not published
- * yet, so the window is cut here from the whole transcript. That is correct
- * but not bounded on the wire. When the contract lands, those query parameters
- * are the only change to this function and `has_more` and `next_page_token`
- * come from the response instead of being derived.
+ * The bound is on the wire. The service selects the window at one committed
+ * cut and reports `has_more` and `next_page_token` itself, so nothing is
+ * filtered or trimmed here. Every page of one walk carries the cursor of the
+ * cut the walk started from, which is why paging older history never moves
+ * the stream's resume position.
  *
  * This is also the controller's only `raw()` call, and it goes through
  * `browserRequest` so it retries and normalizes like every other call.
@@ -1352,24 +1354,25 @@ interface TranscriptWindow {
 async function readTranscriptWindow(
   client: BrowserClient,
   conversationId: string,
-  before: string | null,
+  pageToken: string | null,
   signal: AbortSignal,
+  limit: number = PAGE_SIZE,
 ): Promise<TranscriptWindow> {
   const snapshot = await browserRequest(
     client,
-    () => client.raw().conversations.getConversationTranscript({ conversationId }),
+    () => client.raw().conversations.getConversationTranscript({
+      conversationId,
+      limit,
+      pageToken: pageToken ?? undefined,
+    }),
     signal,
   );
-  const boundary = before === null ? Number.POSITIVE_INFINITY : Number(before);
-  const older = snapshot.messages.filter((message) => message.sequence < boundary);
-  const messages = older.slice(-PAGE_SIZE);
-  const hasMore = messages.length < older.length;
   return {
     conversation: snapshot.conversation,
-    messages,
+    messages: snapshot.messages,
     cursor: snapshot.cursor,
-    hasMore,
-    nextPageToken: hasMore ? String(messages[0]!.sequence) : null,
+    hasMore: snapshot.hasMore,
+    nextPageToken: snapshot.nextPageToken,
   };
 }
 
