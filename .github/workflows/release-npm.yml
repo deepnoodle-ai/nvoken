@@ -54,9 +54,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @deepnoodle/nvoken build
       - run: pnpm --filter @deepnoodle/nvoken test
-      - run: pnpm publish --dry-run --ignore-scripts
+      # This workflow triggers on a tag push, so the checkout is a detached
+      # HEAD and pnpm's git checks abort with ERR_PNPM_GIT_UNKNOWN_BRANCH
+      # before publishing anything. npm has no equivalent check to relax.
+      - run: pnpm publish --dry-run --ignore-scripts --no-git-checks
         working-directory: sdk/typescript
-      - run: pnpm publish
+      - run: pnpm publish --no-git-checks
         working-directory: sdk/typescript
       - name: Verify the public registry artifact
         working-directory: sdk/typescript

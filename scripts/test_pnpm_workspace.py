@@ -59,9 +59,24 @@ class PnpmWorkspaceTests(unittest.TestCase):
         self.assertIn("uses: pnpm/setup@v2", workflow)
         self.assertIn("id-token: write", workflow)
         self.assertIn("pnpm install --frozen-lockfile", workflow)
-        self.assertIn("pnpm publish --dry-run --ignore-scripts", workflow)
         self.assertIn("NODE_AUTH_TOKEN must be unset", workflow)
         self.assertNotIn("run: npm publish", workflow)
+
+    def test_release_publishes_from_a_detached_tag_checkout(self) -> None:
+        # A tag push checks out a detached HEAD, which pnpm's git checks
+        # reject. Assert the whole command: a substring that stops before
+        # the flag passes with or without it and guards nothing.
+        workflow = (ROOT / ".github/workflows/release-npm.yml").read_text()
+
+        self.assertIn(
+            "run: pnpm publish --dry-run --ignore-scripts --no-git-checks",
+            workflow,
+        )
+        self.assertIn("run: pnpm publish --no-git-checks", workflow)
+        for line in workflow.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- run: pnpm publish"):
+                self.assertIn("--no-git-checks", stripped)
 
 
 if __name__ == "__main__":
