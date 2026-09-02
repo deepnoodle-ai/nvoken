@@ -207,3 +207,29 @@ func TestTurnUpdatesStopsAtTerminalFrame(t *testing.T) {
 		t.Fatalf("final update = %#v", last)
 	}
 }
+
+// A graceful stop settles `completed` and says why. That is the whole
+// difference from cancellation on the wire, and it is the reason interrupt is
+// on the Turn facade rather than under raw(): a stop button that threw the
+// turn's work away would be the wrong button.
+func TestInterruptSettlesCompletedWithAnInterruptedStopReason(t *testing.T) {
+	baseURL := os.Getenv("NVOKEN_CONFORMANCE_URL")
+	if baseURL == "" {
+		t.Skip("NVOKEN_CONFORMANCE_URL is not set")
+	}
+	client, err := NewClient(baseURL, "conformance")
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	snapshot, err := client.Turn("33b82f49-6105-75f4-b829-3e5d1f2f3dba", TurnAccess{TenantKey: "acme"}).
+		Interrupt(t.Context())
+	if err != nil {
+		t.Fatalf("interrupt: %v", err)
+	}
+	if snapshot.Resource.Status != TurnCompleted {
+		t.Fatalf("status = %v, want completed", snapshot.Resource.Status)
+	}
+	if snapshot.Resource.StopReason == nil || string(*snapshot.Resource.StopReason) != "interrupted" {
+		t.Fatalf("stop reason = %#v, want interrupted", snapshot.Resource.StopReason)
+	}
+}

@@ -578,3 +578,21 @@ test("interrupt goes through the retry wrapper like any other call", async () =>
   assert.equal(attempts, 2);
   assert.equal(snapshot.status, "running");
 });
+
+test("interrupt settles completed with an interrupted stop reason", async (t) => {
+  const baseUrl = process.env.NVOKEN_CONFORMANCE_URL;
+  if (!baseUrl) {
+    t.skip("NVOKEN_CONFORMANCE_URL is not set");
+    return;
+  }
+  // A graceful stop settles `completed` and says why. That is the whole
+  // difference from cancellation on the wire, and it is the reason interrupt
+  // is on the Turn facade rather than under raw(): a stop button that threw
+  // the turn's work away would be the wrong button.
+  const client = new Client({ baseUrl, apiKey: "conformance" });
+  const snapshot = await client
+    .turn("33b82f49-6105-75f4-b829-3e5d1f2f3dba", { tenant: "acme" })
+    .interrupt();
+  assert.equal(snapshot.status, "completed");
+  assert.equal(snapshot.stopReason, "interrupted");
+});
