@@ -8,6 +8,8 @@ without republishing every artifact.
 
 ## Unreleased
 
+## 0.35.0 - 2026-09-02
+
 - **The Rust SDK decodes Agent and Conversation responses.** Ten generated
   discriminator unions — `AgentOwner`, `ConversationOwner`,
   `DefaultMemoryPolicy`, `MemorySpaceSelector`, `TurnBehaviorSelection`,
