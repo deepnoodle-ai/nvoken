@@ -12,7 +12,7 @@ use crate::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "default_scope")]
+#[serde(untagged)]
 pub enum DefaultMemoryPolicy {
     #[serde(rename = "none")]
     None(Box<models::DefaultMemoryNone>),
