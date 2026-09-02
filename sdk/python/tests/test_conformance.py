@@ -97,3 +97,23 @@ def test_credit_allocation_sends_only_fields_the_request_model_declares() -> Non
     declared = set(AllocateCreditsRequest.model_fields)
     assert set(sent) <= declared, sorted(set(sent) - declared)
     assert AllocateCreditsRequest.from_dict(sent).tenant_key == "acme"
+
+
+@pytest.mark.asyncio
+async def test_interrupt_settles_completed_keeping_its_work() -> None:
+    """A graceful stop settles ``completed``, keeping the work it produced.
+
+    That is the whole difference from cancellation on the wire, and it is the
+    reason interrupt is on the Turn facade rather than under ``raw()``: a stop
+    button that threw the turn's work away would be the wrong button. The
+    Python snapshot carries no ``stop_reason``, so settling is what it can
+    observe; the Go and TypeScript tests assert the reason too.
+    """
+    base_url = os.getenv("NVOKEN_CONFORMANCE_URL")
+    if not base_url:
+        pytest.skip("NVOKEN_CONFORMANCE_URL is not set")
+    client = Client("conformance", base_url=base_url)
+    turn = client.turn("33b82f49-6105-75f4-b829-3e5d1f2f3dba", tenant="acme")
+    snapshot = await turn.interrupt()
+    status = snapshot.status.value if hasattr(snapshot.status, "value") else snapshot.status
+    assert status == "completed"

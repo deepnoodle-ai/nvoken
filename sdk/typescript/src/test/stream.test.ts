@@ -220,3 +220,240 @@ test("a Turn change missing a required field is refused", async () => {
       && /turn change/.test(error.message),
   );
 });
+
+function message(
+  sequence: number,
+  turnId: string | null,
+  text = `m${sequence}`,
+): Record<string, unknown> {
+  return {
+    id: `00000000-0000-7000-8000-${String(sequence).padStart(12, "0")}`,
+    conversation_id: "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+    agent_id: "e1ec4be4-ffd5-7789-83bc-fb8f0f1eb276",
+    turn_id: turnId,
+    content_expires_at: null,
+    user_key: null,
+    sequence,
+    role: sequence % 2 === 1 ? "user" : "assistant",
+    content: [{ type: "text", text }],
+    created_at: "2026-07-21T12:00:00Z",
+  };
+}
+
+function change(
+  turnId: string,
+  revision: number,
+  status: "running" | "completed",
+): Record<string, unknown> {
+  return {
+    turn_id: turnId,
+    conversation_id: "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+    content_expires_at: null,
+    revision,
+    status,
+    terminal: status === "completed",
+    current: true,
+    through_message_sequence: null,
+    error: null,
+    structured_output: null,
+    occurred_at: "2026-07-21T12:00:00Z",
+    tool_calls: [],
+  };
+}
+
+function transcript(
+  cursor: string,
+  messages: Array<Record<string, unknown>>,
+  changes: Array<Record<string, unknown>>,
+): WireEvent {
+  return {
+    id: cursor,
+    event: "transcript.update",
+    data: {
+      type: "transcript.update",
+      messages,
+      turn_changes: changes,
+      has_more: false,
+      cursor,
+    },
+  };
+}
+
+function delta(
+  turnId: string,
+  messageId: string,
+  contentIndex: number,
+  fragment: string,
+): WireEvent {
+  return {
+    event: "message.delta",
+    data: {
+      type: "message.delta",
+      turn_id: turnId,
+      attempt: 1,
+      message_id: messageId,
+      content_index: contentIndex,
+      offset: 0,
+      kind: "text",
+      delta: fragment,
+      emitted_at: "2026-07-21T12:00:00Z",
+    },
+  };
+}
+
+test("two revisions for one Turn fold to one current change", async () => {
+  const turnId = "476dd7be-97a1-78f3-8096-d7032468a80a";
+  const reducer = new Reducer();
+  const frames = await decodeConversation([
+    transcript("cursor-1", [], [change(turnId, 1, "running")]),
+    transcript("cursor-2", [], [change(turnId, 2, "completed")]),
+  ]);
+  for (const frame of frames) reducer.apply(frame);
+
+  const changes = reducer.snapshot().turnChanges;
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].revision, 2);
+  assert.equal(changes[0].status, "completed");
+  assert.equal(reducer.settled(turnId), true);
+});
+
+test("an out-of-order lower revision never replaces the current change", async () => {
+  const turnId = "476dd7be-97a1-78f3-8096-d7032468a80a";
+  const reducer = new Reducer();
+  const frames = await decodeConversation([
+    transcript("cursor-1", [], [change(turnId, 2, "completed")]),
+    transcript("cursor-2", [], [change(turnId, 1, "running")]),
+  ]);
+  for (const frame of frames) reducer.apply(frame);
+
+  const changes = reducer.snapshot().turnChanges;
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].revision, 2);
+});
+
+test("the reducer seeds from a bounded tail and its exact cursor", () => {
+  const reducer = new Reducer({
+    initial: {
+      messages: [message(7, null) as never, message(8, null) as never],
+      cursor: "cursor-tail",
+    },
+    maxMessages: 500,
+  });
+  const snapshot = reducer.snapshot();
+  assert.deepEqual(snapshot.messages.map((item) => item.sequence), [7, 8]);
+  assert.equal(snapshot.cursor, "cursor-tail");
+});
+
+test("merging an older page leaves the live cursor where it was", async () => {
+  const reducer = new Reducer({ initial: { messages: [], cursor: "cursor-live" } });
+  reducer.merge({
+    messages: [message(1, null) as never, message(2, null) as never],
+    turnChanges: [],
+  });
+  assert.deepEqual(reducer.snapshot().messages.map((item) => item.sequence), [1, 2]);
+  assert.equal(reducer.snapshot().cursor, "cursor-live");
+});
+
+test("a non-positive reducer bound is refused as a validation error", () => {
+  for (const options of [
+    { maxMessages: 0 },
+    { maxPreviews: -1 },
+    { maxPreviewBytes: 1.5 },
+  ]) {
+    assert.throws(
+      () => new Reducer(options),
+      (error: unknown) => error instanceof NvokenError && error.category === "validation",
+    );
+  }
+});
+
+test("message eviction removes whole terminal Turns and stops at a live one", async () => {
+  const settled = "476dd7be-97a1-78f3-8096-d7032468a80a";
+  const live = "8f2b0c1e-3d4a-7b5c-9e6f-0a1b2c3d4e5f";
+  const reducer = new Reducer({ maxMessages: 3 });
+  const frames = await decodeConversation([
+    transcript(
+      "cursor-1",
+      [message(1, settled), message(2, settled)],
+      [change(settled, 1, "completed")],
+    ),
+    transcript(
+      "cursor-2",
+      [message(3, live), message(4, live)],
+      [change(live, 1, "running")],
+    ),
+  ]);
+  for (const frame of frames) reducer.apply(frame);
+
+  const snapshot = reducer.snapshot();
+  // The settled Turn goes as a unit; the live Turn is never cut into, so the
+  // window sits above its bound rather than dropping half an exchange.
+  assert.deepEqual(snapshot.messages.map((item) => item.sequence), [3, 4]);
+  assert.deepEqual(snapshot.turnChanges.map((item) => item.turnId), [live]);
+  assert.equal(reducer.settled(settled), false);
+});
+
+test("preview eviction drops the oldest preview past the bound", async () => {
+  const turnId = "476dd7be-97a1-78f3-8096-d7032468a80a";
+  const reducer = new Reducer({ maxPreviews: 2 });
+  const frames = await decodeConversation([
+    delta(turnId, "aaaaaaaa-0000-7000-8000-000000000001", 0, "one"),
+    delta(turnId, "aaaaaaaa-0000-7000-8000-000000000002", 0, "two"),
+    delta(turnId, "aaaaaaaa-0000-7000-8000-000000000003", 0, "three"),
+  ]);
+  for (const frame of frames) reducer.apply(frame);
+
+  const previews = reducer.snapshot().previews;
+  assert.equal(previews.length, 2);
+  assert.deepEqual(previews.map((preview) => preview.delta), ["two", "three"]);
+});
+
+test("a preview truncated at its byte bound never splits a code point", async () => {
+  const turnId = "476dd7be-97a1-78f3-8096-d7032468a80a";
+  const messageId = "aaaaaaaa-0000-7000-8000-000000000001";
+  // Four bytes each, so a bound of 6 lands inside the second character.
+  const reducer = new Reducer({ maxPreviewBytes: 6 });
+  const frames = await decodeConversation([
+    delta(turnId, messageId, 0, "🙂"),
+    delta(turnId, messageId, 0, "🙃"),
+  ]);
+  for (const frame of frames) reducer.apply(frame);
+
+  const preview = reducer.snapshot().previews[0];
+  assert.equal(preview.delta, "🙂");
+  assert.equal(new TextEncoder().encode(preview.delta).length, 4);
+  assert.ok(!preview.delta.includes("�"));
+});
+
+test("the connection callback reports connect and each reconnect", async () => {
+  const states: string[] = [];
+  const closing: WireEvent = {
+    event: "connection.closing",
+    data: { type: "connection.closing", reason: "rotation", retry_after_ms: 0 },
+  };
+  const completed = turnUpdate("completed", 1, "cursor-1");
+  let connects = 0;
+  const connect = async () => {
+    connects += 1;
+    return eventResponse(connects === 1 ? [closing] : [completed]);
+  };
+
+  for await (const _frame of streamTurnFrames(connect, {
+    onConnectionChange: (state) => states.push(state),
+  })) {
+    // Iteration drives the loop; the callback records the transitions.
+  }
+
+  assert.deepEqual(states, ["connected", "reconnecting", "connected"]);
+});
+
+test("a throwing connection callback cannot break the stream", async () => {
+  const completed = turnUpdate("completed", 1, "cursor-1");
+  const frames: StreamFrame[] = [];
+  for await (const frame of streamTurnFrames(async () => eventResponse([completed]), {
+    onConnectionChange: () => { throw new Error("renderer blew up"); },
+  })) {
+    frames.push(frame);
+  }
+  assert.deepEqual(frames.map((frame) => frame.type), ["transcript.update"]);
+});

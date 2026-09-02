@@ -60,6 +60,8 @@
     "dist/client-token.js",
     "dist/client.d.ts",
     "dist/client.js",
+    "dist/conversation-controller.d.ts",
+    "dist/conversation-controller.js",
     "dist/facade-types.d.ts",
     "dist/facade-types.js",
     "dist/diagnostics.d.ts",

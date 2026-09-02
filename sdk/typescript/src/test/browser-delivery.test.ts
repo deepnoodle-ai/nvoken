@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { browserRequest } from "../browser.js";
+import { ResponseError } from "../generated/runtime.js";
 import {
   callbackResult,
   createBrowserClient,
+  NvokenError,
   createCallbackReceiver,
   createWebhookReceiver,
   issueAnonymousToken,
@@ -246,4 +249,96 @@ test("schema-v2 webhook receiver keeps host-owned ordering and retry discipline"
     .handle(headers(), body);
   assert.equal(ignored.outcome, "ignored");
   assert.equal(ignored.reply.status, 200);
+});
+
+const CONVERSATION_ID = "db4eaf24-1ac6-776e-8f98-badc6d0dc764";
+
+function transcriptSnapshot(): Record<string, unknown> {
+  return {
+    conversation: {
+      id: CONVERSATION_ID,
+      tenant_key: "anonymous-partition",
+      user_key: null,
+      conversation_key: null,
+      owner: { kind: "tenant", tenant_key: "anonymous-partition" },
+      agent_id: null,
+      active_turn_id: null,
+      active_turn_status: null,
+      message_count: 0,
+      retention: null,
+      compaction: null,
+      metadata: null,
+      created_at: NOW,
+      updated_at: NOW,
+    },
+    messages: [],
+    compactions: [],
+    cursor: "cursor-1",
+    captured_at: NOW,
+  };
+}
+
+test("a raw() read under a browser token carries the token and no scope headers", async () => {
+  const headers: Headers[] = [];
+  let path = "";
+  const browser = createBrowserClient({
+    baseUrl: BASE_URL,
+    clientToken: async () => "resolved-client-token",
+    fetch: async (input, init) => {
+      path = new URL(String(input)).pathname;
+      headers.push(new Headers(init?.headers));
+      return Response.json(transcriptSnapshot());
+    },
+  });
+
+  await browserRequest(browser, () => browser.raw().conversations.getConversationTranscript({
+    conversationId: CONVERSATION_ID,
+  }));
+
+  assert.equal(path, `/v1/conversations/${CONVERSATION_ID}/transcript`);
+  assert.equal(headers[0].get("Authorization"), "Bearer resolved-client-token");
+  // The token already names the tenant and the end user; asserting them again
+  // from a page is exactly what a browser grant refuses.
+  assert.equal(headers[0].get("X-Nvoken-Tenant-Key"), null);
+  assert.equal(headers[0].get("X-Nvoken-User-Key"), null);
+});
+
+test("a raw() call through browserRequest retries a 503 like any other call", async () => {
+  let attempts = 0;
+  const browser = createBrowserClient({
+    baseUrl: BASE_URL,
+    clientToken: "client-token",
+    retry: { maxAttempts: 3, minDelayMs: 0, maxDelayMs: 0 },
+    fetch: async () => {
+      attempts += 1;
+      if (attempts === 1) return new Response("", { status: 503 });
+      return Response.json(transcriptSnapshot());
+    },
+  });
+
+  const snapshot = await browserRequest(
+    browser,
+    () => browser.raw().conversations.getConversationTranscript({
+      conversationId: CONVERSATION_ID,
+    }),
+  );
+
+  assert.equal(attempts, 2);
+  assert.equal(snapshot.cursor, "cursor-1");
+});
+
+test("a hand-built BrowserClient still gets normalized errors without retry", async () => {
+  let attempts = 0;
+  const fake = {
+    raw: () => { throw new Error("unused"); },
+  } as unknown as Parameters<typeof browserRequest>[0];
+
+  await assert.rejects(
+    () => browserRequest(fake, async () => {
+      attempts += 1;
+      throw new ResponseError(new Response("", { status: 403 }), "denied");
+    }),
+    (error: unknown) => error instanceof NvokenError && error.category === "permission",
+  );
+  assert.equal(attempts, 1);
 });

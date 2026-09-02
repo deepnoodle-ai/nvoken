@@ -60,6 +60,27 @@ export interface ReducedSnapshot<TOutput extends object = Record<string, never>>
   cursor?: string;
 }
 
+export interface ReducerOptions<TOutput extends object = Record<string, never>> {
+  /** Seed a bounded tail and the exact forward resume position it observed. */
+  initial?: Partial<ReducedSnapshot<TOutput>>;
+  /** Bound durable messages. Eviction removes whole terminal Turns only. */
+  maxMessages?: number;
+  /** Bound how many live content previews are retained at once. */
+  maxPreviews?: number;
+  /** Bound each accumulated preview in UTF-8 bytes. */
+  maxPreviewBytes?: number;
+}
+
+/**
+ * Folds durable frames and provisional previews into one current view.
+ *
+ * A Turn's lifecycle is folded, not logged: the reducer keeps the highest
+ * revision it has seen for each Turn and nothing earlier. Every consumer in
+ * this repository already reduced the log that way before publishing it, and
+ * the `current` flag cannot substitute for the fold — it means "current as of
+ * the read that produced this frame", so two frames for one Turn leave two
+ * entries both claiming to be current.
+ */
 export class Reducer<TOutput extends object = Record<string, never>> {
   private readonly messages = new Map<number, ConversationMessage>();
   private readonly changes = new Map<string, TypedTurnChange<TOutput>>();
@@ -67,6 +88,43 @@ export class Reducer<TOutput extends object = Record<string, never>> {
   private readonly latestAttempts = new Map<string, number>();
   private readonly terminalTurns = new Set<string>();
   private cursor?: string;
+  private readonly maxMessages?: number;
+  private readonly maxPreviews?: number;
+  private readonly maxPreviewBytes?: number;
+
+  constructor(options: ReducerOptions<TOutput> = {}) {
+    this.maxMessages = positiveBound(options.maxMessages, "maxMessages");
+    this.maxPreviews = positiveBound(options.maxPreviews, "maxPreviews");
+    this.maxPreviewBytes = positiveBound(options.maxPreviewBytes, "maxPreviewBytes");
+    const initial = options.initial;
+    if (!initial) return;
+    for (const message of initial.messages ?? []) {
+      this.messages.set(message.sequence, message);
+    }
+    for (const change of initial.turnChanges ?? []) this.storeChange(change);
+    for (const preview of initial.previews ?? []) {
+      this.previews.set(`${preview.messageId}:${preview.contentIndex}`, { ...preview });
+    }
+    this.cursor = initial.cursor;
+    this.enforceBounds();
+  }
+
+  /**
+   * Folds a REST transcript page in without moving the stream cursor.
+   *
+   * This is how a live consumer prepends older history: the page is older than
+   * everything the stream has delivered, so adopting its position would replay
+   * the conversation from the middle.
+   *
+   * Bounds are not enforced here. Eviction is oldest-first, and the page being
+   * merged is the oldest thing in the window, so enforcing them would discard
+   * exactly what was just fetched. A caller with a bound checks the window has
+   * room before merging, as the conversation controller does.
+   */
+  merge(snapshot: Pick<ReducedSnapshot<TOutput>, "messages" | "turnChanges">): void {
+    for (const message of snapshot.messages) this.messages.set(message.sequence, message);
+    for (const change of snapshot.turnChanges) this.storeChange(change);
+  }
 
   apply(frame: StreamFrame<TOutput>): void {
     if (frame.type === "message.delta") {
@@ -91,13 +149,11 @@ export class Reducer<TOutput extends object = Record<string, never>> {
       this.discardMessagePreviews(message.id);
     }
     for (const change of frame.turnChanges) {
-      this.changes.set(`${change.turnId}:${change.revision}`, change);
-      if (isTurnOver(change)) {
-        this.terminalTurns.add(change.turnId);
-        this.discardPreviews(change.turnId);
-      }
+      this.storeChange(change);
+      if (isTurnOver(change)) this.discardPreviews(change.turnId);
     }
     this.cursor = frame.sseId || frame.cursor;
+    this.enforceBounds();
   }
 
   settled(turnId: string): boolean {
@@ -107,16 +163,22 @@ export class Reducer<TOutput extends object = Record<string, never>> {
   snapshot(): ReducedSnapshot<TOutput> {
     return {
       messages: [...this.messages.values()].sort((left, right) => left.sequence - right.sequence),
-      turnChanges: [...this.changes.values()].sort((left, right) => {
-        const turnOrder = left.turnId.localeCompare(right.turnId);
-        return turnOrder || left.revision - right.revision;
-      }),
+      turnChanges: [...this.changes.values()]
+        .sort((left, right) => left.turnId.localeCompare(right.turnId)),
       previews: [...this.previews.values()]
         .map((preview) => ({ ...preview }))
         .sort((left, right) => left.messageId.localeCompare(right.messageId)
           || left.contentIndex - right.contentIndex),
       cursor: this.cursor,
     };
+  }
+
+  private storeChange(change: TypedTurnChange<TOutput>): void {
+    const current = this.changes.get(change.turnId);
+    if (!current || change.revision > current.revision) {
+      this.changes.set(change.turnId, change);
+    }
+    if (isTurnOver(change)) this.terminalTurns.add(change.turnId);
   }
 
   private appendPreview(delta: MessageDeltaEvent): void {
@@ -138,10 +200,18 @@ export class Reducer<TOutput extends object = Record<string, never>> {
     };
     preview.attempt = delta.attempt;
     preview.kind = delta.kind;
-    preview.delta += delta.delta;
+    preview.delta = appendUTF8(preview.delta, delta.delta, this.maxPreviewBytes);
     if (delta.toolCallId) preview.toolCallId = delta.toolCallId;
     if (delta.name) preview.name = delta.name;
     this.previews.set(key, preview);
+    if (this.maxPreviews === undefined) return;
+    // Map iteration is insertion order, so the first key is the oldest
+    // preview still accumulating.
+    while (this.previews.size > this.maxPreviews) {
+      const oldest = this.previews.keys().next().value;
+      if (oldest === undefined) break;
+      this.previews.delete(oldest);
+    }
   }
 
   private discardPreviews(turnId: string): void {
@@ -156,6 +226,67 @@ export class Reducer<TOutput extends object = Record<string, never>> {
       if (preview.messageId === messageId) this.previews.delete(key);
     }
   }
+
+  /**
+   * Evicts oldest-first, and only at a Turn boundary that has settled.
+   *
+   * Dropping half a Turn would leave a transcript that reads as though the
+   * agent answered a question nobody asked. A live Turn is never evicted at
+   * all: it is still producing the messages that finish it, so the window
+   * stops growing down rather than cutting into work in progress.
+   */
+  private enforceBounds(): void {
+    if (this.maxMessages === undefined) return;
+    while (this.messages.size > this.maxMessages) {
+      const ordered = [...this.messages.values()]
+        .sort((left, right) => left.sequence - right.sequence);
+      const oldest = ordered[0];
+      if (!oldest) return;
+      const boundary = oldest.turnId;
+      if (!boundary) {
+        this.messages.delete(oldest.sequence);
+        continue;
+      }
+      if (!this.terminalTurns.has(boundary)) return;
+      for (const message of ordered) {
+        if (message.turnId === boundary) this.messages.delete(message.sequence);
+      }
+      this.changes.delete(boundary);
+      this.terminalTurns.delete(boundary);
+    }
+  }
+}
+
+function positiveBound(value: number | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new NvokenError("validation", `${name} must be a positive integer`);
+  }
+  return value;
+}
+
+/**
+ * Appends within a UTF-8 byte budget, truncating at a code-point boundary.
+ *
+ * A preview is text a page renders. Cutting one mid code point produces a
+ * replacement character that stays on screen until the saved message replaces
+ * the whole preview, which is exactly the kind of glitch a bound meant to
+ * prevent problems introduces instead.
+ */
+function appendUTF8(current: string, added: string, maximum?: number): string {
+  if (maximum === undefined) return current + added;
+  const combined = current + added;
+  const bytes = new TextEncoder().encode(combined);
+  if (bytes.length <= maximum) return combined;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let end = maximum; end > 0; end -= 1) {
+    try {
+      return decoder.decode(bytes.slice(0, end));
+    } catch {
+      // Step back to the prior code-point boundary.
+    }
+  }
+  return "";
 }
 
 export interface StreamLoopOptions {
@@ -163,6 +294,15 @@ export interface StreamLoopOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   reconnectTimeoutMs?: number;
+  /**
+   * Reports when the transport is up and when it is about to reconnect.
+   *
+   * A deliberate close is already visible as a `connection.closing` frame. A
+   * silent drop is not, and "reconnecting" is the state a page needs in order
+   * to stop looking broken while it heals. Observational only: a throw here
+   * cannot change what the stream delivers, so it is swallowed.
+   */
+  onConnectionChange?: (state: "connected" | "reconnecting") => void;
 }
 
 export type StreamConnector = (
@@ -203,6 +343,7 @@ async function* reconnectingFrames<TOutput extends object>(
     while (!scope.signal?.aborted) {
       try {
         const response = await connect(cursor, scope.signal);
+        notifyConnection(options, "connected");
         failureStartedAt = undefined;
         let requestedReconnect = false;
         for await (const event of parseEventStream(response, scope.signal)) {
@@ -234,12 +375,24 @@ async function* reconnectingFrames<TOutput extends object>(
         failureStartedAt ??= Date.now();
         if (Date.now() - failureStartedAt >= reconnectTimeoutMs) throw error;
       }
+      notifyConnection(options, "reconnecting");
       if (delayMs > 0) await pause(delayMs, scope.signal);
       delayMs = serverRetryMs ?? Math.min(2_000, Math.max(100, delayMs * 2));
     }
     throw abortReason(scope.signal);
   } finally {
     scope.dispose();
+  }
+}
+
+function notifyConnection(
+  options: StreamLoopOptions,
+  state: "connected" | "reconnecting",
+): void {
+  try {
+    options.onConnectionChange?.(state);
+  } catch {
+    // Transport correctness cannot depend on an observational callback.
   }
 }
 

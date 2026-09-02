@@ -124,7 +124,16 @@ answer = await conversation.text("What changed since yesterday?")
 # Synchronous: no request until status/result/updates is used.
 recovered = client.turn(saved_turn_id, tenant="acme", user="alice")
 result = await recovered.bind_tools({"lookup_property": lookup_property}).result()
+
+# Stop a running Turn and keep what it produced.
+stopping = await recovered.interrupt()
 ```
+
+`interrupt()` returns the Turn's state as of the request, which is often still
+running: mid-step the runtime records the request and stops at the next
+checkpoint. Follow `updates()` or `result()` for settlement rather than reading
+that status as final. Interrupting a Turn that already ended returns it
+unchanged and does not raise.
 
 ## Agent lifecycle and exact HTTP access
 

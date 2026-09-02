@@ -39,6 +39,7 @@ test("emitted Client declarations hide implementation seams", () => {
   const declaration = readFileSync(join(distDir, "client.d.ts"), "utf8");
   for (const member of [
     "admit",
+    "interruptTurn",
     "readTurnResult",
     "submitToolResults",
     "turnFrames",
@@ -70,4 +71,23 @@ test("handwritten shipped source contains no compatibility vocabulary", () => {
       `${relative(sourceDir, path)} retains compatibility vocabulary`,
     );
   }
+});
+
+test("the conversation controller is canonical to the browser subpath", async () => {
+  const browser = await import("../browser.js");
+  assert.equal(typeof browser.createConversation, "function");
+  assert.equal(typeof browser.createAnonymousConversation, "function");
+
+  // The root re-exports the browser entry on purpose: a page is a first-class
+  // caller, and a surface reachable only behind a subpath is one that gets
+  // rebuilt by hand instead of imported. `/browser` is the canonical path and
+  // the root is the same module, not a second implementation of it.
+  const root = await import("../index.js");
+  assert.equal(root.createConversation, browser.createConversation);
+  assert.equal(root.createAnonymousConversation, browser.createAnonymousConversation);
+
+  // The request seam is internal: it exists at runtime for this package's own
+  // modules and is stripped from the published declarations.
+  const declaration = readFileSync(join(distDir, "browser.d.ts"), "utf8");
+  assert.doesNotMatch(declaration, /\bbrowserRequest\b/);
 });

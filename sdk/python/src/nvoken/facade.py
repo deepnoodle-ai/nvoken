@@ -1193,8 +1193,18 @@ class Turn:
         self,
         result: TurnResultResource,
     ) -> TurnSnapshot:
-        self._resource = result.turn
-        source = getattr(result.turn, "behavior_source", None)
+        return self._snapshot_from_turn(
+            result.turn, tuple(result.messages), result.output_text,
+        )
+
+    def _snapshot_from_turn(
+        self,
+        turn: Any,
+        messages: tuple[ConversationMessage, ...],
+        text: str | None,
+    ) -> TurnSnapshot:
+        self._resource = turn
+        source = getattr(turn, "behavior_source", None)
         actual_source = getattr(source, "actual_instance", source)
         kind = getattr(actual_source, "kind", None)
         if hasattr(kind, "value"):
@@ -1205,16 +1215,16 @@ class Turn:
                 f"Turn {self.id} did not include a recognized behavior source",
             )
         return TurnSnapshot(
-            status=result.turn.status,
-            messages=tuple(result.messages),
-            text=result.output_text,
-            structured_output=result.turn.structured_output,
+            status=turn.status,
+            messages=messages,
+            text=text,
+            structured_output=turn.structured_output,
             behavior_source=kind,
             agent_id=getattr(actual_source, "agent_id", None),
             agent_revision_id=getattr(actual_source, "agent_revision_id", None),
-            memory_space_id=result.turn.memory_space_id,
-            conversation_id=result.turn.conversation_id,
-            content_expires_at=result.turn.content_expires_at,
+            memory_space_id=turn.memory_space_id,
+            conversation_id=turn.conversation_id,
+            content_expires_at=turn.content_expires_at,
         )
 
     async def status(self) -> TurnSnapshot:
@@ -1223,6 +1233,25 @@ class Turn:
                 self.id, _headers=self._access_headers(),
             )
             return self._snapshot(result)
+        except ApiException as error:
+            raise normalize_error(error) from error
+
+    async def interrupt(self) -> TurnSnapshot:
+        """Ask the Turn to stop at its next clean stopping point, keeping what it produced.
+
+        The snapshot is the Turn's state as of the request, which is often
+        still running: mid-step the runtime records the request and stops at
+        the next checkpoint. Settlement is the stream's to report, so follow
+        ``updates`` or ``result`` for it rather than reading this status as
+        final. Interrupting a Turn that already ended returns it unchanged and
+        does not raise. The snapshot carries no messages, because the interrupt
+        response is the Turn resource alone.
+        """
+        try:
+            turn = await self._client.raw.turns.interrupt_turn(
+                self.id, _headers=self._access_headers(),
+            )
+            return self._snapshot_from_turn(turn, (), None)
         except ApiException as error:
             raise normalize_error(error) from error
 

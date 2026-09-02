@@ -63,7 +63,45 @@ export function createBrowserClient(options: BrowserClientOptions): BrowserClien
     apiKey: async () => refuseMachineCredential(await resolve()),
     browserCredential: true,
   });
-  return new BrowserClientHandle(client);
+  const handle = new BrowserClientHandle(client);
+  requestSeams.set(handle, client);
+  return handle;
+}
+
+/**
+ * The Client behind a BrowserClient, for callers inside this package that need
+ * `raw()` to behave like the rest of the SDK.
+ *
+ * A WeakMap rather than a member keeps the public `BrowserClient` interface
+ * exactly what a page is meant to see, and lets a hand-built fake stand in for
+ * one in a test without implementing a seam it has no business knowing about.
+ */
+const requestSeams = new WeakMap<BrowserClient, Client>();
+
+/**
+ * Runs a `raw()` operation with the retry policy and error normalization every
+ * other SDK call already gets.
+ *
+ * `raw()` is a door with nothing behind it: the generated APIs throw
+ * `ResponseError`, apply no retry, and normalize nothing. Anything in this
+ * package that reaches through `raw()` goes through here so a 503 on a
+ * transcript read behaves like a 503 anywhere else. A `BrowserClient` this
+ * package did not construct — a fake in a test — still gets normalized errors,
+ * without retry.
+ *
+ * @internal
+ */
+export function browserRequest<T>(
+  client: BrowserClient,
+  operation: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const seam = requestSeams.get(client);
+  if (seam) return seam.request(operation, signal);
+  return operation().then(
+    (value) => value,
+    async (error: unknown) => { throw await normalizeError(error); },
+  );
 }
 
 export type BrowserConversationSelection =
@@ -253,3 +291,31 @@ function refuseMachineCredential(token: string): string {
   }
   return token;
 }
+
+// The headless conversation controller. It is browser-only by construction:
+// it holds a BrowserClient, coordinates anonymous grants through Web Locks,
+// and reads window storage. A server caller reaching for it has taken a wrong
+// turn, so it lives here and not at the package root.
+export {
+  createAnonymousConversation,
+  createConversation,
+  type ConversationAction,
+  type ConversationActivity,
+  type ConversationAuthorization,
+  type ConversationClock,
+  type ConversationConnection,
+  type ConversationController,
+  type ConversationDisabledReason,
+  type ConversationHistory,
+  type ConversationInterruption,
+  type ConversationMode,
+  type ConversationRecovery,
+  type ConversationReset,
+  type ConversationSendReceipt,
+  type ConversationSendState,
+  type ConversationSnapshot,
+  type ConversationStorage,
+  type ConversationStorageAdapter,
+  type CreateAnonymousConversationOptions,
+  type CreateConversationOptions,
+} from "./conversation-controller.js";

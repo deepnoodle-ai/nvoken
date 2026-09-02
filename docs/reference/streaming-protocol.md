@@ -140,6 +140,13 @@ Send the last durable `id` as either the `cursor` query parameter or the
 Disconnecting never cancels a turn. It keeps running and you can reconnect or
 read it later.
 
+Resuming a page that was closed is the same mechanism with one extra step:
+read `GET /v1/conversations/{id}/transcript` for the history to draw, then open
+the Conversation stream at the `cursor` that snapshot returned. That cursor is
+the committed head observed when the snapshot was taken, so the stream delivers
+everything after it with neither overlap nor gap — one read plus one stream, not
+a read per resource.
+
 ## Two frames that are not events
 
 A stream that stays open writes a bare `retry: 1000` control frame once its
@@ -327,10 +334,15 @@ whether a turn succeeded.
 ## The reducer
 
 Any consumer that renders a live transcript needs the same fold: durable
-messages by sequence, lifecycle changes by `(turn_id, revision)`,
+messages by sequence, lifecycle changes by `turn_id`,
 previews by `(message_id, content_index)`, plus the resume cursor and the set
-of turns a terminal change has arrived for. This repository implements it four
-times:
+of turns a terminal change has arrived for. Lifecycle changes are folded rather
+than logged: the reducer keeps the highest `revision` it has seen for each Turn
+and nothing earlier, so `turn_changes` in a reduced snapshot holds one current
+change per Turn. The change's own `current` flag is not a substitute for that
+fold — it means "current as of the read that produced this frame", so a log
+would hold two entries for one Turn both claiming to be current. This
+repository implements it four times:
 
 - [`sdk/go/stream.go`](../../sdk/go/stream.go) `Reducer`
 - [`sdk/typescript/src/stream.ts`](../../sdk/typescript/src/stream.ts) `Reducer`
@@ -384,7 +396,7 @@ this section came from it.
 | State | Keyed by | Arrives on | Rule |
 | --- | --- | --- | --- |
 | Message | `sequence` | `transcript.update.messages` | Append. The stream never re-sends one. |
-| Lifecycle change | `(turn_id, revision)` | `transcript.update.turn_changes` | Append to a log, then fold to the highest revision to get current state. |
+| Lifecycle change | `turn_id` | `transcript.update.turn_changes` | Fold: keep the highest `revision` seen for the Turn and discard what it supersedes. |
 | Preview | `(message_id, content_index)` | `message.delta` | Concatenate, then discard wholesale on any of the five triggers above. |
 | Tool call | `tool_use.id` | opened by one message, closed by a later one; status on `turn_changes.tool_calls` | Retroactively update a message you already rendered. |
 | Compaction | not streamed at all | `GET /v1/conversations/{id}/compactions` | Fetch separately, interleave by `covers_through`. |
@@ -615,11 +627,11 @@ structured output or a provenance that is itself structured.
 Everything a client hits building a live transcript out of an append-only
 stream. Each item names where the nvoken console absorbs the cost today.
 
-**I3. `turn_changes` advertises state and delivers history.** The reducer
-keys by `(turn_id, revision)` and returns every revision it has seen, so
-every consumer folds it again to get current state (`activity.ts`,
-`latestChanges`). Either the snapshot should expose the fold, or the field
-should be named for the log it is.
+**I3. `turn_changes` advertises state and delivers history.** Resolved in the
+SDKs: the reducer keys by `turn_id` and returns one current change per Turn, so
+a consumer reads state rather than folding a log again. The wire frame still
+carries the revisions it observed; the fold is the client's, and all four SDKs
+now do it identically.
 
 **I6. Tool results reach backwards into an already-rendered message.** A
 `tool_result` arrives in a later message than its `tool_use`, so a client needs

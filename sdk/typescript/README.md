@@ -239,6 +239,24 @@ const recovered = client.turn("turn_…", {
 const completed = await recovered.result();
 ```
 
+Stop a running Turn and keep what it produced:
+
+```ts
+const stopping = await recovered.interrupt();
+console.log(stopping.status); // often still "running"
+```
+
+`interrupt()` returns the Turn's state as of the request. Mid-step the runtime
+records the request and stops at the next checkpoint, so follow `updates()` or
+`result()` for settlement rather than reading that status as final.
+Interrupting a Turn that already ended returns it unchanged and does not throw.
+
+`start()` returns a Turn carrying `admission`: the idempotency key, whether the
+request was deduplicated, and the Conversation it resolved to. That last one is
+the only place a `continue_or_create` caller learns which Conversation it landed
+in. A Turn recovered with `client.turn(id)` has no admission to report, so
+`admission` is `undefined` there.
+
 A local timeout or abort only detaches the caller. It does not cancel durable
 work. If admission transport is uncertain, `TurnTimeoutError.idempotencyKey`
 retains the key needed to retry the exact logical request safely. If waiting
@@ -301,6 +319,87 @@ keys before transport.
 See [the browser-direct example](../../examples/typescript-browser-direct/README.md)
 for token minting, direct execution, transcript reads, and signed Turn webhook
 handling.
+
+## Headless conversation controller
+
+`createBrowserClient` gives a page one Turn at a time. A chat needs the part
+around it: the conversation survives a reload, a retry never sends the same
+message twice, and every control knows whether it may be used right now. That
+is what the controller is — state and transitions, no rendering, no framework.
+
+```ts
+import { createConversation } from "@deepnoodle/nvoken/browser";
+
+const conversation = createConversation({
+  client: browser,
+  conversation: { id: conversationId },
+});
+
+conversation.subscribe(() => {
+  const snapshot = conversation.getSnapshot();
+  render(snapshot.messages, snapshot.previews);
+  setComposerEnabled(snapshot.send.action.status === "enabled");
+  setStopEnabled(snapshot.interruption.action.status === "enabled");
+});
+
+const receipt = await conversation.send("What changed since yesterday?");
+console.log(receipt.turnId, receipt.conversationId);
+```
+
+The Conversation selection is required. Omitting it admits a standalone Turn
+with no Conversation — a chat that never persists and never streams, which the
+runtime reports as success.
+
+For a visitor with no account, `createAnonymousConversation` needs a base URL
+and an App id and nothing else. The page stores an opaque visitor token; no
+application credential goes in the bundle, and the grant names the visitor's
+canonical Conversation, so nothing selects one.
+
+```ts
+import { createAnonymousConversation } from "@deepnoodle/nvoken/browser";
+
+const conversation = createAnonymousConversation({
+  baseUrl: "https://api.nvoken.com",
+  appId: "app_…",
+  storage: "local",
+});
+```
+
+What it guarantees:
+
+- **The conversation survives the page.** Resuming is one transcript read
+  plus a stream from the exact position that read observed, so a reload gets
+  recent history and no gap and no replay. The controller keeps the newest 50
+  messages of that read and pages older ones in on request; until the
+  contract's bounded tail mode is published, the read itself is the whole
+  transcript on the wire.
+- **A dropped stream comes back on its own.** The `online` event and a
+  renewed anonymous grant each restart a stream that stopped on a failure;
+  `reconnect()` is for when neither has.
+- **Retry never duplicates a Turn.** A send whose outcome is unknown becomes
+  `send.status === "uncertain"`, and `retrySend()` repeats the same input under
+  the same idempotency key. `discardSend()` is the way out when retries keep
+  failing: it reopens the composer without cancelling anything, and a Turn that
+  was in fact admitted shows up through the stream like any other.
+- **The UI never guesses.** Every action reports `enabled`, `in_flight`, or
+  `disabled` with a stated reason.
+- **Unknown states stay visible.** A Turn status this SDK version does not know
+  is reported as `activity.status === "unknown"`, never read as finished.
+- **Memory is bounded.** 500 messages, 8 previews, 64 KiB per preview, and one
+  current lifecycle record per Turn. Eviction removes whole settled Turns,
+  oldest first, and never cuts into a live one.
+
+`getSnapshot()` returns a frozen value that is replaced rather than mutated, so
+an identity comparison is a correct "did anything change" test. `loadEarlier()`
+prepends an older window without moving the live stream position.
+`startOver()` is anonymous-only and replaces the visitor; it overwrites stored
+continuity only once the new grant exists, so a network failure never costs a
+visitor the conversation they had. `destroy()` is silent and final.
+
+Verify against your deployment whether an anonymous grant may read a
+Conversation transcript and interrupt a Turn. The contract does not say. If
+either is refused, the controller disables that one action with
+`not_authorized` and leaves the rest working.
 
 ## Development
 
