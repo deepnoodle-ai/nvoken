@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn\'s terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -60,6 +60,15 @@ export interface TranscriptSnapshot {
      */
     compactions: Array<ConversationCompaction>;
     /**
+     * The stream position of this snapshot. Open the Conversation stream
+     * with it as `cursor` and you receive exactly what happened after
+     * the snapshot was captured, with neither overlap nor gap.
+     *
+     * @type {string}
+     * @memberof TranscriptSnapshot
+     */
+    cursor: string;
+    /**
      *
      * @type {Date}
      * @memberof TranscriptSnapshot
@@ -74,6 +83,7 @@ export function instanceOfTranscriptSnapshot(value: object): value is Transcript
     if (!('conversation' in value) || value['conversation'] === undefined) return false;
     if (!('messages' in value) || value['messages'] === undefined) return false;
     if (!('compactions' in value) || value['compactions'] === undefined) return false;
+    if (!('cursor' in value) || value['cursor'] === undefined) return false;
     if (!('capturedAt' in value) || value['capturedAt'] === undefined) return false;
     return true;
 }
@@ -91,6 +101,7 @@ export function TranscriptSnapshotFromJSONTyped(json: any, ignoreDiscriminator: 
         'conversation': ConversationFromJSON(json['conversation']),
         'messages': ((json['messages'] as Array<any>).map(ConversationMessageFromJSON)),
         'compactions': ((json['compactions'] as Array<any>).map(ConversationCompactionFromJSON)),
+        'cursor': json['cursor'],
         'capturedAt': (new Date(json['captured_at'])),
     };
 }
@@ -109,6 +120,7 @@ export function TranscriptSnapshotToJSONTyped(value?: TranscriptSnapshot | null,
         'conversation': ConversationToJSON(value['conversation']),
         'messages': ((value['messages'] as Array<any>).map(ConversationMessageToJSON)),
         'compactions': ((value['compactions'] as Array<any>).map(ConversationCompactionToJSON)),
+        'cursor': value['cursor'],
         'captured_at': value['capturedAt'].toISOString(),
     };
 }

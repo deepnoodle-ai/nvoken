@@ -453,6 +453,7 @@ func (e ConnectionClosingEventType) Valid() bool {
 const (
 	ReasonIdle         ConnectionClosingReason = "idle"
 	ReasonRotate       ConnectionClosingReason = "rotate"
+	ReasonSettled      ConnectionClosingReason = "settled"
 	ReasonSlowConsumer ConnectionClosingReason = "slow_consumer"
 )
 
@@ -462,6 +463,8 @@ func (e ConnectionClosingReason) Valid() bool {
 	case ReasonIdle:
 		return true
 	case ReasonRotate:
+		return true
+	case ReasonSettled:
 		return true
 	case ReasonSlowConsumer:
 		return true
@@ -3641,29 +3644,29 @@ type CompactionPolicy_TriggerTokens struct {
 	union json.RawMessage
 }
 
-// ConnectionClosingEvent This connection is closing. The stream continues and the turn is
-// unaffected, so reconnect with your last `cursor`.
+// ConnectionClosingEvent This connection is closing. Every reason but `settled` means the
+// stream continues and the turn is unaffected, so reconnect with your
+// last `cursor`. `settled` means a Turn stream has delivered its turn's
+// terminal change and has nothing left to send.
 //
 // There is no cursor here. You already track your last durable one,
 // because you need it to survive a connection that drops without saying
 // anything, and a field that repeats what you must hold anyway is a
 // second spelling of it.
 type ConnectionClosingEvent struct {
-	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Turn.
-	// Null while it is nonterminal and for conversation-bound work.
-	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
-	ConversationID   *ConversationID   `json:"conversation_id"`
-
-	// Reason Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
-	// with your last `cursor`. `idle` means no turn is running and the
-	// server is reclaiming the connection, so reconnect when you next need
-	// to read; nothing is lost while you are away. `slow_consumer` means
-	// this connection could not keep up with what was being written to it
-	// and was dropped; reconnect, and read faster or buffer more.
+	// Reason Why this connection is closing. `settled` means this Turn stream has
+	// delivered the turn's terminal change and is done; do not reconnect,
+	// and read the Turn if you want its composed result. `rotate` means the
+	// server is cycling the connection, so reconnect now with your last
+	// `cursor`. `idle` means no turn is running and the server is reclaiming
+	// the connection, so reconnect when you next need to read; nothing is
+	// lost while you are away. `slow_consumer` means this connection could
+	// not keep up with what was being written to it and was dropped;
+	// reconnect, and read faster or buffer more.
 	//
 	// Expect new values here over time. Treat a value you do not recognize
 	// as `rotate` and reconnect with your last `cursor`. Reconnecting is
-	// always safe.
+	// always safe: a settled turn answers with its rows and `settled` again.
 	Reason ConnectionClosingReason    `json:"reason"`
 	Type   ConnectionClosingEventType `json:"type"`
 }
@@ -3671,16 +3674,19 @@ type ConnectionClosingEvent struct {
 // ConnectionClosingEventType defines model for ConnectionClosingEvent.Type.
 type ConnectionClosingEventType string
 
-// ConnectionClosingReason Why this connection is closing. `rotate` means the server is cycling the connection, so reconnect now
-// with your last `cursor`. `idle` means no turn is running and the
-// server is reclaiming the connection, so reconnect when you next need
-// to read; nothing is lost while you are away. `slow_consumer` means
-// this connection could not keep up with what was being written to it
-// and was dropped; reconnect, and read faster or buffer more.
+// ConnectionClosingReason Why this connection is closing. `settled` means this Turn stream has
+// delivered the turn's terminal change and is done; do not reconnect,
+// and read the Turn if you want its composed result. `rotate` means the
+// server is cycling the connection, so reconnect now with your last
+// `cursor`. `idle` means no turn is running and the server is reclaiming
+// the connection, so reconnect when you next need to read; nothing is
+// lost while you are away. `slow_consumer` means this connection could
+// not keep up with what was being written to it and was dropped;
+// reconnect, and read faster or buffer more.
 //
 // Expect new values here over time. Treat a value you do not recognize
 // as `rotate` and reconnect with your last `cursor`. Reconnecting is
-// always safe.
+// always safe: a settled turn answers with its rows and `settled` again.
 type ConnectionClosingReason string
 
 // ConsoleDeviceAuthorizationApproval defines model for ConsoleDeviceAuthorizationApproval.
@@ -3934,10 +3940,11 @@ type ConversationMessage struct {
 	// Because it is worked out on read, it is authoritative on ordinary
 	// reads and not on the stream: a message delivered there before its
 	// turn settled carries `commentary` forever, and no later frame
-	// corrects it. On the stream, derive the answer instead. A turn has
-	// a final answer only once it settled `completed` with stop reason
-	// `end_turn`, and that answer is the turn's last assistant message.
-	// That is the same rule nvoken applies.
+	// corrects it. On the stream, read `final_answer_message_id` on the
+	// turn's current change instead. It names the turn's last assistant
+	// message once the turn settled `completed` with stop reason
+	// `end_turn`, and is absent otherwise: the same rule nvoken applies
+	// when it works out `phase` on read.
 	Phase    *MessagePhase           `json:"phase,omitempty"`
 	Role     ConversationMessageRole `json:"role"`
 	Sequence int64                   `json:"sequence"`
@@ -3973,16 +3980,6 @@ type ConversationOwner struct {
 
 // ConversationOwnerKind defines model for ConversationOwnerKind.
 type ConversationOwnerKind string
-
-// ConversationStreamEvent The JSON value carried by one SSE `data:` field. Switch on `type`.
-// Saved `transcript.update` frames carry the resume cursor as both
-// payload data and SSE `id`; preview and control frames never carry IDs.
-//
-// New frame types may appear here over time, and existing ones may gain
-// fields. Handle the types you know and ignore the rest.
-type ConversationStreamEvent struct {
-	union json.RawMessage
-}
 
 // CostMetrics defines model for CostMetrics.
 type CostMetrics struct {
@@ -4898,25 +4895,31 @@ type MemorySpaceSelector struct {
 
 // MessageDeltaEvent A live preview of a message the model is writing. Not saved, never
 // replayed, and never a message. Accumulate it by `(message_id,
-// content_index)` and discard it under the rules in Streaming above.
+// content_index)`, and discard what you accumulated when: a delta for
+// the same Turn arrives with a higher `attempt`; a `stream.resync` names
+// the Turn or, with no `turn_id`, the whole Conversation; the saved
+// message with the same `message_id` lands; or a change for the Turn
+// carries `terminal: true`, after which no later preview for that Turn
+// is rendered.
 //
 // Reasoning previews travel here like any other kind, on machine and
-// browser streams alike. What an end user sees is your application's
-// decision, made in your application. Reasoning is watchable and not
-// stored: no content block carries it, and no read returns it. Watch the
-// stream if you want to see the model think. A turn that runs under
-// explicit `reasoning` controls emits no reasoning previews at all, to
-// either audience.
+// browser streams alike, because the stream is the only place reasoning
+// exists: no content block carries it, and no read returns it, so a
+// browser that could not watch it here could never see it. What an end
+// user sees is your application's decision, made in your application. A
+// turn that runs under explicit `reasoning` controls emits no reasoning
+// previews at all, to either audience.
 type MessageDeltaEvent struct {
 	// Attempt Execution attempt that emitted this preview. Discard provisional
 	// output from earlier attempts when this value increases.
 	Attempt int64 `json:"attempt"`
 
-	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Turn.
-	// Null while it is nonterminal and for conversation-bound work.
-	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
-	ContentIndex     int               `json:"content_index"`
-	ConversationID   *ConversationID   `json:"conversation_id"`
+	// ContentIndex Which content block of the message this fragment extends, counted
+	// from 0 in the order the model opened them. It is a preview
+	// coordinate only: reasoning blocks are never saved, so the saved
+	// message's `content` array can be shorter and this index is not a
+	// position in it.
+	ContentIndex int `json:"content_index"`
 
 	// Delta The fragment, for every kind. One accumulator handles all of them.
 	Delta     string    `json:"delta"`
@@ -4931,10 +4934,9 @@ type MessageDeltaEvent struct {
 	Kind MessageDeltaKind `json:"kind"`
 
 	// MessageID The identifier the saved assistant message will carry when this
-	// iteration lands, with the same `msg_` prefix every message ID has. Key
-	// your preview by it and the handoff becomes an update to a row that
-	// already has its permanent identity, rather than one row disappearing
-	// and another taking its place.
+	// iteration lands. Key your preview by it and the handoff becomes an
+	// update to a row that already has its permanent identity, rather than
+	// one row disappearing and another taking its place.
 	//
 	// It is allocated when the model starts writing, so every preview of one
 	// message carries it. It is stable within one attempt; a retried attempt
@@ -4945,6 +4947,12 @@ type MessageDeltaEvent struct {
 	// Name The tool being called, alongside `tool_call_id` and on the same
 	// terms.
 	Name *string `json:"name,omitempty"`
+
+	// Offset Where this fragment starts within its block: the UTF-8 byte length
+	// of every earlier fragment for the same `(message_id,
+	// content_index)`. When it exceeds what you have accumulated, a
+	// frame was lost; discard the block and wait for the saved message.
+	Offset int64 `json:"offset"`
 
 	// ToolCallID The tool call these arguments belong to. Present on every
 	// `tool_arguments` frame, denormalized so a lost frame cannot orphan
@@ -5521,10 +5529,9 @@ type OrgList struct {
 type OutputSchema map[string]interface{}
 
 // PreviewMessageID The identifier the saved assistant message will carry when this
-// iteration lands, with the same `msg_` prefix every message ID has. Key
-// your preview by it and the handoff becomes an update to a row that
-// already has its permanent identity, rather than one row disappearing
-// and another taking its place.
+// iteration lands. Key your preview by it and the handoff becomes an
+// update to a row that already has its permanent identity, rather than
+// one row disappearing and another taking its place.
 //
 // It is allocated when the model starts writing, so every preview of one
 // message carries it. It is stable within one attempt; a retried attempt
@@ -5890,13 +5897,19 @@ type StoredTurnBehaviorSource struct {
 // StoredTurnBehaviorSourceKind defines model for StoredTurnBehaviorSource.Kind.
 type StoredTurnBehaviorSourceKind string
 
+// StreamEvent The JSON value carried by one SSE `data:` field, on the Turn and the
+// Conversation stream alike. Switch on `type`. Saved `transcript.update`
+// frames carry the resume cursor as both payload data and SSE `id`;
+// preview and control frames never carry IDs.
+//
+// New frame types may appear here over time, and existing ones may gain
+// fields. Handle the types you know and ignore the rest.
+type StreamEvent struct {
+	union json.RawMessage
+}
+
 // StreamResyncEvent defines model for StreamResyncEvent.
 type StreamResyncEvent struct {
-	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Turn.
-	// Null while it is nonterminal and for conversation-bound work.
-	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
-	ConversationID   *ConversationID   `json:"conversation_id"`
-
 	// Reason Why previews were invalidated. `live_delivery_gap` means the live
 	// delivery path could not prove continuity, so previews were lost;
 	// discard what you accumulated and wait for saved frames.
@@ -5905,9 +5918,11 @@ type StreamResyncEvent struct {
 	// the same way you treat `live_delivery_gap`.
 	Reason StreamResyncReason `json:"reason"`
 
-	// TurnID The Turn whose previews are void. Absent means every
-	// Turn in the Conversation: an absent field is scope, where a null
-	// identifier would be scope wearing an identifier's name.
+	// TurnID The Turn whose previews are void. On a Turn stream it is always
+	// present and names that Turn. On a Conversation stream it is
+	// present when one Turn's previews are void and absent when every
+	// preview in the Conversation is: an absent field is scope, where a
+	// null identifier would be scope wearing an identifier's name.
 	TurnID *TurnID               `json:"turn_id,omitempty"`
 	Type   StreamResyncEventType `json:"type"`
 }
@@ -6474,7 +6489,12 @@ type TranscriptSnapshot struct {
 	CapturedAt   time.Time                `json:"captured_at"`
 	Compactions  []ConversationCompaction `json:"compactions"`
 	Conversation Conversation             `json:"conversation"`
-	Messages     []ConversationMessage    `json:"messages"`
+
+	// Cursor The stream position of this snapshot. Open the Conversation stream
+	// with it as `cursor` and you receive exactly what happened after
+	// the snapshot was captured, with neither overlap nor gap.
+	Cursor   string                `json:"cursor"`
+	Messages []ConversationMessage `json:"messages"`
 }
 
 // TranscriptUpdateEvent The saved frame, and the only one. Messages append by `sequence` and
@@ -6482,14 +6502,19 @@ type TranscriptSnapshot struct {
 // `(turn_id, revision)`; fold to the highest revision for current
 // state. Within one frame apply messages before changes, so a turn is
 // never marked settled before its final message exists.
+//
+// Scope lives on the rows: every message and change carries its own
+// `conversation_id` and `content_expires_at`, so the frame repeats
+// neither. A page is cut when it reaches the server's row or byte
+// budget; `has_more` says another page follows immediately.
 type TranscriptUpdateEvent struct {
-	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Turn.
-	// Null while it is nonterminal and for conversation-bound work.
-	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
-	ConversationID   *ConversationID   `json:"conversation_id"`
-
 	// Cursor Your resume position. Store it and send it back as `cursor` to continue where you left off.
-	Cursor      string                    `json:"cursor"`
+	Cursor string `json:"cursor"`
+
+	// HasMore Whether saved rows past `cursor` were already known when this page
+	// was cut, so the next `transcript.update` follows without waiting
+	// for new work. `false` means you are caught up as of this frame.
+	HasMore     bool                      `json:"has_more"`
 	Messages    []ConversationMessage     `json:"messages"`
 	TurnChanges []TurnChange              `json:"turn_changes"`
 	Type        TranscriptUpdateEventType `json:"type"`
@@ -6610,24 +6635,52 @@ type TurnBehaviorSource struct {
 // saved it replays on reconnect at any cursor, so a turn that settled
 // while you were away is still settled when you return.
 //
-// A change carries what a turn's own projection carries about where it
-// stands: `terminal` for whether this change is the end, `stop_reason`
-// for a turn that ended, `credit_block` for one held on credits, and
-// `tool_calls` for what its tools are doing, with `arguments` on the ones
-// waiting for you to run them. You never need a second request to find
-// out why a turn is not moving.
+// A change has two kinds of field. The log fields are always present and
+// describe the step itself: `turn_id`, `conversation_id`,
+// `content_expires_at`, `revision`, `status`, `terminal`, `current`,
+// `through_message_sequence`, `error`, `structured_output`, and
+// `occurred_at`; a nullable one is `null` when it has no value. The
+// detail fields describe where the turn stands now, so they are present
+// only on the change that is still the turn's current state
+// (`current: true`) and omitted from every replayed earlier change:
+// `stop_reason` for a turn that ended, `credit_block` for one held on
+// credits, `tool_calls` for what its tools are doing, with `arguments` on
+// the ones waiting for you to run them, `usage` and `provenance` for its
+// model calls, `structured_output_provenance`, and
+// `final_answer_message_id`. Read detail from the current change alone
+// and you never need a second request to find out why a turn is not
+// moving.
 type TurnChange struct {
 	// ContentExpiresAt Scheduled private-content expiry for a terminal standalone Turn.
 	// Null while it is nonterminal and for conversation-bound work.
 	ContentExpiresAt *ContentExpiresAt `json:"content_expires_at"`
 	ConversationID   *ConversationID   `json:"conversation_id"`
 
-	// CreditBlock Present while the turn is on budget hold for spending capacity.
-	CreditBlock *CreditBlock     `json:"credit_block,omitempty"`
-	Error       *TurnFailure     `json:"error"`
-	OccurredAt  time.Time        `json:"occurred_at"`
-	Provenance  *ModelProvenance `json:"provenance,omitempty"`
-	Revision    int64            `json:"revision"`
+	// CreditBlock Present on the current change while the turn is on budget hold for
+	// spending capacity. Omitted for browser client tokens.
+	CreditBlock *CreditBlock `json:"credit_block,omitempty"`
+
+	// Current Whether this change is still the turn's current state as of the
+	// read that produced it. At most one change per turn in a frame or
+	// snapshot carries `true`, and only that change carries the detail
+	// fields. A replayed change is `false` even though it was current
+	// when it happened.
+	Current bool         `json:"current"`
+	Error   *TurnFailure `json:"error"`
+
+	// FinalAnswerMessageID The message that is this turn's answer: its last assistant
+	// message, present on the current change once the turn settled
+	// `completed` with stop reason `end_turn`, and absent otherwise.
+	// This is the stream's spelling of `phase: final_answer`, which
+	// ordinary reads work out for you and a stream frame cannot.
+	FinalAnswerMessageID *ConversationMessageID `json:"final_answer_message_id,omitempty"`
+	OccurredAt           time.Time              `json:"occurred_at"`
+
+	// Provenance Which provider and model served the turn's latest recorded call.
+	// Present on the current terminal change of a turn that made one.
+	// Omitted for browser client tokens.
+	Provenance *ModelProvenance `json:"provenance,omitempty"`
+	Revision   int64            `json:"revision"`
 
 	// Status `completed`, `incomplete`, `failed`, and `cancelled` are final. Once a
 	// turn reaches one of them it never changes again. Do not encode that
@@ -6664,10 +6717,14 @@ type TurnChange struct {
 	// iteration, output-token, estimated-cost, and credit ceilings.
 	Status TurnStatus `json:"status"`
 
-	// StopReason Why the turn stopped. Present once it has stopped, so an
-	// `incomplete` change names the limit that ran out.
-	StopReason                 *TurnStopReason             `json:"stop_reason,omitempty"`
-	StructuredOutput           *map[string]interface{}     `json:"structured_output"`
+	// StopReason Why the turn stopped. Present on the current change once the turn
+	// has stopped, so an `incomplete` change names the limit that ran
+	// out. Absent otherwise.
+	StopReason       *TurnStopReason         `json:"stop_reason,omitempty"`
+	StructuredOutput *map[string]interface{} `json:"structured_output"`
+
+	// StructuredOutputProvenance Present on the current terminal change of a turn that produced
+	// `structured_output`.
 	StructuredOutputProvenance *StructuredOutputProvenance `json:"structured_output_provenance,omitempty"`
 
 	// Terminal Whether this change is the turn's end. It is exactly
@@ -6685,15 +6742,20 @@ type TurnChange struct {
 	ThroughMessageSequence *int64 `json:"through_message_sequence"`
 
 	// ToolCalls Every tool call this turn has made, with its current status.
-	// Omitted when the turn has made none. A tool call changing state is
-	// itself a change, so a failed or long-running call is visible
-	// before its result message arrives, and a client that was
+	// Present on the current change, as `[]` when the turn has made
+	// none, and omitted from replayed changes. A tool call changing
+	// state is itself a change, so a failed or long-running call is
+	// visible before its result message arrives, and a client that was
 	// disconnected sees it on replay.
 	ToolCalls *[]ToolCallSummary `json:"tool_calls,omitempty"`
 
 	// TurnID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
-	TurnID TurnID      `json:"turn_id"`
-	Usage  *ModelUsage `json:"usage,omitempty"`
+	TurnID TurnID `json:"turn_id"`
+
+	// Usage Model usage summed across the turn's recorded model calls. Present
+	// on the current terminal change of a turn that made one. Omitted
+	// for browser client tokens.
+	Usage *ModelUsage `json:"usage,omitempty"`
 }
 
 // TurnChildCounts Direct-child counts; descendants are not folded in recursively.
@@ -7432,8 +7494,17 @@ type IdempotencyKey = string
 // IfNoneMatch defines model for IfNoneMatch.
 type IfNoneMatch = string
 
+// LastEventID defines model for LastEventID.
+type LastEventID = string
+
 // Limit defines model for Limit.
 type Limit = int
+
+// StreamCursor defines model for StreamCursor.
+type StreamCursor = string
+
+// StreamDeltas defines model for StreamDeltas.
+type StreamDeltas = bool
 
 // TenantKeyFilter defines model for TenantKeyFilter.
 type TenantKeyFilter = string
@@ -7664,7 +7735,23 @@ type ListConversationMessagesParams struct {
 
 // StreamConversationParams defines parameters for StreamConversation.
 type StreamConversationParams struct {
-	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	// Cursor Resume position: the `cursor` of the last `transcript.update` you
+	// applied, which is also that frame's SSE `id`. It is bound to the scope
+	// that issued it. A Turn cursor is accepted by that Turn's stream and by
+	// its Conversation's stream; a Conversation cursor only by the
+	// Conversation stream. Wins over `Last-Event-ID` when both are sent.
+	Cursor *StreamCursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Deltas Whether to send the id-less `message.delta` and `stream.resync`
+	// frames. Defaults to true. With `false` the connection carries only
+	// saved frames and `connection.closing`; replay, resumption, and
+	// settlement are unchanged.
+	Deltas *StreamDeltas `form:"deltas,omitempty" json:"deltas,omitempty"`
+
+	// LastEventID The resume position, as `EventSource`-style clients send it on
+	// reconnect. Same value and scope rules as `cursor`, which wins when
+	// both are present. At most one header, and never blank.
+	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
 }
 
 // ListCreditAccountsParams defines parameters for ListCreditAccounts.
@@ -7863,14 +7950,23 @@ type ListNudgesParams struct {
 
 // StreamTurnParams defines parameters for StreamTurn.
 type StreamTurnParams struct {
-	// Cursor Opaque cursor returned by the same operation and filter set.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+	// Cursor Resume position: the `cursor` of the last `transcript.update` you
+	// applied, which is also that frame's SSE `id`. It is bound to the scope
+	// that issued it. A Turn cursor is accepted by that Turn's stream and by
+	// its Conversation's stream; a Conversation cursor only by the
+	// Conversation stream. Wins over `Last-Event-ID` when both are sent.
+	Cursor *StreamCursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 
-	// Deltas Include id-less preview frames. Defaults to true.
-	Deltas *bool `form:"deltas,omitempty" json:"deltas,omitempty"`
+	// Deltas Whether to send the id-less `message.delta` and `stream.resync`
+	// frames. Defaults to true. With `false` the connection carries only
+	// saved frames and `connection.closing`; replay, resumption, and
+	// settlement are unchanged.
+	Deltas *StreamDeltas `form:"deltas,omitempty" json:"deltas,omitempty"`
 
-	// LastEventID Opaque cursor from the last durable update; ignored when the cursor query parameter is supplied.
-	LastEventID *string `json:"Last-Event-ID,omitempty"`
+	// LastEventID The resume position, as `EventSource`-style clients send it on
+	// reconnect. Same value and scope rules as `cursor`, which wins when
+	// both are present. At most one header, and never blank.
+	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
 }
 
 // ListToolCallsParams defines parameters for ListToolCalls.
@@ -9248,179 +9344,6 @@ func (t *ConversationOwner) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-// AsTranscriptUpdateEvent returns the union data inside the ConversationStreamEvent as a TranscriptUpdateEvent
-func (t ConversationStreamEvent) AsTranscriptUpdateEvent() (TranscriptUpdateEvent, error) {
-	var body TranscriptUpdateEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromTranscriptUpdateEvent overwrites any union data inside the ConversationStreamEvent as the provided TranscriptUpdateEvent
-func (t *ConversationStreamEvent) FromTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	t.union = b
-	return err
-}
-
-// MergeTranscriptUpdateEvent performs a merge with any union data inside the ConversationStreamEvent, using the provided TranscriptUpdateEvent
-func (t *ConversationStreamEvent) MergeTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsMessageDeltaEvent returns the union data inside the ConversationStreamEvent as a MessageDeltaEvent
-func (t ConversationStreamEvent) AsMessageDeltaEvent() (MessageDeltaEvent, error) {
-	var body MessageDeltaEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromMessageDeltaEvent overwrites any union data inside the ConversationStreamEvent as the provided MessageDeltaEvent
-func (t *ConversationStreamEvent) FromMessageDeltaEvent(v MessageDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
-	t.union = b
-	return err
-}
-
-// MergeMessageDeltaEvent performs a merge with any union data inside the ConversationStreamEvent, using the provided MessageDeltaEvent
-func (t *ConversationStreamEvent) MergeMessageDeltaEvent(v MessageDeltaEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsStreamResyncEvent returns the union data inside the ConversationStreamEvent as a StreamResyncEvent
-func (t ConversationStreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
-	var body StreamResyncEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromStreamResyncEvent overwrites any union data inside the ConversationStreamEvent as the provided StreamResyncEvent
-func (t *ConversationStreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	t.union = b
-	return err
-}
-
-// MergeStreamResyncEvent performs a merge with any union data inside the ConversationStreamEvent, using the provided StreamResyncEvent
-func (t *ConversationStreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-// AsConnectionClosingEvent returns the union data inside the ConversationStreamEvent as a ConnectionClosingEvent
-func (t ConversationStreamEvent) AsConnectionClosingEvent() (ConnectionClosingEvent, error) {
-	var body ConnectionClosingEvent
-	err := json.Unmarshal(t.union, &body)
-	return body, err
-}
-
-// FromConnectionClosingEvent overwrites any union data inside the ConversationStreamEvent as the provided ConnectionClosingEvent
-func (t *ConversationStreamEvent) FromConnectionClosingEvent(v ConnectionClosingEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
-	t.union = b
-	return err
-}
-
-// MergeConnectionClosingEvent performs a merge with any union data inside the ConversationStreamEvent, using the provided ConnectionClosingEvent
-func (t *ConversationStreamEvent) MergeConnectionClosingEvent(v ConnectionClosingEvent) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
-	if err != nil {
-		return err
-	}
-
-	merged, err := runtime.JSONMerge(t.union, b)
-	t.union = merged
-	return err
-}
-
-func (t ConversationStreamEvent) Discriminator() (string, error) {
-	var discriminator struct {
-		Discriminator string `json:"type"`
-	}
-	err := json.Unmarshal(t.union, &discriminator)
-	return discriminator.Discriminator, err
-}
-
-func (t ConversationStreamEvent) ValueByDiscriminator() (interface{}, error) {
-	discriminator, err := t.Discriminator()
-	if err != nil {
-		return nil, err
-	}
-	switch discriminator {
-	case "connection.closing":
-		return t.AsConnectionClosingEvent()
-	case "message.delta":
-		return t.AsMessageDeltaEvent()
-	case "stream.resync":
-		return t.AsStreamResyncEvent()
-	case "transcript.update":
-		return t.AsTranscriptUpdateEvent()
-	default:
-		return nil, errors.New("unknown discriminator value: " + discriminator)
-	}
-}
-
-func (t ConversationStreamEvent) MarshalJSON() ([]byte, error) {
-	b, err := t.union.MarshalJSON()
-	return b, err
-}
-
-func (t *ConversationStreamEvent) UnmarshalJSON(b []byte) error {
-	err := t.union.UnmarshalJSON(b)
-	return err
-}
-
 // AsDefaultMemoryNone returns the union data inside the DefaultMemoryPolicy as a DefaultMemoryNone
 func (t DefaultMemoryPolicy) AsDefaultMemoryNone() (DefaultMemoryNone, error) {
 	var body DefaultMemoryNone
@@ -9968,6 +9891,179 @@ func (t ProviderKeySelection) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ProviderKeySelection) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsTranscriptUpdateEvent returns the union data inside the StreamEvent as a TranscriptUpdateEvent
+func (t StreamEvent) AsTranscriptUpdateEvent() (TranscriptUpdateEvent, error) {
+	var body TranscriptUpdateEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTranscriptUpdateEvent overwrites any union data inside the StreamEvent as the provided TranscriptUpdateEvent
+func (t *StreamEvent) FromTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	t.union = b
+	return err
+}
+
+// MergeTranscriptUpdateEvent performs a merge with any union data inside the StreamEvent, using the provided TranscriptUpdateEvent
+func (t *StreamEvent) MergeTranscriptUpdateEvent(v TranscriptUpdateEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"transcript.update"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMessageDeltaEvent returns the union data inside the StreamEvent as a MessageDeltaEvent
+func (t StreamEvent) AsMessageDeltaEvent() (MessageDeltaEvent, error) {
+	var body MessageDeltaEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMessageDeltaEvent overwrites any union data inside the StreamEvent as the provided MessageDeltaEvent
+func (t *StreamEvent) FromMessageDeltaEvent(v MessageDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
+	t.union = b
+	return err
+}
+
+// MergeMessageDeltaEvent performs a merge with any union data inside the StreamEvent, using the provided MessageDeltaEvent
+func (t *StreamEvent) MergeMessageDeltaEvent(v MessageDeltaEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"message.delta"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsStreamResyncEvent returns the union data inside the StreamEvent as a StreamResyncEvent
+func (t StreamEvent) AsStreamResyncEvent() (StreamResyncEvent, error) {
+	var body StreamResyncEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromStreamResyncEvent overwrites any union data inside the StreamEvent as the provided StreamResyncEvent
+func (t *StreamEvent) FromStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	t.union = b
+	return err
+}
+
+// MergeStreamResyncEvent performs a merge with any union data inside the StreamEvent, using the provided StreamResyncEvent
+func (t *StreamEvent) MergeStreamResyncEvent(v StreamResyncEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"stream.resync"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsConnectionClosingEvent returns the union data inside the StreamEvent as a ConnectionClosingEvent
+func (t StreamEvent) AsConnectionClosingEvent() (ConnectionClosingEvent, error) {
+	var body ConnectionClosingEvent
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromConnectionClosingEvent overwrites any union data inside the StreamEvent as the provided ConnectionClosingEvent
+func (t *StreamEvent) FromConnectionClosingEvent(v ConnectionClosingEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
+	t.union = b
+	return err
+}
+
+// MergeConnectionClosingEvent performs a merge with any union data inside the StreamEvent, using the provided ConnectionClosingEvent
+func (t *StreamEvent) MergeConnectionClosingEvent(v ConnectionClosingEvent) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"type":"connection.closing"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t StreamEvent) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"type"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t StreamEvent) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "connection.closing":
+		return t.AsConnectionClosingEvent()
+	case "message.delta":
+		return t.AsMessageDeltaEvent()
+	case "stream.resync":
+		return t.AsStreamResyncEvent()
+	case "transcript.update":
+		return t.AsTranscriptUpdateEvent()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t StreamEvent) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *StreamEvent) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -11458,9 +11554,12 @@ type ClientInterface interface {
 
 	// StreamConversation Follow current and future Turns in a Conversation
 	//
-	// Streams Conversation events and may remain open while idle. A cursor
-	// issued for a Turn in this Conversation is accepted; a standalone Turn
-	// cursor is not.
+	// Streams saved transcript updates and optional live previews for every
+	// Turn in the Conversation, current and future, and may remain open
+	// while idle. Without a cursor it starts at the Conversation's first
+	// message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot.
+	// A cursor issued for a Turn in this Conversation is accepted; a
+	// standalone Turn cursor is not.
 	//
 	// Corresponds with GET /v1/conversations/{conversation_id}/stream (the `StreamConversation` operationId).
 	StreamConversation(ctx context.Context, conversationID ConversationID, params *StreamConversationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -12235,10 +12334,14 @@ type ClientInterface interface {
 
 	// StreamTurn Follow one Turn over Server-Sent Events
 	//
-	// Carries only this turn's durable transcript updates and optional live
-	// previews, then closes after its terminal change is delivered. The
-	// cursor is scoped to the Turn and never reveals an internal
-	// carrier Conversation for a standalone turn.
+	// Carries only this turn's saved transcript updates and optional live
+	// previews. Without a cursor the stream starts at the turn's first
+	// message, so nothing that predates the turn is replayed. Once the
+	// turn's terminal change is delivered the server writes
+	// `connection.closing` with reason `settled` and closes; a turn that had
+	// already settled when you connected delivers its rows and settles the
+	// same way. The cursor is scoped to the Turn and never reveals an
+	// internal carrier Conversation for a standalone turn.
 	//
 	// Corresponds with GET /v1/turns/{turn_id}/stream (the `StreamTurn` operationId).
 	StreamTurn(ctx context.Context, turnID TurnID, params *StreamTurnParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -13543,9 +13646,12 @@ func (c *Client) ListConversationMessages(ctx context.Context, conversationID Co
 
 // StreamConversation Follow current and future Turns in a Conversation
 //
-// Streams Conversation events and may remain open while idle. A cursor
-// issued for a Turn in this Conversation is accepted; a standalone Turn
-// cursor is not.
+// Streams saved transcript updates and optional live previews for every
+// Turn in the Conversation, current and future, and may remain open
+// while idle. Without a cursor it starts at the Conversation's first
+// message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot.
+// A cursor issued for a Turn in this Conversation is accepted; a
+// standalone Turn cursor is not.
 //
 // Corresponds with GET /v1/conversations/{conversation_id}/stream (the `StreamConversation` operationId).
 func (c *Client) StreamConversation(ctx context.Context, conversationID ConversationID, params *StreamConversationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -14890,10 +14996,14 @@ func (c *Client) ResumeTurn(ctx context.Context, turnID TurnID, body ResumeTurnJ
 
 // StreamTurn Follow one Turn over Server-Sent Events
 //
-// Carries only this turn's durable transcript updates and optional live
-// previews, then closes after its terminal change is delivered. The
-// cursor is scoped to the Turn and never reveals an internal
-// carrier Conversation for a standalone turn.
+// Carries only this turn's saved transcript updates and optional live
+// previews. Without a cursor the stream starts at the turn's first
+// message, so nothing that predates the turn is replayed. Once the
+// turn's terminal change is delivered the server writes
+// `connection.closing` with reason `settled` and closes; a turn that had
+// already settled when you connected delivers its rows and settles the
+// same way. The cursor is scoped to the Turn and never reveals an
+// internal carrier Conversation for a standalone turn.
 //
 // Corresponds with GET /v1/turns/{turn_id}/stream (the `StreamTurn` operationId).
 func (c *Client) StreamTurn(ctx context.Context, turnID TurnID, params *StreamTurnParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -17145,6 +17255,18 @@ func NewStreamConversationRequest(server string, conversationID ConversationID, 
 
 		}
 
+		if params.Deltas != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "deltas", *params.Deltas, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -17154,6 +17276,21 @@ func NewStreamConversationRequest(server string, conversationID ConversationID, 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.LastEventID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Last-Event-ID", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -21357,9 +21494,12 @@ type ClientWithResponsesInterface interface {
 
 	// StreamConversationWithResponse Follow current and future Turns in a Conversation
 	//
-	// Streams Conversation events and may remain open while idle. A cursor
-	// issued for a Turn in this Conversation is accepted; a standalone Turn
-	// cursor is not.
+	// Streams saved transcript updates and optional live previews for every
+	// Turn in the Conversation, current and future, and may remain open
+	// while idle. Without a cursor it starts at the Conversation's first
+	// message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot.
+	// A cursor issued for a Turn in this Conversation is accepted; a
+	// standalone Turn cursor is not.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -22200,10 +22340,14 @@ type ClientWithResponsesInterface interface {
 
 	// StreamTurnWithResponse Follow one Turn over Server-Sent Events
 	//
-	// Carries only this turn's durable transcript updates and optional live
-	// previews, then closes after its terminal change is delivered. The
-	// cursor is scoped to the Turn and never reveals an internal
-	// carrier Conversation for a standalone turn.
+	// Carries only this turn's saved transcript updates and optional live
+	// previews. Without a cursor the stream starts at the turn's first
+	// message, so nothing that predates the turn is replayed. Once the
+	// turn's terminal change is delivered the server writes
+	// `connection.closing` with reason `settled` and closes; a turn that had
+	// already settled when you connected delivers its rows and settles the
+	// same way. The cursor is scoped to the Turn and never reveals an
+	// internal carrier Conversation for a standalone turn.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -31323,9 +31467,12 @@ func (c *ClientWithResponses) ListConversationMessagesWithResponse(ctx context.C
 
 // StreamConversationWithResponse Follow current and future Turns in a Conversation
 //
-// Streams Conversation events and may remain open while idle. A cursor
-// issued for a Turn in this Conversation is accepted; a standalone Turn
-// cursor is not.
+// Streams saved transcript updates and optional live previews for every
+// Turn in the Conversation, current and future, and may remain open
+// while idle. Without a cursor it starts at the Conversation's first
+// message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot.
+// A cursor issued for a Turn in this Conversation is accepted; a
+// standalone Turn cursor is not.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -32508,10 +32655,14 @@ func (c *ClientWithResponses) ResumeTurnWithResponse(ctx context.Context, turnID
 
 // StreamTurnWithResponse Follow one Turn over Server-Sent Events
 //
-// Carries only this turn's durable transcript updates and optional live
-// previews, then closes after its terminal change is delivered. The
-// cursor is scoped to the Turn and never reveals an internal
-// carrier Conversation for a standalone turn.
+// Carries only this turn's saved transcript updates and optional live
+// previews. Without a cursor the stream starts at the turn's first
+// message, so nothing that predates the turn is replayed. Once the
+// turn's terminal change is delivered the server writes
+// `connection.closing` with reason `settled` and closes; a turn that had
+// already settled when you connected delivers its rows and settles the
+// same way. The cursor is scoped to the Turn and never reveals an
+// internal carrier Conversation for a standalone turn.
 //
 // Returns a wrapper object for the known response body format(s).
 //

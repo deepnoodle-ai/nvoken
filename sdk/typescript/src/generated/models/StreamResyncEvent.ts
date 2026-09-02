@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * nvoken API
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential\'s existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn\'s terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -34,23 +34,11 @@ export interface StreamResyncEvent {
      */
     type: StreamResyncEventTypeEnum;
     /**
-     * RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
-     * @type {string}
-     * @memberof StreamResyncEvent
-     */
-    conversationId: string | null;
-    /**
-     * Scheduled private-content expiry for a terminal standalone Turn.
-     * Null while it is nonterminal and for conversation-bound work.
-     *
-     * @type {Date}
-     * @memberof StreamResyncEvent
-     */
-    contentExpiresAt: Date | null;
-    /**
-     * The Turn whose previews are void. Absent means every
-     * Turn in the Conversation: an absent field is scope, where a null
-     * identifier would be scope wearing an identifier's name.
+     * The Turn whose previews are void. On a Turn stream it is always
+     * present and names that Turn. On a Conversation stream it is
+     * present when one Turn's previews are void and absent when every
+     * preview in the Conversation is: an absent field is scope, where a
+     * null identifier would be scope wearing an identifier's name.
      *
      * @type {string}
      * @memberof StreamResyncEvent
@@ -79,8 +67,6 @@ export type StreamResyncEventTypeEnum = typeof StreamResyncEventTypeEnum[keyof t
  */
 export function instanceOfStreamResyncEvent(value: object): value is StreamResyncEvent {
     if (!('type' in value) || value['type'] === undefined) return false;
-    if (!('conversationId' in value) || value['conversationId'] === undefined) return false;
-    if (!('contentExpiresAt' in value) || value['contentExpiresAt'] === undefined) return false;
     if (!('reason' in value) || value['reason'] === undefined) return false;
     return true;
 }
@@ -96,8 +82,6 @@ export function StreamResyncEventFromJSONTyped(json: any, ignoreDiscriminator: b
     return {
 
         'type': json['type'],
-        'conversationId': json['conversation_id'],
-        'contentExpiresAt': (json['content_expires_at'] == null ? null : new Date(json['content_expires_at'])),
         'turnId': json['turn_id'] == null ? undefined : json['turn_id'],
         'reason': StreamResyncReasonFromJSON(json['reason']),
     };
@@ -115,8 +99,6 @@ export function StreamResyncEventToJSONTyped(value?: StreamResyncEvent | null, i
     return {
 
         'type': value['type'],
-        'conversation_id': value['conversationId'],
-        'content_expires_at': value['contentExpiresAt'] == null ? value['contentExpiresAt'] : value['contentExpiresAt'].toISOString(),
         'turn_id': value['turnId'],
         'reason': StreamResyncReasonToJSON(value['reason']),
     };

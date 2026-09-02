@@ -5,7 +5,6 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
         "messages": [
           {
             "id": "89f5ce23-9fb3-7a9e-9c7f-2dcb44c41346",
@@ -28,22 +27,21 @@
         "turn_changes": [
           {
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+            "content_expires_at": null,
             "revision": 1,
             "status": "running",
             "terminal": false,
+            "current": true,
             "through_message_sequence": 1,
             "error": null,
-            "usage": null,
-            "provenance": null,
             "structured_output": null,
-            "structured_output_provenance": null,
             "occurred_at": "2026-07-21T12:00:01Z",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
-            "content_expires_at": null
+            "tool_calls": []
           }
         ],
-        "cursor": "cursor-1",
-        "content_expires_at": null
+        "has_more": false,
+        "cursor": "cursor-1"
       }
     },
     {
@@ -51,7 +49,6 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
         "messages": [
           {
             "id": "89f5ce23-9fb3-7a9e-9c7f-2dcb44c41346",
@@ -91,30 +88,28 @@
         "turn_changes": [
           {
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+            "content_expires_at": null,
             "revision": 1,
             "status": "running",
             "terminal": false,
+            "current": false,
             "through_message_sequence": 1,
             "error": null,
-            "usage": null,
-            "provenance": null,
             "structured_output": null,
-            "structured_output_provenance": null,
-            "occurred_at": "2026-07-21T12:00:01Z",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
-            "content_expires_at": null
+            "occurred_at": "2026-07-21T12:00:01Z"
           },
           {
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+            "content_expires_at": null,
             "revision": 2,
             "status": "completed",
             "terminal": true,
+            "current": true,
             "through_message_sequence": 2,
             "error": null,
-            "usage": null,
-            "provenance": null,
             "structured_output": null,
-            "structured_output_provenance": null,
             "occurred_at": "2026-07-21T12:00:03Z",
             "stop_reason": "end_turn",
             "tool_calls": [
@@ -126,12 +121,11 @@
                 "updated_at": "2026-07-21T12:00:02Z"
               }
             ],
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
-            "content_expires_at": null
+            "final_answer_message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8"
           }
         ],
-        "cursor": "cursor-2",
-        "content_expires_at": null
+        "has_more": false,
+        "cursor": "cursor-2"
       }
     },
     {
@@ -139,11 +133,10 @@
       "event": "transcript.update",
       "data": {
         "type": "transcript.update",
-        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
         "messages": [],
         "turn_changes": [],
-        "cursor": "cursor-2",
-        "content_expires_at": null
+        "has_more": false,
+        "cursor": "cursor-2"
       }
     },
     {
@@ -151,15 +144,14 @@
       "event": "message.delta",
       "data": {
         "type": "message.delta",
-        "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
         "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
         "attempt": 1,
         "message_id": "f29873b8-b85b-7b39-9f19-743348119f04",
         "content_index": 0,
+        "offset": 0,
         "kind": "text",
         "delta": "ephemeral",
-        "emitted_at": "2026-07-21T12:00:02Z",
-        "content_expires_at": null
+        "emitted_at": "2026-07-21T12:00:02Z"
       }
     }
   ],
@@ -172,15 +164,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 1,
+            "offset": 0,
             "kind": "text",
             "delta": "Hel",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -188,15 +179,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 0,
+            "offset": 0,
             "kind": "thinking",
             "delta": "plan",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -204,15 +194,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 1,
+            "offset": 3,
             "kind": "text",
             "delta": "lo",
-            "emitted_at": "2026-07-21T12:00:02Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:02Z"
           }
         }
       ],
@@ -243,17 +232,16 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 2,
+            "offset": 0,
             "kind": "tool_arguments",
             "delta": "{\"order_id\"",
             "tool_call_id": "63779fde-08fe-71c9-a953-873cd55651a4",
             "name": "lookup_order",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -261,17 +249,16 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 2,
+            "offset": 11,
             "kind": "tool_arguments",
             "delta": ":\"A-1\"}",
             "tool_call_id": "63779fde-08fe-71c9-a953-873cd55651a4",
             "name": "lookup_order",
-            "emitted_at": "2026-07-21T12:00:02Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:02Z"
           }
         }
       ],
@@ -296,15 +283,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 0,
+            "offset": 0,
             "kind": "text",
             "delta": "old",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -312,15 +298,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 1,
+            "offset": 0,
             "kind": "thinking",
             "delta": "old thought",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -328,15 +313,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 2,
             "message_id": "dccffdac-d2c4-7ff5-9e0a-4c5a034ecbfb",
             "content_index": 0,
+            "offset": 0,
             "kind": "text",
             "delta": "new",
-            "emitted_at": "2026-07-21T12:00:03Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:03Z"
           }
         }
       ],
@@ -359,15 +343,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 0,
+            "offset": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -375,10 +358,8 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
-            "reason": "live_delivery_gap",
-            "content_expires_at": null
+            "reason": "live_delivery_gap"
           }
         }
       ],
@@ -392,15 +373,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 0,
+            "offset": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -408,9 +388,7 @@
           "event": "stream.resync",
           "data": {
             "type": "stream.resync",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
-            "reason": "live_delivery_gap",
-            "content_expires_at": null
+            "reason": "live_delivery_gap"
           }
         }
       ],
@@ -424,15 +402,14 @@
           "event": "message.delta",
           "data": {
             "type": "message.delta",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
             "attempt": 1,
             "message_id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
             "content_index": 0,
+            "offset": 0,
             "kind": "text",
             "delta": "provisional",
-            "emitted_at": "2026-07-21T12:00:01Z",
-            "content_expires_at": null
+            "emitted_at": "2026-07-21T12:00:01Z"
           }
         },
         {
@@ -440,7 +417,6 @@
           "event": "transcript.update",
           "data": {
             "type": "transcript.update",
-            "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
             "messages": [
               {
                 "id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
@@ -461,12 +437,71 @@
               }
             ],
             "turn_changes": [],
-            "cursor": "cursor-2",
-            "content_expires_at": null
+            "has_more": false,
+            "cursor": "cursor-2"
           }
         }
       ],
       "expected_previews": []
+    },
+    {
+      "name": "a saved message discards only the preview it replaces",
+      "events": [
+        {
+          "id": "",
+          "event": "message.delta",
+          "data": {
+            "type": "message.delta",
+            "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+            "attempt": 1,
+            "message_id": "b1c9e2f4-7d3a-7c1e-8a2b-5e6f7a8b9c0d",
+            "content_index": 0,
+            "offset": 0,
+            "kind": "text",
+            "delta": "next",
+            "emitted_at": "2026-07-21T12:00:03Z"
+          }
+        },
+        {
+          "id": "cursor-2",
+          "event": "transcript.update",
+          "data": {
+            "type": "transcript.update",
+            "messages": [
+              {
+                "id": "85770b50-8915-79ac-b01c-6eb1548ea9b8",
+                "conversation_id": "db4eaf24-1ac6-776e-8f98-badc6d0dc764",
+                "agent_id": "e1ec4be4-ffd5-7789-83bc-fb8f0f1eb276",
+                "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+                "content_expires_at": null,
+                "user_key": null,
+                "sequence": 2,
+                "role": "assistant",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "canonical"
+                  }
+                ],
+                "created_at": "2026-07-21T12:00:02Z"
+              }
+            ],
+            "turn_changes": [],
+            "has_more": false,
+            "cursor": "cursor-2"
+          }
+        }
+      ],
+      "expected_previews": [
+        {
+          "turn_id": "33b82f49-6105-75f4-b829-3e5d1f2f3dba",
+          "attempt": 1,
+          "message_id": "b1c9e2f4-7d3a-7c1e-8a2b-5e6f7a8b9c0d",
+          "content_index": 0,
+          "kind": "text",
+          "delta": "next"
+        }
+      ]
     }
   ],
   "expected": {
