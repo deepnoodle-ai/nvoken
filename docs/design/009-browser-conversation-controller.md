@@ -1,8 +1,8 @@
 # The browser conversation controller
 
-**Status:** Accepted. Steps 2 through 4 are implemented; step 1, the
-contract's bounded transcript tail (C1), is pending on the service, and the
-controller reads the whole transcript and trims client-side until it lands.
+**Status:** Accepted and implemented. Every step is in, including C1: the
+service published the bounded transcript read and the controller reads a
+window on the wire.
 **Author:** Claude Fable 5.1 with Curtis Myzie
 **Date:** 2026-09-02
 **Applies to:** the service for one contract change; this repository for the
@@ -198,19 +198,13 @@ flag, because `limit` alone selects the window and a second parameter meaning
 `before` or `order` on `listConversationMessages`, the pre-cut tail's per-Turn
 lifecycle records, and its incremental drain mode. The proposal records why.
 
-**This repository, once published:** `make sdk-generate`, then
-`make sdk-generate-check`, `make openapi-check`, `make facade-check`. The
-operation stays in `RAW_ONLY`, so parity needs no change. `sdk/operations.json`
-is regenerated from the contract and tracks IDs, methods, and paths only, so
-it does not change. `readTranscriptWindow` in `conversation-controller.ts`
+**This repository, done:** the contract was published and regenerated, and
+`sdk/operations.json` did not change, the operation's id, method, and path
+having stayed where they were. The operation remains in `RAW_ONLY`, so parity
+needed no change. `readTranscriptWindow` in `conversation-controller.ts`
 passes `limit` and `pageToken` and takes `hasMore` and `nextPageToken` from
-the response; the client-side trim goes away. That function is the only place
+the response; the client-side trim is gone. That function is the only place
 the parameters appear.
-
-**Until the service change lands:** the controller's bootstrap code path is
-the same call without parameters, trimmed client-side to the newest 50.
-Correct, not bounded on the wire, and the README says so. Do not call the
-feature done until the bounded form is in.
 
 ## SDK changes
 
@@ -510,8 +504,7 @@ same surface; do not leave it stale.
   bounded transcript read.
 - `CHANGELOG.md` Unreleased: the controller; `Turn.admission`;
   `Turn.interrupt()` in all four SDKs; the reducer fold in all four SDKs;
-  `onConnectionChange`; and, once the contract lands, the bounded transcript
-  tail. One entry each.
+  `onConnectionChange`; and the bounded transcript read. One entry each.
 - `docs/reference/streaming-protocol.md`: note the reducer fold where
   `turn_changes` is described as a log, and that resuming a page is one
   transcript read plus a stream from its cursor.
@@ -537,9 +530,9 @@ donor branch is a source to copy from, never a merge base; do not rebase it.
 4. **Controller.** S5, S6, D8, the ported and new tests, README, changelog.
 5. `make check`, then `make sdk-check` against the conformance server.
 
-If step 1 lags, step 4 lands with the unbounded fallback from C1 and a
-follow-up PR switches on `tail` and `limit`. The feature is not announced
-until that follow-up is in.
+Step 1 lagged, so step 4 landed with the unbounded fallback and a follow-up PR
+switched it onto `limit` and `page_token`. The contract as published has no
+`tail` flag; `limit` alone selects the window.
 
 ## Risks to verify, not assume
 
@@ -567,8 +560,9 @@ until that follow-up is in.
 ## Follow-up raised by D0
 
 Reading a Conversation's recent transcript is common for machine callers too,
-and today it needs `raw()`. The facade has `Conversation.start/run/text` and
-no read at all. Once C1 lands, a `Conversation.transcript({ tail, limit })`
-returning the bounded snapshot, in four languages, would satisfy D0 for that
-operation and let the controller drop its last `raw()` call. That is a facade
-design decision for a separate document, not a reason to hold this series.
+and it still needs `raw()`. The facade has `Conversation.start/run/text` and
+no read at all. Now that C1 has landed, a
+`Conversation.transcript({ limit, pageToken })` returning the bounded snapshot,
+in four languages, would satisfy D0 for that operation and let the controller
+drop its last `raw()` call. That is a facade design decision carried by its own
+PR, not a reason to have held this series.
