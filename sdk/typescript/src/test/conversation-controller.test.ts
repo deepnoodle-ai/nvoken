@@ -33,7 +33,7 @@ test("the host controller admits once and resumes the acknowledged Conversation"
         if (admissionAttempts === 1) throw new TypeError("response was lost");
         return admissionResponse();
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
     },
@@ -87,7 +87,7 @@ test("bootstrap seeds activity from the Conversation before any frame arrives", 
     fetch: async (input, init) => {
       const url = requestURL(input);
       if (url.pathname.endsWith("/transcript")) {
-        return transcriptResponse({
+        return transcriptResponse(url, {
           conversation: wireConversation({
             active_turn_id: TURN_ID,
             active_turn_status: "running",
@@ -127,7 +127,7 @@ test("an unknown nonterminal lifecycle stays explicit and cannot enable a second
     fetch: async (input, init) => {
       const url = requestURL(input);
       if (url.pathname.endsWith("/transcript")) {
-        return transcriptResponse({
+        return transcriptResponse(url, {
           conversation: wireConversation({
             active_turn_id: TURN_ID,
             active_turn_status: "paused_by_future_runtime",
@@ -179,7 +179,7 @@ test("host authorization loss stops automatic work and recovers through the toke
       if (url.pathname.endsWith("/transcript") && !refreshed) {
         return Response.json({ message: "expired", code: "invalid_token" }, { status: 401 });
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
     },
@@ -216,7 +216,7 @@ test("a refused optional operation disables only that action", async () => {
     fetch: async (input, init) => {
       const url = requestURL(input);
       if (url.pathname.endsWith("/transcript")) {
-        return transcriptResponse({
+        return transcriptResponse(url, {
           conversation: wireConversation({
             active_turn_id: TURN_ID,
             active_turn_status: "running",
@@ -265,7 +265,7 @@ test("a busy Conversation refreshes the claim and disables send for the stated r
         transcriptReads += 1;
         // The first read is bootstrap and finds the Conversation idle. The
         // refresh after the 409 is where the other client's Turn shows up.
-        return transcriptResponse(transcriptReads === 1 ? {} : {
+        return transcriptResponse(url, transcriptReads === 1 ? {} : {
           conversation: wireConversation({
             active_turn_id: TURN_ID,
             active_turn_status: "running",
@@ -318,7 +318,7 @@ test("an uncertain send is retryable with the same input and the same key", asyn
         if (admissionAttempts === 1) throw new TypeError("response was lost");
         return admissionResponse();
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
     },
@@ -363,7 +363,7 @@ test("discarding an uncertain send reopens the composer under a fresh key", asyn
         if (admissionAttempts === 1) throw new TypeError("response was lost");
         return admissionResponse();
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
     },
@@ -413,7 +413,7 @@ test("recovery actions say nothing is lost rather than that something is running
     retry: { maxAttempts: 1 },
     fetch: async (input, init) => {
       const url = requestURL(input);
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
     },
@@ -625,7 +625,7 @@ test("start-over replaces the visitor, and a failed exchange keeps the old one",
         exchangeBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
         return grantResponse(exchanges, exchanges === 1 ? CONVERSATION_ID : null);
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) {
         streamOpens += 1;
         return stream.respond(init?.signal);
@@ -674,7 +674,7 @@ test("older history never moves the live cursor and stops at the 500-message win
     fetch: async (input, init) => {
       const url = requestURL(input);
       if (url.pathname.endsWith("/transcript")) {
-        return transcriptResponse({ messages: all });
+        return transcriptResponse(url, { messages: all });
       }
       if (url.pathname.endsWith("/stream")) {
         streamCursors.push(url.searchParams.get("cursor") ?? "");
@@ -699,6 +699,111 @@ test("older history never moves the live cursor and stops at the 500-message win
     assert.deepEqual(streamCursors, ["cursor-tail"]);
     assert.equal(Object.isFrozen(snapshot.messages), true);
     assert.equal(Object.isFrozen(snapshot.messages[0].content), true);
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("the wire read is bounded on bootstrap and on every older page", async () => {
+  const transcriptQueries: string[] = [];
+  const streamCursors: string[] = [];
+  const all = wireMessages(1, 180);
+  const client = createBrowserClient({
+    baseUrl: "https://bounded.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) {
+        transcriptQueries.push(url.search);
+        return transcriptResponse(url, { messages: all });
+      }
+      if (url.pathname.endsWith("/stream")) {
+        streamCursors.push(url.searchParams.get("cursor") ?? "");
+        return openSSE(init?.signal);
+      }
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    await waitFor(controller, (snapshot) => snapshot.connection.status === "connected");
+
+    // Bootstrap asks for a window, not the transcript.
+    assert.equal(transcriptQueries.length, 1);
+    const bootstrap = new URLSearchParams(transcriptQueries[0]);
+    assert.equal(bootstrap.get("limit"), "50");
+    assert.equal(bootstrap.has("page_token"), false);
+    assert.equal(controller.getSnapshot().messages.length, 50);
+    assert.equal(controller.getSnapshot().messages[0].sequence, 131);
+
+    // Each older page carries the previous response's token and its own bound.
+    await controller.loadEarlier();
+    await controller.loadEarlier();
+    assert.equal(transcriptQueries.length, 3);
+    for (const search of transcriptQueries.slice(1)) {
+      const query = new URLSearchParams(search);
+      assert.equal(query.get("limit"), "50");
+      assert.notEqual(query.get("page_token"), null);
+    }
+    // A token names a window, and the walk never re-reads one it already had.
+    const tokens = transcriptQueries.slice(1).map((search) =>
+      new URLSearchParams(search).get("page_token"));
+    assert.equal(new Set(tokens).size, tokens.length);
+
+    // No read ever asked for the whole transcript.
+    assert.equal(
+      transcriptQueries.every((search) => new URLSearchParams(search).has("limit")),
+      true,
+      "every transcript read was bounded on the wire",
+    );
+
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.messages.length, 150);
+    assert.equal(snapshot.messages[0].sequence, 31);
+    assert.equal(snapshot.messages.at(-1)?.sequence, 180);
+    // Every page reported the cut's cursor, so the stream was opened once and
+    // paging older history never restarted it.
+    assert.deepEqual(streamCursors, ["cursor-tail"]);
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("a walk to the beginning ends with no continuation and no lost message", async () => {
+  const all = wireMessages(1, 120);
+  const client = createBrowserClient({
+    baseUrl: "https://walk.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) {
+        return transcriptResponse(url, { messages: all });
+      }
+      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    await waitFor(controller, (snapshot) => snapshot.connection.status === "connected");
+    while (controller.getSnapshot().olderHistory.action.status === "enabled") {
+      await controller.loadEarlier();
+    }
+    const snapshot = controller.getSnapshot();
+    assert.equal(snapshot.messages.length, 120);
+    assert.deepEqual(
+      snapshot.messages.map((message) => message.sequence),
+      all.map((message) => Number(message.sequence)),
+    );
+    // The service said there was no continuation, so the control retires
+    // rather than offering a page that would come back empty.
+    assert.equal(snapshot.olderHistory.status, "ready");
+    assert.deepEqual(snapshot.olderHistory.action, {
+      status: "disabled",
+      reason: "no_earlier_history",
+    });
   } finally {
     controller.destroy();
   }
@@ -749,7 +854,7 @@ test("reconnect after a failed bootstrap reads the transcript it never got", asy
         if (transcriptReads === 1) {
           return Response.json({ message: "later", code: "unavailable" }, { status: 503 });
         }
-        return transcriptResponse({ messages: wireMessages(1, 2) });
+        return transcriptResponse(url, { messages: wireMessages(1, 2) });
       }
       if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
@@ -791,7 +896,7 @@ test("a stream rejected for authorization comes back when the anonymous grant re
         exchanges += 1;
         return grantResponse(exchanges, CONVERSATION_ID);
       }
-      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse(url);
       if (url.pathname.endsWith("/stream")) {
         streamOpens += 1;
         if (streamOpens === 1) {
@@ -838,7 +943,7 @@ test("an interrupt that finds no Turn leaves the Conversation in place", async (
         transcriptReads += 1;
         // The first read finds a Turn mid-flight; by the time the stop
         // button is pressed the runtime no longer has it.
-        return transcriptResponse(transcriptReads === 1 ? {
+        return transcriptResponse(url, transcriptReads === 1 ? {
           conversation: wireConversation({
             active_turn_id: TURN_ID,
             active_turn_status: "running",
@@ -888,7 +993,7 @@ test("collections keep their identity across frames that do not change them", as
     fetch: async (input, init) => {
       const url = requestURL(input);
       if (url.pathname.endsWith("/transcript")) {
-        return transcriptResponse({ messages: wireMessages(1, 2) });
+        return transcriptResponse(url, { messages: wireMessages(1, 2) });
       }
       if (url.pathname.endsWith("/stream")) return stream.respond(init?.signal);
       throw new Error(`unexpected request ${url.pathname}`);
@@ -950,15 +1055,53 @@ function wireConversation(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
-function transcriptResponse(overrides: Record<string, unknown> = {}): Response {
+/**
+ * The transcript endpoint as the service implements it.
+ *
+ * `limit` selects the newest window at one committed cut; `page_token` returns
+ * the window before it at that same cut, which the token carries. `has_more`
+ * and `next_page_token` are decided here, so a controller that trimmed
+ * client-side would be visibly reading more than it asked for. Absent both
+ * parameters the whole transcript comes back with `has_more` false, which is
+ * what the operation did before it gained a bound.
+ */
+function transcriptResponse(url: URL, overrides: Record<string, unknown> = {}): Response {
+  const { messages: seededMessages, cursor: seededCursor, ...rest } = overrides;
+  const all = (seededMessages as Record<string, unknown>[] | undefined) ?? [];
+  const headCursor = (seededCursor as string | undefined) ?? "cursor-tail";
+  const limitParameter = url.searchParams.get("limit");
+  const pageToken = url.searchParams.get("page_token");
+  const page = pageToken === null ? null : decodeTranscriptPageToken(pageToken);
+  const limit = limitParameter === null
+    ? (page === null ? Number.POSITIVE_INFINITY : 100)
+    : Number(limitParameter);
+  // The cut is fixed when the walk opens, so a later page reports the cursor
+  // the first page did rather than the head as it now stands.
+  const cursor = page?.cursor ?? headCursor;
+  const through = page?.through ?? Number.POSITIVE_INFINITY;
+  const eligible = all.filter((message) => Number(message.sequence) <= through);
+  const messages = Number.isFinite(limit) ? eligible.slice(-limit) : eligible;
+  const hasMore = messages.length < eligible.length;
   return Response.json({
     conversation: wireConversation(),
-    messages: [],
+    messages,
     compactions: [],
-    cursor: "cursor-tail",
+    cursor,
+    has_more: hasMore,
+    next_page_token: hasMore
+      ? encodeTranscriptPageToken({ through: Number(messages[0]!.sequence) - 1, cursor })
+      : null,
     captured_at: NOW,
-    ...overrides,
+    ...rest,
   });
+}
+
+function encodeTranscriptPageToken(token: { through: number; cursor: string }): string {
+  return Buffer.from(JSON.stringify(token), "utf8").toString("base64url");
+}
+
+function decodeTranscriptPageToken(token: string): { through: number; cursor: string } {
+  return JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
 }
 
 function wireTurn(status: "queued" | "running" | "completed" = "queued"): Record<string, unknown> {
