@@ -21,13 +21,27 @@ repository Actions secret.
 
 ## Prepare a release
 
-1. Update `CHANGELOG.md` and the versions in `sdk/go/version.go`,
+1. Read the review threads on every pull request merged since the last release
+   tag, and confirm anything a reviewer made approval conditional on was
+   actually applied before that pull request merged. A conditional approval is
+   not a merge gate, so the fix can be absent from the merged commit while the
+   review still reads as satisfied.
+2. Update `CHANGELOG.md` and the versions in `sdk/go/version.go`,
    `sdk/typescript/package.json`, `sdk/typescript/src/version.ts`,
    `sdk/python/pyproject.toml`, and `sdk/rust/Cargo.toml`.
-2. Run `make sdk-generate` so generated package metadata uses those versions.
-3. Run `make check`.
-4. Merge the release pull request and confirm the `check` workflow passed on
+3. Bump the `nvoken` entry in `sdk/rust/Cargo.lock` to match, with
+   `cargo update -p nvoken --offline` from `sdk/rust`. The lockfile is tracked
+   and pins the crate's own version, so `cargo --locked` fails to resolve
+   without it.
+4. Run `make sdk-generate` so generated package metadata uses those versions.
+5. Run `make check`.
+6. Merge the release pull request and confirm the `check` workflow passed on
    `main`.
+
+Step 1 is the only place a release-workflow defect is visible before it fires.
+`make check` runs on a branch checkout and cannot exercise the release
+workflows, which run only on a tag push; 0.35.0's npm job aborted on a bug that
+review had found, described, and given the fix for.
 
 The OpenAPI documents keep their independent contract version. Do not change
 `info.version` merely to match an SDK release.
