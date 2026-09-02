@@ -83,9 +83,12 @@ export class Reducer<TOutput extends object = Record<string, never>> {
     }
     if (frame.type !== "transcript.update") return;
 
+    // A saved message replaces only the preview that was building it. The
+    // Turn's next message may already be accumulating, and dropping that
+    // prefix loses text no later delta restores.
     for (const message of frame.messages) {
       this.messages.set(message.sequence, message);
-      if (message.role === "assistant" && message.turnId) this.discardPreviews(message.turnId);
+      this.discardMessagePreviews(message.id);
     }
     for (const change of frame.turnChanges) {
       this.changes.set(`${change.turnId}:${change.revision}`, change);
@@ -146,6 +149,12 @@ export class Reducer<TOutput extends object = Record<string, never>> {
       if (preview.turnId === turnId) this.previews.delete(key);
     }
     this.latestAttempts.delete(turnId);
+  }
+
+  private discardMessagePreviews(messageId: string): void {
+    for (const [key, preview] of this.previews) {
+      if (preview.messageId === messageId) this.previews.delete(key);
+    }
   }
 }
 

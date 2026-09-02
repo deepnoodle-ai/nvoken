@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn's terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -11,45 +11,37 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// TranscriptUpdateEvent : The saved frame, and the only one. Messages append by `sequence` and are never sent twice. Changes are an append log keyed by `(turn_id, revision)`; fold to the highest revision for current state. Within one frame apply messages before changes, so a turn is never marked settled before its final message exists.
+/// TranscriptUpdateEvent : The saved frame, and the only one. Messages append by `sequence` and are never sent twice. Changes are an append log keyed by `(turn_id, revision)`; fold to the highest revision for current state. Within one frame apply messages before changes, so a turn is never marked settled before its final message exists.  Scope lives on the rows: every message and change carries its own `conversation_id` and `content_expires_at`, so the frame repeats neither. A page is cut when it reaches the server's row or byte budget; `has_more` says another page follows immediately.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TranscriptUpdateEvent {
     #[serde(rename = "type")]
     pub r#type: Type,
-    /// RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
-    #[serde(rename = "conversation_id", deserialize_with = "Option::deserialize")]
-    pub conversation_id: Option<String>,
-    /// Scheduled private-content expiry for a terminal standalone Turn. Null while it is nonterminal and for conversation-bound work.
-    #[serde(
-        rename = "content_expires_at",
-        deserialize_with = "Option::deserialize"
-    )]
-    pub content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     #[serde(rename = "messages")]
     pub messages: Vec<models::ConversationMessage>,
     #[serde(rename = "turn_changes")]
     pub turn_changes: Vec<models::TurnChange>,
+    /// Whether saved rows past `cursor` were already known when this page was cut, so the next `transcript.update` follows without waiting for new work. `false` means you are caught up as of this frame.
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
     /// Your resume position. Store it and send it back as `cursor` to continue where you left off.
     #[serde(rename = "cursor")]
     pub cursor: String,
 }
 
 impl TranscriptUpdateEvent {
-    /// The saved frame, and the only one. Messages append by `sequence` and are never sent twice. Changes are an append log keyed by `(turn_id, revision)`; fold to the highest revision for current state. Within one frame apply messages before changes, so a turn is never marked settled before its final message exists.
+    /// The saved frame, and the only one. Messages append by `sequence` and are never sent twice. Changes are an append log keyed by `(turn_id, revision)`; fold to the highest revision for current state. Within one frame apply messages before changes, so a turn is never marked settled before its final message exists.  Scope lives on the rows: every message and change carries its own `conversation_id` and `content_expires_at`, so the frame repeats neither. A page is cut when it reaches the server's row or byte budget; `has_more` says another page follows immediately.
     pub fn new(
         r#type: Type,
-        conversation_id: Option<String>,
-        content_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
         messages: Vec<models::ConversationMessage>,
         turn_changes: Vec<models::TurnChange>,
+        has_more: bool,
         cursor: String,
     ) -> TranscriptUpdateEvent {
         TranscriptUpdateEvent {
             r#type,
-            conversation_id,
-            content_expires_at,
             messages,
             turn_changes,
+            has_more,
             cursor,
         }
     }

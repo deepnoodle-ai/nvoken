@@ -8,6 +8,19 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Fixed: a saved message discarded every preview of its Turn.** All four
+  reducers dropped the previews of the Turn's next message when an earlier one
+  landed, losing a prefix no later delta restores. They now discard only the
+  preview with the saved message's `message_id`; the shared fixture pins it.
+- **Adopt the streaming contract revision.** A Turn stream ends with
+  `connection.closing` reason `settled`; the frame union is `StreamEvent`;
+  frames no longer carry `conversation_id` or `content_expires_at` (rows still
+  do); `TurnChange` gains `current` and `final_answer_message_id`, with detail
+  fields present only on the current change; `transcript.update` gains
+  `has_more`, `message.delta` gains `offset`, and `TranscriptSnapshot` gains
+  the `cursor` to stream from. **Breaking:** clients that reconnect on every
+  close must stop on `settled`, and `ConversationStreamEvent` is renamed.
+
 ## 0.34.0 - 2026-08-30
 
 - **Conversations can change retention and compaction after creation.**

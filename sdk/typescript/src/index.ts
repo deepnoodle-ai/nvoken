@@ -45,7 +45,7 @@ export type {
   ConversationContentBlock,
   ConversationMessage,
   ConversationMessageList,
-  ConversationStreamEvent,
+  StreamEvent,
   ModelCost,
   ModelControlCapabilities,
   ModelDescriptor,

@@ -1,7 +1,7 @@
 /*
  * nvoken API
  *
- * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque and use `agent_`, `arev_`, `mspc_`, `conv_`, and `turn_` prefixes. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes after that Turn becomes terminal. A Conversation stream follows current and future Turns and may stay open while idle. Both use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.
+ * nvoken runs durable Agent Turns in the background. Each Turn selects one immutable AgentRevision or inline behavior, optional retained Conversation, and optional MemorySpace. Those coordinates remain independent: a Conversation supplies continuity only, and an optional user is the Turn actor.  ## Getting started  `POST /v1/turns` durably admits work and returns `202`. Follow it with `GET /v1/turns/{turn_id}/stream`, or read `/result` later. A standalone Turn omits `conversation`; a conversational Turn explicitly selects new, existing, or continue-or-create continuity. Disconnecting never cancels work.  Reusable behavior lives in owner-namespaced Agents. Creating an Agent creates revision 1 atomically; publishing appends an immutable AgentRevision and advances current without updating one resource per tenant or user. Exact HTTP key lookup always states App, tenant, or user ownership and never applies owner precedence.  ## Authorization  Machine credentials use `nvk_…` bearer API keys. Installation credentials manage Apps but resolve no tenant runtime data; App credentials operate only inside their App. `X-Nvoken-Tenant-Key` and `X-Nvoken-User-Key` are optional per-request assertions: they narrow reads and attribute writes, but never redefine Agent or Conversation ownership. A user assertion requires its tenant assertion. Callers may only narrow the credential's existing scope.  Browser callers use narrow short-lived grants. A verified browser grant pins one exact AgentRevision, so browser Turn admission omits behavior. Browser projections may omit machine-only detail while retaining the same resource schema. Anonymous work is memoryless.  ## Keys and IDs  Caller-owned keys are names in explicit owner namespaces. Service-owned IDs are opaque UUIDs and carry no type prefix. Paths take IDs; key resolution uses exact request or query coordinates.  ## Streams  A Turn stream closes with `connection.closing` reason `settled` once that Turn's terminal change is delivered. A Conversation stream follows current and future Turns and may stay open while idle. Both routes accept the same `cursor`, `deltas`, and `Last-Event-ID` parameters and use the same frame vocabulary. A Conversation-bound Turn cursor may resume on its Conversation stream; a standalone Turn cursor cannot.  Reconnect with your last saved `cursor` after any close but `settled`. Honor the `retry:` delay the stream opens with, and back off when the server keeps refusing the connection: a flat retry from every client is what turns an outage into a load spike.
  *
  * The version of the OpenAPI document: 0.1.0
  *
@@ -598,15 +598,19 @@ pub async fn list_conversations(
     }
 }
 
-/// Streams Conversation events and may remain open while idle. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
+/// Streams saved transcript updates and optional live previews for every Turn in the Conversation, current and future, and may remain open while idle. Without a cursor it starts at the Conversation's first message; `TranscriptSnapshot.cursor` resumes exactly after a snapshot. A cursor issued for a Turn in this Conversation is accepted; a standalone Turn cursor is not.
 pub async fn stream_conversation(
     configuration: &configuration::Configuration,
     conversation_id: &str,
     cursor: Option<&str>,
-) -> Result<models::ConversationStreamEvent, Error<StreamConversationError>> {
+    deltas: Option<bool>,
+    last_event_id: Option<&str>,
+) -> Result<models::StreamEvent, Error<StreamConversationError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_conversation_id = conversation_id;
     let p_query_cursor = cursor;
+    let p_query_deltas = deltas;
+    let p_header_last_event_id = last_event_id;
 
     let uri_str = format!(
         "{}/v1/conversations/{conversation_id}/stream",
@@ -618,8 +622,14 @@ pub async fn stream_conversation(
     if let Some(ref param_value) = p_query_cursor {
         req_builder = req_builder.query(&[("cursor", &param_value.to_string())]);
     }
+    if let Some(ref param_value) = p_query_deltas {
+        req_builder = req_builder.query(&[("deltas", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    if let Some(param_value) = p_header_last_event_id {
+        req_builder = req_builder.header("Last-Event-ID", param_value.to_string());
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
@@ -640,8 +650,8 @@ pub async fn stream_conversation(
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::ConversationStreamEvent`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ConversationStreamEvent`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::StreamEvent`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::StreamEvent`")))),
         }
     } else {
         let content = resp.text().await?;

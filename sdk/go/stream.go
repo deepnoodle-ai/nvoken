@@ -126,12 +126,13 @@ func (r *Reducer) Apply(event StreamEvent) error {
 			return fmt.Errorf("decode transcript update: %w", err)
 		}
 		// Messages land before terminal changes so a snapshot never settles a
-		// Turn before its final saved message is visible.
+		// Turn before its final saved message is visible. A saved message
+		// replaces only the preview that was building it: the Turn's next
+		// message may already be accumulating, and dropping that prefix loses
+		// text no later delta restores.
 		for _, message := range update.Messages {
 			r.messages[message.Sequence] = message
-			if message.TurnID != nil {
-				r.discardPreviews(*message.TurnID)
-			}
+			r.discardMessagePreviews(string(message.ID))
 		}
 		for _, change := range update.TurnChanges {
 			key := fmt.Sprintf("%s:%d", change.TurnID, change.Revision)
@@ -222,6 +223,16 @@ func (r *Reducer) discardPreviews(turnID string) {
 		}
 	}
 	delete(r.latestAttempts, turnID)
+}
+
+// discardMessagePreviews drops every content index of one previewed message
+// once the saved message carrying that ID has landed.
+func (r *Reducer) discardMessagePreviews(messageID string) {
+	for key := range r.previews {
+		if key.messageID == messageID {
+			delete(r.previews, key)
+		}
+	}
 }
 
 // Updates follows this Turn as reduced snapshots, reconnecting from the last

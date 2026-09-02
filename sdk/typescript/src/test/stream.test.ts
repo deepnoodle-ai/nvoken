@@ -126,8 +126,6 @@ function turnUpdate(
     event: "transcript.update",
     data: {
       type: "transcript.update",
-      conversation_id: null,
-      content_expires_at: null,
       messages: [],
       turn_changes: [{
         turn_id: "476dd7be-97a1-78f3-8096-d7032468a80a",
@@ -136,12 +134,15 @@ function turnUpdate(
         revision,
         status,
         terminal: status === "completed",
-        stop_reason: status === "completed" ? "end_turn" : null,
+        current: true,
         through_message_sequence: null,
         error: null,
         structured_output: null,
         occurred_at: "2026-07-21T12:00:00Z",
+        ...(status === "completed" ? { stop_reason: "end_turn" } : {}),
+        tool_calls: [],
       }],
+      has_more: false,
       cursor,
     },
   };

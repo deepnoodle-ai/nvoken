@@ -40,6 +40,7 @@ function change(
     revision: 1,
     status,
     terminal: ["completed", "incomplete", "failed", "cancelled"].includes(status),
+    current: true,
     throughMessageSequence: null,
     error: null,
     structuredOutput: null,
