@@ -29,15 +29,15 @@ pub use facade::{
     Agent, AgentCollection, AgentPage, Behavior, BehaviorSourceKind, Client, Conversation,
     ConversationContext, ConversationOwner, ConversationRef, ConversationTurnOptions, InlineAgent,
     InlineConversationContext, InlineMemory, InlineTurnOptions, IntoModelInput, IntoTurnInput,
-    Memory, NvokenError, OwnedBy, RawClient, Tool, ToolContext, ToolHandler, Turn, TurnAdmission,
-    TurnAdmissionError, TurnExecutionError, TurnOptions, TurnResult, TurnSnapshot,
-    TurnTimeoutError, TurnUpdate,
+    Memory, NvokenError, OwnedBy, RawClient, Tool, ToolContext, ToolHandler, TranscriptOptions,
+    Turn, TurnAdmission, TurnAdmissionError, TurnExecutionError, TurnOptions, TurnResult,
+    TurnSnapshot, TurnTimeoutError, TurnUpdate,
 };
 pub use media_preflight::{
     document_block, document_url_block, image_block, image_url_block, preflight_input_blocks,
     text_block, MediaIssue,
 };
-pub use models::{AgentRevision, MemorySpace};
+pub use models::{AgentRevision, MemorySpace, TranscriptSnapshot};
 pub use signed_delivery::{
     verify_signed_delivery, DeliveryError, DeliveryKeyError, DeliveryKeyTableError,
     DeliverySigningKey, SignedDelivery, SIGNATURE_TIMESTAMP_WINDOW,

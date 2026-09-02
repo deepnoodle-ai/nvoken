@@ -39,6 +39,7 @@ import type {
   ProviderKeyList,
   ProviderKeyScope,
   ToolCallSummary,
+  TranscriptSnapshot,
   TurnBehaviorSelection,
   TurnConversation,
   TurnMemorySelection,
@@ -59,6 +60,7 @@ import type {
   ClientOptions,
   Conversation,
   ConversationSelection,
+  ConversationTranscriptOptions,
   ConversationTurnOptions,
   CreateAgent,
   HostToolContract,
@@ -551,6 +553,22 @@ export class Client {
   }
 
   /** @internal */
+  async readConversationTranscript(
+    conversationId: string,
+    context: TurnAccessContext,
+    options: ConversationTranscriptOptions,
+    signal?: AbortSignal,
+  ): Promise<TranscriptSnapshot> {
+    return this.request(
+      () => this.exact.conversations.getConversationTranscript(
+        { conversationId, limit: options.limit, pageToken: options.pageToken },
+        contextOverride(context, signal),
+      ),
+      signal,
+    );
+  }
+
+  /** @internal */
   async submitToolResults(
     turnId: string,
     context: TurnAccessContext,
@@ -886,6 +904,28 @@ class ConversationHandle<TOutput extends object> implements Conversation<TOutput
 
   async text(input: TurnInput, options: ConversationTurnOptions = {}): Promise<string> {
     return requiredText(await this.run(input, options));
+  }
+
+  async transcript(
+    options: ConversationTranscriptOptions = {},
+  ): Promise<TranscriptSnapshot> {
+    // The route addresses a Conversation by its opaque id. A handle bound by
+    // key and owner has not resolved one yet, and resolving it here would mean
+    // creating the Conversation as a side effect of reading it.
+    const conversationId = this.bound.id;
+    if (!conversationId) {
+      throw new NvokenError(
+        "validation",
+        "transcript() needs the Conversation id; a key-bound Conversation "
+          + "learns it from the admission of its first Turn",
+      );
+    }
+    return this.client.readConversationTranscript(
+      conversationId,
+      { tenant: this.bound.tenant, user: this.bound.user },
+      options,
+      options.signal,
+    );
   }
 }
 

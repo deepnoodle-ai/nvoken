@@ -85,6 +85,11 @@ RAW_ONLY = {
     # building a chat, not administration — so it belongs on the Turn facade in
     # all four languages. It takes no query parameters and no body, so parity
     # passes by construction and this note is the only record of the decision.
+    #
+    # `getConversationTranscript` is absent for the same reason. Reading a
+    # Conversation back is what a chat does on every reload, so it is on the
+    # Conversation facade in all four languages, and its `limit` and
+    # `page_token` are checked here like any other workflow parameter.
     "cancelNudge",
     "cancelTurn",
     "createConversation",
@@ -95,7 +100,6 @@ RAW_ONLY = {
     "forkConversation",
     "getAgentRevision",
     "getConversation",
-    "getConversationTranscript",
     "getMemorySpace",
     "getTrace",
     "getTurn",
