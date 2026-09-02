@@ -581,6 +581,10 @@ class ConversationControllerImpl implements ConversationController {
   private startOverError?: NvokenError;
   private snapshot: ConversationSnapshot;
   private onlineListener?: () => void;
+  private bootstrapping?: { conversationId: string; promise: Promise<void> };
+  private readonly messagesView = new SharedView<ConversationMessage>();
+  private readonly lifecyclesView = new SharedView<TurnChange>();
+  private readonly previewsView = new SharedView<StreamPreview>(samePreview);
 
   constructor(private readonly authority: Authority, initialConversationId: string | null) {
     this.conversationId = initialConversationId;
@@ -614,6 +618,10 @@ class ConversationControllerImpl implements ConversationController {
         else if (this.recovery.status === "authorization_lost") this.recovery = { status: "none" };
       }
       this.publish();
+      // The anonymous grant renews on its own timer. A stream that stopped on
+      // a rejected token comes back here, when a good one exists again,
+      // rather than waiting for somebody to press a button.
+      if (state === "ready" && this.needsResume()) void this.resume(this.conversationId!);
     };
     this.installOnlineRecovery();
     void this.initialize();
@@ -664,7 +672,9 @@ class ConversationControllerImpl implements ConversationController {
         ? { status: "storage_unavailable" }
         : { status: "none" };
       this.publish();
-      if (this.conversationId) await this.bootstrap(this.conversationId);
+      // An anonymous authority already resumed through its ready callback;
+      // a host authority has no callback, so this is where its page recovers.
+      if (this.needsResume()) await this.resume(this.conversationId!);
     } catch (error) {
       throw await normalizeError(error);
     }
@@ -686,8 +696,14 @@ class ConversationControllerImpl implements ConversationController {
       this.interrupting = undefined;
       this.publish();
     } catch (error) {
-      const normalized = await this.handleTransportError(error);
+      // Scoped to the Turn: a 404 here says the Turn is gone, not the
+      // Conversation, and a stop button must not erase the transcript
+      // behind it.
+      const normalized = await this.handleTransportError(error, "turn");
       if (normalized.category === "permission") this.interruptDenied = true;
+      // A Turn the runtime no longer has cannot be the one holding the
+      // composer closed. Re-read so the claim says what is actually running.
+      if (normalized.category === "not_found") await this.refreshConversationClaim();
       this.interrupting = undefined;
       this.interruptionError = { turnId, error: normalized };
       this.publish();
@@ -697,13 +713,9 @@ class ConversationControllerImpl implements ConversationController {
 
   async reconnect(): Promise<void> {
     this.requireEnabled(this.reconnectAction(), "reconnect");
-    if (!this.conversationId || !this.reducer) {
-      throw invalidState("reconnect", "conversation_missing");
-    }
+    if (!this.conversationId) throw invalidState("reconnect", "conversation_missing");
     this.recovery = { status: "none" };
-    this.connection = { status: "connecting" };
-    this.publish();
-    this.startStream(this.conversationId, this.reducer);
+    await this.resume(this.conversationId);
   }
 
   async loadEarlier(): Promise<void> {
@@ -749,8 +761,11 @@ class ConversationControllerImpl implements ConversationController {
     this.startOverError = undefined;
     this.publish();
     try {
-      this.stopStream();
+      // The stream stays up until the replacement visitor exists. Stopping it
+      // first would leave a failed start-over with no stream and a snapshot
+      // still saying `connected`; this way a failure changes nothing.
       const conversationId = await this.authority.startOver!(this.lifetime.signal);
+      this.stopStream();
       this.clearDenials();
       this.resetConversation(conversationId);
       this.startOverState = "idle";
@@ -810,7 +825,39 @@ class ConversationControllerImpl implements ConversationController {
    * everything after it with neither overlap nor gap, which is why this is one
    * read and not one per resource.
    */
-  private async bootstrap(conversationId: string): Promise<void> {
+  private bootstrap(conversationId: string): Promise<void> {
+    // Two callers can ask at once — a renewal's ready callback and a manual
+    // retry, say — and one read is the answer to both.
+    if (this.bootstrapping?.conversationId === conversationId) return this.bootstrapping.promise;
+    const promise = this.runBootstrap(conversationId).finally(() => {
+      if (this.bootstrapping?.promise === promise) this.bootstrapping = undefined;
+    });
+    this.bootstrapping = { conversationId, promise };
+    return promise;
+  }
+
+  /**
+   * Whether the page has a Conversation and no live stream for it.
+   *
+   * True before the first read, and after a stream stopped on a failure. False
+   * while a read or a stream is in flight, so two recoveries cannot race.
+   */
+  private needsResume(): boolean {
+    if (!this.conversationId || this.destroyed || this.bootstrapping) return false;
+    if (!this.reducer) return true;
+    return this.connection.status === "error";
+  }
+
+  /** Puts the stream back: from the reducer's cursor when there is one, else from a fresh read. */
+  private resume(conversationId: string): Promise<void> {
+    if (this.reducer) {
+      this.startStream(conversationId, this.reducer);
+      return Promise.resolve();
+    }
+    return this.bootstrap(conversationId);
+  }
+
+  private async runBootstrap(conversationId: string): Promise<void> {
     this.connection = { status: "connecting" };
     this.publish();
     try {
@@ -975,7 +1022,16 @@ class ConversationControllerImpl implements ConversationController {
     }
   }
 
-  private async handleTransportError(error: unknown): Promise<NvokenError> {
+  /**
+   * Normalizes an error and applies what it says about the whole page.
+   *
+   * `scope` is which resource a `not_found` names. A missing Conversation
+   * resets the page; a missing Turn is that operation's problem alone.
+   */
+  private async handleTransportError(
+    error: unknown,
+    scope: "conversation" | "turn" = "conversation",
+  ): Promise<NvokenError> {
     const normalized = await normalizeError(error);
     if (normalized.category === "authentication") {
       this.authorization = {
@@ -985,7 +1041,10 @@ class ConversationControllerImpl implements ConversationController {
       };
       this.recovery = { status: "authorization_lost", error: normalized };
       this.stopStream();
-    } else if (normalized.category === "not_found" && this.conversationId) {
+      // The stream is down until a good token exists. Saying `connected`
+      // here is the guess a page cannot afford to draw.
+      if (this.conversationId) this.connection = { status: "error", error: normalized };
+    } else if (normalized.category === "not_found" && scope === "conversation" && this.conversationId) {
       this.stopStream();
       this.resetConversation(null);
       this.recovery = { status: "conversation_missing" };
@@ -1104,9 +1163,12 @@ class ConversationControllerImpl implements ConversationController {
   private buildSnapshot(): ConversationSnapshot {
     const reduced = this.reducer?.snapshot()
       ?? { messages: [], turnChanges: [], previews: [] };
-    const messages = freezeClone(reduced.messages);
-    const lifecycles = freezeClone(reduced.turnChanges) as readonly TurnChange[];
-    const previews = freezeClone(reduced.previews);
+    // Each collection keeps its identity while its contents are unchanged, so
+    // a renderer that memoizes on `snapshot.messages` redraws the transcript
+    // when a message lands and not once per streamed token.
+    const messages = this.messagesView.of(reduced.messages);
+    const lifecycles = this.lifecyclesView.of(reduced.turnChanges as TurnChange[]);
+    const previews = this.previewsView.of(reduced.previews);
     const send: ConversationSendState = this.pendingSend?.status === "admitting"
       ? { status: "admitting", action: inFlight(), idempotencyKey: this.pendingSend.idempotencyKey }
       : this.pendingSend?.status === "uncertain"
@@ -1342,6 +1404,43 @@ function cloneInput(input: TurnInput): TurnInput {
 
 function freezeClone<T>(value: T): T {
   return deepFreeze(structuredClone(value));
+}
+
+/**
+ * A frozen copy of a collection that is rebuilt only when the collection
+ * changes.
+ *
+ * The reducer hands out the same message and lifecycle objects until a frame
+ * replaces them, so identity per element is an exact "unchanged" test for
+ * those. Previews are copied by the reducer on every read, so they compare by
+ * value instead.
+ */
+class SharedView<T> {
+  private source: readonly T[] = [];
+  private frozen: readonly T[] = Object.freeze([]);
+
+  constructor(private readonly same: (left: T, right: T) => boolean = Object.is) {}
+
+  of(source: readonly T[]): readonly T[] {
+    const unchanged = source.length === this.source.length
+      && source.every((item, index) => this.same(item, this.source[index]!));
+    if (!unchanged) {
+      this.source = source;
+      this.frozen = freezeClone(source);
+    }
+    return this.frozen;
+  }
+}
+
+function samePreview(left: StreamPreview, right: StreamPreview): boolean {
+  return left.turnId === right.turnId
+    && left.attempt === right.attempt
+    && left.messageId === right.messageId
+    && left.contentIndex === right.contentIndex
+    && left.kind === right.kind
+    && left.delta === right.delta
+    && left.toolCallId === right.toolCallId
+    && left.name === right.name;
 }
 
 function deepFreeze<T>(value: T): T {

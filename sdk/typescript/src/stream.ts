@@ -115,6 +115,11 @@ export class Reducer<TOutput extends object = Record<string, never>> {
    * This is how a live consumer prepends older history: the page is older than
    * everything the stream has delivered, so adopting its position would replay
    * the conversation from the middle.
+   *
+   * Bounds are not enforced here. Eviction is oldest-first, and the page being
+   * merged is the oldest thing in the window, so enforcing them would discard
+   * exactly what was just fetched. A caller with a bound checks the window has
+   * room before merging, as the conversation controller does.
    */
   merge(snapshot: Pick<ReducedSnapshot<TOutput>, "messages" | "turnChanges">): void {
     for (const message of snapshot.messages) this.messages.set(message.sequence, message);

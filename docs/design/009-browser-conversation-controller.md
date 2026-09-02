@@ -1,6 +1,8 @@
 # The browser conversation controller
 
-**Status:** Accepted plan, pre-implementation.
+**Status:** Accepted. Steps 2 through 4 are implemented; step 1, the
+contract's bounded transcript tail (C1), is pending on the service, and the
+controller reads the whole transcript and trims client-side until it lands.
 **Author:** Claude Fable 5.1 with Curtis Myzie
 **Date:** 2026-09-02
 **Applies to:** the service for one contract change; this repository for the
@@ -332,10 +334,10 @@ server exposes interrupt. Mention it in each SDK's README next to
 
 ### S5. `conversation-controller.ts`
 
-New file, exported from `browser.ts` so the public path is
-`@deepnoodle/nvoken/browser`. Not exported from `index.ts`; the donor's
-removal of `export * from "./browser.js"` in `index.ts` is dropped because
-`main` never had that line.
+New file, exported from `browser.ts` so the canonical public path is
+`@deepnoodle/nvoken/browser`. `index.ts` on `main` re-exports the whole
+browser entry, so the controller is reachable at the root as the same module;
+the donor's removal of that `export * from "./browser.js"` line is not ported.
 
 **Constructors**
 
@@ -471,7 +473,7 @@ the `online` listener, clear listeners, publish a final snapshot with
 - `package.json` `files` gains `dist/conversation-controller.{js,d.ts}` and
   does not gain `dist/browser-client.*`.
 - `public-surface.test.ts` asserts the controller is reachable at `/browser`
-  and not at the root.
+  and that the root export is the same function, not a second copy.
 
 ## Tests
 

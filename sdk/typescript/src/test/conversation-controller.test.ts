@@ -495,7 +495,9 @@ test("throwing anonymous storage degrades to nonfatal memory continuity", async 
 test("start-over replaces the visitor, and a failed exchange keeps the old one", async () => {
   const values = new Map<string, string>();
   const exchangeBodies: Array<Record<string, unknown>> = [];
+  const stream = sseChannel();
   let exchanges = 0;
+  let streamOpens = 0;
   let refuseExchange = false;
   const controller = createAnonymousConversation({
     baseUrl: "https://reset.example.test",
@@ -513,7 +515,10 @@ test("start-over replaces the visitor, and a failed exchange keeps the old one",
         return grantResponse(exchanges, exchanges === 1 ? CONVERSATION_ID : null);
       }
       if (url.pathname.endsWith("/transcript")) return transcriptResponse();
-      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      if (url.pathname.endsWith("/stream")) {
+        streamOpens += 1;
+        return stream.respond(init?.signal);
+      }
       throw new Error(`unexpected request ${init?.method} ${url.pathname}`);
     },
   });
@@ -526,6 +531,14 @@ test("start-over replaces the visitor, and a failed exchange keeps the old one",
     refuseExchange = true;
     await assert.rejects(() => controller.startOver());
     assert.equal([...values.values()][0].includes("visitor-1"), true);
+
+    // Nor their stream. The one they had is still the one delivering, and
+    // the snapshot says so rather than reporting a connection that is gone.
+    assert.equal(controller.getSnapshot().connection.status, "connected");
+    assert.equal(controller.getSnapshot().startOver.status, "error");
+    stream.emit(transcriptUpdate("cursor-after-refusal", wireMessages(1, 1)));
+    await waitFor(controller, (snapshot) => snapshot.messages.length === 1);
+    assert.equal(streamOpens, 1, "a failed start-over neither drops nor reopens the stream");
 
     refuseExchange = false;
     await controller.startOver();
@@ -610,6 +623,196 @@ test("destroy is silent and final", async () => {
   await Promise.resolve();
   assert.equal(notifications, afterDestroy);
   assert.equal(controller.getSnapshot().recovery.status, "destroyed");
+});
+
+test("reconnect after a failed bootstrap reads the transcript it never got", async () => {
+  let transcriptReads = 0;
+  const client = createBrowserClient({
+    baseUrl: "https://exhausted.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) {
+        transcriptReads += 1;
+        if (transcriptReads === 1) {
+          return Response.json({ message: "later", code: "unavailable" }, { status: 503 });
+        }
+        return transcriptResponse({ messages: wireMessages(1, 2) });
+      }
+      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    const failed = await waitFor(controller, (snapshot) => snapshot.connection.status === "error");
+    assert.equal(failed.recovery.status, "connection_exhausted");
+    assert.equal(failed.reconnect.status, "enabled");
+
+    // The snapshot said reconnect was enabled, so it has to work: there is no
+    // stream position to resume from yet, and the read is what supplies one.
+    await controller.reconnect();
+    const recovered = await waitFor(
+      controller,
+      (snapshot) => snapshot.connection.status === "connected",
+    );
+    assert.equal(transcriptReads, 2);
+    assert.deepEqual(recovered.messages.map((message) => message.sequence), [1, 2]);
+    assert.equal(recovered.recovery.status, "none");
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("a stream rejected for authorization comes back when the anonymous grant renews", async () => {
+  const clock = new FakeClock();
+  let exchanges = 0;
+  let streamOpens = 0;
+  const controller = createAnonymousConversation({
+    baseUrl: "https://renew-stream.example.test",
+    appId: "app_renew_stream",
+    storage: "memory",
+    clock,
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/anonymous-tokens")) {
+        exchanges += 1;
+        return grantResponse(exchanges, CONVERSATION_ID);
+      }
+      if (url.pathname.endsWith("/transcript")) return transcriptResponse();
+      if (url.pathname.endsWith("/stream")) {
+        streamOpens += 1;
+        if (streamOpens === 1) {
+          return Response.json({ message: "expired", code: "invalid_token" }, { status: 401 });
+        }
+        return openSSE(init?.signal);
+      }
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  try {
+    const lost = await waitFor(controller, (snapshot) => snapshot.authorization.status === "lost");
+    // No stream is running, and the snapshot has to say so rather than keep
+    // reporting the connection it had before the token was refused.
+    assert.equal(lost.connection.status, "error");
+    assert.deepEqual(lost.reconnect, { status: "disabled", reason: "authorization_required" });
+    assert.equal(lost.retryAuthorization.status, "enabled");
+
+    // The grant renews on its own timer. Nobody presses anything.
+    clock.runNext();
+    const recovered = await waitFor(
+      controller,
+      (snapshot) => snapshot.connection.status === "connected",
+    );
+    assert.equal(exchanges, 2);
+    assert.equal(streamOpens, 2);
+    assert.equal(recovered.authorization.status, "ready");
+    assert.equal(recovered.recovery.status, "none");
+    assert.equal(recovered.conversationId, CONVERSATION_ID);
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("an interrupt that finds no Turn leaves the Conversation in place", async () => {
+  let transcriptReads = 0;
+  const client = createBrowserClient({
+    baseUrl: "https://gone-turn.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) {
+        transcriptReads += 1;
+        // The first read finds a Turn mid-flight; by the time the stop
+        // button is pressed the runtime no longer has it.
+        return transcriptResponse(transcriptReads === 1 ? {
+          conversation: wireConversation({
+            active_turn_id: TURN_ID,
+            active_turn_status: "running",
+          }),
+          messages: wireMessages(1, 3),
+        } : { messages: wireMessages(1, 3) });
+      }
+      if (url.pathname.endsWith("/stream")) return openSSE(init?.signal);
+      if (url.pathname === `/v1/turns/${TURN_ID}/interrupt`) {
+        return Response.json({ message: "no such Turn", code: "not_found" }, { status: 404 });
+      }
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    await waitFor(controller, (snapshot) => snapshot.activity.status === "active");
+    await assert.rejects(
+      () => controller.interrupt(),
+      (error: unknown) => error instanceof NvokenError && error.category === "not_found",
+    );
+    const snapshot = controller.getSnapshot();
+    // A 404 on the Turn is not a missing Conversation: the transcript, the
+    // id, and the stream all stay.
+    assert.equal(snapshot.conversationId, CONVERSATION_ID);
+    assert.equal(snapshot.messages.length, 3);
+    assert.equal(snapshot.recovery.status, "none");
+    assert.equal(snapshot.connection.status, "connected");
+    assert.equal(snapshot.interruption.status, "error");
+    // The Turn that was holding the composer closed is gone, and the re-read
+    // is what lets the composer open again.
+    assert.equal(transcriptReads, 2);
+    assert.equal(snapshot.activity.status, "idle");
+    assert.equal(snapshot.send.action.status, "enabled");
+  } finally {
+    controller.destroy();
+  }
+});
+
+test("collections keep their identity across frames that do not change them", async () => {
+  const stream = sseChannel();
+  const messageId = "00000000-0000-7000-8000-000000000001";
+  const client = createBrowserClient({
+    baseUrl: "https://identity.example.test",
+    clientToken: "header.payload.signature",
+    retry: { maxAttempts: 1 },
+    fetch: async (input, init) => {
+      const url = requestURL(input);
+      if (url.pathname.endsWith("/transcript")) {
+        return transcriptResponse({ messages: wireMessages(1, 2) });
+      }
+      if (url.pathname.endsWith("/stream")) return stream.respond(init?.signal);
+      throw new Error(`unexpected request ${url.pathname}`);
+    },
+  });
+  const controller = createConversation({ client, conversation: { id: CONVERSATION_ID } });
+  try {
+    const connected = await waitFor(
+      controller,
+      (snapshot) => snapshot.connection.status === "connected",
+    );
+
+    // A streamed token changes the preview and nothing else. A renderer that
+    // memoizes on `messages` must not redraw the transcript for it.
+    stream.emit(messageDelta(TURN_ID, messageId, "Hel"));
+    const previewed = await waitFor(controller, (snapshot) => snapshot.previews.length === 1);
+    assert.notStrictEqual(previewed, connected);
+    assert.strictEqual(previewed.messages, connected.messages);
+    assert.strictEqual(previewed.lifecycles, connected.lifecycles);
+    assert.notStrictEqual(previewed.previews, connected.previews);
+    assert.equal(Object.isFrozen(previewed.previews), true);
+
+    // A saved message replaces both: the transcript grew, and the preview it
+    // supersedes is discarded.
+    stream.emit(transcriptUpdate("cursor-3", [
+      { ...wireMessages(3, 3)[0], id: messageId, turn_id: TURN_ID },
+    ]));
+    const saved = await waitFor(controller, (snapshot) => snapshot.messages.length === 3);
+    assert.notStrictEqual(saved.messages, previewed.messages);
+    assert.strictEqual(saved.lifecycles, previewed.lifecycles);
+    assert.equal(saved.previews.length, 0);
+    assert.equal(Object.isFrozen(saved.messages[2]), true);
+  } finally {
+    controller.destroy();
+  }
 });
 
 function requestURL(input: RequestInfo | URL): URL {
@@ -697,6 +900,68 @@ function openSSE(signal?: AbortSignal | null): Response {
       }, { once: true });
     },
   }), { headers: { "content-type": "text/event-stream" } });
+}
+
+interface WireEvent {
+  id?: string;
+  event: string;
+  data: Record<string, unknown>;
+}
+
+/** An SSE response a test can keep writing to after the controller opened it. */
+function sseChannel(): {
+  respond(signal?: AbortSignal | null): Response;
+  emit(event: WireEvent): void;
+} {
+  const encoder = new TextEncoder();
+  let sink: ReadableStreamDefaultController<Uint8Array> | undefined;
+  return {
+    respond(signal) {
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          sink = controller;
+          controller.enqueue(encoder.encode("retry: 1000\n\n"));
+          signal?.addEventListener("abort", () => {
+            try { controller.close(); } catch { /* already closed */ }
+            if (sink === controller) sink = undefined;
+          }, { once: true });
+        },
+      }), { headers: { "content-type": "text/event-stream" } });
+    },
+    emit(event) {
+      if (!sink) throw new Error("no stream is open");
+      sink.enqueue(encoder.encode(
+        `${event.id === undefined ? "" : `id: ${event.id}\n`}`
+        + `event: ${event.event}\n`
+        + `data: ${JSON.stringify(event.data)}\n\n`,
+      ));
+    },
+  };
+}
+
+function transcriptUpdate(cursor: string, messages: Record<string, unknown>[]): WireEvent {
+  return {
+    id: cursor,
+    event: "transcript.update",
+    data: { type: "transcript.update", messages, turn_changes: [], has_more: false, cursor },
+  };
+}
+
+function messageDelta(turnId: string, messageId: string, fragment: string): WireEvent {
+  return {
+    event: "message.delta",
+    data: {
+      type: "message.delta",
+      turn_id: turnId,
+      attempt: 1,
+      message_id: messageId,
+      content_index: 0,
+      offset: 0,
+      kind: "text",
+      delta: fragment,
+      emitted_at: NOW,
+    },
+  };
 }
 
 function wireMessages(start: number, end: number): Record<string, unknown>[] {

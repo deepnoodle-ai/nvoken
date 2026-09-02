@@ -367,9 +367,15 @@ const conversation = createAnonymousConversation({
 
 What it guarantees:
 
-- **The conversation survives the page.** Resuming is one bounded transcript
-  read plus a stream from the exact position that read observed, so a reload
-  gets recent history and no gap and no replay.
+- **The conversation survives the page.** Resuming is one transcript read
+  plus a stream from the exact position that read observed, so a reload gets
+  recent history and no gap and no replay. The controller keeps the newest 50
+  messages of that read and pages older ones in on request; until the
+  contract's bounded tail mode is published, the read itself is the whole
+  transcript on the wire.
+- **A dropped stream comes back on its own.** The `online` event and a
+  renewed anonymous grant each restart a stream that stopped on a failure;
+  `reconnect()` is for when neither has.
 - **Retry never duplicates a Turn.** A send whose outcome is unknown becomes
   `send.status === "uncertain"`, and `retrySend()` repeats the same input under
   the same idempotency key.
