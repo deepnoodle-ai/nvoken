@@ -560,9 +560,36 @@ switched it onto `limit` and `page_token`. The contract as published has no
 ## Follow-up raised by D0
 
 Reading a Conversation's recent transcript is common for machine callers too,
-and it still needs `raw()`. The facade has `Conversation.start/run/text` and
-no read at all. Now that C1 has landed, a
-`Conversation.transcript({ limit, pageToken })` returning the bounded snapshot,
-in four languages, would satisfy D0 for that operation and let the controller
-drop its last `raw()` call. That is a facade design decision carried by its own
-PR, not a reason to have held this series.
+and it needed `raw()`: the facade had `Conversation.start/run/text` and no read
+at all. `Conversation.transcript` in four languages closes that gap and is
+carried by its own PR, deepnoodle-ai/nvoken#109, as this section always said it
+would be.
+
+The controller still makes its own `raw()` call, and that is settled rather
+than outstanding. Set by Curtis Myzie on 2026-09-02: D0 measures what an
+integrator has to reach for. `raw()` being the only door to a common operation
+is a problem because it makes an integrator retype transport concerns for an
+ordinary task. `readTranscriptWindow` is SDK-internal code in this package; it
+goes through `browserRequest`, so it retries and normalizes errors exactly like
+every other call the controller makes, and no integrator sees it. D0's own
+wording already allows it: the controller may call `raw()` for operations that
+are not common outside it. Shipping `Conversation.transcript()` in four
+languages is what satisfies D0 here, and calling `raw()` internally is an
+implementation detail rather than a gap in the front door.
+
+So the browser entry grows nothing. `BrowserClient` exposes no `Conversation`
+handle, and `ConversationHandle` calls `validateContext(bound, false)`, which
+rejects the empty tenant a browser client asserts. Reaching the facade from the
+controller would need either a `BrowserClient.conversation(id)` factory or a
+browser-shaped variant of the handle, both new public surface on the browser
+entry, and neither is needed to satisfy the rule.
+
+`transcript()` on a key-bound handle keeps the validation error it shipped
+with, also set by Curtis Myzie on 2026-09-02. The route addresses a
+Conversation by its opaque id, a `{ key, owner }` handle has not resolved one,
+and resolving it during a read would make the read create the Conversation. The
+alternative is a handle that caches the id its first admission returned, which
+makes the handle's answer depend on its history and needs interior mutability
+in Python and Rust. Refusing is the reversible choice: if the cache is wanted
+later, the error stops firing, with no signature change and nothing to
+deprecate.

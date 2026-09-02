@@ -11,6 +11,7 @@ import pytest
 from nvoken import (
     Behavior,
     Client,
+    NvokenError,
     ConversationById,
     ConversationByKey,
     ConversationRef,
@@ -574,3 +575,60 @@ async def test_interrupting_a_finished_turn_returns_it_unchanged() -> None:
         client, "8f57d547-fa52-75fa-947d-41e21909db99", tenant="acme",
     ).interrupt()
     assert snapshot.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_conversation_transcript_sends_the_window_and_its_continuation() -> None:
+    observed: list[dict[str, object]] = []
+
+    class Conversations:
+        async def get_conversation_transcript(self, conversation_id, **kwargs):
+            observed.append({"id": conversation_id, **kwargs})
+            return SimpleNamespace(
+                has_more=True, next_page_token="token-1", cursor="cursor-1", messages=[],
+            )
+
+    client = object.__new__(Client)
+    client._raw = SimpleNamespace(conversations=Conversations())
+    client._conversation_locks = {}
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    conversation = Conversation(
+        inline,
+        ConversationRef.by_id("18325d9f-b9bc-797d-9259-96ece372defd"),
+        "acme",
+        user="alice",
+    )
+
+    window = await conversation.transcript(limit=50)
+    assert observed[0] == {
+        "id": "18325d9f-b9bc-797d-9259-96ece372defd",
+        "limit": 50,
+        "page_token": None,
+        "_headers": {"X-Nvoken-Tenant-Key": "acme", "X-Nvoken-User-Key": "alice"},
+    }
+    assert window.has_more and window.next_page_token == "token-1"
+
+    # The walk asks for the window preceding the one that minted the token.
+    await conversation.transcript(limit=50, page_token=window.next_page_token)
+    assert observed[1]["page_token"] == "token-1"
+
+    # No bounds reads the whole transcript, which is what the operation has
+    # always done.
+    await conversation.transcript()
+    assert observed[2]["limit"] is None and observed[2]["page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_conversation_transcript_refuses_a_key_bound_handle() -> None:
+    client = object.__new__(Client)
+    client._conversation_locks = {}
+    inline = InlineAgent(client, Behavior("Help", "openai/gpt-5"))
+    conversation = Conversation(
+        inline, ConversationRef.by_key("case-42", owner="tenant"), "acme",
+    )
+
+    # The route addresses a Conversation by id, and a key-bound handle has not
+    # resolved one. Reading must not create the Conversation to find out.
+    with pytest.raises(NvokenError) as refusal:
+        await conversation.transcript(limit=10)
+    assert refusal.value.category == "validation"

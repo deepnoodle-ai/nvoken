@@ -43,6 +43,7 @@ from nvoken_generated.models.register_org_request import RegisterOrgRequest
 from nvoken_generated.models.rotate_credential_request import RotateCredentialRequest
 from nvoken_generated.models.rotate_provider_key_request import RotateProviderKeyRequest
 from nvoken_generated.models.submit_host_tool_results_request import SubmitHostToolResultsRequest
+from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
 from nvoken_generated.models.turn_result import TurnResult as TurnResultResource
 from nvoken_generated.models.turn_status import TurnStatus
 from nvoken_generated.models.conversation_message import ConversationMessage
@@ -1058,6 +1059,51 @@ class Conversation:
     user: str | None = None
     memory: Memory | InlineMemorySelection | None = None
     limits: Mapping[str, Any] | None = None
+
+    async def transcript(
+        self, *, limit: int | None = None, page_token: str | None = None,
+    ) -> TranscriptSnapshot:
+        """Read this Conversation back.
+
+        Reading a Conversation is what a chat does on every reload, so it is an
+        ordinary workflow call rather than administration. The snapshot carries
+        the Conversation resource, the messages, the compactions, and the
+        ``cursor`` a stream resumes from, which is why one read is enough to
+        restore a page.
+
+        ``limit`` selects the newest messages at one committed cut, between 1
+        and 200. ``page_token`` walks older windows at that same cut and comes
+        from a previous snapshot's ``next_page_token``; it is never a stream
+        cursor. Omitting both reads the whole transcript.
+
+        The handle must name a Conversation by id. A handle bound by key and
+        owner has no id until a Turn is admitted through it, and admission is
+        where that caller learns which Conversation it landed in.
+        """
+        # The route addresses a Conversation by its opaque id. Resolving a key
+        # here would mean creating the Conversation as a side effect of
+        # reading it.
+        if not isinstance(self.ref, ConversationById):
+            raise NvokenError(
+                "validation",
+                "transcript() needs the Conversation id; a key-bound Conversation "
+                "learns it from the admission of its first Turn",
+            )
+        try:
+            return await self.runnable.client.raw.conversations.get_conversation_transcript(
+                self.ref.id,
+                limit=limit,
+                page_token=page_token,
+                _headers=self._access_headers(),
+            )
+        except ApiException as error:
+            raise normalize_error(error) from error
+
+    def _access_headers(self) -> dict[str, str]:
+        headers = {"X-Nvoken-Tenant-Key": self.tenant}
+        if self.user is not None:
+            headers["X-Nvoken-User-Key"] = self.user
+        return headers
 
     def _lock_key(self) -> str:
         if isinstance(self.ref, ConversationById):

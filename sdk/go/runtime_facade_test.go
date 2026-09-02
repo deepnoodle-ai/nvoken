@@ -514,3 +514,83 @@ func TestInterruptingAFinishedTurnReturnsItUnchanged(t *testing.T) {
 		t.Fatalf("status = %v, want completed", snapshot.Resource.Status)
 	}
 }
+
+func TestConversationTranscriptSendsTheWindowAndItsContinuation(t *testing.T) {
+	var path, rawQuery, tenant, user string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		path, rawQuery = request.URL.Path, request.URL.RawQuery
+		tenant = request.Header.Get("X-Nvoken-Tenant-Key")
+		user = request.Header.Get("X-Nvoken-User-Key")
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"conversation":{"id":"18325d9f-b9bc-797d-9259-96ece372defd","tenant_key":"acme","owner_kind":"tenant","status":"active","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},"messages":[],"compactions":[],"cursor":"cursor-1","has_more":true,"next_page_token":"token-1","captured_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{client: client, value: AgentResource{ID: "47fc63e5-ae78-727c-ab52-a2872fe8728f"}}
+	conversation := agent.Conversation(ConversationOptions{
+		TenantKey: "acme",
+		UserKey:   "alice",
+		Selection: *ContinueConversation("18325d9f-b9bc-797d-9259-96ece372defd"),
+	})
+
+	snapshot, err := conversation.Transcript(context.Background(), TranscriptOptions{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "/v1/conversations/18325d9f-b9bc-797d-9259-96ece372defd/transcript" {
+		t.Fatalf("path = %s", path)
+	}
+	if rawQuery != "limit=50" {
+		t.Fatalf("query = %s, want limit=50", rawQuery)
+	}
+	if tenant != "acme" || user != "alice" {
+		t.Fatalf("access headers = %q / %q", tenant, user)
+	}
+	if !snapshot.HasMore || snapshot.NextPageToken == nil || *snapshot.NextPageToken != "token-1" {
+		t.Fatalf("continuation = %#v", snapshot)
+	}
+
+	// The walk asks for the window preceding the one that minted the token.
+	if _, err = conversation.Transcript(context.Background(), TranscriptOptions{
+		Limit:     50,
+		PageToken: *snapshot.NextPageToken,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if rawQuery != "limit=50&page_token=token-1" {
+		t.Fatalf("continuation query = %s", rawQuery)
+	}
+
+	// The zero value reads the whole transcript, which is what the operation
+	// has always done.
+	if _, err = conversation.Transcript(context.Background(), TranscriptOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if rawQuery != "" {
+		t.Fatalf("unbounded query = %s, want empty", rawQuery)
+	}
+}
+
+func TestConversationTranscriptRefusesAKeyBoundHandle(t *testing.T) {
+	client, err := NewClient("https://runtime.example.test", "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &Agent{client: client, value: AgentResource{ID: "47fc63e5-ae78-727c-ab52-a2872fe8728f"}}
+	conversation := agent.Conversation(ConversationOptions{
+		TenantKey: "acme",
+		Selection: *ContinueOrCreateConversation("case-42", TenantConversation()),
+	})
+
+	// The route addresses a Conversation by ID, and a key-bound handle has not
+	// resolved one. Reading must not create the Conversation to find out.
+	_, err = conversation.Transcript(context.Background(), TranscriptOptions{Limit: 10})
+	var sdkError *Error
+	if !errors.As(err, &sdkError) || sdkError.Category != ErrorValidation {
+		t.Fatalf("key-bound transcript error = %v", err)
+	}
+}

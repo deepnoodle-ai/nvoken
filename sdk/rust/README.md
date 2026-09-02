@@ -142,6 +142,32 @@ checkpoint. Follow `updates` or `result` for settlement rather than reading that
 status as final. Interrupting a Turn that already ended returns it unchanged and
 is not an error.
 
+Read a Conversation back with `transcript`. It returns the Conversation
+resource, its messages, its compactions, and the `cursor` a stream resumes
+from, so one read restores a page:
+
+```rust,no_run
+# use nvoken::{Conversation, TranscriptOptions};
+# async fn example(conversation: Conversation) -> Result<(), nvoken::NvokenError> {
+let mut window = conversation
+    .transcript(TranscriptOptions { limit: Some(50), page_token: None })
+    .await?;
+while window.has_more {
+    window = conversation
+        .transcript(TranscriptOptions {
+            limit: Some(50),
+            page_token: window.next_page_token.clone(),
+        })
+        .await?;
+}
+# Ok(()) }
+```
+
+Every page of one walk carries the cursor of the cut the walk started from, so
+paging back through older history never moves the stream's resume position. The
+handle must name a Conversation by id; a key-bound handle learns its id from the
+admission of its first Turn.
+
 ## Agent lifecycle and exact OpenAPI access
 
 ```rust,no_run

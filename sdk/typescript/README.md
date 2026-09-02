@@ -143,6 +143,22 @@ Conversation creation or lookup and Turn admission are one atomic request.
 Calls through the same local Conversation identity are serialized in-process;
 the service remains authoritative across processes.
 
+Read a Conversation back with `transcript()`. It returns the Conversation
+resource, its messages, its compactions, and the `cursor` a stream resumes
+from, so one read restores a page:
+
+```ts
+let window = await chat.transcript({ limit: 50 });
+while (window.hasMore) {
+  window = await chat.transcript({ limit: 50, pageToken: window.nextPageToken! });
+}
+```
+
+Every page of one walk carries the cursor of the cut the walk started from, so
+paging back through older history never moves the stream's resume position. The
+handle must name a Conversation by `id`; a handle bound by `key` and `owner`
+learns its id from the admission of its first Turn.
+
 ## Bind host tools
 
 Declare durable tool contracts in behavior, then bind process-local

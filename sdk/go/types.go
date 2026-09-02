@@ -19,6 +19,10 @@ type ModelInput = generated.ModelInput
 type ToolDeclaration = generated.ToolDeclaration
 type DefaultMemoryPolicy = generated.DefaultMemoryPolicy
 type ConversationResource = generated.Conversation
+
+// TranscriptSnapshot is one read of a Conversation: the Conversation resource,
+// its messages, its compactions, and the stream position the read observed.
+type TranscriptSnapshot = generated.TranscriptSnapshot
 type ConversationMessage = generated.ConversationMessage
 type MemorySpace = generated.MemorySpace
 type MemorySpaceList = generated.MemorySpaceList
@@ -481,6 +485,16 @@ type ConversationOptions struct {
 	Selection ConversationSelection
 	Memory    *MemorySelection
 	Limits    *Limits
+}
+
+// TranscriptOptions bounds one transcript read. Its zero value reads the whole
+// transcript, which is what the operation has always done. Limit selects the
+// newest messages at one committed cut, between 1 and 200; PageToken walks
+// older windows at that same cut and comes from a previous snapshot's
+// NextPageToken. A PageToken is never a stream cursor.
+type TranscriptOptions struct {
+	Limit     int
+	PageToken string
 }
 
 // ConversationTurnOptions contains only facts a Conversation call may vary.

@@ -579,6 +579,80 @@ test("interrupt goes through the retry wrapper like any other call", async () =>
   assert.equal(snapshot.status, "running");
 });
 
+test("Conversation.transcript sends the window and its continuation", async () => {
+  const requests: URL[] = [];
+  const client = clientWith(async (input) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    return Response.json({
+      conversation: {
+        id: CONVERSATION_ID,
+        tenant_key: "acme",
+        owner: { kind: "tenant" },
+        conversation_key: null,
+        forked_from: null,
+        active_turn_id: null,
+        active_turn_status: null,
+        retention: null,
+        compaction: null,
+        metadata: null,
+        expires_at: null,
+        created_at: NOW,
+        updated_at: NOW,
+      },
+      messages: [],
+      compactions: [],
+      cursor: "cursor-1",
+      has_more: true,
+      next_page_token: "token-1",
+      captured_at: NOW,
+    });
+  });
+  const conversation = client.inline({
+    instructions: "Be concise.",
+    model: "openai/gpt-5",
+  }).conversation({ tenant: "acme", user: "alice", id: CONVERSATION_ID });
+
+  const window = await conversation.transcript({ limit: 50 });
+  assert.equal(requests[0].pathname, `/v1/conversations/${CONVERSATION_ID}/transcript`);
+  assert.equal(requests[0].searchParams.get("limit"), "50");
+  assert.equal(requests[0].searchParams.get("page_token"), null);
+  assert.equal(window.hasMore, true);
+  assert.equal(window.nextPageToken, "token-1");
+  // The cursor is the stream position of the cut this window was selected
+  // from, which is what makes one read enough to restore a page.
+  assert.equal(window.cursor, "cursor-1");
+
+  // The walk asks for the window preceding the one that minted the token.
+  await conversation.transcript({ limit: 50, pageToken: window.nextPageToken! });
+  assert.equal(requests[1].searchParams.get("page_token"), "token-1");
+
+  // No bounds reads the whole transcript, which is what the operation has
+  // always done.
+  await conversation.transcript();
+  assert.equal(requests[2].search, "");
+});
+
+test("Conversation.transcript refuses a key-bound handle", async () => {
+  let requests = 0;
+  const client = clientWith(async () => {
+    requests += 1;
+    return Response.json({});
+  });
+  const conversation = client.inline({
+    instructions: "Be concise.",
+    model: "openai/gpt-5",
+  }).conversation({ tenant: "acme", key: "ticket-42", owner: "tenant" });
+
+  // The route addresses a Conversation by id, and a key-bound handle has not
+  // resolved one. Reading must not create the Conversation to find out.
+  await assert.rejects(
+    conversation.transcript({ limit: 10 }),
+    (error: unknown) => error instanceof NvokenError && error.category === "validation",
+  );
+  assert.equal(requests, 0);
+});
+
 test("interrupt settles completed with an interrupted stop reason", async (t) => {
   const baseUrl = process.env.NVOKEN_CONFORMANCE_URL;
   if (!baseUrl) {

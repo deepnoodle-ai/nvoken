@@ -1,6 +1,7 @@
 from nvoken_generated import __version__ as __version__
 from nvoken_generated.models.agent_revision import AgentRevision
 from nvoken_generated.models.conversation import Conversation as ConversationResource
+from nvoken_generated.models.transcript_snapshot import TranscriptSnapshot
 from nvoken_generated.models.memory_space import MemorySpace
 from nvoken_generated.models.turn import Turn as TurnResource
 
@@ -128,6 +129,7 @@ __all__ = [
     "ConversationRef",
     "ConversationSelection",
     "ConversationResource",
+    "TranscriptSnapshot",
     "ClientTokenClaims",
     "ClientTokenConversationAccess",
     "ClientTokenMemoryAccess",

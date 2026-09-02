@@ -7,6 +7,7 @@ import type {
   ModelInput,
   RetentionPolicy,
   ToolDeclaration,
+  TranscriptSnapshot,
   TurnFailure,
   TurnInput,
   TurnStatus,
@@ -256,10 +257,39 @@ export interface Turn<TOutput extends object = JsonObject> {
   interrupt(signal?: AbortSignal): Promise<TurnSnapshot<TOutput>>;
 }
 
+/**
+ * One bounded window of a Conversation transcript.
+ *
+ * Omitting both bounds reads the whole transcript, which is what the operation
+ * has always done. `limit` selects the newest messages at one committed cut,
+ * and `pageToken` walks older windows at that same cut, so paging back never
+ * moves the stream position the first read observed.
+ */
+export interface ConversationTranscriptOptions {
+  /** 1 to 200. Absent with a `pageToken`, the service defaults to 100. */
+  limit?: number;
+  /** A previous snapshot's `nextPageToken`. Never a stream `cursor`. */
+  pageToken?: string;
+  signal?: AbortSignal;
+}
+
 export interface Conversation<TOutput extends object = JsonObject> {
   start(input: TurnInput, options?: ConversationTurnOptions): Promise<Turn<TOutput>>;
   run(input: TurnInput, options?: ConversationTurnOptions): Promise<TurnResult<TOutput>>;
   text(input: TurnInput, options?: ConversationTurnOptions): Promise<string>;
+  /**
+   * Reads this Conversation's transcript.
+   *
+   * Reading a Conversation back is what a chat does on every reload, so it is
+   * a workflow call rather than administration. The snapshot carries the
+   * Conversation resource, the messages, the compactions, and the `cursor` a
+   * stream resumes from, which is why one read is enough to restore a page.
+   *
+   * The handle must name a Conversation by `id`. A handle bound by `key` and
+   * `owner` has no id until a Turn is admitted through it, and admission is
+   * where that caller learns which Conversation it landed in.
+   */
+  transcript(options?: ConversationTranscriptOptions): Promise<TranscriptSnapshot>;
 }
 
 export interface InlineRunner<TOutput extends object = JsonObject> {

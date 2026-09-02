@@ -194,6 +194,7 @@ type runnable interface {
 // Conversation fixes continuity, actor, memory, and maximum limits. Calls
 // through one handle are serialized in this process.
 type Conversation struct {
+	client  *Client
 	runner  runnable
 	options ConversationOptions
 	mu      *sync.Mutex
@@ -209,7 +210,7 @@ func newConversation(client *Client, runner runnable, options ConversationOption
 		}
 		key = "key:" + bound.TenantKey + ":" + owner + ":" + bound.Selection.Key
 	}
-	return &Conversation{runner: runner, options: bound, mu: client.conversationLocks.lock(key)}
+	return &Conversation{client: client, runner: runner, options: bound, mu: client.conversationLocks.lock(key)}
 }
 
 func (c *Conversation) Start(ctx context.Context, input TurnInput, options ...ConversationTurnOptions) (*Turn, error) {
@@ -240,6 +241,55 @@ func (c *Conversation) Text(ctx context.Context, input TurnInput, options ...Con
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.runner.Text(ctx, input, turnOptions)
+}
+
+// Transcript reads this Conversation back.
+//
+// Reading a Conversation is what a chat does on every reload, so it is an
+// ordinary workflow call rather than administration. The snapshot carries the
+// Conversation resource, the messages, the compactions, and the Cursor a
+// stream resumes from, which is why one read is enough to restore a page.
+//
+// The handle must name a Conversation by ID. A handle bound by key and owner
+// has no ID until a Turn is admitted through it, and admission is where that
+// caller learns which Conversation it landed in.
+func (c *Conversation) Transcript(ctx context.Context, options TranscriptOptions) (*TranscriptSnapshot, error) {
+	// The route addresses a Conversation by its opaque ID. Resolving a key
+	// here would mean creating the Conversation as a side effect of reading it.
+	if strings.TrimSpace(c.options.Selection.ID) == "" {
+		return nil, &Error{
+			Category: ErrorValidation,
+			Message:  "Transcript needs the Conversation ID; a key-bound Conversation learns it from the admission of its first Turn",
+		}
+	}
+	params := &generated.GetConversationTranscriptParams{}
+	if options.Limit != 0 {
+		params.Limit = &options.Limit
+	}
+	if options.PageToken != "" {
+		params.PageToken = &options.PageToken
+	}
+	response, err := c.client.raw.GetConversationTranscriptWithResponse(
+		ctx, c.options.Selection.ID, params, c.requestEditor())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if response.JSON200 == nil {
+		return nil, errorFromResponse(response.StatusCode(), responseHeader(response.HTTPResponse), response.Body)
+	}
+	return response.JSON200, nil
+}
+
+func (c *Conversation) requestEditor() generated.RequestEditorFn {
+	return func(_ context.Context, request *http.Request) error {
+		if c.options.TenantKey != "" {
+			request.Header.Set("X-Nvoken-Tenant-Key", c.options.TenantKey)
+		}
+		if c.options.UserKey != "" {
+			request.Header.Set("X-Nvoken-User-Key", c.options.UserKey)
+		}
+		return nil
+	}
 }
 
 func (c *Conversation) turnOptions(options []ConversationTurnOptions) (TurnOptions, error) {

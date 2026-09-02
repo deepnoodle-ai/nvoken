@@ -686,6 +686,17 @@ impl std::fmt::Display for TurnTimeoutError {
 
 impl std::error::Error for TurnTimeoutError {}
 
+/// Bounds one transcript read. The default reads the whole transcript, which
+/// is what the operation has always done. `limit` selects the newest messages
+/// at one committed cut, between 1 and 200; `page_token` walks older windows
+/// at that same cut and comes from a previous snapshot's `next_page_token`. A
+/// page token is never a stream cursor.
+#[derive(Clone, Debug, Default)]
+pub struct TranscriptOptions {
+    pub limit: Option<u32>,
+    pub page_token: Option<String>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ConversationTurnOptions {
     pub limits: Option<models::Limits>,
@@ -1553,6 +1564,71 @@ impl Conversation {
             .await
     }
 
+    /// Reads this Conversation back.
+    ///
+    /// Reading a Conversation is what a chat does on every reload, so it is an
+    /// ordinary workflow call rather than administration. The snapshot carries
+    /// the Conversation resource, the messages, the compactions, and the
+    /// `cursor` a stream resumes from, which is why one read is enough to
+    /// restore a page.
+    ///
+    /// The handle must name a Conversation by id. A handle bound by key and
+    /// owner has no id until a Turn is admitted through it, and admission is
+    /// where that caller learns which Conversation it landed in.
+    pub async fn transcript(
+        &self,
+        options: TranscriptOptions,
+    ) -> Result<models::TranscriptSnapshot, NvokenError> {
+        // The route addresses a Conversation by its opaque id. Resolving a key
+        // here would mean creating the Conversation as a side effect of
+        // reading it.
+        let ConversationRef::Id { id } = &self.reference else {
+            return Err(NvokenError::InvalidInput(
+                "transcript needs the Conversation id; a key-bound Conversation \
+                 learns it from the admission of its first Turn"
+                    .into(),
+            ));
+        };
+        let path = format!(
+            "/v1/conversations/{}/transcript",
+            crate::apis::urlencode(id)
+        );
+        let mut request = self.request(reqwest::Method::GET, &path);
+        if let Some(limit) = options.limit {
+            request = request.query(&[("limit", limit.to_string())]);
+        }
+        if let Some(page_token) = &options.page_token {
+            request = request.query(&[("page_token", page_token)]);
+        }
+        let response = request.send().await.map_err(api_error)?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(NvokenError::Api(format!(
+                "Conversation transcript returned HTTP {status}: {body}"
+            )));
+        }
+        response.json().await.map_err(api_error)
+    }
+
+    fn request(&self, method: reqwest::Method, path: &str) -> reqwest_middleware::RequestBuilder {
+        let raw = self.runner.client.raw();
+        let mut request = raw
+            .client
+            .request(method, format!("{}{}", raw.base_path, path))
+            .header("X-Nvoken-Tenant-Key", &self.tenant);
+        if let Some(user) = &self.user {
+            request = request.header("X-Nvoken-User-Key", user);
+        }
+        if let Some(user_agent) = &raw.user_agent {
+            request = request.header(reqwest::header::USER_AGENT, user_agent);
+        }
+        if let Some(token) = &raw.bearer_access_token {
+            request = request.bearer_auth(token);
+        }
+        request
+    }
+
     pub async fn text(
         &self,
         input: impl IntoTurnInput,
@@ -2344,6 +2420,82 @@ mod tests {
             .starts_with("POST /v1/turns/476dd7be-97a1-78f3-8096-d7032468a80a/interrupt HTTP/1.1"));
         // The contract declares no request body for this operation.
         assert!(requests[0].contains("content-length: 0"));
+    }
+
+    const TRANSCRIPT_WINDOW: &str = r#"{"conversation":{"id":"18325d9f-b9bc-797d-9259-96ece372defd","tenant_key":"acme","owner":{"kind":"tenant"},"conversation_key":null,"forked_from":null,"active_turn_id":null,"active_turn_status":null,"retention":null,"compaction":null,"metadata":null,"expires_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"},"messages":[],"compactions":[],"cursor":"cursor-1","has_more":true,"next_page_token":"token-1","captured_at":"2026-01-01T00:00:00Z"}"#;
+
+    #[tokio::test]
+    async fn transcript_sends_the_window_and_its_continuation() {
+        let (base_url, server) = response_server(vec![
+            (200, TRANSCRIPT_WINDOW.to_string()),
+            (200, TRANSCRIPT_WINDOW.to_string()),
+            (200, TRANSCRIPT_WINDOW.to_string()),
+        ])
+        .await;
+        let client = Client::with_base_url("test", base_url);
+        let conversation = client
+            .inline(Behavior::new("Help", "openai/gpt-5"))
+            .conversation(
+                ConversationRef::by_id("18325d9f-b9bc-797d-9259-96ece372defd"),
+                InlineConversationContext::new("acme").user("alice"),
+            );
+
+        // The body above is what the service sends. This SDK's generated
+        // `ConversationOwner` cannot deserialize its own `{"kind":"tenant"}`
+        // wire shape: serde consumes the discriminator for the internally
+        // tagged enum and the generated variant struct then reports `kind`
+        // missing. Every Conversation-carrying response fails to decode here
+        // today, through `raw()` exactly as much as through this facade, so
+        // what this test pins is the request the facade sends.
+        let _ = conversation
+            .transcript(TranscriptOptions {
+                limit: Some(50),
+                page_token: None,
+            })
+            .await;
+        // The walk asks for the window preceding the one that minted the token.
+        let _ = conversation
+            .transcript(TranscriptOptions {
+                limit: Some(50),
+                page_token: Some("token-1".into()),
+            })
+            .await;
+        // The default reads the whole transcript, which is what the operation
+        // has always done.
+        let _ = conversation.transcript(TranscriptOptions::default()).await;
+
+        let requests = server.await.unwrap();
+        assert!(requests[0].starts_with(
+            "GET /v1/conversations/18325d9f-b9bc-797d-9259-96ece372defd/transcript?limit=50 HTTP/1.1"
+        ));
+        assert!(requests[0].contains("x-nvoken-tenant-key: acme"));
+        assert!(requests[0].contains("x-nvoken-user-key: alice"));
+        assert!(requests[1].starts_with(
+            "GET /v1/conversations/18325d9f-b9bc-797d-9259-96ece372defd/transcript?limit=50&page_token=token-1 HTTP/1.1"
+        ));
+        assert!(requests[2].starts_with(
+            "GET /v1/conversations/18325d9f-b9bc-797d-9259-96ece372defd/transcript HTTP/1.1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn transcript_refuses_a_key_bound_handle() {
+        let client = Client::with_base_url("test", "http://localhost");
+        let conversation = client
+            .inline(Behavior::new("Help", "openai/gpt-5"))
+            .conversation(
+                ConversationRef::by_key("case-42", ConversationOwner::Tenant),
+                InlineConversationContext::new("acme"),
+            );
+
+        // The route addresses a Conversation by id, and a key-bound handle has
+        // not resolved one. Reading must not create the Conversation to find
+        // out.
+        let refusal = conversation
+            .transcript(TranscriptOptions::default())
+            .await
+            .unwrap_err();
+        assert!(matches!(refusal, NvokenError::InvalidInput(_)));
     }
 
     #[tokio::test]
