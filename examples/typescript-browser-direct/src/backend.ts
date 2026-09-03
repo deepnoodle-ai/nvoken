@@ -1,10 +1,5 @@
-/**
- * The backend half of browser-direct access.
- *
- * It mints a short-lived client token for the signed-in user and receives the
- * signed Turn webhook. The page talks directly to nvoken between those two
- * host-controlled boundaries.
- */
+// ABOUTME: Defines host controlled token issuance and signed webhook boundaries.
+// ABOUTME: Keeps private credentials and atomic settlement storage outside the browser.
 import {
   acceptWebhook,
   clientTokenConversations,
@@ -12,34 +7,58 @@ import {
   mintClientToken,
   retryWebhook,
   verifyWebhook,
-  webhookSupersedes,
 } from "@deepnoodle/nvoken";
 
-interface Environment {
+export interface Environment {
   NVOKEN_APP_ID: string;
   NVOKEN_CLIENT_KEY_ID: string;
   NVOKEN_CLIENT_PRIVATE_KEY: string;
   NVOKEN_AGENT_ID: string;
   NVOKEN_AGENT_REVISION_ID: string;
   NVOKEN_WEBHOOK_SECRET: string;
+  NVOKEN_BASE_URL: string;
 }
 
-export default {
-  async fetch(request: Request, environment: Environment): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/api/nvoken-token" && request.method === "POST") {
-      return issueClientToken(request, environment);
-    }
-    if (url.pathname === "/api/nvoken-webhook" && request.method === "POST") {
-      return receiveWebhook(request, environment);
-    }
-    return new Response("not found", { status: 404 });
-  },
-};
+export interface User {
+  id: string;
+  workspaceId: string;
+  conversationId: string;
+}
+
+export interface BackendDependencies {
+  authenticate(request: Request): Promise<User | undefined>;
+  /**
+   * Compare the highest stored sequence and conditionally apply this settlement
+   * in one transaction or conditional write. Return false for a stale delivery.
+   */
+  applySettlement?(
+    turnId: string,
+    sequence: number,
+    envelope: unknown,
+  ): Promise<boolean>;
+}
+
+export function createBackend(dependencies: BackendDependencies): {
+  fetch(request: Request, environment: Environment): Promise<Response>;
+} {
+  return {
+    async fetch(request: Request, environment: Environment): Promise<Response> {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/nvoken-token" && request.method === "POST") {
+        return issueClientToken(request, environment, dependencies.authenticate);
+      }
+      if (url.pathname === "/api/nvoken-webhook" && request.method === "POST") {
+        return receiveWebhook(request, environment, dependencies);
+      }
+      return new Response("not found", { status: 404 });
+    },
+  };
+}
 
 async function issueClientToken(
   request: Request,
   environment: Environment,
+  authenticate: BackendDependencies["authenticate"],
 ): Promise<Response> {
   const user = await authenticate(request);
   if (!user) return new Response("unauthorized", { status: 401 });
@@ -59,7 +78,11 @@ async function issueClientToken(
     },
   );
 
-  return Response.json({ token, conversationId: user.conversationId }, {
+  return Response.json({
+    token,
+    baseUrl: environment.NVOKEN_BASE_URL,
+    conversationId: user.conversationId,
+  }, {
     headers: { "cache-control": "no-store" },
   });
 }
@@ -67,7 +90,11 @@ async function issueClientToken(
 async function receiveWebhook(
   request: Request,
   environment: Environment,
+  dependencies: BackendDependencies,
 ): Promise<Response> {
+  if (!dependencies.applySettlement) {
+    return new Response("webhook storage not configured", { status: 501 });
+  }
   const rawBody = new Uint8Array(await request.arrayBuffer());
   let delivery;
   try {
@@ -81,13 +108,8 @@ async function receiveWebhook(
     return new Response("invalid signature", { status: 400 });
   }
 
-  const applied = await lastAppliedSequence(delivery.turnId);
-  if (!webhookSupersedes(delivery, applied)) {
-    return replyWith(acceptWebhook());
-  }
-
   try {
-    await recordSettlement(delivery.turnId, delivery.sequence, delivery.envelope);
+    await dependencies.applySettlement(delivery.turnId, delivery.sequence, delivery.envelope);
   } catch {
     return replyWith(retryWebhook());
   }
@@ -100,28 +122,4 @@ function replyWith(reply: { status: number }): Response {
 
 function base64Decode(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
-}
-
-// These functions belong to the host application. They are stubs so this
-// framework-neutral example remains type-checkable.
-interface User {
-  id: string;
-  workspaceId: string;
-  conversationId: string;
-}
-
-async function authenticate(_request: Request): Promise<User | undefined> {
-  throw new Error("resolve the signed-in user from your own session");
-}
-
-async function lastAppliedSequence(_turnId: string): Promise<number> {
-  throw new Error("read the highest sequence recorded for this Turn");
-}
-
-async function recordSettlement(
-  _turnId: string,
-  _sequence: number,
-  _envelope: unknown,
-): Promise<void> {
-  throw new Error("record settlement durably before returning");
 }

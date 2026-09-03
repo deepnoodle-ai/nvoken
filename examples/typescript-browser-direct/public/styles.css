@@ -1,0 +1,138 @@
+/* ABOUTME: Gives the educational browser chat a restrained readable layout. */
+/* ABOUTME: Keeps controls and state visible across desktop and mobile widths. */
+:root {
+  color: #1d2520;
+  background: #f3f0e7;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 3rem 0;
+}
+
+header {
+  margin-bottom: 2rem;
+}
+
+h1 {
+  margin: 0.2rem 0 0.5rem;
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  line-height: 1;
+}
+
+.eyebrow,
+label,
+button,
+#status,
+.notice {
+  font-family: Verdana, sans-serif;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #4c5f52;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#transcript {
+  min-height: 14rem;
+  padding: 1rem 0;
+  border-block: 1px solid #a8ad9e;
+}
+
+.message {
+  max-width: 36rem;
+  margin: 0 0 1.5rem;
+}
+
+.message-user {
+  margin-left: auto;
+}
+
+.message p {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
+
+.message-preview {
+  color: #3f5345;
+}
+
+form {
+  margin-top: 2rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #66746a;
+  border-radius: 0.2rem;
+  padding: 0.75rem;
+  color: inherit;
+  background: #fbf9f2;
+  font: inherit;
+}
+
+textarea:focus {
+  outline: 3px solid #c8a84e;
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+button {
+  border: 1px solid #1d2520;
+  border-radius: 0.2rem;
+  padding: 0.55rem 1rem;
+  color: #f8f5ec;
+  background: #1d2520;
+  font-weight: 700;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+#status {
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+#error {
+  color: #8b241a;
+  font-weight: 700;
+}
+
+.notice {
+  margin-top: 2rem;
+  color: #4c5f52;
+  font-size: 0.78rem;
+}
