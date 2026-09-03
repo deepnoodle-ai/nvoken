@@ -1,0 +1,61 @@
+<!-- ABOUTME: Provides the semantic shell for the localhost browser chat. -->
+<!-- ABOUTME: Loads the compiled example and SDK modules through an import map. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nvoken browser direct chat</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "@deepnoodle/nvoken/browser": "/sdk/browser.js",
+          "@deepnoodle/nvoken/transcript": "/sdk/transcript.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Local security boundary example</p>
+        <h1>Browser direct chat</h1>
+        <p>The browser calls nvoken with a short lived token. The local host keeps the private signing key.</p>
+      </header>
+
+      <section id="transcript" aria-label="Conversation" aria-live="polite"></section>
+
+      <form id="composer">
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="4" required></textarea>
+        <div class="actions">
+          <button id="send" type="submit" disabled>Send</button>
+          <button id="stop" type="button" hidden>Stop</button>
+          <button id="retry-send" type="button" hidden>Retry Send</button>
+          <button id="discard-send" type="button" hidden>Discard Send</button>
+          <button id="reconnect" type="button" hidden>Reconnect</button>
+        </div>
+      </form>
+
+      <p id="status" role="status">Starting</p>
+      <p id="error" role="alert" hidden></p>
+      <p class="notice">Local demo only. Every visitor is treated as the configured demo user.</p>
+    </main>
+
+    <script type="module">
+      import { installPageLifecycle, startBrowserChat } from "/app/page.js";
+
+      try {
+        const stop = await startBrowserChat();
+        installPageLifecycle(window, stop);
+      } catch (cause) {
+        document.getElementById("status").textContent = "Could not start";
+        document.getElementById("error").textContent = cause instanceof Error
+          ? cause.message
+          : "Unknown startup error";
+        document.getElementById("error").hidden = false;
+      }
+    </script>
+  </body>
+</html>
