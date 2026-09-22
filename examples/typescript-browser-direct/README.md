@@ -1,57 +1,75 @@
-# TypeScript browser-direct example
+# TypeScript browser-direct chat
 
-A page that talks to nvoken directly, plus the backend boundaries that
-authorize it.
+A chat page that talks to nvoken directly from the browser.
 
-`src/backend.ts`:
+- `src/server.ts` is the host backend. It keeps the client signing key and
+  mints a ten-minute token pinned to one tenant, user, AgentRevision, and
+  Conversation. It never proxies model calls.
+- `src/page.ts` is the page. It fetches that token and drives the chat with
+  `createConversation`, which reads the transcript, streams the active Turn,
+  and resumes after a reload.
 
-- authenticates the host application's user;
-- mints a short-lived token pinned to one tenant, user, AgentRevision,
-  Conversation, and memory namespace;
-- verifies signed schema-v2 Turn webhooks and folds them by monotonic sequence.
+## Configure
 
-`src/page.ts`:
-
-- obtains that token from the host backend;
-- admits and follows Turns without exposing a machine credential;
-- recovers a Turn by ID after reload;
-- reads retained Conversation messages through `raw()`.
-
-The backend is deliberately not a proxy for model execution. A slow model does
-not hold one of the host application's requests open, and closing the page does
-not cancel durable work.
-
-## Configure the backend
-
-Generate and register a browser client keypair, then keep the private seed on
-the backend:
+Browser access needs an App created with `--browser`, this page's origin, and
+a webhook receiver (see the [CLI guide](../../docs/guides/cli.md)):
 
 ```bash
-nvoken client-key generate <app-id> --name web
+nvoken app init browser-direct-demo \
+  --browser \
+  --origin http://127.0.0.1:8787 \
+  --webhook-url https://your-host.example/nvoken/events \
+  > nvoken.env
 ```
 
-The example expects:
+The Agent must opt in to browser tokens with a `client_interface`, or every
+browser request is rejected with 401. The Agent facade cannot set it yet, so
+create the Agent and a Conversation for `demo-user` through `raw()` with the
+App's API key:
+
+```ts
+const agent = await client.raw().agents.createAgent({
+  idempotencyKey: crypto.randomUUID(),
+  createAgentRequest: {
+    agentKey: "support",
+    owner: { kind: "app" },
+    instructions: "Answer briefly.",
+    model: "anthropic/claude-sonnet-5",
+    clientInterface: {},
+  },
+});
+const conversation = await client.raw().conversations.createConversation({
+  createConversationRequest: {
+    tenantKey: "demo-tenant",
+    owner: { kind: "user", userKey: "demo-user" },
+  },
+});
+```
+
+Then export the App, client key, Agent, its revision, and the Conversation:
 
 ```bash
-NVOKEN_APP_ID='app_…'
-NVOKEN_CLIENT_KEY_ID='ckey_…'
-NVOKEN_CLIENT_PRIVATE_KEY='<base64 Ed25519 seed>'
-NVOKEN_AGENT_ID='agent_…'
-NVOKEN_AGENT_REVISION_ID='arev_…'
-NVOKEN_WEBHOOK_SECRET='<webhook signing secret>'
+export NVOKEN_BASE_URL='…'
+export NVOKEN_APP_ID='app_…'
+export NVOKEN_CLIENT_KEY_ID='ckey_…'
+export NVOKEN_CLIENT_PRIVATE_KEY='<base64 Ed25519 seed>'
+export NVOKEN_AGENT_ID='agent_…'
+export NVOKEN_AGENT_REVISION_ID='arev_…'
+export NVOKEN_CONVERSATION_ID='conv_…'
 ```
 
-Resolve the Conversation ID from the signed-in user's host-owned record. The
-token grants exactly that Conversation. Its subject and tenant also come from
-the authenticated session, never from request-body claims.
-
-## Build
+## Run
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
 pnpm --filter nvoken-typescript-browser-direct-example... build
+pnpm --filter nvoken-typescript-browser-direct-example start
 ```
 
-This example type-checks rather than running: the stubs must be connected to a
-real authentication session and durable host database.
+Open <http://127.0.0.1:8787> and send a message. The reply streams in. Reload
+mid-reply and it picks up where it left off; Stop interrupts the Turn and keeps
+what it produced.
+
+Every visitor is treated as `demo-user`, so keep this server on loopback. A
+real host takes the user and Conversation from its own signed-in session.

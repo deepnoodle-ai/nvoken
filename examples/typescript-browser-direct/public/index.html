@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>nvoken browser-direct chat</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@deepnoodle/nvoken/browser": "/sdk/browser.js",
+          "@deepnoodle/nvoken/transcript": "/sdk/transcript.js"
+        }
+      }
+    </script>
+    <script type="module" src="/page.js"></script>
+    <style>
+      body { font: 16px system-ui; max-width: 40rem; margin: 2rem auto; }
+      #transcript p { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="transcript"></div>
+    <form>
+      <input required autofocus>
+      <button id="send" disabled>Send</button>
+      <button id="stop" type="button" disabled>Stop</button>
+    </form>
+    <p id="error" role="alert"></p>
+  </body>
+</html>

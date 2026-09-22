@@ -1,75 +1,68 @@
 /**
- * The browser half. It holds a short-lived client token and no machine key.
+ * The browser half. It holds a short-lived client token, never a machine key,
+ * and calls nvoken directly.
  */
-import {
-  createBrowserClient,
-  createConversation,
-  type ConversationController,
-} from "@deepnoodle/nvoken/browser";
+import { createBrowserClient, createConversation } from "@deepnoodle/nvoken/browser";
+import { blocksOf } from "@deepnoodle/nvoken/transcript";
 
-async function currentToken(): Promise<string> {
-  const response = await fetch("/api/nvoken-token", { method: "POST" });
-  if (!response.ok) throw new Error("could not obtain an nvoken client token");
-  return ((await response.json()) as { token: string }).token;
+interface Access {
+  token: string;
+  baseUrl: string;
+  conversationId: string;
 }
 
+async function access(): Promise<Access> {
+  const response = await fetch("/token", { method: "POST" });
+  if (!response.ok) throw new Error("could not obtain an nvoken client token");
+  return response.json();
+}
+
+const { baseUrl, conversationId } = await access();
 const client = createBrowserClient({
-  baseUrl: "https://api.nvoken.com",
-  clientToken: currentToken,
+  baseUrl,
+  // Called per request, so an expiring token is replaced from the host.
+  clientToken: async () => (await access()).token,
 });
 
-/** Admit one Turn and render reduced, authoritative updates. */
-export async function send(conversationId: string, text: string): Promise<string> {
-  const turn = await client.start(text, {
-    conversation: { id: conversationId },
-  });
+// The controller reads the transcript, follows any active Turn, and resumes
+// after a reload. The page only renders its snapshot.
+const chat = createConversation({ client, conversation: { id: conversationId } });
 
-  let answer = "";
-  for await (const update of turn.updates()) {
-    if (update.snapshot.text !== null && update.snapshot.text !== answer) {
-      answer = update.snapshot.text;
-      renderAnswer(answer);
-    }
-    renderStatus(update.snapshot.status);
-  }
-  return answer;
-}
+const transcript = document.querySelector("#transcript")!;
+const form = document.querySelector("form")!;
+const input = form.querySelector("input")!;
+const send = form.querySelector<HTMLButtonElement>("#send")!;
+const stop = form.querySelector<HTMLButtonElement>("#stop")!;
+const error = document.querySelector("#error")!;
 
-/** Recover an admitted Turn after a reload, using only its durable ID. */
-export async function recover(turnId: string): Promise<string | null> {
-  return (await client.turn(turnId).result()).text;
-}
+chat.subscribe(() => {
+  const snapshot = chat.getSnapshot();
+  const lines = [
+    ...snapshot.messages.flatMap((message) =>
+      blocksOf(message)
+        .filter((block) => block.type === "text")
+        .map((block) => `${message.role}: ${block.text}`),
+    ),
+    ...snapshot.previews
+      .filter((preview) => preview.kind === "text")
+      .map((preview) => `assistant: ${preview.delta}`),
+  ];
+  // textContent, never innerHTML: model output is untrusted.
+  transcript.replaceChildren(...lines.map((line) => {
+    const p = document.createElement("p");
+    p.textContent = line;
+    return p;
+  }));
+  send.disabled = snapshot.send.action.status !== "enabled";
+  stop.disabled = snapshot.interruption.action.status !== "enabled";
+  const failed = [snapshot.authorization, snapshot.connection, snapshot.send]
+    .find((state) => "error" in state);
+  error.textContent = failed && "error" in failed ? failed.error.message : "";
+});
 
-/** Stop a running Turn and keep everything it produced. */
-export async function stop(turnId: string): Promise<string> {
-  return (await client.turn(turnId).interrupt()).status;
-}
-
-/**
- * The whole page, as a resumable conversation.
- *
- * Everything above is the low-level path: one Turn at a time, with the page
- * responsible for what happens across a reload. The controller is the same
- * runtime with the resumption already written — one transcript read plus a
- * stream from the position it observed, and a snapshot that says what every
- * control may do right now. Hold one for the life of the page.
- */
-export function conversation(conversationId: string): ConversationController {
-  const controller = createConversation({
-    client,
-    conversation: { id: conversationId },
-  });
-  controller.subscribe(() => {
-    const snapshot = controller.getSnapshot();
-    renderMessages(snapshot.messages.length);
-    renderStatus(snapshot.activity.status);
-    // Never guess: the snapshot already says whether the composer is usable.
-    renderComposer(snapshot.send.action.status === "enabled");
-  });
-  return controller;
-}
-
-declare function renderAnswer(text: string): void;
-declare function renderStatus(status: string): void;
-declare function renderMessages(count: number): void;
-declare function renderComposer(enabled: boolean): void;
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  // Failures surface in the snapshot, so only success needs handling here.
+  chat.send(input.value).then(() => (input.value = ""), () => {});
+});
+stop.addEventListener("click", () => chat.interrupt());

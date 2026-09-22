@@ -333,8 +333,8 @@ machine-only coordinates again. The browser client rejects `nvk_` machine
 keys before transport.
 
 See [the browser-direct example](../../examples/typescript-browser-direct/README.md)
-for token minting, direct execution, transcript reads, and signed Turn webhook
-handling.
+for token minting and a resumable chat page driven by the conversation
+controller.
 
 ## Headless conversation controller
 
