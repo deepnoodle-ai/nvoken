@@ -8,6 +8,22 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **Breaking: `time_to_first_output_ms` is now `time_to_first_token_ms`.** The
+  Turn timeline step renames the field in all four generated clients. Both
+  `TurnTimelineStep` and `ModelCallRecord` now carry `time_to_first_token_ms`,
+  `last_output_at`, `generation_duration_ms`, and `output_tokens_per_second`:
+  time to first content-bearing output, the last such output, the span from
+  first to last, and provider-reported output tokens after the first divided by
+  that span. On `ModelCallRecord` they are required and null when unobserved.
+- **Meta as a model provider.** `createTurn` accepts an `X-Meta-Api-Key` header
+  beside the other per-request provider keys. The Rust facade passes the new
+  header slot through as `None`, as it does the others.
+- **Provider-native web search options.** `WebSearchTool` gains the Meta-only
+  `search_context_size` (`low`, `medium`, `high`) and `include_results`, and
+  `max_uses`, `allowed_domains`, and `blocked_domains` are documented as
+  Anthropic-only. A field the selected provider does not implement is rejected
+  at Turn admission rather than silently dropped.
+
 ## 0.35.0 - 2026-09-02
 
 - **The Rust SDK decodes Agent and Conversation responses.** Ten generated

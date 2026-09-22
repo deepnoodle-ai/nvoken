@@ -379,7 +379,7 @@ paths:
             caller_ephemeral `provider_keys` selection. The header
             must name the model provider and cannot be combined with
             the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key,
-            X-Xai-Api-Key.
+            X-Xai-Api-Key, X-Meta-Api-Key.
           schema:
             type: string
             minLength: 1
@@ -399,6 +399,13 @@ paths:
             minLength: 1
             maxLength: 65536
         - name: X-Xai-Api-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 65536
+        - name: X-Meta-Api-Key
           in: header
           required: false
           schema:
@@ -5364,9 +5371,12 @@ components:
           type: integer
           minimum: 1
           maximum: 20
-          description: |
-            Searches this turn may run. Omitted means the provider default.
+          description: >
+            Anthropic only. Searches this turn may run. Omitted means the
+            provider default.
+
             This is the only bound nvoken can place on search spend, because
+
             the provider does not report a per-search fee it can meter.
         allowed_domains:
           type: array
@@ -5374,9 +5384,12 @@ components:
           items:
             type: string
             maxLength: 255
-          description: |
-            Restrict results to these hosts. Bare hostnames only — a scheme,
+          description: >
+            Anthropic only. Restrict results to these hosts. Bare hostnames only
+            — a scheme,
+
             path, or port is rejected rather than reinterpreted. Mutually
+
             exclusive with `blocked_domains`, which is the provider's rule.
         blocked_domains:
           type: array
@@ -5384,14 +5397,40 @@ components:
           items:
             type: string
             maxLength: 255
-          description: |
-            Exclude these hosts. Same format as `allowed_domains`, and mutually
+          description: >
+            Anthropic only. Exclude these hosts. Same format as
+            `allowed_domains`, and mutually
+
             exclusive with it.
+        search_context_size:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+          x-enum-varnames:
+            - SearchContextLow
+            - SearchContextMedium
+            - SearchContextHigh
+          description: |
+            Meta only. How much retrieved content reaches the model, trading
+            latency and tokens for breadth. Omitted leaves Meta's `medium`
+            default in force.
+        include_results:
+          type: boolean
+          default: false
+          description: |
+            Meta only. Retain the title, URL, and snippet for the search hits
+            the model consulted under the visible `server_tool_use` input.
+            These results add input tokens to the provider response.
         user_location:
           $ref: '#/components/schemas/WebSearchLocation'
       description: |
-        Anthropic web search options, passed through as the provider defines
-        them.
+        Provider-native web search options. `user_location` is shared;
+        `max_uses` and domain controls are Anthropic-only, while
+        `search_context_size` and `include_results` are Meta-only. A field the
+        selected provider does not implement is rejected at admission rather
+        than silently dropped.
     WebSearchLocation:
       type: object
       additionalProperties: false
@@ -7521,15 +7560,37 @@ components:
         first_output_at:
           type: string
           format: date-time
+          description: First content-bearing output observed from a streamed model call.
+        last_output_at:
+          type: string
+          format: date-time
+          description: >-
+            Last content-bearing output observed from a successfully settled
+            streamed model call.
         ended_at:
           type: string
           format: date-time
         duration_ms:
           type: integer
           minimum: 0
-        time_to_first_output_ms:
+        time_to_first_token_ms:
           type: integer
           minimum: 0
+          description: >-
+            Client-observed time from model-call start to its first
+            content-bearing streamed output.
+        generation_duration_ms:
+          type: integer
+          minimum: 0
+          description: >-
+            Client-observed time from first to last content-bearing streamed
+            output.
+        output_tokens_per_second:
+          type: number
+          exclusiveMinimum: 0
+          description: >-
+            Provider-reported output tokens after the first, divided by
+            generation duration in seconds.
         input_tokens:
           type: integer
           minimum: 0
@@ -11176,7 +11237,11 @@ components:
         - created_at
         - started_at
         - first_output_at
+        - last_output_at
         - settled_at
+        - time_to_first_token_ms
+        - generation_duration_ms
+        - output_tokens_per_second
       properties:
         id:
           $ref: '#/components/schemas/ModelCallFactID'
@@ -11343,11 +11408,44 @@ components:
             - string
             - 'null'
           format: date-time
+          description: First content-bearing output observed from a streamed model call.
+        last_output_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: >-
+            Last content-bearing output observed from a successfully settled
+            streamed model call.
         settled_at:
           type:
             - string
             - 'null'
           format: date-time
+        time_to_first_token_ms:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+          description: >-
+            Client-observed time from model-call start to its first
+            content-bearing streamed output.
+        generation_duration_ms:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+          description: >-
+            Client-observed time from first to last content-bearing streamed
+            output.
+        output_tokens_per_second:
+          type:
+            - number
+            - 'null'
+          exclusiveMinimum: 0
+          description: >-
+            Provider-reported output tokens after the first, divided by
+            generation duration in seconds.
     UsageRecords:
       type: object
       additionalProperties: false

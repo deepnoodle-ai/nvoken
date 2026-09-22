@@ -33,17 +33,34 @@ pub struct TurnTimelineStep {
     pub status: String,
     #[serde(rename = "started_at")]
     pub started_at: chrono::DateTime<chrono::FixedOffset>,
+    /// First content-bearing output observed from a streamed model call.
     #[serde(rename = "first_output_at", skip_serializing_if = "Option::is_none")]
     pub first_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Last content-bearing output observed from a successfully settled streamed model call.
+    #[serde(rename = "last_output_at", skip_serializing_if = "Option::is_none")]
+    pub last_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     #[serde(rename = "ended_at", skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     #[serde(rename = "duration_ms", skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u32>,
+    /// Client-observed time from model-call start to its first content-bearing streamed output.
     #[serde(
-        rename = "time_to_first_output_ms",
+        rename = "time_to_first_token_ms",
         skip_serializing_if = "Option::is_none"
     )]
-    pub time_to_first_output_ms: Option<u32>,
+    pub time_to_first_token_ms: Option<u32>,
+    /// Client-observed time from first to last content-bearing streamed output.
+    #[serde(
+        rename = "generation_duration_ms",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub generation_duration_ms: Option<u32>,
+    /// Provider-reported output tokens after the first, divided by generation duration in seconds.
+    #[serde(
+        rename = "output_tokens_per_second",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub output_tokens_per_second: Option<f64>,
     #[serde(rename = "input_tokens", skip_serializing_if = "Option::is_none")]
     pub input_tokens: Option<u32>,
     #[serde(rename = "output_tokens", skip_serializing_if = "Option::is_none")]
@@ -84,9 +101,12 @@ impl TurnTimelineStep {
             status,
             started_at,
             first_output_at: None,
+            last_output_at: None,
             ended_at: None,
             duration_ms: None,
-            time_to_first_output_ms: None,
+            time_to_first_token_ms: None,
+            generation_duration_ms: None,
+            output_tokens_per_second: None,
             input_tokens: None,
             output_tokens: None,
             cache_creation_input_tokens: None,
