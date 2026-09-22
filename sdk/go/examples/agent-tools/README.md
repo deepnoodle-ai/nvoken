@@ -11,7 +11,8 @@ For a live run, start nvoken and run from `sdk/go`:
 NVOKEN_API_KEY='<app-key>' go run ./examples/agent-tools
 ```
 
-`NVOKEN_BASE_URL` defaults to `http://localhost:8080` and `NVOKEN_MODEL` to
+`NVOKEN_BASE_URL` defaults to `http://localhost:8080`. Set
+`NVOKEN_MODEL_PROVIDER` and `NVOKEN_MODEL` to use a model other than
 `anthropic/claude-sonnet-5`.
 
 The handler uses the stable ToolCall ID as the host-side idempotency key.

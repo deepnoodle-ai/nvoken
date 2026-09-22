@@ -38,7 +38,8 @@ func main() {
 		log.Fatal(err)
 	}
 	var model nvoken.ModelInput
-	if err := model.FromModelInput1(cmp.Or(os.Getenv("NVOKEN_MODEL"), "anthropic/claude-sonnet-5")); err != nil {
+	if err := model.FromModelInput1(cmp.Or(os.Getenv("NVOKEN_MODEL_PROVIDER"), "anthropic") + "/" +
+		cmp.Or(os.Getenv("NVOKEN_MODEL"), "claude-sonnet-5")); err != nil {
 		log.Fatal(err)
 	}
 
