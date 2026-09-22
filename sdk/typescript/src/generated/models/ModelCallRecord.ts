@@ -305,17 +305,41 @@ export interface ModelCallRecord {
      */
     startedAt: Date | null;
     /**
-     *
+     * First content-bearing output observed from a streamed model call.
      * @type {Date}
      * @memberof ModelCallRecord
      */
     firstOutputAt: Date | null;
+    /**
+     * Last content-bearing output observed from a successfully settled streamed model call.
+     * @type {Date}
+     * @memberof ModelCallRecord
+     */
+    lastOutputAt: Date | null;
     /**
      *
      * @type {Date}
      * @memberof ModelCallRecord
      */
     settledAt: Date | null;
+    /**
+     * Client-observed time from model-call start to its first content-bearing streamed output.
+     * @type {number}
+     * @memberof ModelCallRecord
+     */
+    timeToFirstTokenMs: number | null;
+    /**
+     * Client-observed time from first to last content-bearing streamed output.
+     * @type {number}
+     * @memberof ModelCallRecord
+     */
+    generationDurationMs: number | null;
+    /**
+     * Provider-reported output tokens after the first, divided by generation duration in seconds.
+     * @type {number}
+     * @memberof ModelCallRecord
+     */
+    outputTokensPerSecond: number | null;
 }
 
 
@@ -394,7 +418,11 @@ export function instanceOfModelCallRecord(value: object): value is ModelCallReco
     if (!('createdAt' in value) || value['createdAt'] === undefined) return false;
     if (!('startedAt' in value) || value['startedAt'] === undefined) return false;
     if (!('firstOutputAt' in value) || value['firstOutputAt'] === undefined) return false;
+    if (!('lastOutputAt' in value) || value['lastOutputAt'] === undefined) return false;
     if (!('settledAt' in value) || value['settledAt'] === undefined) return false;
+    if (!('timeToFirstTokenMs' in value) || value['timeToFirstTokenMs'] === undefined) return false;
+    if (!('generationDurationMs' in value) || value['generationDurationMs'] === undefined) return false;
+    if (!('outputTokensPerSecond' in value) || value['outputTokensPerSecond'] === undefined) return false;
     return true;
 }
 
@@ -449,7 +477,11 @@ export function ModelCallRecordFromJSONTyped(json: any, ignoreDiscriminator: boo
         'createdAt': (new Date(json['created_at'])),
         'startedAt': (json['started_at'] == null ? null : new Date(json['started_at'])),
         'firstOutputAt': (json['first_output_at'] == null ? null : new Date(json['first_output_at'])),
+        'lastOutputAt': (json['last_output_at'] == null ? null : new Date(json['last_output_at'])),
         'settledAt': (json['settled_at'] == null ? null : new Date(json['settled_at'])),
+        'timeToFirstTokenMs': json['time_to_first_token_ms'],
+        'generationDurationMs': json['generation_duration_ms'],
+        'outputTokensPerSecond': json['output_tokens_per_second'],
     };
 }
 
@@ -505,6 +537,10 @@ export function ModelCallRecordToJSONTyped(value?: ModelCallRecord | null, ignor
         'created_at': value['createdAt'].toISOString(),
         'started_at': value['startedAt'] == null ? value['startedAt'] : value['startedAt'].toISOString(),
         'first_output_at': value['firstOutputAt'] == null ? value['firstOutputAt'] : value['firstOutputAt'].toISOString(),
+        'last_output_at': value['lastOutputAt'] == null ? value['lastOutputAt'] : value['lastOutputAt'].toISOString(),
         'settled_at': value['settledAt'] == null ? value['settledAt'] : value['settledAt'].toISOString(),
+        'time_to_first_token_ms': value['timeToFirstTokenMs'],
+        'generation_duration_ms': value['generationDurationMs'],
+        'output_tokens_per_second': value['outputTokensPerSecond'],
     };
 }

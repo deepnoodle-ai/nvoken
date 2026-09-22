@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
 from typing import Any, ClassVar, Dict, List, Optional
 from typing_extensions import Annotated
 from nvoken_generated.models.web_search_location import WebSearchLocation
@@ -27,13 +27,25 @@ from pydantic_core import to_jsonable_python
 
 class WebSearchTool(BaseModel):
     """
-    Anthropic web search options, passed through as the provider defines them.
+    Provider-native web search options. `user_location` is shared; `max_uses` and domain controls are Anthropic-only, while `search_context_size` and `include_results` are Meta-only. A field the selected provider does not implement is rejected at admission rather than silently dropped.
     """ # noqa: E501
-    max_uses: Optional[Annotated[int, Field(le=20, strict=True, ge=1)]] = Field(default=None, description="Searches this turn may run. Omitted means the provider default. This is the only bound nvoken can place on search spend, because the provider does not report a per-search fee it can meter. ")
-    allowed_domains: Optional[Annotated[List[Annotated[str, Field(strict=True, max_length=255)]], Field(max_length=20)]] = Field(default=None, description="Restrict results to these hosts. Bare hostnames only — a scheme, path, or port is rejected rather than reinterpreted. Mutually exclusive with `blocked_domains`, which is the provider's rule. ")
-    blocked_domains: Optional[Annotated[List[Annotated[str, Field(strict=True, max_length=255)]], Field(max_length=20)]] = Field(default=None, description="Exclude these hosts. Same format as `allowed_domains`, and mutually exclusive with it. ")
+    max_uses: Optional[Annotated[int, Field(le=20, strict=True, ge=1)]] = Field(default=None, description="Anthropic only. Searches this turn may run. Omitted means the provider default. This is the only bound nvoken can place on search spend, because the provider does not report a per-search fee it can meter. ")
+    allowed_domains: Optional[Annotated[List[Annotated[str, Field(strict=True, max_length=255)]], Field(max_length=20)]] = Field(default=None, description="Anthropic only. Restrict results to these hosts. Bare hostnames only — a scheme, path, or port is rejected rather than reinterpreted. Mutually exclusive with `blocked_domains`, which is the provider's rule. ")
+    blocked_domains: Optional[Annotated[List[Annotated[str, Field(strict=True, max_length=255)]], Field(max_length=20)]] = Field(default=None, description="Anthropic only. Exclude these hosts. Same format as `allowed_domains`, and mutually exclusive with it. ")
+    search_context_size: Optional[StrictStr] = Field(default=None, description="Meta only. How much retrieved content reaches the model, trading latency and tokens for breadth. Omitted leaves Meta's `medium` default in force. ")
+    include_results: Optional[StrictBool] = Field(default=False, description="Meta only. Retain the title, URL, and snippet for the search hits the model consulted under the visible `server_tool_use` input. These results add input tokens to the provider response. ")
     user_location: Optional[WebSearchLocation] = None
-    __properties: ClassVar[List[str]] = ["max_uses", "allowed_domains", "blocked_domains", "user_location"]
+    __properties: ClassVar[List[str]] = ["max_uses", "allowed_domains", "blocked_domains", "search_context_size", "include_results", "user_location"]
+
+    @field_validator('search_context_size')
+    def search_context_size_validate_enum(cls, value):
+        """Validates the enum"""
+        if value is None:
+            return value
+
+        if value not in set(['low', 'medium', 'high']):
+            raise ValueError("must be one of enum values ('low', 'medium', 'high')")
+        return value
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -92,6 +104,8 @@ class WebSearchTool(BaseModel):
             "max_uses": obj.get("max_uses"),
             "allowed_domains": obj.get("allowed_domains"),
             "blocked_domains": obj.get("blocked_domains"),
+            "search_context_size": obj.get("search_context_size"),
+            "include_results": obj.get("include_results") if obj.get("include_results") is not None else False,
             "user_location": WebSearchLocation.from_dict(obj["user_location"]) if obj.get("user_location") is not None else None
         })
         return _obj

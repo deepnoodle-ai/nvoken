@@ -127,10 +127,32 @@ pub struct ModelCallRecord {
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "started_at", deserialize_with = "Option::deserialize")]
     pub started_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// First content-bearing output observed from a streamed model call.
     #[serde(rename = "first_output_at", deserialize_with = "Option::deserialize")]
     pub first_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Last content-bearing output observed from a successfully settled streamed model call.
+    #[serde(rename = "last_output_at", deserialize_with = "Option::deserialize")]
+    pub last_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     #[serde(rename = "settled_at", deserialize_with = "Option::deserialize")]
     pub settled_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Client-observed time from model-call start to its first content-bearing streamed output.
+    #[serde(
+        rename = "time_to_first_token_ms",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub time_to_first_token_ms: Option<u32>,
+    /// Client-observed time from first to last content-bearing streamed output.
+    #[serde(
+        rename = "generation_duration_ms",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub generation_duration_ms: Option<u32>,
+    /// Provider-reported output tokens after the first, divided by generation duration in seconds.
+    #[serde(
+        rename = "output_tokens_per_second",
+        deserialize_with = "Option::deserialize"
+    )]
+    pub output_tokens_per_second: Option<f64>,
 }
 
 impl ModelCallRecord {
@@ -176,7 +198,11 @@ impl ModelCallRecord {
         created_at: chrono::DateTime<chrono::FixedOffset>,
         started_at: Option<chrono::DateTime<chrono::FixedOffset>>,
         first_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+        last_output_at: Option<chrono::DateTime<chrono::FixedOffset>>,
         settled_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+        time_to_first_token_ms: Option<u32>,
+        generation_duration_ms: Option<u32>,
+        output_tokens_per_second: Option<f64>,
     ) -> ModelCallRecord {
         ModelCallRecord {
             id,
@@ -232,7 +258,11 @@ impl ModelCallRecord {
             created_at,
             started_at,
             first_output_at,
+            last_output_at,
             settled_at,
+            time_to_first_token_ms,
+            generation_duration_ms,
+            output_tokens_per_second,
         }
     }
 }

@@ -11,30 +11,57 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// WebSearchTool : Anthropic web search options, passed through as the provider defines them.
+/// WebSearchTool : Provider-native web search options. `user_location` is shared; `max_uses` and domain controls are Anthropic-only, while `search_context_size` and `include_results` are Meta-only. A field the selected provider does not implement is rejected at admission rather than silently dropped.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WebSearchTool {
-    /// Searches this turn may run. Omitted means the provider default. This is the only bound nvoken can place on search spend, because the provider does not report a per-search fee it can meter.
+    /// Anthropic only. Searches this turn may run. Omitted means the provider default. This is the only bound nvoken can place on search spend, because the provider does not report a per-search fee it can meter.
     #[serde(rename = "max_uses", skip_serializing_if = "Option::is_none")]
     pub max_uses: Option<u32>,
-    /// Restrict results to these hosts. Bare hostnames only — a scheme, path, or port is rejected rather than reinterpreted. Mutually exclusive with `blocked_domains`, which is the provider's rule.
+    /// Anthropic only. Restrict results to these hosts. Bare hostnames only — a scheme, path, or port is rejected rather than reinterpreted. Mutually exclusive with `blocked_domains`, which is the provider's rule.
     #[serde(rename = "allowed_domains", skip_serializing_if = "Option::is_none")]
     pub allowed_domains: Option<Vec<String>>,
-    /// Exclude these hosts. Same format as `allowed_domains`, and mutually exclusive with it.
+    /// Anthropic only. Exclude these hosts. Same format as `allowed_domains`, and mutually exclusive with it.
     #[serde(rename = "blocked_domains", skip_serializing_if = "Option::is_none")]
     pub blocked_domains: Option<Vec<String>>,
+    /// Meta only. How much retrieved content reaches the model, trading latency and tokens for breadth. Omitted leaves Meta's `medium` default in force.
+    #[serde(
+        rename = "search_context_size",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub search_context_size: Option<SearchContextSize>,
+    /// Meta only. Retain the title, URL, and snippet for the search hits the model consulted under the visible `server_tool_use` input. These results add input tokens to the provider response.
+    #[serde(rename = "include_results", skip_serializing_if = "Option::is_none")]
+    pub include_results: Option<bool>,
     #[serde(rename = "user_location", skip_serializing_if = "Option::is_none")]
     pub user_location: Option<Box<models::WebSearchLocation>>,
 }
 
 impl WebSearchTool {
-    /// Anthropic web search options, passed through as the provider defines them.
+    /// Provider-native web search options. `user_location` is shared; `max_uses` and domain controls are Anthropic-only, while `search_context_size` and `include_results` are Meta-only. A field the selected provider does not implement is rejected at admission rather than silently dropped.
     pub fn new() -> WebSearchTool {
         WebSearchTool {
             max_uses: None,
             allowed_domains: None,
             blocked_domains: None,
+            search_context_size: None,
+            include_results: None,
             user_location: None,
         }
+    }
+}
+/// Meta only. How much retrieved content reaches the model, trading latency and tokens for breadth. Omitted leaves Meta's `medium` default in force.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+pub enum SearchContextSize {
+    #[serde(rename = "low")]
+    SearchContextLow,
+    #[serde(rename = "medium")]
+    SearchContextMedium,
+    #[serde(rename = "high")]
+    SearchContextHigh,
+}
+
+impl Default for SearchContextSize {
+    fn default() -> SearchContextSize {
+        Self::SearchContextLow
     }
 }

@@ -19,7 +19,7 @@ import json
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional, Union
 from typing_extensions import Annotated
 from nvoken_generated.models.authentication_method import AuthenticationMethod
 from nvoken_generated.models.model_call_fact_status import ModelCallFactStatus
@@ -75,9 +75,13 @@ class ModelCallRecord(BaseModel):
     pricing_version: Optional[StrictStr]
     created_at: datetime
     started_at: Optional[datetime]
-    first_output_at: Optional[datetime]
+    first_output_at: Optional[datetime] = Field(description="First content-bearing output observed from a streamed model call.")
+    last_output_at: Optional[datetime] = Field(description="Last content-bearing output observed from a successfully settled streamed model call.")
     settled_at: Optional[datetime]
-    __properties: ClassVar[List[str]] = ["id", "turn_id", "conversation_id", "content_expires_at", "app_id", "tenant_key", "user_key", "behavior_source_kind", "agent_id", "agent_revision_id", "effective_behavior_digest", "effective_limits", "memory_space_id", "credential_family_id", "authentication_method", "provider_key_source", "provider_key_id", "provider_key_version_id", "call_kind", "call_ordinal", "lease_attempt", "provider_attempt_ordinal", "requested_provider", "requested_model", "served_provider", "served_model", "status", "outcome", "failure_class", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost", "cost_coverage", "max_cost_at_risk", "pricing_version", "created_at", "started_at", "first_output_at", "settled_at"]
+    time_to_first_token_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(description="Client-observed time from model-call start to its first content-bearing streamed output.")
+    generation_duration_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(description="Client-observed time from first to last content-bearing streamed output.")
+    output_tokens_per_second: Optional[Union[Annotated[float, Field(strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(description="Provider-reported output tokens after the first, divided by generation duration in seconds.")
+    __properties: ClassVar[List[str]] = ["id", "turn_id", "conversation_id", "content_expires_at", "app_id", "tenant_key", "user_key", "behavior_source_kind", "agent_id", "agent_revision_id", "effective_behavior_digest", "effective_limits", "memory_space_id", "credential_family_id", "authentication_method", "provider_key_source", "provider_key_id", "provider_key_version_id", "call_kind", "call_ordinal", "lease_attempt", "provider_attempt_ordinal", "requested_provider", "requested_model", "served_provider", "served_model", "status", "outcome", "failure_class", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost", "cost_coverage", "max_cost_at_risk", "pricing_version", "created_at", "started_at", "first_output_at", "last_output_at", "settled_at", "time_to_first_token_ms", "generation_duration_ms", "output_tokens_per_second"]
 
     @field_validator('behavior_source_kind')
     def behavior_source_kind_validate_enum(cls, value):
@@ -312,10 +316,30 @@ class ModelCallRecord(BaseModel):
         if self.first_output_at is None and "first_output_at" in self.model_fields_set:
             _dict['first_output_at'] = None
 
+        # set to None if last_output_at (nullable) is None
+        # and model_fields_set contains the field
+        if self.last_output_at is None and "last_output_at" in self.model_fields_set:
+            _dict['last_output_at'] = None
+
         # set to None if settled_at (nullable) is None
         # and model_fields_set contains the field
         if self.settled_at is None and "settled_at" in self.model_fields_set:
             _dict['settled_at'] = None
+
+        # set to None if time_to_first_token_ms (nullable) is None
+        # and model_fields_set contains the field
+        if self.time_to_first_token_ms is None and "time_to_first_token_ms" in self.model_fields_set:
+            _dict['time_to_first_token_ms'] = None
+
+        # set to None if generation_duration_ms (nullable) is None
+        # and model_fields_set contains the field
+        if self.generation_duration_ms is None and "generation_duration_ms" in self.model_fields_set:
+            _dict['generation_duration_ms'] = None
+
+        # set to None if output_tokens_per_second (nullable) is None
+        # and model_fields_set contains the field
+        if self.output_tokens_per_second is None and "output_tokens_per_second" in self.model_fields_set:
+            _dict['output_tokens_per_second'] = None
 
         return _dict
 
@@ -370,6 +394,10 @@ class ModelCallRecord(BaseModel):
             "created_at": obj.get("created_at"),
             "started_at": obj.get("started_at"),
             "first_output_at": obj.get("first_output_at"),
-            "settled_at": obj.get("settled_at")
+            "last_output_at": obj.get("last_output_at"),
+            "settled_at": obj.get("settled_at"),
+            "time_to_first_token_ms": obj.get("time_to_first_token_ms"),
+            "generation_duration_ms": obj.get("generation_duration_ms"),
+            "output_tokens_per_second": obj.get("output_tokens_per_second")
         })
         return _obj

@@ -22,15 +22,18 @@ import {
 } from './WebSearchLocation.js';
 
 /**
- * Anthropic web search options, passed through as the provider defines
- * them.
+ * Provider-native web search options. `user_location` is shared;
+ * `max_uses` and domain controls are Anthropic-only, while
+ * `search_context_size` and `include_results` are Meta-only. A field the
+ * selected provider does not implement is rejected at admission rather
+ * than silently dropped.
  *
  * @export
  * @interface WebSearchTool
  */
 export interface WebSearchTool {
     /**
-     * Searches this turn may run. Omitted means the provider default.
+     * Anthropic only. Searches this turn may run. Omitted means the provider default.
      * This is the only bound nvoken can place on search spend, because
      * the provider does not report a per-search fee it can meter.
      *
@@ -39,7 +42,7 @@ export interface WebSearchTool {
      */
     maxUses?: number;
     /**
-     * Restrict results to these hosts. Bare hostnames only — a scheme,
+     * Anthropic only. Restrict results to these hosts. Bare hostnames only — a scheme,
      * path, or port is rejected rather than reinterpreted. Mutually
      * exclusive with `blocked_domains`, which is the provider's rule.
      *
@@ -48,7 +51,7 @@ export interface WebSearchTool {
      */
     allowedDomains?: Array<string>;
     /**
-     * Exclude these hosts. Same format as `allowed_domains`, and mutually
+     * Anthropic only. Exclude these hosts. Same format as `allowed_domains`, and mutually
      * exclusive with it.
      *
      * @type {Array<string>}
@@ -56,12 +59,42 @@ export interface WebSearchTool {
      */
     blockedDomains?: Array<string>;
     /**
+     * Meta only. How much retrieved content reaches the model, trading
+     * latency and tokens for breadth. Omitted leaves Meta's `medium`
+     * default in force.
+     *
+     * @type {WebSearchToolSearchContextSizeEnum}
+     * @memberof WebSearchTool
+     */
+    searchContextSize?: WebSearchToolSearchContextSizeEnum;
+    /**
+     * Meta only. Retain the title, URL, and snippet for the search hits
+     * the model consulted under the visible `server_tool_use` input.
+     * These results add input tokens to the provider response.
+     *
+     * @type {boolean}
+     * @memberof WebSearchTool
+     */
+    includeResults?: boolean;
+    /**
      *
      * @type {WebSearchLocation}
      * @memberof WebSearchTool
      */
     userLocation?: WebSearchLocation;
 }
+
+
+/**
+ * @export
+ */
+export const WebSearchToolSearchContextSizeEnum = {
+    SearchContextLow: 'low',
+    SearchContextMedium: 'medium',
+    SearchContextHigh: 'high'
+} as const;
+export type WebSearchToolSearchContextSizeEnum = typeof WebSearchToolSearchContextSizeEnum[keyof typeof WebSearchToolSearchContextSizeEnum];
+
 
 /**
  * Check if a given object implements the WebSearchTool interface.
@@ -83,6 +116,8 @@ export function WebSearchToolFromJSONTyped(json: any, ignoreDiscriminator: boole
         'maxUses': json['max_uses'] == null ? undefined : json['max_uses'],
         'allowedDomains': json['allowed_domains'] == null ? undefined : json['allowed_domains'],
         'blockedDomains': json['blocked_domains'] == null ? undefined : json['blocked_domains'],
+        'searchContextSize': json['search_context_size'] == null ? undefined : json['search_context_size'],
+        'includeResults': json['include_results'] == null ? undefined : json['include_results'],
         'userLocation': json['user_location'] == null ? undefined : WebSearchLocationFromJSON(json['user_location']),
     };
 }
@@ -101,6 +136,8 @@ export function WebSearchToolToJSONTyped(value?: WebSearchTool | null, ignoreDis
         'max_uses': value['maxUses'],
         'allowed_domains': value['allowedDomains'],
         'blocked_domains': value['blockedDomains'],
+        'search_context_size': value['searchContextSize'],
+        'include_results': value['includeResults'],
         'user_location': WebSearchLocationToJSON(value['userLocation']),
     };
 }

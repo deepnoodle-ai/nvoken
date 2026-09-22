@@ -19,7 +19,7 @@ import json
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional, Union
 from typing_extensions import Annotated
 from nvoken_generated.models.money import Money
 from typing import Optional, Set
@@ -40,17 +40,20 @@ class TurnTimelineStep(BaseModel):
     model: Optional[StrictStr] = None
     status: StrictStr
     started_at: datetime
-    first_output_at: Optional[datetime] = None
+    first_output_at: Optional[datetime] = Field(default=None, description="First content-bearing output observed from a streamed model call.")
+    last_output_at: Optional[datetime] = Field(default=None, description="Last content-bearing output observed from a successfully settled streamed model call.")
     ended_at: Optional[datetime] = None
     duration_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
-    time_to_first_output_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
+    time_to_first_token_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Client-observed time from model-call start to its first content-bearing streamed output.")
+    generation_duration_ms: Optional[Annotated[int, Field(strict=True, ge=0)]] = Field(default=None, description="Client-observed time from first to last content-bearing streamed output.")
+    output_tokens_per_second: Optional[Union[Annotated[float, Field(strict=True, gt=0)], Annotated[int, Field(strict=True, gt=0)]]] = Field(default=None, description="Provider-reported output tokens after the first, divided by generation duration in seconds.")
     input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     output_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     cache_creation_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     cache_read_input_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     reasoning_tokens: Optional[Annotated[int, Field(strict=True, ge=0)]] = None
     model_cost: Optional[Money] = None
-    __properties: ClassVar[List[str]] = ["kind", "id", "detail_id", "name", "mode", "call_kind", "provider", "model", "status", "started_at", "first_output_at", "ended_at", "duration_ms", "time_to_first_output_ms", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost"]
+    __properties: ClassVar[List[str]] = ["kind", "id", "detail_id", "name", "mode", "call_kind", "provider", "model", "status", "started_at", "first_output_at", "last_output_at", "ended_at", "duration_ms", "time_to_first_token_ms", "generation_duration_ms", "output_tokens_per_second", "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "reasoning_tokens", "model_cost"]
 
     @field_validator('kind')
     def kind_validate_enum(cls, value):
@@ -124,9 +127,12 @@ class TurnTimelineStep(BaseModel):
             "status": obj.get("status"),
             "started_at": obj.get("started_at"),
             "first_output_at": obj.get("first_output_at"),
+            "last_output_at": obj.get("last_output_at"),
             "ended_at": obj.get("ended_at"),
             "duration_ms": obj.get("duration_ms"),
-            "time_to_first_output_ms": obj.get("time_to_first_output_ms"),
+            "time_to_first_token_ms": obj.get("time_to_first_token_ms"),
+            "generation_duration_ms": obj.get("generation_duration_ms"),
+            "output_tokens_per_second": obj.get("output_tokens_per_second"),
             "input_tokens": obj.get("input_tokens"),
             "output_tokens": obj.get("output_tokens"),
             "cache_creation_input_tokens": obj.get("cache_creation_input_tokens"),
