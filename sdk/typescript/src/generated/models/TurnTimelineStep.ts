@@ -88,11 +88,17 @@ export interface TurnTimelineStep {
      */
     startedAt: Date;
     /**
-     *
+     * First content-bearing output observed from a streamed model call.
      * @type {Date}
      * @memberof TurnTimelineStep
      */
     firstOutputAt?: Date;
+    /**
+     * Last content-bearing output observed from a successfully settled streamed model call.
+     * @type {Date}
+     * @memberof TurnTimelineStep
+     */
+    lastOutputAt?: Date;
     /**
      *
      * @type {Date}
@@ -106,11 +112,23 @@ export interface TurnTimelineStep {
      */
     durationMs?: number;
     /**
-     *
+     * Client-observed time from model-call start to its first content-bearing streamed output.
      * @type {number}
      * @memberof TurnTimelineStep
      */
-    timeToFirstOutputMs?: number;
+    timeToFirstTokenMs?: number;
+    /**
+     * Client-observed time from first to last content-bearing streamed output.
+     * @type {number}
+     * @memberof TurnTimelineStep
+     */
+    generationDurationMs?: number;
+    /**
+     * Provider-reported output tokens after the first, divided by generation duration in seconds.
+     * @type {number}
+     * @memberof TurnTimelineStep
+     */
+    outputTokensPerSecond?: number;
     /**
      *
      * @type {number}
@@ -195,9 +213,12 @@ export function TurnTimelineStepFromJSONTyped(json: any, ignoreDiscriminator: bo
         'status': json['status'],
         'startedAt': (new Date(json['started_at'])),
         'firstOutputAt': json['first_output_at'] == null ? undefined : (new Date(json['first_output_at'])),
+        'lastOutputAt': json['last_output_at'] == null ? undefined : (new Date(json['last_output_at'])),
         'endedAt': json['ended_at'] == null ? undefined : (new Date(json['ended_at'])),
         'durationMs': json['duration_ms'] == null ? undefined : json['duration_ms'],
-        'timeToFirstOutputMs': json['time_to_first_output_ms'] == null ? undefined : json['time_to_first_output_ms'],
+        'timeToFirstTokenMs': json['time_to_first_token_ms'] == null ? undefined : json['time_to_first_token_ms'],
+        'generationDurationMs': json['generation_duration_ms'] == null ? undefined : json['generation_duration_ms'],
+        'outputTokensPerSecond': json['output_tokens_per_second'] == null ? undefined : json['output_tokens_per_second'],
         'inputTokens': json['input_tokens'] == null ? undefined : json['input_tokens'],
         'outputTokens': json['output_tokens'] == null ? undefined : json['output_tokens'],
         'cacheCreationInputTokens': json['cache_creation_input_tokens'] == null ? undefined : json['cache_creation_input_tokens'],
@@ -229,9 +250,12 @@ export function TurnTimelineStepToJSONTyped(value?: TurnTimelineStep | null, ign
         'status': value['status'],
         'started_at': value['startedAt'].toISOString(),
         'first_output_at': value['firstOutputAt'] == null ? value['firstOutputAt'] : value['firstOutputAt'].toISOString(),
+        'last_output_at': value['lastOutputAt'] == null ? value['lastOutputAt'] : value['lastOutputAt'].toISOString(),
         'ended_at': value['endedAt'] == null ? value['endedAt'] : value['endedAt'].toISOString(),
         'duration_ms': value['durationMs'],
-        'time_to_first_output_ms': value['timeToFirstOutputMs'],
+        'time_to_first_token_ms': value['timeToFirstTokenMs'],
+        'generation_duration_ms': value['generationDurationMs'],
+        'output_tokens_per_second': value['outputTokensPerSecond'],
         'input_tokens': value['inputTokens'],
         'output_tokens': value['outputTokens'],
         'cache_creation_input_tokens': value['cacheCreationInputTokens'],

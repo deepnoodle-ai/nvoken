@@ -2582,6 +2582,27 @@ func (e WebSearchResultLocationCitationType) Valid() bool {
 	}
 }
 
+// Defines values for WebSearchToolSearchContextSize.
+const (
+	SearchContextHigh   WebSearchToolSearchContextSize = "high"
+	SearchContextLow    WebSearchToolSearchContextSize = "low"
+	SearchContextMedium WebSearchToolSearchContextSize = "medium"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchToolSearchContextSize enum.
+func (e WebSearchToolSearchContextSize) Valid() bool {
+	switch e {
+	case SearchContextHigh:
+		return true
+	case SearchContextLow:
+		return true
+	case SearchContextMedium:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WebhookEvent.
 const (
 	WebhookEventBudgetHold WebhookEvent = "turn.budget_hold"
@@ -5060,20 +5081,31 @@ type ModelCallRecord struct {
 	EffectiveBehaviorDigest *string                     `json:"effective_behavior_digest"`
 	EffectiveLimits         *ResolvedLimits             `json:"effective_limits"`
 	FailureClass            *string                     `json:"failure_class"`
-	FirstOutputAt           *time.Time                  `json:"first_output_at"`
+
+	// FirstOutputAt First content-bearing output observed from a streamed model call.
+	FirstOutputAt *time.Time `json:"first_output_at"`
+
+	// GenerationDurationMs Client-observed time from first to last content-bearing streamed output.
+	GenerationDurationMs *int `json:"generation_duration_ms"`
 
 	// ID RFC 9562 UUIDv7 in canonical lowercase text. Identifiers carry no type prefix; treat the value as opaque.
-	ID                     ModelCallFactID         `json:"id"`
-	InputTokens            *int                    `json:"input_tokens"`
-	LeaseAttempt           int                     `json:"lease_attempt"`
-	MaxCostAtRisk          *Money                  `json:"max_cost_at_risk"`
-	MemorySpaceID          *MemorySpaceID          `json:"memory_space_id"`
-	ModelCost              *Money                  `json:"model_cost"`
-	Outcome                *ModelCallRecordOutcome `json:"outcome"`
-	OutputTokens           *int                    `json:"output_tokens"`
-	PricingVersion         *string                 `json:"pricing_version"`
-	ProviderAttemptOrdinal int                     `json:"provider_attempt_ordinal"`
-	ProviderKeyID          *string                 `json:"provider_key_id"`
+	ID          ModelCallFactID `json:"id"`
+	InputTokens *int            `json:"input_tokens"`
+
+	// LastOutputAt Last content-bearing output observed from a successfully settled streamed model call.
+	LastOutputAt  *time.Time              `json:"last_output_at"`
+	LeaseAttempt  int                     `json:"lease_attempt"`
+	MaxCostAtRisk *Money                  `json:"max_cost_at_risk"`
+	MemorySpaceID *MemorySpaceID          `json:"memory_space_id"`
+	ModelCost     *Money                  `json:"model_cost"`
+	Outcome       *ModelCallRecordOutcome `json:"outcome"`
+	OutputTokens  *int                    `json:"output_tokens"`
+
+	// OutputTokensPerSecond Provider-reported output tokens after the first, divided by generation duration in seconds.
+	OutputTokensPerSecond  *float32 `json:"output_tokens_per_second"`
+	PricingVersion         *string  `json:"pricing_version"`
+	ProviderAttemptOrdinal int      `json:"provider_attempt_ordinal"`
+	ProviderKeyID          *string  `json:"provider_key_id"`
 
 	// ProviderKeySource Which account pays for a model call. Installations choose which
 	// sources they enable: a BYOK-disabled installation (nvoken Cloud
@@ -5091,7 +5123,10 @@ type ModelCallRecord struct {
 	StartedAt            *time.Time          `json:"started_at"`
 	Status               ModelCallFactStatus `json:"status"`
 	TenantKey            *string             `json:"tenant_key"`
-	TurnID               *TurnID             `json:"turn_id"`
+
+	// TimeToFirstTokenMs Client-observed time from model-call start to its first content-bearing streamed output.
+	TimeToFirstTokenMs *int    `json:"time_to_first_token_ms"`
+	TurnID             *TurnID `json:"turn_id"`
 
 	// UserKey Null after user erasure.
 	UserKey *string `json:"user_key"`
@@ -5687,8 +5722,11 @@ type ProviderStaticKey struct {
 type ProviderTool struct {
 	Type ProviderToolType `json:"type"`
 
-	// WebSearch Anthropic web search options, passed through as the provider defines
-	// them.
+	// WebSearch Provider-native web search options. `user_location` is shared;
+	// `max_uses` and domain controls are Anthropic-only, while
+	// `search_context_size` and `include_results` are Meta-only. A field the
+	// selected provider does not implement is rejected at admission rather
+	// than silently dropped.
 	WebSearch WebSearchTool `json:"web_search"`
 }
 
@@ -7043,26 +7081,39 @@ type TurnTimeline struct {
 
 // TurnTimelineStep defines model for TurnTimelineStep.
 type TurnTimelineStep struct {
-	CacheCreationInputTokens *int                 `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     *int                 `json:"cache_read_input_tokens,omitempty"`
-	CallKind                 *string              `json:"call_kind,omitempty"`
-	DetailID                 string               `json:"detail_id"`
-	DurationMs               *int                 `json:"duration_ms,omitempty"`
-	EndedAt                  *time.Time           `json:"ended_at,omitempty"`
-	FirstOutputAt            *time.Time           `json:"first_output_at,omitempty"`
-	ID                       string               `json:"id"`
-	InputTokens              *int                 `json:"input_tokens,omitempty"`
-	Kind                     TurnTimelineStepKind `json:"kind"`
-	Mode                     *string              `json:"mode,omitempty"`
-	Model                    *string              `json:"model,omitempty"`
-	ModelCost                *Money               `json:"model_cost,omitempty"`
-	Name                     *string              `json:"name,omitempty"`
-	OutputTokens             *int                 `json:"output_tokens,omitempty"`
-	Provider                 *string              `json:"provider,omitempty"`
-	ReasoningTokens          *int                 `json:"reasoning_tokens,omitempty"`
-	StartedAt                time.Time            `json:"started_at"`
-	Status                   string               `json:"status"`
-	TimeToFirstOutputMs      *int                 `json:"time_to_first_output_ms,omitempty"`
+	CacheCreationInputTokens *int       `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     *int       `json:"cache_read_input_tokens,omitempty"`
+	CallKind                 *string    `json:"call_kind,omitempty"`
+	DetailID                 string     `json:"detail_id"`
+	DurationMs               *int       `json:"duration_ms,omitempty"`
+	EndedAt                  *time.Time `json:"ended_at,omitempty"`
+
+	// FirstOutputAt First content-bearing output observed from a streamed model call.
+	FirstOutputAt *time.Time `json:"first_output_at,omitempty"`
+
+	// GenerationDurationMs Client-observed time from first to last content-bearing streamed output.
+	GenerationDurationMs *int                 `json:"generation_duration_ms,omitempty"`
+	ID                   string               `json:"id"`
+	InputTokens          *int                 `json:"input_tokens,omitempty"`
+	Kind                 TurnTimelineStepKind `json:"kind"`
+
+	// LastOutputAt Last content-bearing output observed from a successfully settled streamed model call.
+	LastOutputAt *time.Time `json:"last_output_at,omitempty"`
+	Mode         *string    `json:"mode,omitempty"`
+	Model        *string    `json:"model,omitempty"`
+	ModelCost    *Money     `json:"model_cost,omitempty"`
+	Name         *string    `json:"name,omitempty"`
+	OutputTokens *int       `json:"output_tokens,omitempty"`
+
+	// OutputTokensPerSecond Provider-reported output tokens after the first, divided by generation duration in seconds.
+	OutputTokensPerSecond *float32  `json:"output_tokens_per_second,omitempty"`
+	Provider              *string   `json:"provider,omitempty"`
+	ReasoningTokens       *int      `json:"reasoning_tokens,omitempty"`
+	StartedAt             time.Time `json:"started_at"`
+	Status                string    `json:"status"`
+
+	// TimeToFirstTokenMs Client-observed time from model-call start to its first content-bearing streamed output.
+	TimeToFirstTokenMs *int `json:"time_to_first_token_ms,omitempty"`
 }
 
 // TurnTimelineStepKind defines model for TurnTimelineStep.Kind.
@@ -7419,27 +7470,45 @@ type WebSearchResultLocationCitation struct {
 // WebSearchResultLocationCitationType defines model for WebSearchResultLocationCitation.Type.
 type WebSearchResultLocationCitationType string
 
-// WebSearchTool Anthropic web search options, passed through as the provider defines
-// them.
+// WebSearchTool Provider-native web search options. `user_location` is shared;
+// `max_uses` and domain controls are Anthropic-only, while
+// `search_context_size` and `include_results` are Meta-only. A field the
+// selected provider does not implement is rejected at admission rather
+// than silently dropped.
 type WebSearchTool struct {
-	// AllowedDomains Restrict results to these hosts. Bare hostnames only — a scheme,
+	// AllowedDomains Anthropic only. Restrict results to these hosts. Bare hostnames only — a scheme,
 	// path, or port is rejected rather than reinterpreted. Mutually
 	// exclusive with `blocked_domains`, which is the provider's rule.
 	AllowedDomains *[]string `json:"allowed_domains,omitempty"`
 
-	// BlockedDomains Exclude these hosts. Same format as `allowed_domains`, and mutually
+	// BlockedDomains Anthropic only. Exclude these hosts. Same format as `allowed_domains`, and mutually
 	// exclusive with it.
 	BlockedDomains *[]string `json:"blocked_domains,omitempty"`
 
-	// MaxUses Searches this turn may run. Omitted means the provider default.
+	// IncludeResults Meta only. Retain the title, URL, and snippet for the search hits
+	// the model consulted under the visible `server_tool_use` input.
+	// These results add input tokens to the provider response.
+	IncludeResults *bool `json:"include_results,omitempty"`
+
+	// MaxUses Anthropic only. Searches this turn may run. Omitted means the provider default.
 	// This is the only bound nvoken can place on search spend, because
 	// the provider does not report a per-search fee it can meter.
 	MaxUses *int `json:"max_uses,omitempty"`
+
+	// SearchContextSize Meta only. How much retrieved content reaches the model, trading
+	// latency and tokens for breadth. Omitted leaves Meta's `medium`
+	// default in force.
+	SearchContextSize *WebSearchToolSearchContextSize `json:"search_context_size,omitempty"`
 
 	// UserLocation Approximate location used to bias results. Every member is optional;
 	// the host decides how precise to be about its end user.
 	UserLocation *WebSearchLocation `json:"user_location,omitempty"`
 }
+
+// WebSearchToolSearchContextSize Meta only. How much retrieved content reaches the model, trading
+// latency and tokens for breadth. Omitted leaves Meta's `medium`
+// default in force.
+type WebSearchToolSearchContextSize string
 
 // WebhookEvent `turn.waiting` fires when a turn stops and needs you to run at
 // least one tool. A turn waiting only on callback tools sends nothing,
@@ -7943,11 +8012,12 @@ type CreateTurnParams struct {
 	// caller_ephemeral `provider_keys` selection. The header
 	// must name the model provider and cannot be combined with
 	// the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key,
-	// X-Xai-Api-Key.
+	// X-Xai-Api-Key, X-Meta-Api-Key.
 	XAnthropicAPIKey *string `json:"X-Anthropic-Api-Key,omitempty"`
 	XOpenaiAPIKey    *string `json:"X-Openai-Api-Key,omitempty"`
 	XGeminiAPIKey    *string `json:"X-Gemini-Api-Key,omitempty"`
 	XXaiAPIKey       *string `json:"X-Xai-Api-Key,omitempty"`
+	XMetaAPIKey      *string `json:"X-Meta-Api-Key,omitempty"`
 }
 
 // ListTurnLogsParams defines parameters for ListTurnLogs.
@@ -19211,6 +19281,17 @@ func NewCreateTurnRequestWithBody(server string, params *CreateTurnParams, conte
 			}
 
 			req.Header.Set("X-Xai-Api-Key", headerParam3)
+		}
+
+		if params.XMetaAPIKey != nil {
+			var headerParam4 string
+
+			headerParam4, err = runtime.StyleParamWithOptions("simple", false, "X-Meta-Api-Key", *params.XMetaAPIKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Meta-Api-Key", headerParam4)
 		}
 
 	}

@@ -956,10 +956,11 @@ class TurnsApi:
     async def create_turn(
         self,
         create_turn_request: CreateTurnRequest,
-        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key. ")] = None,
+        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key. ")] = None,
         x_openai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_gemini_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_xai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
+        x_meta_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -979,7 +980,7 @@ class TurnsApi:
 
         :param create_turn_request: (required)
         :type create_turn_request: CreateTurnRequest
-        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key.
+        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key.
         :type x_anthropic_api_key: str
         :param x_openai_api_key:
         :type x_openai_api_key: str
@@ -987,6 +988,8 @@ class TurnsApi:
         :type x_gemini_api_key: str
         :param x_xai_api_key:
         :type x_xai_api_key: str
+        :param x_meta_api_key:
+        :type x_meta_api_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1015,6 +1018,7 @@ class TurnsApi:
             x_openai_api_key=x_openai_api_key,
             x_gemini_api_key=x_gemini_api_key,
             x_xai_api_key=x_xai_api_key,
+            x_meta_api_key=x_meta_api_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1048,10 +1052,11 @@ class TurnsApi:
     async def create_turn_with_http_info(
         self,
         create_turn_request: CreateTurnRequest,
-        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key. ")] = None,
+        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key. ")] = None,
         x_openai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_gemini_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_xai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
+        x_meta_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1071,7 +1076,7 @@ class TurnsApi:
 
         :param create_turn_request: (required)
         :type create_turn_request: CreateTurnRequest
-        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key.
+        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key.
         :type x_anthropic_api_key: str
         :param x_openai_api_key:
         :type x_openai_api_key: str
@@ -1079,6 +1084,8 @@ class TurnsApi:
         :type x_gemini_api_key: str
         :param x_xai_api_key:
         :type x_xai_api_key: str
+        :param x_meta_api_key:
+        :type x_meta_api_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1107,6 +1114,7 @@ class TurnsApi:
             x_openai_api_key=x_openai_api_key,
             x_gemini_api_key=x_gemini_api_key,
             x_xai_api_key=x_xai_api_key,
+            x_meta_api_key=x_meta_api_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1140,10 +1148,11 @@ class TurnsApi:
     async def create_turn_without_preload_content(
         self,
         create_turn_request: CreateTurnRequest,
-        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key. ")] = None,
+        x_anthropic_api_key: Annotated[Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]], Field(description="Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key. ")] = None,
         x_openai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_gemini_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         x_xai_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
+        x_meta_api_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=65536)]] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1163,7 +1172,7 @@ class TurnsApi:
 
         :param create_turn_request: (required)
         :type create_turn_request: CreateTurnRequest
-        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key.
+        :param x_anthropic_api_key: Caller-supplied Anthropic API key, equivalent to a caller_ephemeral `provider_keys` selection. The header must name the model provider and cannot be combined with the body field. Siblings: X-Openai-Api-Key, X-Gemini-Api-Key, X-Xai-Api-Key, X-Meta-Api-Key.
         :type x_anthropic_api_key: str
         :param x_openai_api_key:
         :type x_openai_api_key: str
@@ -1171,6 +1180,8 @@ class TurnsApi:
         :type x_gemini_api_key: str
         :param x_xai_api_key:
         :type x_xai_api_key: str
+        :param x_meta_api_key:
+        :type x_meta_api_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1199,6 +1210,7 @@ class TurnsApi:
             x_openai_api_key=x_openai_api_key,
             x_gemini_api_key=x_gemini_api_key,
             x_xai_api_key=x_xai_api_key,
+            x_meta_api_key=x_meta_api_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1231,6 +1243,7 @@ class TurnsApi:
         x_openai_api_key,
         x_gemini_api_key,
         x_xai_api_key,
+        x_meta_api_key,
         _request_auth,
         _content_type,
         _headers,
@@ -1262,6 +1275,8 @@ class TurnsApi:
             _header_params['X-Gemini-Api-Key'] = x_gemini_api_key
         if x_xai_api_key is not None:
             _header_params['X-Xai-Api-Key'] = x_xai_api_key
+        if x_meta_api_key is not None:
+            _header_params['X-Meta-Api-Key'] = x_meta_api_key
         # process the form parameters
         # process the body parameter
         if create_turn_request is not None:
