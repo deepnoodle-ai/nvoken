@@ -134,6 +134,7 @@ export interface CreateTurnOperationRequest {
     xOpenaiApiKey?: string;
     xGeminiApiKey?: string;
     xXaiApiKey?: string;
+    xMetaApiKey?: string;
 }
 
 export interface DeleteTurnRequest {
@@ -435,6 +436,10 @@ export class TurnsApi extends runtime.BaseAPI {
 
         if (requestParameters['xXaiApiKey'] != null) {
             headerParameters['X-Xai-Api-Key'] = String(requestParameters['xXaiApiKey']);
+        }
+
+        if (requestParameters['xMetaApiKey'] != null) {
+            headerParameters['X-Meta-Api-Key'] = String(requestParameters['xMetaApiKey']);
         }
 
         if (this.configuration && this.configuration.accessToken) {

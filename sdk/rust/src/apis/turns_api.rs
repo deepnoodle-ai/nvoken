@@ -449,6 +449,7 @@ pub async fn create_turn(
     x_openai_api_key: Option<&str>,
     x_gemini_api_key: Option<&str>,
     x_xai_api_key: Option<&str>,
+    x_meta_api_key: Option<&str>,
 ) -> Result<models::Turn, Error<CreateTurnError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_body_create_turn_request = create_turn_request;
@@ -456,6 +457,7 @@ pub async fn create_turn(
     let p_header_x_openai_api_key = x_openai_api_key;
     let p_header_x_gemini_api_key = x_gemini_api_key;
     let p_header_x_xai_api_key = x_xai_api_key;
+    let p_header_x_meta_api_key = x_meta_api_key;
 
     let uri_str = format!("{}/v1/turns", configuration.base_path);
     let mut req_builder = configuration
@@ -476,6 +478,9 @@ pub async fn create_turn(
     }
     if let Some(param_value) = p_header_x_xai_api_key {
         req_builder = req_builder.header("X-Xai-Api-Key", param_value.to_string());
+    }
+    if let Some(param_value) = p_header_x_meta_api_key {
+        req_builder = req_builder.header("X-Meta-Api-Key", param_value.to_string());
     }
     if let Some(ref token) = configuration.bearer_access_token {
         req_builder = req_builder.bearer_auth(token.to_owned());
