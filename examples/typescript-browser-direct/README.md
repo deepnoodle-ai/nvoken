@@ -22,8 +22,31 @@ nvoken app init browser-direct-demo \
   > nvoken.env
 ```
 
-Then export the App, client key, a published Agent, and an existing
-Conversation owned by user `demo-user` in tenant `demo-tenant`:
+The Agent must opt in to browser tokens with a `client_interface`, or every
+browser request is rejected with 401. The Agent facade cannot set it yet, so
+create the Agent and a Conversation for `demo-user` through `raw()` with the
+App's API key:
+
+```ts
+const agent = await client.raw().agents.createAgent({
+  idempotencyKey: crypto.randomUUID(),
+  createAgentRequest: {
+    agentKey: "support",
+    owner: { kind: "app" },
+    instructions: "Answer briefly.",
+    model: "anthropic/claude-sonnet-5",
+    clientInterface: {},
+  },
+});
+const conversation = await client.raw().conversations.createConversation({
+  createConversationRequest: {
+    tenantKey: "demo-tenant",
+    owner: { kind: "user", userKey: "demo-user" },
+  },
+});
+```
+
+Then export the App, client key, Agent, its revision, and the Conversation:
 
 ```bash
 export NVOKEN_BASE_URL='…'

@@ -33,6 +33,7 @@ const form = document.querySelector("form")!;
 const input = form.querySelector("input")!;
 const send = form.querySelector<HTMLButtonElement>("#send")!;
 const stop = form.querySelector<HTMLButtonElement>("#stop")!;
+const error = document.querySelector("#error")!;
 
 chat.subscribe(() => {
   const snapshot = chat.getSnapshot();
@@ -54,11 +55,14 @@ chat.subscribe(() => {
   }));
   send.disabled = snapshot.send.action.status !== "enabled";
   stop.disabled = snapshot.interruption.action.status !== "enabled";
+  const failed = [snapshot.authorization, snapshot.connection, snapshot.send]
+    .find((state) => "error" in state);
+  error.textContent = failed && "error" in failed ? failed.error.message : "";
 });
 
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-  await chat.send(input.value);
-  input.value = "";
+  // Failures surface in the snapshot, so only success needs handling here.
+  chat.send(input.value).then(() => (input.value = ""), () => {});
 });
 stop.addEventListener("click", () => chat.interrupt());
