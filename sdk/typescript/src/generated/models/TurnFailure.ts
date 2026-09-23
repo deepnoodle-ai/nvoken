@@ -39,6 +39,10 @@ import { mapValues } from '../runtime.js';
  *   when nvoken knows it.
  * - `input_media_rejected` sets `modality`, `media_type`, and `reason`
  *   as the provider reported them, each only when known.
+ * - `mcp_discovery_failed` sets `details.reason` to `unauthorized` when
+ *   a remote MCP server rejected the supplied credentials, which is
+ *   yours to fix, or `discovery_failed` when it could not be reached or
+ *   read.
  *
  * A `provider_error` sets `details.provider_failure_class`, which is
  * nvoken's summary of what went wrong at the provider and is the field

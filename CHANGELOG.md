@@ -8,6 +8,10 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **MCP discovery failures name rejected credentials.** `TurnFailure` and the
+  `listMCPTools` error document `details.reason`: `unauthorized` when the remote
+  MCP server rejected the supplied credentials, `discovery_failed` otherwise.
+  Only generated doc comments change.
 - **Breaking: `time_to_first_output_ms` is now `time_to_first_token_ms`.** The
   Turn timeline step renames the field in all four generated clients. Both
   `TurnTimelineStep` and `ModelCallRecord` now carry `time_to_first_token_ms`,
