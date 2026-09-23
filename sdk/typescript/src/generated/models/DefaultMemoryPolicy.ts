@@ -71,11 +71,11 @@ export function DefaultMemoryPolicyToJSONTyped(value?: DefaultMemoryPolicy | nul
     }
     switch (value['defaultScope']) {
         case 'none':
-            return Object.assign({}, DefaultMemoryNoneToJSON(value), { defaultScope: 'none' } as const);
+            return Object.assign({}, DefaultMemoryNoneToJSON(value), { default_scope: 'none' } as const);
         case 'tenant':
-            return Object.assign({}, DefaultMemoryTenantToJSON(value), { defaultScope: 'tenant' } as const);
+            return Object.assign({}, DefaultMemoryTenantToJSON(value), { default_scope: 'tenant' } as const);
         case 'user':
-            return Object.assign({}, DefaultMemoryUserToJSON(value), { defaultScope: 'user' } as const);
+            return Object.assign({}, DefaultMemoryUserToJSON(value), { default_scope: 'user' } as const);
         default:
             return value;
     }

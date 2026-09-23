@@ -275,6 +275,55 @@ test("inline default memory requires a namespace and user actor", async () => {
   );
 });
 
+test("default memory reaches the wire under default_scope only", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const client = clientWith(async (input, init) => {
+    const url = new URL(String(input));
+    if (init?.body) bodies.push(requestBody(init));
+    if (url.pathname === "/v1/agents") {
+      return Response.json(wireAgent(), { status: 201 });
+    }
+    if (url.pathname === "/v1/turns") {
+      return Response.json({ ...wireTurn(), deduplicated: false }, { status: 202 });
+    }
+    return Response.json({
+      id: "4e2c07c1-1b15-7f5e-b42b-8e1b29dc83fd",
+      agent_id: AGENT_ID,
+      revision: 2,
+      behavior: {
+        instructions: "Remember.",
+        model: "openai/gpt-5",
+        memory: { default_scope: "tenant", namespace: "support" },
+      },
+      behavior_sha256: "sha256:revision",
+      created_at: NOW,
+    });
+  });
+
+  const agent = await client.agents.create({
+    key: "support",
+    instructions: "Remember.",
+    model: "openai/gpt-5",
+    memory: { defaultScope: "none" },
+  });
+  const revision = await agent.publish({
+    instructions: "Remember.",
+    model: "openai/gpt-5",
+    memory: { defaultScope: "tenant", namespace: "support" },
+  });
+  await client.inline({
+    instructions: "Remember.",
+    model: "openai/gpt-5",
+    memory: { defaultScope: "user", namespace: "support" },
+  }).start("hello", { tenant: "acme", user: "alice" });
+
+  const inline = bodies[2]?.behavior as { behavior?: Record<string, unknown> } | undefined;
+  assert.deepEqual(bodies[0]?.memory, { default_scope: "none" });
+  assert.deepEqual(bodies[1]?.memory, { default_scope: "tenant", namespace: "support" });
+  assert.deepEqual(inline?.behavior?.memory, { default_scope: "user", namespace: "support" });
+  assert.deepEqual(revision.behavior.memory, { defaultScope: "tenant", namespace: "support" });
+});
+
 test("Conversation calls inherit omitted limits and may only narrow them", async () => {
   const bodies: Record<string, unknown>[] = [];
   const client = clientWith(async (_input, init) => {

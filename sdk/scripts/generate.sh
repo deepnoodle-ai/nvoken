@@ -97,6 +97,14 @@ cp -R "$WORK/typescript/src/." sdk/typescript/src/generated/
 python3 sdk/scripts/fix_typescript_turn_input.py \
   sdk/typescript/src/generated/models/TurnInput.ts
 
+# OpenAPI Generator's union encoders merge the discriminator back in under its
+# TypeScript property name, so `DefaultMemoryPolicy` sent both `default_scope`
+# and `defaultScope`, and the API rejected every Agent or inline behavior that
+# set memory. Rewrite the merged key to the wire name. This also fails
+# generation on a union encoder shape the script does not recognize.
+python3 sdk/scripts/fix_typescript_union_discriminators.py \
+  sdk/typescript/src/generated/models
+
 # OpenAPI Generator treats the contract's outbound webhook as a Runtime client
 # operation and emits a broken DefaultApi sender. SDK users receive callbacks;
 # they do not invoke the receiver. Keep the generated callback models, but drop
