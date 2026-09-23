@@ -8,6 +8,14 @@ without republishing every artifact.
 
 ## Unreleased
 
+- **The TypeScript SDK sends default memory policies the API accepts.** The
+  generated `DefaultMemoryPolicy` encoder wrote the discriminator twice, as
+  `default_scope` and as `defaultScope`, and the API rejected the unknown key.
+  So every `agents.create`, `publish`, or inline Turn that set `memory` failed.
+  Generation now rewrites union encoders to use the wire name, and fails when a
+  union encoder has a shape it does not recognize. `default_scope` is the only
+  discriminator whose TypeScript and wire names differ, so no other union
+  changes. The Go, Python, and Rust SDKs were not affected. Fixes #116.
 - **MCP discovery failures name rejected credentials.** `TurnFailure` and the
   `listMCPTools` error document `details.reason`: `unauthorized` when the remote
   MCP server rejected the supplied credentials, `discovery_failed` otherwise.
